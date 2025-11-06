@@ -497,61 +497,78 @@
                 const { createClient } = supabase; // Corrigido: removido o ".auth"
                 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-                // Esta função busca os dados das 6 tabelas PEQUENAS (jsonb)
-                const fetchJsonbData = async (tableName) => {
-                    const { data, error } = await supabaseClient
-                        .from(tableName)
-                        .select('data, updated_at') // <--- Isto está correto para as tabelas jsonb
-                        .eq('id', 1)
-                        .single();
-                    if (error) throw new Error(`Erro ao buscar dados da tabela ${tableName}: ${error.message}`);
-                    if (!data) throw new Error(`Tabela ${tableName} está vazia ou não foi encontrada.`);
-                    return data;
-                };
-
-                // ETAPA 3: Nova função para buscar os dados das 2 tabelas GRANDES (colunares)
+                // ETAPA 3: Função para buscar os dados de TODAS as 9 tabelas (agora colunares)
                 const fetchColumnarData = async (tableName) => {
-                    // Seleciona TODAS as colunas (*) da tabela
                     const { data, error } = await supabaseClient
                         .from(tableName)
-                        .select('*'); // <--- MUDANÇA PRINCIPAL
-                    
+                        .select('*');
                     if (error) throw new Error(`Erro ao buscar dados da tabela ${tableName}: ${error.message}`);
-                    // Retorna o array de linhas diretamente
                     return data; 
                 };
 
-                loaderText.textContent = 'Buscando dados (1/8)...';
-                // ETAPA 3: Modificado para usar as funções corretas
+                loaderText.textContent = 'Buscando dados (1/9)...';
+                // ETAPA 3: Modificado para buscar das 9 tabelas colunares
                 const [
-                    detailedData, historyData, clientsJson, ordersJson,
-                    productsJson, stockJson, innovationsJson, metadata
+                    detailedData, historyData, clientsData, ordersData,
+                    productDetailsData, activeProductsData, stockData,
+                    innovationsData, metadata
                 ] = await Promise.all([
-                    fetchColumnarData('data_detailed'), // <--- MUDANÇA
-                    fetchColumnarData('data_history'),  // <--- MUDANÇA
-                    fetchJsonbData('data_clients'),
-                    fetchJsonbData('data_orders'),
-                    fetchJsonbData('data_products'),
-                    fetchJsonbData('data_stock'),
-                    fetchJsonbData('data_innovations'),
-                    fetchJsonbData('data_metadata')
+                    fetchColumnarData('data_detailed'),
+                    fetchColumnarData('data_history'),
+                    fetchColumnarData('data_clients'),
+                    fetchColumnarData('data_orders'),
+                    fetchColumnarData('data_product_details'),
+                    fetchColumnarData('data_active_products'),
+                    fetchColumnarData('data_stock'),
+                    fetchColumnarData('data_innovations'),
+                    fetchColumnarData('data_metadata')
                 ]);
 
                 loaderText.textContent = 'Renderizando dashboard...';
 
-                // 9. PONTO MÁGICO: Reconstrói o objeto 'embeddedData' que o script antigo espera
-                // MODIFICADO: Adicionadas verificações (??) para impedir erros se os dados forem nulos
+                // ETAPA 4: Reconstrói o objeto 'embeddedData' a partir dos dados colunares
+
+                // 4.1: Converte 'data_product_details' (array) para um objeto/mapa
+                const productDetails = (productDetailsData ?? []).reduce((acc, item) => {
+                    acc[item.code] = {
+                        descricao: item.descricao,
+                        fornecedor: item.fornecedor,
+                        codfor: item.codfor,
+                        dtCadastro: item.dtCadastro // Mantém o nome da coluna original
+                    };
+                    return acc;
+                }, {});
+
+                // 4.2: Converte 'data_active_products' (array) para um array simples de códigos
+                const activeProductCodes = (activeProductsData ?? []).map(item => item.code);
+
+                // 4.3: Converte 'data_stock' (array) para os dois mapas de estoque esperados
+                const stockMap05 = {};
+                const stockMap08 = {};
+                (stockData ?? []).forEach(item => {
+                    if (item.filial === '05') {
+                        stockMap05[item.product_code] = item.stock_qty;
+                    } else if (item.filial === '08') {
+                        stockMap08[item.product_code] = item.stock_qty;
+                    }
+                });
+
+                // 4.4: Extrai o metadado 'passedWorkingDaysCurrentMonth'
+                const metadataValue = (metadata ?? []).find(m => m.key === 'passedWorkingDaysCurrentMonth')?.value;
+                const passedWorkingDaysCurrentMonth = metadataValue ? parseInt(metadataValue, 10) : 1;
+
+                // 4.5: Monta o objeto final
                 window.embeddedData = {
-                    detailed: detailedData ?? [], // <--- MUDANÇA (Fallback para array vazio)
-                    history: historyData ?? [],   // <--- MUDANÇA (Fallback para array vazio)
-                    clients: clientsJson?.data ?? [], // <--- MUDANÇA
-                    byOrder: ordersJson?.data ?? [], // <--- MUDANÇA
-                    activeProductCodes: productsJson?.data?.activeProductCodes ?? [], // <--- MUDANÇA (Evita o erro)
-                    productDetails: productsJson?.data?.productDetails ?? {}, // <--- MUDANÇA
-                    stockMap05: stockJson?.data?.stockMap05 ?? {}, // <--- MUDANÇA
-                    stockMap08: stockJson?.data?.stockMap08 ?? {}, // <--- MUDANÇA
-                    innovationsMonth: innovationsJson?.data ?? [], // <--- MUDANÇA
-                    passedWorkingDaysCurrentMonth: metadata?.data?.passedWorkingDaysCurrentMonth ?? 1 // <--- MUDANÇA
+                    detailed: detailedData ?? [],
+                    history: historyData ?? [],
+                    clients: clientsData ?? [],
+                    byOrder: ordersData ?? [],
+                    innovationsMonth: innovationsData ?? [],
+                    productDetails: productDetails,
+                    activeProductCodes: activeProductCodes,
+                    stockMap05: stockMap05,
+                    stockMap08: stockMap08,
+                    passedWorkingDaysCurrentMonth: passedWorkingDaysCurrentMonth
                 };
 
 
@@ -620,9 +637,8 @@
 
 
                 
-                // Usa a data de atualização dos metadados (a última a ser escrita)
-                // MODIFICADO: Adiciona verificação para 'metadata'
-                const generationDate = new Date(metadata?.updated_at || Date.now()).toLocaleString('pt-BR');
+                // ETAPA 5: Usa a data/hora atual para a mensagem de atualização
+                const generationDate = new Date().toLocaleString('pt-BR');
                 document.getElementById('generation-date').textContent = `Dados atualizados em: ${generationDate}`;
 
                 // Pega o conteúdo do script de lógica
