@@ -936,8 +936,8 @@
                 client.rcas = rcaList;
             });
             aggregatedOrders.sort((a, b) => {
-                const dateA = parseDate(a.DTPED);
-                const dateB = parseDate(b.DTPED);
+                const dateA = parseDate(a.dtped);
+                const dateB = parseDate(b.dtped);
                 if (!dateA) return 1;
                 if (!dateB) return -1;
                 return dateB - dateA;
@@ -1135,7 +1135,7 @@
             const workingDaysSet = new Set();
             const allSalesForDays = [...allSalesData, ...allHistoryData];
             allSalesForDays.forEach(sale => {
-                const date = parseDate(sale.DTPED);
+                const date = parseDate(sale.dtped);
                 if (date) {
                     const dayOfWeek = date.getDay();
                     if (dayOfWeek >= 1 && dayOfWeek <= 5) {
@@ -1151,8 +1151,8 @@
 
             optimizedData.productPastaMap = new Map();
             const populatePastaMap = (sale) => {
-                if (sale.PRODUTO && sale.OBSERVACAOFOR && !optimizedData.productPastaMap.has(sale.PRODUTO)) {
-                    optimizedData.productPastaMap.set(sale.PRODUTO, sale.OBSERVACAOFOR);
+                if (sale.PRODUTO && sale.observacaofor && !optimizedData.productPastaMap.has(sale.PRODUTO)) {
+                    optimizedData.productPastaMap.set(sale.PRODUTO, sale.observacaofor);
                 }
             };
             allSalesData.forEach(populatePastaMap);
@@ -1542,13 +1542,13 @@
             let sales = [...allSalesData];
             let history = [...allHistoryData];
             if (filial !== 'ambas') {
-                 sales = sales.filter(s => s.FILIAL === filial);
-                 history = history.filter(s => s.FILIAL === filial);
+                 sales = sales.filter(s => s.filial === filial);
+                 history = history.filter(s => s.filial === filial);
             }
             
             const salesFilter = s => 
-                (suppliers.length === 0 || suppliers.includes(String(s.CODFOR))) &&
-                (products.length === 0 || products.includes(String(s.PRODUTO)));
+                (suppliers.length === 0 || suppliers.includes(String(s.codfor))) &&
+                (products.length === 0 || products.includes(String(s.produto)));
                 
             sales = sales.filter(salesFilter);
             history = history.filter(salesFilter);
@@ -1579,7 +1579,7 @@
         
         function updateCoverageView() {
             const { clients, sales, history } = getCoverageFilteredData();
-            const productsToAnalyze = [...new Set([...sales.map(s => s.PRODUTO), ...history.map(s => s.PRODUTO)])];
+            const productsToAnalyze = [...new Set([...sales.map(s => s.produto), ...history.map(s => s.produto)])];
 
             const supervisor = coverageSupervisorFilter.value;
             const sellers = selectedCoverageSellers;
@@ -1669,7 +1669,7 @@
                 }
 
                 const stockQty = activeStockMap.get(productCode) || 0;
-                const productAllSales = [...sales, ...history].filter(s => s.PRODUTO === productCode);
+                const productAllSales = [...sales, ...history].filter(s => s.produto === productCode);
                 
                 const productCadastroDate = parseDate(productInfo.dtCadastro);
                 let productFirstWorkingDayIndex = 0;
@@ -1687,7 +1687,7 @@
                 
                 let totalQtySoldInRange = 0;
                 productAllSales.forEach(sale => {
-                    const saleDate = parseDate(sale.DTPED);
+                    const saleDate = parseDate(sale.dtped);
                     if (saleDate && saleDate >= startDate && saleDate <= endDate) {
                         totalQtySoldInRange += sale.QTVENDA_EMBALAGEM_MASTER;
                     }
@@ -2401,7 +2401,7 @@
                 const codcli = String(client['codigo_cliente']);
                 if (codcli === '6720' || client.bloqueio === 'S') return;
 
-                const registrationDate = parseDate(client.dataCadastro);
+                const registrationDate = parseDate(client.datacadastro);
                 client.isNew = registrationDate && registrationDate.getMonth() === currentMonth && registrationDate.getFullYear() === currentYear;
 
                 const totalFaturamentoMes = clientTotalsThisMonth.get(codcli) || 0;
@@ -2414,7 +2414,7 @@
                     }
                     const clientRcas = client.rcas || [];
                     if (clientRcas.length > 0 && clientRcas.every(rca => rca === '53')) return;
-                    client.isNewForInactiveLabel = client.isNew && !parseDate(client.ultimaCompra);
+                    client.isNewForInactiveLabel = client.isNew && !parseDate(client.ultimacompra);
                     inactiveClientsList.push(client);
                 }
             });
@@ -2467,7 +2467,7 @@
             cityInactiveDetailTableBody.innerHTML = inactiveClientsList.map(client => {
                 const novoLabel = client.isNewForInactiveLabel ? `<span class="ml-2 text-xs font-semibold text-purple-400 bg-purple-900/50 px-2 py-0.5 rounded-full">NOVO</span>` : '';
                 const devolucaoLabel = client.isReturn ? `<span class="ml-2 text-xs font-semibold text-red-400 bg-red-900/50 px-2 py-0.5 rounded-full">DEVOLUÇÃO</span>` : '';
-                return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${client['codigo_cliente']}">${client['codigo_cliente']}</a></td><td class="px-4 py-2 flex items-center">${client.fantasia || client.razaoSocial}${novoLabel}${devolucaoLabel}</td><td class="px-4 py-2">${client.cidade}</td><td class="px-4 py-2">${client.bairro}</td><td class="px-4 py-2 text-center">${formatDate(client.ultimaCompra)}</td><td class="px-4 py-2">${client.rca1 || '-'}</td></tr>`
+                return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${client['codigo_cliente']}">${client['codigo_cliente']}</a></td><td class="px-4 py-2 flex items-center">${client.fantasia || client.razaosocial}${novoLabel}${devolucaoLabel}</td><td class="px-4 py-2">${client.cidade}</td><td class="px-4 py-2">${client.bairro}</td><td class="px-4 py-2 text-center">${formatDate(client.ultimacompra)}</td><td class="px-4 py-2">${client.rca1 || '-'}</td></tr>`
             }).join('');
 
             const cityChartTitleEl = document.getElementById('city-chart-title');
@@ -3434,7 +3434,7 @@
             const productAnalysis = new Map();
 
             const productsWithFilteredActivity = new Set();
-            allCombinedSales.forEach(s => productsWithFilteredActivity.add(s.PRODUTO));
+            allCombinedSales.forEach(s => productsWithFilteredActivity.add(s.produto));
 
             activeStockMap.forEach((qty, productCode) => {
                 if (qty > 0) {
@@ -4358,10 +4358,10 @@
                 tableBodyHTML += `
                     <tr class="hover:bg-slate-700/50">
                         <td class="px-2 py-1.5 text-xs">${client['codigo_cliente']}</td>
-                        <td class="px-2 py-1.5 text-xs">${client.fantasia || client.razaoSocial}</td>
+                        <td class="px-2 py-1.5 text-xs">${client.fantasia || client.razaosocial}</td>
                         <td class="px-2 py-1.5 text-xs">${client.cidade}</td>
                         <td class="px-2 py-1.5 text-xs">${client.bairro}</td>
-                        <td class="px-2 py-1.5 text-xs text-center">${formatDate(client.ultimaCompra)}</td>
+                        <td class="px-2 py-1.5 text-xs text-center">${formatDate(client.ultimacompra)}</td>
                 `;
                 categoryNames.forEach(catName => {
                     tableBodyHTML += `<td class="px-2 py-1.5 text-center">${client.innovationStatus[catName] ? checkIcon : xIcon}</td>`;
@@ -4461,10 +4461,10 @@
                 const clientInnovationsBody = innovationsByClientForExport.map(client => {
                     const row = [
                         client['codigo_cliente'],
-                        client.fantasia || client.razaoSocial,
+                        client.fantasia || client.razaosocial,
                         client.cidade,
                         client.bairro,
-                        formatDate(client.ultimaCompra)
+                        formatDate(client.ultimacompra)
                     ];
                     categoryLegendForExport.forEach((cat, index) => {
                         const catName = cat.split(' - ')[1];
@@ -4562,7 +4562,7 @@
 
             const tableRows = [];
             clientList.forEach(client => {
-                const clientData = [ client['codigo_cliente'] || '', client.fantasia || client.razaoSocial || '', client.bairro || '', client.cidade || '', formatDate(client.ultimaCompra) || 'N/A' ];
+                const clientData = [ client['codigo_cliente'] || '', client.fantasia || client.razaosocial || '', client.bairro || '', client.cidade || '', formatDate(client.ultimacompra) || 'N/A' ];
                 if (includeFaturamento) clientData.splice(2, 0, (client.total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
                 tableRows.push(clientData);
             });
