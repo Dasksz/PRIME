@@ -913,7 +913,7 @@
         let clientLastBranch = new Map();
         let clientRamoMap = new Map();
 
-        const lastSaleDate = allSalesData.length > 0 ? new Date(Math.max.apply(null, allSalesData.map(s => parseDate(s.DTPED)).filter(d => d && !isNaN(d)))) : new Date();
+        const lastSaleDate = allSalesData.length > 0 ? new Date(Math.max.apply(null, allSalesData.map(s => parseDate(s.dtped)).filter(d => d && !isNaN(d)))) : new Date();
         lastSaleDate.setHours(0,0,0,0);
         let maxWorkingDaysStock = 0;
         let sortedWorkingDays = [];
@@ -958,11 +958,11 @@
             optimizedData.rcasBySupervisor = new Map();
             const supervisorToRcaMap = new Map();
             const populateSupervisorMap = (sale) => {
-                 if (sale.CODUSUR && sale.SUPERV) {
-                    if (!supervisorToRcaMap.has(sale.SUPERV)) {
-                        supervisorToRcaMap.set(sale.SUPERV, new Set());
+                 if (sale.codusur && sale.superv) {
+                    if (!supervisorToRcaMap.has(sale.superv)) {
+                        supervisorToRcaMap.set(sale.superv, new Set());
                     }
-                    supervisorToRcaMap.get(sale.SUPERV).add(sale.CODUSUR);
+                    supervisorToRcaMap.get(sale.superv).add(sale.codusur);
                 }
             };
             allSalesData.forEach(populateSupervisorMap);
@@ -974,12 +974,12 @@
 
             optimizedData.productsBySupplier = new Map();
             const populateProductMap = (sale) => {
-                if (sale.CODFOR && sale.PRODUTO) {
-                    const codfor = String(sale.CODFOR);
+                if (sale.codfor && sale.produto) {
+                    const codfor = String(sale.codfor);
                     if (!optimizedData.productsBySupplier.has(codfor)) {
                         optimizedData.productsBySupplier.set(codfor, new Set());
                     }
-                    optimizedData.productsBySupplier.get(codfor).add(sale.PRODUTO);
+                    optimizedData.productsBySupplier.get(codfor).add(sale.produto);
                 }
             };
             allSalesData.forEach(populateProductMap);
@@ -988,32 +988,32 @@
 
             optimizedData.salesByProduct = { current: new Map(), history: new Map() };
             allSalesData.forEach(sale => {
-                if (sale.PRODUTO) {
-                    if (!optimizedData.salesByProduct.current.has(sale.PRODUTO)) {
-                        optimizedData.salesByProduct.current.set(sale.PRODUTO, []);
+                if (sale.produto) {
+                    if (!optimizedData.salesByProduct.current.has(sale.produto)) {
+                        optimizedData.salesByProduct.current.set(sale.produto, []);
                     }
-                    optimizedData.salesByProduct.current.get(sale.PRODUTO).push(sale);
+                    optimizedData.salesByProduct.current.get(sale.produto).push(sale);
                 }
             });
             allHistoryData.forEach(sale => {
-                if (sale.PRODUTO) {
-                    if (!optimizedData.salesByProduct.history.has(sale.PRODUTO)) {
-                        optimizedData.salesByProduct.history.set(sale.PRODUTO, []);
+                if (sale.produto) {
+                    if (!optimizedData.salesByProduct.history.has(sale.produto)) {
+                        optimizedData.salesByProduct.history.set(sale.produto, []);
                     }
-                    optimizedData.salesByProduct.history.get(sale.PRODUTO).push(sale);
+                    optimizedData.salesByProduct.history.get(sale.produto).push(sale);
                 }
             });
 
             optimizedData.rcaCodeByName = new Map();
             const populateRcaCodeMap = (s) => {
-                if(s.NOME && s.CODUSUR) optimizedData.rcaCodeByName.set(s.NOME, s.CODUSUR);
+                if(s.nome && s.codusur) optimizedData.rcaCodeByName.set(s.nome, s.codusur);
             };
             allSalesData.forEach(populateRcaCodeMap);
             allHistoryData.forEach(populateRcaCodeMap);
 
             [...allSalesData, ...allHistoryData].forEach(sale => {
-                if (sale.CODCLI && sale.FILIAL) {
-                    clientLastBranch.set(sale.CODCLI, sale.FILIAL);
+                if (sale.codcli && sale.filial) {
+                    clientLastBranch.set(sale.codcli, sale.filial);
                 }
             });
 
@@ -1024,14 +1024,14 @@
                     const id = dataMap.size;
                     dataMap.set(id, sale);
 
-                    const supervisor = sale.SUPERV || 'N/A';
-                    const rca = sale.NOME || 'N/A';
-                    const pasta = sale.OBSERVACAOFOR || 'N/A';
-                    const supplier = sale.CODFOR || 'N/A';
-                    const client = sale.CODCLI || 'N/A';
-                    const position = sale.POSICAO || 'N/A';
+                    const supervisor = sale.superv || 'N/A';
+                    const rca = sale.nome || 'N/A';
+                    const pasta = sale.observacaofor || 'N/A';
+                    const supplier = sale.codfor || 'N/A';
+                    const client = sale.codcli || 'N/A';
+                    const position = sale.posicao || 'N/A';
                     const rede = clientRamoMap.get(client) || 'N/A';
-                    const tipoVenda = sale.TIPOVENDA || 'N/A';
+                    const tipoVenda = sale.tipovenda || 'N/A';
 
                     if (!bySupervisor.has(supervisor)) bySupervisor.set(supervisor, new Set());
                     bySupervisor.get(supervisor).add(id);
@@ -1071,15 +1071,15 @@
 
             optimizedData.salesByClientAndRca_CurrentMonth = new Map();
             allSalesData.forEach(s => {
-                if (s.VLVENDA > 0 && s.CODCLI && s.PRODUTO && s.CODUSUR) {
-                    if (!optimizedData.salesByClientAndRca_CurrentMonth.has(s.CODCLI)) {
-                        optimizedData.salesByClientAndRca_CurrentMonth.set(s.CODCLI, new Map());
+                if (s.vlvenda > 0 && s.codcli && s.produto && s.codusur) {
+                    if (!optimizedData.salesByClientAndRca_CurrentMonth.has(s.codcli)) {
+                        optimizedData.salesByClientAndRca_CurrentMonth.set(s.codcli, new Map());
                     }
-                    const clientSales = optimizedData.salesByClientAndRca_CurrentMonth.get(s.CODCLI);
-                    if (!clientSales.has(s.PRODUTO)) {
-                        clientSales.set(s.PRODUTO, new Set());
+                    const clientSales = optimizedData.salesByClientAndRca_CurrentMonth.get(s.codcli);
+                    if (!clientSales.has(s.produto)) {
+                        clientSales.set(s.produto, new Set());
                     }
-                    clientSales.get(s.PRODUTO).add(s.CODUSUR);
+                    clientSales.get(s.produto).add(s.codusur);
                 }
             });
 
@@ -1090,45 +1090,45 @@
 
             optimizedData.salesByClientAndRca_PreviousMonth = new Map();
             allHistoryData.forEach(s => {
-                const saleDate = parseDate(s.DTPED);
-                if (s.VLVENDA > 0 && s.CODCLI && s.PRODUTO && s.CODUSUR && saleDate?.getMonth() === previousMonth && saleDate?.getFullYear() === previousMonthYear) {
-                     if (!optimizedData.salesByClientAndRca_PreviousMonth.has(s.CODCLI)) {
-                        optimizedData.salesByClientAndRca_PreviousMonth.set(s.CODCLI, new Map());
+                const saleDate = parseDate(s.dtped);
+                if (s.vlvenda > 0 && s.codcli && s.produto && s.codusur && saleDate?.getMonth() === previousMonth && saleDate?.getFullYear() === previousMonthYear) {
+                     if (!optimizedData.salesByClientAndRca_PreviousMonth.has(s.codcli)) {
+                        optimizedData.salesByClientAndRca_PreviousMonth.set(s.codcli, new Map());
                     }
-                    const clientSales = optimizedData.salesByClientAndRca_PreviousMonth.get(s.CODCLI);
-                    if (!clientSales.has(s.PRODUTO)) {
-                        clientSales.set(s.PRODUTO, new Set());
+                    const clientSales = optimizedData.salesByClientAndRca_PreviousMonth.get(s.codcli);
+                    if (!clientSales.has(s.produto)) {
+                        clientSales.set(s.produto, new Set());
                     }
-                    clientSales.get(s.PRODUTO).add(s.CODUSUR);
+                    clientSales.get(s.produto).add(s.codusur);
                 }
             });
 
             optimizedData.bonificationsByClientAndRca_CurrentMonth = new Map();
             allSalesData.forEach(s => {
-                if (s.VLBONIFIC > 0 && s.CODCLI && s.PRODUTO && s.CODUSUR) {
-                    if (!optimizedData.bonificationsByClientAndRca_CurrentMonth.has(s.CODCLI)) {
-                        optimizedData.bonificationsByClientAndRca_CurrentMonth.set(s.CODCLI, new Map());
+                if (s.vlbonific > 0 && s.codcli && s.produto && s.codusur) {
+                    if (!optimizedData.bonificationsByClientAndRca_CurrentMonth.has(s.codcli)) {
+                        optimizedData.bonificationsByClientAndRca_CurrentMonth.set(s.codcli, new Map());
                     }
-                    const clientBonuses = optimizedData.bonificationsByClientAndRca_CurrentMonth.get(s.CODCLI);
-                    if (!clientBonuses.has(s.PRODUTO)) {
-                        clientBonuses.set(s.PRODUTO, new Set());
+                    const clientBonuses = optimizedData.bonificationsByClientAndRca_CurrentMonth.get(s.codcli);
+                    if (!clientBonuses.has(s.produto)) {
+                        clientBonuses.set(s.produto, new Set());
                     }
-                    clientBonuses.get(s.PRODUTO).add(s.CODUSUR);
+                    clientBonuses.get(s.produto).add(s.codusur);
                 }
             });
 
             optimizedData.bonificationsByClientAndRca_PreviousMonth = new Map();
             allHistoryData.forEach(s => {
-                const saleDate = parseDate(s.DTPED);
-                if (s.VLBONIFIC > 0 && s.CODCLI && s.PRODUTO && s.CODUSUR && saleDate?.getMonth() === previousMonth && saleDate?.getFullYear() === previousMonthYear) {
-                     if (!optimizedData.bonificationsByClientAndRca_PreviousMonth.has(s.CODCLI)) {
-                        optimizedData.bonificationsByClientAndRca_PreviousMonth.set(s.CODCLI, new Map());
+                const saleDate = parseDate(s.dtped);
+                if (s.vlbonific > 0 && s.codcli && s.produto && s.codusur && saleDate?.getMonth() === previousMonth && saleDate?.getFullYear() === previousMonthYear) {
+                     if (!optimizedData.bonificationsByClientAndRca_PreviousMonth.has(s.codcli)) {
+                        optimizedData.bonificationsByClientAndRca_PreviousMonth.set(s.codcli, new Map());
                     }
-                    const clientBonuses = optimizedData.bonificationsByClientAndRca_PreviousMonth.get(s.CODCLI);
-                    if (!clientBonuses.has(s.PRODUTO)) {
-                        clientBonuses.set(s.PRODUTO, new Set());
+                    const clientBonuses = optimizedData.bonificationsByClientAndRca_PreviousMonth.get(s.codcli);
+                    if (!clientBonuses.has(s.produto)) {
+                        clientBonuses.set(s.produto, new Set());
                     }
-                    clientBonuses.get(s.PRODUTO).add(s.CODUSUR);
+                    clientBonuses.get(s.produto).add(s.codusur);
                 }
             });
 
@@ -1755,7 +1755,7 @@
         function getUniqueMonthCount(data) {
             const months = new Set();
             data.forEach(sale => {
-                const saleDate = parseDate(sale.DTPED);
+                const saleDate = parseDate(sale.dtped);
                 if (saleDate) {
                     const monthKey = `${saleDate.getFullYear()}-${saleDate.getMonth()}`;
                     months.add(monthKey);
@@ -1779,9 +1779,9 @@
             // Registar clientes que tiveram *qualquer* operação (Venda OU Bonificação)
             const positiveClients = new Set();
             data.forEach(sale => {
-                // Se o cliente teve Venda (VLVENDA > 0) OU Bonificação (VLBONIFIC > 0), ele é considerado positivado.
-                if (sale.CODCLI && (sale.VLVENDA > 0 || sale.VLBONIFIC > 0)) {
-                    positiveClients.add(sale.CODCLI);
+                // Se o cliente teve Venda (vlvenda > 0) OU Bonificação (vlbonific > 0), ele é considerado positivado.
+                if (sale.codcli && (sale.vlvenda > 0 || sale.vlbonific > 0)) {
+                    positiveClients.add(sale.codcli);
                 }
             });
             summary.positivacaoCount = positiveClients.size;
@@ -1789,38 +1789,38 @@
 
             let totalSkus = 0;
             data.forEach(item => {
-                summary.totalFaturamento += item.VLVENDA;
-                summary.totalPeso += item.TOTPESOLIQ;
+                summary.totalFaturamento += item.vlvenda;
+                summary.totalPeso += item.totpesoliq;
 
                 // 2. Lógica de SKU/PDV
                 // Contamos o SKU se for uma Venda OU uma Bonificação
-                if(item.VLVENDA > 0 || item.VLBONIFIC > 0) {
+                if(item.vlvenda > 0 || item.vlbonific > 0) {
                     totalSkus++;
                 }
 
-                const vendedor = item.NOME || 'N/A';
-                summary.vendasPorVendedor[vendedor] = (summary.vendasPorVendedor[vendedor] || 0) + item.VLVENDA;
+                const vendedor = item.nome || 'N/A';
+                summary.vendasPorVendedor[vendedor] = (summary.vendasPorVendedor[vendedor] || 0) + item.vlvenda;
 
-                const supervisor = item.SUPERV || 'N/A';
-                summary.vendasPorSupervisor[supervisor] = (summary.vendasPorSupervisor[supervisor] || 0) + item.VLVENDA;
+                const supervisor = item.superv || 'N/A';
+                summary.vendasPorSupervisor[supervisor] = (summary.vendasPorSupervisor[supervisor] || 0) + item.vlvenda;
 
-                const produto = item.DESCRICAO || 'N/A';
-                const codigo = item.PRODUTO || 'N/A';
+                const produto = item.descricao || 'N/A';
+                const codigo = item.produto || 'N/A';
                 if (!salesByProduct[produto]) salesByProduct[produto] = { faturamento: 0, peso: 0, codigo: codigo };
-                salesByProduct[produto].faturamento += item.VLVENDA;
-                salesByProduct[produto].peso += item.TOTPESOLIQ;
+                salesByProduct[produto].faturamento += item.vlvenda;
+                salesByProduct[produto].peso += item.totpesoliq;
 
                 let fornecedorLabel;
                 if(isFiltered){
-                    const fornecedorNome = item.FORNECEDOR || 'N/A';
-                    const codFor = item.CODFOR;
+                    const fornecedorNome = item.fornecedor || 'N/A';
+                    const codFor = item.codfor;
                     fornecedorLabel = `${fornecedorNome} - ${codFor}`;
                 } else {
-                     fornecedorLabel = item.OBSERVACAOFOR || 'N/A';
+                     fornecedorLabel = item.observacaofor || 'N/A';
                 }
 
                 const currentTotal = faturamentoMap.get(fornecedorLabel) || 0;
-                faturamentoMap.set(fornecedorLabel, currentTotal + item.VLVENDA);
+                faturamentoMap.set(fornecedorLabel, currentTotal + item.vlvenda);
             });
 
             const totalRelevantClients = clientBaseForPositivacao.length;
@@ -1945,15 +1945,15 @@
             
             tableBody.innerHTML = pageData.map(row => `
                 <tr class="hover:bg-slate-700">
-                    <td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-pedido-id="${row.PEDIDO}">${row.PEDIDO}</a></td>
-                    <td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${row.CODCLI}">${row.CODCLI}</a></td>
-                    <td class="px-4 py-2">${getFirstName(row.NOME)}</td>
-                    <td class="px-4 py-2">${row.FORNECEDORES_STR || ''}</td>
-                    <td class="px-4 py-2">${formatDate(row.DTPED)}</td>
-                    <td class="px-4 py-2">${formatDate(row.DTSAIDA)}</td>
-                    <td class="px-4 py-2 text-right">${(row.TOTPESOLIQ || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Kg</td>
-                    <td class="px-4 py-2 text-right">${(row.VLVENDA || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                    <td class="px-4 py-2 text-center">${getPosicaoBadge(row.POSICAO)}</td>
+                    <td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-pedido-id="${row.pedido}">${row.pedido}</a></td>
+                    <td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${row.codcli}">${row.codcli}</a></td>
+                    <td class="px-4 py-2">${getFirstName(row.nome)}</td>
+                    <td class="px-4 py-2">${row.fornecedores_str || ''}</td>
+                    <td class="px-4 py-2">${formatDate(row.dtped)}</td>
+                    <td class="px-4 py-2">${formatDate(row.dtsaida)}</td>
+                    <td class="px-4 py-2 text-right">${(row.totpesoliq || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Kg</td>
+                    <td class="px-4 py-2 text-right">${(row.vlvenda || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                    <td class="px-4 py-2 text-center">${getPosicaoBadge(row.posicao)}</td>
                 </tr>
             `).join('');
 
@@ -2014,9 +2014,9 @@
             const passedWorkingDays = getPassedWorkingDaysInMonth(currentYear, currentMonth, selectedHolidays, lastSaleDate);
 
             const monthCount = getUniqueMonthCount(historicalSales);
-            const pastQuarterRevenue = historicalSales.reduce((sum, sale) => sum + sale.VLVENDA, 0);
+            const pastQuarterRevenue = historicalSales.reduce((sum, sale) => sum + sale.vlvenda, 0);
             const averageMonthlyRevenue = monthCount > 0 ? pastQuarterRevenue / monthCount : 0;
-            const currentMonthRevenue = currentSales.reduce((sum, sale) => sum + sale.VLVENDA, 0);
+            const currentMonthRevenue = currentSales.reduce((sum, sale) => sum + sale.vlvenda, 0);
             const trend = passedWorkingDays > 0 && totalWorkingDays > 0 ? (currentMonthRevenue / passedWorkingDays) * totalWorkingDays : 0;
             const lineChartDataset = [{ label: 'Valor', data: [averageMonthlyRevenue, trend], fill: true, borderColor: '#14b8a6', backgroundColor: 'rgba(20, 184, 166, 0.1)', tension: 0.2, pointRadius: 6, pointBackgroundColor: '#14b8a6', pointBorderColor: '#FFF', pointBorderWidth: 2, pointHoverRadius: 8 }];
             
@@ -2065,37 +2065,37 @@
                 return sourceData.filter(item => {
                     let matches = true;
                     if (mainRedeGroupFilter) {
-                        matches = matches && clientCodesInRede.has(item.CODCLI);
+                        matches = matches && clientCodesInRede.has(item.codcli);
                     }
                     if (codcli) {
-                        matches = matches && item.CODCLI === codcli;
+                        matches = matches && item.codcli === codcli;
                     } else {
                         if (supervisor) {
-                            matches = matches && item.SUPERV === supervisor;
+                            matches = matches && item.superv === supervisor;
                         }
                         if (selectedSellers.length > 0) {
-                            matches = matches && selectedSellers.includes(item.NOME);
+                            matches = matches && selectedSellers.includes(item.nome);
                         }
                     }
                     if (selectedTiposVenda.length > 0) {
-                        matches = matches && selectedTiposVenda.includes(item.TIPOVENDA);
+                        matches = matches && selectedTiposVenda.includes(item.tipovenda);
                     }
                     if (currentFornecedor) {
-                        if (item.FORNECEDORES_LIST) { // Para aggregatedOrders
-                            matches = matches && item.FORNECEDORES_LIST.includes(currentFornecedor);
+                        if (item.fornecedores_list) { // Para aggregatedOrders
+                            matches = matches && item.fornecedores_list.includes(currentFornecedor);
                         } else { // Para allSalesData/allHistoryData
-                            matches = matches && item.OBSERVACAOFOR === currentFornecedor;
+                            matches = matches && item.observacaofor === currentFornecedor;
                         }
                     }
                     if (selectedFornecedor) {
-                         if (item.CODFORS_LIST) { // Para aggregatedOrders
-                            matches = matches && item.CODFORS_LIST.includes(selectedFornecedor);
+                         if (item.codfors_list) { // Para aggregatedOrders
+                            matches = matches && item.codfors_list.includes(selectedFornecedor);
                         } else { // Para allSalesData/allHistoryData
-                            matches = matches && item.CODFOR == selectedFornecedor;
+                            matches = matches && item.codfor == selectedFornecedor;
                         }
                     }
                     if (posicao) {
-                        matches = matches && item.POSICAO === posicao;
+                        matches = matches && item.posicao === posicao;
                     }
                     return matches;
                 });
@@ -2146,7 +2146,7 @@
         function populateSupervisors(filterElementId, dataSource) {
             const supervisorFilterEl = document.getElementById(filterElementId);
             if (!supervisorFilterEl) return;
-            const supervisors = [...new Set(dataSource.map(item => item.SUPERV).filter(Boolean))].sort();
+            const supervisors = [...new Set(dataSource.map(item => item.superv).filter(Boolean))].sort();
             const currentSupervisorValue = supervisorFilterEl.value;
             supervisorFilterEl.innerHTML = '<option value="">Todos</option>';
             supervisors.forEach(sup => { supervisorFilterEl.innerHTML += `<option value="${sup}">${sup}</option>`; });
@@ -2159,8 +2159,8 @@
             if (!filterEl) return;
             const suppliers = new Map();
             dataSource.forEach(s => {
-                if (s.CODFOR && s.FORNECEDOR) {
-                    suppliers.set(s.CODFOR, s.FORNECEDOR);
+                if (s.codfor && s.fornecedor) {
+                    suppliers.set(s.codfor, s.fornecedor);
                 }
             });
             const sortedSuppliers = [...suppliers.entries()].sort((a, b) => a[1].localeCompare(b[1]));
@@ -2172,7 +2172,7 @@
         }
 
         function updateSellerFilter(supervisor, dropdown, filterText, selectedArray, dataSource) {
-            const sellersToShow = supervisor ? [...new Set(dataSource.filter(s => s.SUPERV === supervisor).map(s => s.NOME))].sort() : [...new Set(dataSource.map(item => item.NOME).filter(Boolean))].sort();
+            const sellersToShow = supervisor ? [...new Set(dataSource.filter(s => s.superv === supervisor).map(s => s.nome))].sort() : [...new Set(dataSource.map(item => item.nome).filter(Boolean))].sort();
             selectedArray = selectedArray.filter(seller => sellersToShow.includes(seller));
             dropdown.innerHTML = '';
             sellersToShow.forEach(s => { const isChecked = selectedArray.includes(s); dropdown.innerHTML += `<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${s}" ${isChecked ? 'checked' : ''}><span class="ml-2">${s}</span></label>`; });
@@ -2183,7 +2183,7 @@
         }
 
         function updateTipoVendaFilter(dropdown, filterText, selectedArray, dataSource) {
-            const tiposVendaToShow = [...new Set(dataSource.map(item => item.TIPOVENDA).filter(Boolean))].sort();
+            const tiposVendaToShow = [...new Set(dataSource.map(item => item.tipovenda).filter(Boolean))].sort();
             selectedArray = selectedArray.filter(tipo => tiposVendaToShow.includes(tipo));
             dropdown.innerHTML = '';
             tiposVendaToShow.forEach(s => { 
@@ -2325,11 +2325,11 @@
 
             const supervisor = citySupervisorFilter.value;
             if (supervisor) {
-                const rcasOfSupervisor = [...new Set(allSalesData.filter(s => s.SUPERV === supervisor).map(s => s.CODUSUR))];
+                const rcasOfSupervisor = [...new Set(allSalesData.filter(s => s.superv === supervisor).map(s => s.codusur))];
                 clients = clients.filter(c => c.rcas.some(rca => rcasOfSupervisor.includes(rca)));
             }
             if (selectedCitySellers.length > 0) {
-                const rcasOfVendedor = [...new Set(allSalesData.filter(s => selectedCitySellers.includes(s.NOME)).map(s => s.CODUSUR))];
+                const rcasOfVendedor = [...new Set(allSalesData.filter(s => selectedCitySellers.includes(s.nome)).map(s => s.codusur))];
                 clients = clients.filter(c => c.rcas.some(rca => rcasOfVendedor.includes(rca)));
             }
 
@@ -2338,7 +2338,7 @@
 
         function updateCitySuggestions(filterInput, suggestionsContainer, dataSource) {
             const inputValue = filterInput.value.toLowerCase();
-            const allAvailableCities = [...new Set(dataSource.map(c => c.CIDADE || c.cidade).filter(c => c && c !== 'N/A'))].sort();
+            const allAvailableCities = [...new Set(dataSource.map(c => c.cidade || c.cidade).filter(c => c && c !== 'N/A'))].sort();
             const filteredCities = inputValue ? allAvailableCities.filter(c => c.toLowerCase().includes(inputValue)) : allAvailableCities;
 
             if (filteredCities.length > 0 && (document.activeElement === filterInput || !suggestionsContainer.classList.contains('manual-hide'))) {
@@ -2374,24 +2374,24 @@
             let salesForAnalysis = allSalesData;
 
             const clientCodesForAnalysis = new Set(clientsForAnalysis.map(c => c['codigo_cliente']));
-            salesForAnalysis = salesForAnalysis.filter(s => clientCodesForAnalysis.has(s.CODCLI));
+            salesForAnalysis = salesForAnalysis.filter(s => clientCodesForAnalysis.has(s.codcli));
 
-            if (supervisor) salesForAnalysis = salesForAnalysis.filter(s => s.SUPERV === supervisor);
-            if (selectedCitySellers.length > 0) salesForAnalysis = salesForAnalysis.filter(s => selectedCitySellers.includes(s.NOME));
+            if (supervisor) salesForAnalysis = salesForAnalysis.filter(s => s.superv === supervisor);
+            if (selectedCitySellers.length > 0) salesForAnalysis = salesForAnalysis.filter(s => selectedCitySellers.includes(s.nome));
 
-            if (cidadeFiltro) { clientsForAnalysis = clientsForAnalysis.filter(c => c.cidade && c.cidade === cidadeFiltro); salesForAnalysis = salesForAnalysis.filter(s => s.CIDADE && s.CIDADE === cidadeFiltro); }
-            if (codcliFilterVal) { clientsForAnalysis = clientsForAnalysis.filter(c => String(c['codigo_cliente']) === codcliFilterVal); salesForAnalysis = salesForAnalysis.filter(s => s.CODCLI === codcliFilterVal); }
+            if (cidadeFiltro) { clientsForAnalysis = clientsForAnalysis.filter(c => c.cidade && c.cidade === cidadeFiltro); salesForAnalysis = salesForAnalysis.filter(s => s.cidade && s.cidade === cidadeFiltro); }
+            if (codcliFilterVal) { clientsForAnalysis = clientsForAnalysis.filter(c => String(c['codigo_cliente']) === codcliFilterVal); salesForAnalysis = salesForAnalysis.filter(s => s.codcli === codcliFilterVal); }
 
             const salesThisMonth = allSalesData.filter(sale => {
-                const saleDate = parseDate(sale.DTPED);
+                const saleDate = parseDate(sale.dtped);
                 return saleDate && saleDate.getFullYear() === currentYear && saleDate.getMonth() === currentMonth;
             });
 
             const clientTotalsThisMonth = new Map();
             salesThisMonth.forEach(sale => {
-                const codcli = sale.CODCLI;
+                const codcli = sale.codcli;
                 const currentTotal = clientTotalsThisMonth.get(codcli) || 0;
-                clientTotalsThisMonth.set(codcli, currentTotal + sale.VLVENDA);
+                clientTotalsThisMonth.set(codcli, currentTotal + sale.vlvenda);
             });
 
             let activeClientsList = [];
@@ -2429,17 +2429,17 @@
             const salesByActiveClient = {};
             activeClientsList.forEach(client => {
                 const codcli = String(client['codigo_cliente']);
-                let clientSales = salesThisMonth.filter(s => s.CODCLI === codcli);
+                let clientSales = salesThisMonth.filter(s => s.codcli === codcli);
 
                 if (selectedCitySellers.length > 0) {
-                    clientSales = clientSales.filter(s => selectedCitySellers.includes(s.NOME));
+                    clientSales = clientSales.filter(s => selectedCitySellers.includes(s.nome));
                 }
 
-                const totalFaturamentoFiltrado = clientSales.reduce((sum, s) => sum + s.VLVENDA, 0);
+                const totalFaturamentoFiltrado = clientSales.reduce((sum, s) => sum + s.vlvenda, 0);
 
                 if (totalFaturamentoFiltrado > 0) {
-                    const pepsicoTotal = clientSales.filter(s => s.OBSERVACAOFOR === 'PEPSICO').reduce((sum, s) => sum + s.VLVENDA, 0);
-                    const multimarcasTotal = clientSales.filter(s => s.OBSERVACAOFOR === 'MULTIMARCAS').reduce((sum, s) => sum + s.VLVENDA, 0);
+                    const pepsicoTotal = clientSales.filter(s => s.observacaofor === 'PEPSICO').reduce((sum, s) => sum + s.vlvenda, 0);
+                    const multimarcasTotal = clientSales.filter(s => s.observacaofor === 'MULTIMARCAS').reduce((sum, s) => sum + s.vlvenda, 0);
                     const outrosTotal = totalFaturamentoFiltrado - pepsicoTotal - multimarcasTotal;
                     salesByActiveClient[codcli] = { ...client, total: totalFaturamentoFiltrado, pepsico: pepsicoTotal, multimarcas: multimarcasTotal, outros: outrosTotal };
                 }
@@ -2472,18 +2472,18 @@
 
             const cityChartTitleEl = document.getElementById('city-chart-title');
             const cityChartOptions = { indexAxis: 'y', scales: { x: { grace: '15%' } }, plugins: { datalabels: { align: 'end', anchor: 'end', color: '#cbd5e1', font: { size: 14, weight: 'bold' }, formatter: (value) => (value / 1000).toFixed(1) + 'k', offset: 8 } } };
-            const totalFaturamentoCidade = salesForAnalysis.reduce((sum, item) => sum + item.VLVENDA, 0);
+            const totalFaturamentoCidade = salesForAnalysis.reduce((sum, item) => sum + item.vlvenda, 0);
             totalFaturamentoCidadeEl.textContent = totalFaturamentoCidade.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             if (cidadeFiltro) {
                 cityChartTitleEl.textContent = 'Top 10 Bairros';
                 const salesByBairro = {};
-                salesForAnalysis.forEach(sale => { const bairro = sale.BAIRRO || 'N/A'; salesByBairro[bairro] = (salesByBairro[bairro] || 0) + sale.VLVENDA; });
+                salesForAnalysis.forEach(sale => { const bairro = sale.bairro || 'N/A'; salesByBairro[bairro] = (salesByBairro[bairro] || 0) + sale.vlvenda; });
                 const sortedBairros = Object.entries(salesByBairro).sort(([, a], [, b]) => b - a).slice(0, 10);
                 createChart('salesByClientInCityChart', 'bar', sortedBairros.map(([name]) => name), sortedBairros.map(([, total]) => total), cityChartOptions);
             } else {
                 cityChartTitleEl.textContent = 'Top 10 Cidades';
                 const salesByCity = {};
-                salesForAnalysis.forEach(sale => { const cidade = sale.CIDADE || 'N/A'; salesByCity[cidade] = (salesByCity[cidade] || 0) + sale.VLVENDA; });
+                salesForAnalysis.forEach(sale => { const cidade = sale.cidade || 'N/A'; salesByCity[cidade] = (salesByCity[cidade] || 0) + sale.vlvenda; });
                 const sortedCidades = Object.entries(salesByCity).sort(([, a], [, b]) => b - a).slice(0, 10);
                 createChart('salesByClientInCityChart', 'bar', sortedCidades.map(([name]) => name), sortedCidades.map(([, total]) => total), cityChartOptions);
             }
@@ -2500,18 +2500,18 @@
 
         function calculateHistoricalBests() {
             const salesBySupervisorByDay = {};
-            const mostRecentSaleDate = allSalesData.map(s => parseDate(s.DTPED)).filter(Boolean).reduce((a, b) => a > b ? a : b, new Date(0));
+            const mostRecentSaleDate = allSalesData.map(s => parseDate(s.dtped)).filter(Boolean).reduce((a, b) => a > b ? a : b, new Date(0));
             const previousMonthDate = new Date(mostRecentSaleDate.getFullYear(), mostRecentSaleDate.getMonth() - 1, 1);
             const previousMonth = previousMonthDate.getMonth();
             const previousMonthYear = previousMonthDate.getFullYear();
-            const historyLastMonthData = allHistoryData.filter(sale => { const saleDate = parseDate(sale.DTPED); return saleDate && saleDate.getMonth() === previousMonth && saleDate.getFullYear() === previousMonthYear; });
+            const historyLastMonthData = allHistoryData.filter(sale => { const saleDate = parseDate(sale.dtped); return saleDate && saleDate.getMonth() === previousMonth && saleDate.getFullYear() === previousMonthYear; });
             historyLastMonthData.forEach(sale => {
-                if (!sale.SUPERV || sale.SUPERV === 'BALCAO' || !sale.DTPED) return;
-                const saleDate = parseDate(sale.DTPED); if (!saleDate) return;
-                const supervisor = sale.SUPERV.toUpperCase(); const dateString = saleDate.toISOString().split('T')[0];
+                if (!sale.superv || sale.superv === 'BALCAO' || !sale.dtped) return;
+                const saleDate = parseDate(sale.dtped); if (!saleDate) return;
+                const supervisor = sale.superv.toUpperCase(); const dateString = saleDate.toISOString().split('T')[0];
                 if (!salesBySupervisorByDay[supervisor]) salesBySupervisorByDay[supervisor] = {};
                 if (!salesBySupervisorByDay[supervisor][dateString]) salesBySupervisorByDay[supervisor][dateString] = 0;
-                salesBySupervisorByDay[supervisor][dateString] += sale.VLVENDA;
+                salesBySupervisorByDay[supervisor][dateString] += sale.vlvenda;
             });
             const bestDayByWeekdayBySupervisor = {};
             for (const supervisor in salesBySupervisorByDay) {
@@ -2529,7 +2529,7 @@
         }
 
         function populateWeeklyFilters() {
-            const supervisors = [...new Set(allSalesData.map(item => item.SUPERV).filter(Boolean).filter(sup => sup !== 'BALCAO'))].sort();
+            const supervisors = [...new Set(allSalesData.map(item => item.superv).filter(Boolean).filter(sup => sup !== 'BALCAO'))].sort();
             weeklySupervisorFilter.innerHTML = '';
             supervisors.forEach(sup => { weeklySupervisorFilter.innerHTML += `<div class="flex items-center"><input id="sup-check-${sup.replace(/\s+/g, '-')}" type="checkbox" value="${sup}" class="w-4 h-4 text-teal-600 bg-slate-700 border-slate-600 rounded focus:ring-teal-600 ring-offset-slate-800 focus:ring-2"><label for="sup-check-${sup.replace(/\s+/g, '-')}" class="ml-2 text-sm font-medium text-slate-300">${sup}</label></div>`; });
         }
@@ -2537,14 +2537,14 @@
         function updateWeeklyView() {
             const selectedSupervisors = Array.from(weeklySupervisorFilter.querySelectorAll('input:checked')).map(cb => cb.value);
             let dataForGeneralCharts = allSalesData;
-            if (currentWeeklyFornecedor) dataForGeneralCharts = dataForGeneralCharts.filter(row => String(row.OBSERVACAOFOR).trim() === currentWeeklyFornecedor);
-            if (selectedSupervisors.length > 0) dataForGeneralCharts = dataForGeneralCharts.filter(d => selectedSupervisors.includes(d.SUPERV));
+            if (currentWeeklyFornecedor) dataForGeneralCharts = dataForGeneralCharts.filter(row => String(row.observacaofor).trim() === currentWeeklyFornecedor);
+            if (selectedSupervisors.length > 0) dataForGeneralCharts = dataForGeneralCharts.filter(d => selectedSupervisors.includes(d.superv));
             const currentMonth = lastSaleDate.getMonth(); const currentYear = lastSaleDate.getFullYear();
-            const monthSales = dataForGeneralCharts.filter(d => { if (!d.DTPED) return false; const saleDate = parseDate(d.DTPED); return saleDate && saleDate.getMonth() === currentMonth && saleDate.getFullYear() === currentYear; });
-            const totalMes = monthSales.reduce((sum, item) => sum + item.VLVENDA, 0);
+            const monthSales = dataForGeneralCharts.filter(d => { if (!d.dtped) return false; const saleDate = parseDate(d.dtped); return saleDate && saleDate.getMonth() === currentMonth && saleDate.getFullYear() === currentYear; });
+            const totalMes = monthSales.reduce((sum, item) => sum + item.vlvenda, 0);
             totalMesSemanalEl.textContent = totalMes.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             const salesByWeekAndDay = {}; const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-            monthSales.forEach(sale => { const saleDate = parseDate(sale.DTPED); if (!saleDate) return; const weekNum = getWeekOfMonth(saleDate); const dayName = dayNames[saleDate.getDay()]; if (!salesByWeekAndDay[weekNum]) salesByWeekAndDay[weekNum] = {}; if (!salesByWeekAndDay[weekNum][dayName]) salesByWeekAndDay[weekNum][dayName] = 0; salesByWeekAndDay[weekNum][dayName] += sale.VLVENDA; });
+            monthSales.forEach(sale => { const saleDate = parseDate(sale.dtped); if (!saleDate) return; const weekNum = getWeekOfMonth(saleDate); const dayName = dayNames[saleDate.getDay()]; if (!salesByWeekAndDay[weekNum]) salesByWeekAndDay[weekNum] = {}; if (!salesByWeekAndDay[weekNum][dayName]) salesByWeekAndDay[weekNum][dayName] = 0; salesByWeekAndDay[weekNum][dayName] += sale.vlvenda; });
             const weekLabels = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
             const weekNumbers = Object.keys(salesByWeekAndDay).sort((a,b) => a - b);
             const professionalPalette = ['#14b8a6', '#6366f1', '#ec4899', '#f97316', '#8b5cf6'];
@@ -2562,24 +2562,24 @@
                 Object.keys(salesByWeekAndDay).sort((a,b) => parseInt(a) - parseInt(b)).forEach(weekNum => { const weekTotal = Object.values(salesByWeekAndDay[weekNum]).reduce((a, b) => a + b, 0); grandTotal += weekTotal; weeklySummaryTableBody.innerHTML += `<tr class="hover:bg-slate-700"><td class="px-4 py-2">Semana ${weekNum}</td><td class="px-4 py-2 text-right">${weekTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td></tr>`; });
                 weeklySummaryTableBody.innerHTML += `<tr class="font-bold bg-slate-700/50"><td class="px-4 py-2">Total do Mês</td><td class="px-4 py-2 text-right">${grandTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td></tr>`;
             }
-            const dataForRankings = dataForGeneralCharts.filter(d => d.SUPERV !== 'BALCAO');
-            const positivacao = {}; dataForRankings.forEach(d => { if (!d.NOME || !d.CODCLI) return; if (!positivacao[d.NOME]) positivacao[d.NOME] = new Set(); positivacao[d.NOME].add(d.CODCLI); });
+            const dataForRankings = dataForGeneralCharts.filter(d => d.superv !== 'BALCAO');
+            const positivacao = {}; dataForRankings.forEach(d => { if (!d.nome || !d.codcli) return; if (!positivacao[d.nome]) positivacao[d.nome] = new Set(); positivacao[d.nome].add(d.codcli); });
             const positivacaoRank = Object.entries(positivacao).map(([v, c]) => ({ vendedor: v, total: c.size })).sort((a, b) => b.total - a.total).slice(0, 10);
             if (positivacaoRank.length > 0) createChart('positivacaoChart', 'bar', positivacaoRank.map(r => getFirstName(r.vendedor)), positivacaoRank.map(r => r.total));
             else showNoDataMessage('positivacaoChart', 'Sem dados para o ranking.');
-            const salesBySeller = {}; dataForRankings.forEach(d => { if (!d.NOME) return; salesBySeller[d.NOME] = (salesBySeller[d.NOME] || 0) + d.VLVENDA; });
+            const salesBySeller = {}; dataForRankings.forEach(d => { if (!d.nome) return; salesBySeller[d.nome] = (salesBySeller[d.nome] || 0) + d.vlvenda; });
             const topSellersRank = Object.entries(salesBySeller).sort(([, a], [, b]) => b - a).slice(0, 10);
             if (topSellersRank.length > 0) createChart('topSellersChart', 'bar', topSellersRank.map(r => getFirstName(r[0])), topSellersRank.map(r => r[1]));
             else showNoDataMessage('topSellersChart', 'Sem dados para o ranking.');
-            const vendorsInFilter = [...new Set(dataForRankings.map(d => d.NOME))].filter(v => v !== 'VD HIAGO');
-            const mixRank = vendorsInFilter.map(vendedor => { const vendorSales = dataForRankings.filter(d => d.NOME === vendedor); if (vendorSales.length === 0) return { vendedor, avgMix: 0 }; const supervisor = vendorSales[0].SUPERV; let salesForMixCalc; if (supervisor === 'OSVALDO NUNES O') salesForMixCalc = vendorSales; else { const targetSuppliers = ['707', '708']; salesForMixCalc = vendorSales.filter(d => targetSuppliers.includes(String(d.CODFOR))); } const mixPerClient = {}; salesForMixCalc.forEach(d => { if (!d.CODCLI || !d.DESCRICAO) return; if (!mixPerClient[d.CODCLI]) mixPerClient[d.CODCLI] = new Set(); mixPerClient[d.CODCLI].add(d.DESCRICAO); }); const mixValues = Object.values(mixPerClient).map(p => p.size); if (mixValues.length === 0) return { vendedor, avgMix: 0 }; const avgMix = mixValues.reduce((a, b) => a + b, 0) / mixValues.length; return { vendedor, avgMix }; }).sort((a, b) => b.avgMix - a.avgMix).slice(0, 10);
+            const vendorsInFilter = [...new Set(dataForRankings.map(d => d.nome))].filter(v => v !== 'VD HIAGO');
+            const mixRank = vendorsInFilter.map(vendedor => { const vendorSales = dataForRankings.filter(d => d.nome === vendedor); if (vendorSales.length === 0) return { vendedor, avgMix: 0 }; const supervisor = vendorSales[0].superv; let salesForMixCalc; if (supervisor === 'OSVALDO NUNES O') salesForMixCalc = vendorSales; else { const targetSuppliers = ['707', '708']; salesForMixCalc = vendorSales.filter(d => targetSuppliers.includes(String(d.codfor))); } const mixPerClient = {}; salesForMixCalc.forEach(d => { if (!d.codcli || !d.descricao) return; if (!mixPerClient[d.codcli]) mixPerClient[d.codcli] = new Set(); mixPerClient[d.codcli].add(d.descricao); }); const mixValues = Object.values(mixPerClient).map(p => p.size); if (mixValues.length === 0) return { vendedor, avgMix: 0 }; const avgMix = mixValues.reduce((a, b) => a + b, 0) / mixValues.length; return { vendedor, avgMix }; }).sort((a, b) => b.avgMix - a.avgMix).slice(0, 10);
             if(mixRank.length > 0 && mixRank.some(r => r.avgMix > 0)) createChart('mixChart', 'bar', mixRank.map(r => getFirstName(r.vendedor)), mixRank.map(r => r.avgMix));
             else showNoDataMessage('mixChart', 'Sem dados para o ranking.');
         }
 
         function updateSupplierFilter(dropdown, filterText, selectedArray, dataSource, filterType = 'comparison') {
             const suppliers = new Map();
-            dataSource.forEach(s => { if(s.CODFOR && s.FORNECEDOR) suppliers.set(s.CODFOR, s.FORNECEDOR); });
+            dataSource.forEach(s => { if(s.codfor && s.fornecedor) suppliers.set(s.codfor, s.fornecedor); });
             const sortedSuppliers = [...suppliers.entries()].sort((a, b) => a[1].localeCompare(b[1]));
 
             selectedArray = selectedArray.filter(cod => suppliers.has(cod));
@@ -2602,7 +2602,7 @@
 
         function updateComparisonCitySuggestions(dataSource) {
             const inputValue = comparisonCityFilter.value.toLowerCase();
-            const allAvailableCities = [...new Set(dataSource.map(c => c.CIDADE).filter(c => c && c !== 'N/A'))].sort();
+            const allAvailableCities = [...new Set(dataSource.map(c => c.cidade).filter(c => c && c !== 'N/A'))].sort();
             const filteredCities = inputValue ? allAvailableCities.filter(c => c.toLowerCase().includes(inputValue)) : allAvailableCities;
             if (filteredCities.length > 0 && document.activeElement === comparisonCityFilter) {
                 comparisonCitySuggestions.innerHTML = filteredCities.map(c => `<div class="p-2 hover:bg-slate-600 cursor-pointer">${c}</div>`).join('');
@@ -2640,9 +2640,9 @@
         function getPositiveClientsWithNewLogic(salesData) {
             const salesByClient = new Map();
             salesData.forEach(sale => {
-                if (!sale.CODCLI) return;
-                const clientTotal = salesByClient.get(sale.CODCLI) || 0;
-                salesByClient.set(sale.CODCLI, clientTotal + sale.VLVENDA);
+                if (!sale.codcli) return;
+                const clientTotal = salesByClient.get(sale.codcli) || 0;
+                salesByClient.set(sale.codcli, clientTotal + sale.vlvenda);
             });
 
             let positiveClients = 0;
@@ -2702,16 +2702,16 @@
             const clientProductNetValue = new Map();
 
             for (const sale of salesData) {
-                if (!targetCodfors.includes(String(sale.CODFOR))) continue;
-                if (!sale.CODCLI || !sale.PRODUTO) continue;
+                if (!targetCodfors.includes(String(sale.codfor))) continue;
+                if (!sale.codcli || !sale.produto) continue;
 
-                if (!clientProductNetValue.has(sale.CODCLI)) {
-                    clientProductNetValue.set(sale.CODCLI, new Map());
+                if (!clientProductNetValue.has(sale.codcli)) {
+                    clientProductNetValue.set(sale.codcli, new Map());
                 }
-                const clientProducts = clientProductNetValue.get(sale.CODCLI);
+                const clientProducts = clientProductNetValue.get(sale.codcli);
 
-                const currentValue = clientProducts.get(sale.PRODUTO) || 0;
-                clientProducts.set(sale.PRODUTO, currentValue + (Number(sale.VLVENDA) || 0));
+                const currentValue = clientProducts.get(sale.produto) || 0;
+                clientProducts.set(sale.produto, currentValue + (Number(sale.vlvenda) || 0));
             }
 
             const mixValues = [];
@@ -2739,18 +2739,18 @@
             const clientProductNetSales = new Map();
 
             for (const sale of salesData) {
-                if (!sale.CODCLI || !sale.PRODUTO) continue;
+                if (!sale.codcli || !sale.produto) continue;
 
-                if (!clientProductNetSales.has(sale.CODCLI)) {
-                    clientProductNetSales.set(sale.CODCLI, new Map());
+                if (!clientProductNetSales.has(sale.codcli)) {
+                    clientProductNetSales.set(sale.codcli, new Map());
                 }
-                const clientProducts = clientProductNetSales.get(sale.CODCLI);
+                const clientProducts = clientProductNetSales.get(sale.codcli);
 
-                if (!clientProducts.has(sale.PRODUTO)) {
-                    clientProducts.set(sale.PRODUTO, { netValue: 0, description: sale.DESCRICAO });
+                if (!clientProducts.has(sale.produto)) {
+                    clientProducts.set(sale.produto, { netValue: 0, description: sale.descricao });
                 }
-                const productData = clientProducts.get(sale.PRODUTO);
-                productData.netValue += (Number(sale.VLVENDA) || 0);
+                const productData = clientProducts.get(sale.produto);
+                productData.netValue += (Number(sale.vlvenda) || 0);
             }
 
             const clientPurchasedCategories = new Map();
@@ -2787,7 +2787,7 @@
         function groupSalesByMonth(salesData) {
             const salesByMonth = {};
             salesData.forEach(sale => {
-                const date = parseDate(sale.DTPED);
+                const date = parseDate(sale.dtped);
                 if (!date || isNaN(date.getTime())) return;
                 const monthKey = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
                 if (!salesByMonth[monthKey]) salesByMonth[monthKey] = [];
@@ -2826,14 +2826,14 @@
             const filial = comparisonFilialFilter.value;
 
             const filterFunction = s =>
-                (clientCodes.has(s.CODCLI)) &&
-                (filial === 'ambas' || s.FILIAL === filial) &&
-                (excludeFilter === 'supervisor' || !supervisor || s.SUPERV === supervisor) &&
-                (excludeFilter === 'seller' || sellers.length === 0 || sellers.includes(s.NOME)) &&
-                (excludeFilter === 'supplier' || suppliers.length === 0 || suppliers.includes(String(s.CODFOR))) &&
-                (excludeFilter === 'product' || products.length === 0 || products.includes(String(s.PRODUTO))) &&
-                (excludeFilter === 'pasta' || !pasta || s.OBSERVACAOFOR === pasta) &&
-                (excludeFilter === 'city' || !city || (s.CIDADE && s.CIDADE.toLowerCase() === city.toLowerCase()));
+                (clientCodes.has(s.codcli)) &&
+                (filial === 'ambas' || s.filial === filial) &&
+                (excludeFilter === 'supervisor' || !supervisor || s.superv === supervisor) &&
+                (excludeFilter === 'seller' || sellers.length === 0 || sellers.includes(s.nome)) &&
+                (excludeFilter === 'supplier' || suppliers.length === 0 || suppliers.includes(String(s.codfor))) &&
+                (excludeFilter === 'product' || products.length === 0 || products.includes(String(s.produto))) &&
+                (excludeFilter === 'pasta' || !pasta || s.observacaofor === pasta) &&
+                (excludeFilter === 'city' || !city || (s.cidade && s.cidade.toLowerCase() === city.toLowerCase()));
 
             return {
                 currentSales: allSalesData.filter(filterFunction),
@@ -2869,8 +2869,8 @@
             const pastaOptionsData = [...pastaCurrent, ...pastaHistory];
             const pepsicoBtn = document.querySelector('#comparison-fornecedor-toggle-container button[data-fornecedor="PEPSICO"]');
             const multimarcasBtn = document.querySelector('#comparison-fornecedor-toggle-container button[data-fornecedor="MULTIMARCAS"]');
-            const hasPepsico = pastaOptionsData.some(s => s.OBSERVACAOFOR === 'PEPSICO');
-            const hasMultimarcas = pastaOptionsData.some(s => s.OBSERVACAOFOR === 'MULTIMARCAS');
+            const hasPepsico = pastaOptionsData.some(s => s.observacaofor === 'PEPSICO');
+            const hasMultimarcas = pastaOptionsData.some(s => s.observacaofor === 'MULTIMARCAS');
             pepsicoBtn.disabled = !hasPepsico;
             multimarcasBtn.disabled = !hasMultimarcas;
             pepsicoBtn.classList.toggle('opacity-50', !hasPepsico);
@@ -2882,7 +2882,7 @@
             const listContainer = dropdown.querySelector('div[id$="-list"]');
             const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
 
-            const products = [...new Map(dataSource.map(s => [s.PRODUTO, s.DESCRICAO])).entries()].sort((a,b) => a[1].localeCompare(b[1]));
+            const products = [...new Map(dataSource.map(s => [s.produto, s.descricao])).entries()].sort((a,b) => a[1].localeCompare(b[1]));
 
             const filteredProducts = searchTerm.length > 0
                 ? products.filter(([code, name]) =>
@@ -2932,7 +2932,7 @@
 
         function updateStockCitySuggestions(dataSource) {
             const inputValue = stockCityFilter.value.toLowerCase();
-            const allAvailableCities = [...new Set(dataSource.map(c => c.CIDADE).filter(c => c && c !== 'N/A'))].sort();
+            const allAvailableCities = [...new Set(dataSource.map(c => c.cidade).filter(c => c && c !== 'N/A'))].sort();
             const filteredCities = inputValue ? allAvailableCities.filter(c => c.toLowerCase().includes(inputValue)) : allAvailableCities;
             if (filteredCities.length > 0 && document.activeElement === stockCityFilter) {
                 stockCitySuggestions.innerHTML = filteredCities.map(c => `<div class="p-2 hover:bg-slate-600 cursor-pointer">${c}</div>`).join('');
@@ -2982,14 +2982,14 @@
             const filial = stockFilialFilter.value;
 
             const filterFunction = s =>
-                (clientCodes.has(s.CODCLI)) &&
-                (filial === 'ambas' || s.FILIAL === filial) &&
-                (excludeFilter === 'supervisor' || !supervisor || s.SUPERV === supervisor) &&
-                (excludeFilter === 'seller' || sellers.length === 0 || sellers.includes(s.NOME)) &&
-                (excludeFilter === 'supplier' || suppliers.length === 0 || suppliers.includes(String(s.CODFOR))) &&
-                (excludeFilter === 'product' || products.length === 0 || products.includes(String(s.PRODUTO))) &&
-                (excludeFilter === 'pasta' || !pasta || s.OBSERVACAOFOR === pasta) &&
-                (excludeFilter === 'city' || !city || (s.CIDADE && s.CIDADE.toLowerCase() === city.toLowerCase()));
+                (clientCodes.has(s.codcli)) &&
+                (filial === 'ambas' || s.filial === filial) &&
+                (excludeFilter === 'supervisor' || !supervisor || s.superv === supervisor) &&
+                (excludeFilter === 'seller' || sellers.length === 0 || sellers.includes(s.nome)) &&
+                (excludeFilter === 'supplier' || suppliers.length === 0 || suppliers.includes(String(s.codfor))) &&
+                (excludeFilter === 'product' || products.length === 0 || products.includes(String(s.produto))) &&
+                (excludeFilter === 'pasta' || !pasta || s.observacaofor === pasta) &&
+                (excludeFilter === 'city' || !city || (s.cidade && s.cidade.toLowerCase() === city.toLowerCase()));
 
             return {
                 sales: allSalesData.filter(filterFunction),
@@ -3013,8 +3013,8 @@
             const pastaOptionsData = [...pastaData.sales, ...pastaData.history];
             const pepsicoBtn = document.querySelector('#stock-fornecedor-toggle-container button[data-fornecedor="PEPSICO"]');
             const multimarcasBtn = document.querySelector('#stock-fornecedor-toggle-container button[data-fornecedor="MULTIMARCAS"]');
-            const hasPepsico = pastaOptionsData.some(s => s.OBSERVACAOFOR === 'PEPSICO');
-            const hasMultimarcas = pastaOptionsData.some(s => s.OBSERVACAOFOR === 'MULTIMARCAS');
+            const hasPepsico = pastaOptionsData.some(s => s.observacaofor === 'PEPSICO');
+            const hasMultimarcas = pastaOptionsData.some(s => s.observacaofor === 'MULTIMARCAS');
             pepsicoBtn.disabled = !hasPepsico;
             multimarcasBtn.disabled = !hasMultimarcas;
             pepsicoBtn.classList.toggle('opacity-50', !hasPepsico);
@@ -3029,8 +3029,8 @@
 
             const historyMonthsCount = getUniqueMonthCount(historySales);
 
-            const currentTotalFat = currentSales.reduce((sum, item) => sum + item.VLVENDA, 0);
-            const currentTotalPeso = currentSales.reduce((sum, item) => sum + item.TOTPESOLIQ, 0);
+            const currentTotalFat = currentSales.reduce((sum, item) => sum + item.vlvenda, 0);
+            const currentTotalPeso = currentSales.reduce((sum, item) => sum + item.totpesoliq, 0);
             const currentClients = getPositiveClientsWithNewLogic(currentSales);
             const currentTicket = currentClients > 0 ? currentTotalFat / currentClients : 0;
             const pepsicoCodfors = ['707', '708'];
@@ -3040,8 +3040,8 @@
             const currentPositivacaoSalty = calculatePositivacaoPorCestaComDevolucao(currentSales, saltyCategories);
             const currentPositivacaoFoods = calculatePositivacaoPorCestaComDevolucao(currentSales, foodsCategories);
 
-            const historyTotalFat = historySales.reduce((sum, item) => sum + item.VLVENDA, 0);
-            const historyTotalPeso = historySales.reduce((sum, item) => sum + item.TOTPESOLIQ, 0);
+            const historyTotalFat = historySales.reduce((sum, item) => sum + item.vlvenda, 0);
+            const historyTotalPeso = historySales.reduce((sum, item) => sum + item.totpesoliq, 0);
 
             const historyAvgFat = historyMonthsCount > 0 ? historyTotalFat / historyMonthsCount : 0;
             const historyAvgPeso = historyMonthsCount > 0 ? historyTotalPeso / 1000 / historyMonthsCount : 0;
@@ -3096,7 +3096,7 @@
                 if (firstWeekStartDate.getMonth() < currentMonth || firstWeekStartDate.getFullYear() < currentYear) {
                     const endOfPreviousMonth = new Date(currentYear, currentMonth, 0);
                     const relevantHistory = historySales.filter(s => {
-                        const d = parseDate(s.DTPED);
+                        const d = parseDate(s.dtped);
                         return d >= firstWeekStartDate && d <= endOfPreviousMonth;
                     });
                     salesForWeeklyCharts.push(...relevantHistory);
@@ -3106,17 +3106,17 @@
 
             let currentSalesByWeek = new Array(currentMonthWeeks.length).fill(0);
             salesForWeeklyCharts.forEach(sale => {
-                const saleDate = parseDate(sale.DTPED);
+                const saleDate = parseDate(sale.dtped);
                 if (!saleDate) return;
                 const weekIndex = currentMonthWeeks.findIndex(week => saleDate >= week.start && saleDate <= week.end);
                 if (weekIndex !== -1) {
-                     currentSalesByWeek[weekIndex] += sale.VLVENDA;
+                     currentSalesByWeek[weekIndex] += sale.vlvenda;
                 }
             });
 
             const historySalesByWeekIndex = {};
             historySales.forEach(sale => {
-                const saleDate = parseDate(sale.DTPED);
+                const saleDate = parseDate(sale.dtped);
                 if (!saleDate) return;
                 const saleYear = saleDate.getFullYear();
                 const saleMonth = saleDate.getMonth();
@@ -3126,7 +3126,7 @@
                 if (weekIndex !== -1) {
                     if (!historySalesByWeekIndex[weekIndex]) historySalesByWeekIndex[weekIndex] = {};
                     if (!historySalesByWeekIndex[weekIndex][monthKey]) historySalesByWeekIndex[weekIndex][monthKey] = 0;
-                    historySalesByWeekIndex[weekIndex][monthKey] += sale.VLVENDA;
+                    historySalesByWeekIndex[weekIndex][monthKey] += sale.vlvenda;
                 }
             });
 
@@ -3151,10 +3151,10 @@
                     } else if (i === currentWeekIndex) {
                         const currentWeek = currentMonthWeeks[currentWeekIndex];
                         const salesThisWeekSoFar = salesForWeeklyCharts.filter(s => {
-                            const d = parseDate(s.DTPED);
+                            const d = parseDate(s.dtped);
                             return d >= currentWeek.start && d <= today;
                         });
-                        const totalSoldThisWeek = salesThisWeekSoFar.reduce((sum, s) => sum + s.VLVENDA, 0);
+                        const totalSoldThisWeek = salesThisWeekSoFar.reduce((sum, s) => sum + s.vlvenda, 0);
 
                         let workingDaysPassed = 0;
                         let totalWorkingDays = 0;
@@ -3208,20 +3208,20 @@
 
                     if (totalDays > 0 && passedDays > 0 && passedDays <= totalDays) {
                         const projectionFactor = totalDays / passedDays;
-                        const currentTotal = monthlyCurrentSales.reduce((sum, item) => sum + item.VLVENDA, 0);
+                        const currentTotal = monthlyCurrentSales.reduce((sum, item) => sum + item.vlvenda, 0);
                         const projectedTotal = currentTotal * projectionFactor;
 
-                        monthlyCurrentSales = [{ VLVENDA: projectedTotal, DTPED: new Date() }];
+                        monthlyCurrentSales = [{ vlvenda: projectedTotal, dtped: new Date() }];
                     }
                 }
-                const monthlyCurrentTotalFat = monthlyCurrentSales.reduce((sum, item) => sum + item.VLVENDA, 0);
+                const monthlyCurrentTotalFat = monthlyCurrentSales.reduce((sum, item) => sum + item.vlvenda, 0);
 
                 const salesByMonth = {};
                 historySales.forEach(sale => {
-                    const saleDate = parseDate(sale.DTPED);
+                    const saleDate = parseDate(sale.dtped);
                     if (!saleDate) return;
                     const monthKey = `${saleDate.getFullYear()}-${String(saleDate.getMonth() + 1).padStart(2, '0')}`;
-                    salesByMonth[monthKey] = (salesByMonth[monthKey] || 0) + sale.VLVENDA;
+                    salesByMonth[monthKey] = (salesByMonth[monthKey] || 0) + sale.vlvenda;
                 });
 
                 const sortedMonths = Object.keys(salesByMonth).sort();
@@ -3233,7 +3233,7 @@
 
                 let currentMonthLabel = 'Mês Atual';
                 if (currentSales.length > 0) {
-                    const firstSaleDate = parseDate(currentSales[0].DTPED) || new Date();
+                    const firstSaleDate = parseDate(currentSales[0].dtped) || new Date();
                     currentMonthLabel = firstSaleDate.toLocaleString('pt-BR', { month: 'short', year: '2-digit' });
                 }
 
@@ -3292,12 +3292,12 @@
             });
 
             salesForWeeklyCharts.forEach(sale => {
-                const saleDate = parseDate(sale.DTPED);
+                const saleDate = parseDate(sale.dtped);
                 if (!saleDate) return;
                 const weekIndex = currentMonthWeeks.findIndex(week => saleDate >= week.start && saleDate <= week.end);
                 if (weekIndex !== -1) {
                     const dayOfWeek = saleDate.getDay();
-                    salesByWeekAndDay[weekIndex + 1][dayOfWeek] += sale.VLVENDA;
+                    salesByWeekAndDay[weekIndex + 1][dayOfWeek] += sale.vlvenda;
                 }
             });
 
@@ -3309,7 +3309,7 @@
                 const salesByWeekDayMonth = {};
 
                 historySales.forEach(sale => {
-                    const d = parseDate(sale.DTPED);
+                    const d = parseDate(sale.dtped);
                     if (!d) return;
                     const monthKey = `${d.getFullYear()}-${d.getMonth()}`;
                     const monthWeeks = getSundayBasedWeeks(d.getFullYear(), d.getMonth());
@@ -3317,7 +3317,7 @@
                     if (weekIndex !== -1) {
                         if (!salesByWeekDayMonth[monthKey]) salesByWeekDayMonth[monthKey] = {};
                         if (!salesByWeekDayMonth[monthKey][weekIndex]) salesByWeekDayMonth[monthKey][weekIndex] = new Array(7).fill(0);
-                        salesByWeekDayMonth[monthKey][weekIndex][d.getDay()] += sale.VLVENDA;
+                        salesByWeekDayMonth[monthKey][weekIndex][d.getDay()] += sale.vlvenda;
                     }
                 });
 
@@ -3411,10 +3411,10 @@
             }
 
             const supervisorComparison = {};
-            const activeSupervisors = [...new Set(allSalesData.map(s => s.SUPERV))].filter(Boolean);
+            const activeSupervisors = [...new Set(allSalesData.map(s => s.superv))].filter(Boolean);
             activeSupervisors.forEach(sup => supervisorComparison[sup] = { current: 0, history: 0 });
-            currentSales.forEach(s => { if(s.SUPERV && supervisorComparison[s.SUPERV]) supervisorComparison[s.SUPERV].current += s.VLVENDA; });
-            historySales.forEach(s => { if(s.SUPERV && supervisorComparison[s.SUPERV]) supervisorComparison[s.SUPERV].history += s.VLVENDA; });
+            currentSales.forEach(s => { if(s.superv && supervisorComparison[s.superv]) supervisorComparison[s.superv].current += s.vlvenda; });
+            historySales.forEach(s => { if(s.superv && supervisorComparison[s.superv]) supervisorComparison[s.superv].history += s.vlvenda; });
             Object.keys(supervisorComparison).forEach(sup => supervisorComparison[sup].history /= historyMonthsCount);
             const supervisorTableBody = document.getElementById('supervisorComparisonTableBody');
             supervisorTableBody.innerHTML = Object.entries(supervisorComparison).map(([sup, data]) => { const variation = data.history > 0 ? ((data.current - data.history) / data.history) * 100 : (data.current > 0 ? 100 : 0); const colorClass = variation > 0 ? 'text-green-400' : variation < 0 ? 'text-red-400' : 'text-slate-400'; return `<tr class="hover:bg-slate-700"><td class="px-4 py-2">${sup}</td><td class="px-4 py-2 text-right">${data.history.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right">${data.current.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right ${colorClass}">${variation.toFixed(2)}%</td></tr>`; }).join('');
@@ -3468,14 +3468,14 @@
                 };
 
                 const stock = activeStockMap.get(productCode) || 0;
-                const productAllSales = allCombinedSales.filter(s => s.PRODUTO === productCode);
-                const totalQtySold = productAllSales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
+                const productAllSales = allCombinedSales.filter(s => s.produto === productCode);
+                const totalQtySold = productAllSales.reduce((sum, s) => sum + s.qtvenda_embalagem_master, 0);
 
                 if (stock <= 0 && totalQtySold <= 0) return;
 
-                const productHistorySales = filteredHistory.filter(s => s.PRODUTO === productCode);
-                const productCurrentSales = filteredSales.filter(s => s.PRODUTO === productCode);
-                const currentMonthSalesQty = productCurrentSales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
+                const productHistorySales = filteredHistory.filter(s => s.produto === productCode);
+                const productCurrentSales = filteredSales.filter(s => s.produto === productCode);
+                const currentMonthSalesQty = productCurrentSales.reduce((sum, s) => sum + s.qtvenda_embalagem_master, 0);
 
                 const productCadastroDate = parseDate(details.dtCadastro);
                 let productFirstWorkingDayIndex = 0;
@@ -3515,9 +3515,9 @@
                 
                 let totalQtySoldInRange = 0;
                 productAllSales.forEach(sale => {
-                    const saleDate = parseDate(sale.DTPED);
+                    const saleDate = parseDate(sale.dtped);
                     if (saleDate && saleDate >= startDate && saleDate <= endDate) {
-                        totalQtySoldInRange += sale.QTVENDA_EMBALAGEM_MASTER;
+                        totalQtySoldInRange += sale.qtvenda_embalagem_master;
                     }
                 });
 
@@ -3679,8 +3679,8 @@
             let sales = [...allSalesData];
             let history = [...allHistoryData];
             if (filial !== 'ambas') {
-                 sales = sales.filter(s => s.FILIAL === filial);
-                 history = history.filter(s => s.FILIAL === filial);
+                 sales = sales.filter(s => s.filial === filial);
+                 history = history.filter(s => s.filial === filial);
             }
 
             return { sales, history, clients };
@@ -3691,7 +3691,7 @@
             let productSource = [...sales, ...history];
 
             if (selectedInnovationsSuppliers.length > 0) {
-                 productSource = productSource.filter(s => selectedInnovationsSuppliers.includes(String(s.CODFOR)));
+                 productSource = productSource.filter(s => selectedInnovationsSuppliers.includes(String(s.codfor)));
             }
 
             updateProductFilter(innovationsProductFilterDropdown, innovationsProductFilterText, selectedInnovationsProducts, productSource, 'innovations');
@@ -3783,7 +3783,7 @@
             let topCoverageItem = { name: '-', coverage: 0, clients: 0 };
 
             productsToAnalyze.forEach(productCode => {
-                const productInfo = productDetailsMap.get(productCode) || { DESCRICAO: `Produto ${productCode}`};
+                const productInfo = productDetailsMap.get(productCode) || { descricao: `Produto ${productCode}`};
 
                 let clientsWhoGotProductCurrent = 0;
                 let clientsWhoGotProductPrevious = 0;
@@ -4514,18 +4514,18 @@
 
 
         function openModal(pedidoId) {
-            const orderInfo = aggregatedOrders.find(order => order.PEDIDO == pedidoId);
-            const itemsDoPedido = allSalesData.filter(item => item.PEDIDO == pedidoId);
+            const orderInfo = aggregatedOrders.find(order => order.pedido == pedidoId);
+            const itemsDoPedido = allSalesData.filter(item => item.pedido == pedidoId);
             if (!orderInfo) return;
             modalPedidoId.textContent = pedidoId;
-            modalHeaderInfo.innerHTML = `<div><p class="font-bold">Cód. Cliente:</p><p>${orderInfo.CODCLI || 'N/A'}</p></div><div><p class="font-bold">Cliente:</p><p>${orderInfo.CLIENTE_NOME || 'N/A'}</p></div><div><p class="font-bold">Vendedor:</p><p>${orderInfo.NOME || 'N/A'}</p></div><div><p class="font-bold">Data Pedido:</p><p>${formatDate(orderInfo.DTPED)}</p></div><div><p class="font-bold">Data Faturamento:</p><p>${formatDate(orderInfo.DTSAIDA)}</p></div><div><p class="font-bold">Cidade:</p><p>${orderInfo.CIDADE || 'N/A'}</p></div>`;
-            modalTableBody.innerHTML = itemsDoPedido.map(item => { const unitPrice = (item.QTVENDA > 0) ? (item.VLVENDA / item.QTVENDA) : 0; return `<tr class="hover:bg-slate-700"><td class="px-4 py-2">(${item.PRODUTO}) ${item.DESCRICAO}</td><td class="px-4 py-2 text-right">${item.QTVENDA}</td><td class="px-4 py-2 text-right">${item.TOTPESOLIQ.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Kg</td><td class="px-4 py-2 text-right"><div class="tooltip">${unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">Subtotal: ${item.VLVENDA.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div></td></tr>`; }).join('');
-            modalFooterTotal.innerHTML = `<p class="text-lg font-bold text-teal-400">Mix de Produtos: ${itemsDoPedido.length}</p><p class="text-lg font-bold text-emerald-400">Total do Pedido: ${orderInfo.VLVENDA.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>`;
+            modalHeaderInfo.innerHTML = `<div><p class="font-bold">Cód. Cliente:</p><p>${orderInfo.codcli || 'N/A'}</p></div><div><p class="font-bold">Cliente:</p><p>${orderInfo.cliente_nome || 'N/A'}</p></div><div><p class="font-bold">Vendedor:</p><p>${orderInfo.nome || 'N/A'}</p></div><div><p class="font-bold">Data Pedido:</p><p>${formatDate(orderInfo.dtped)}</p></div><div><p class="font-bold">Data Faturamento:</p><p>${formatDate(orderInfo.dtsaida)}</p></div><div><p class="font-bold">Cidade:</p><p>${orderInfo.cidade || 'N/A'}</p></div>`;
+            modalTableBody.innerHTML = itemsDoPedido.map(item => { const unitPrice = (item.qtvenda > 0) ? (item.vlvenda / item.qtvenda) : 0; return `<tr class="hover:bg-slate-700"><td class="px-4 py-2">(${item.produto}) ${item.descricao}</td><td class="px-4 py-2 text-right">${item.qtvenda}</td><td class="px-4 py-2 text-right">${item.totpesoliq.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Kg</td><td class="px-4 py-2 text-right"><div class="tooltip">${unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">Subtotal: ${item.vlvenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div></td></tr>`; }).join('');
+            modalFooterTotal.innerHTML = `<p class="text-lg font-bold text-teal-400">Mix de Produtos: ${itemsDoPedido.length}</p><p class="text-lg font-bold text-emerald-400">Total do Pedido: ${orderInfo.vlvenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>`;
             modal.classList.remove('hidden');
         }
 
         function openClientModal(codcli) {
-            const clientData = allClientsData.find(c => String(c['Código']) === String(codcli));
+            const clientData = allClientsData.find(c => String(c['código']) === String(codcli));
             if (!clientData) return;
             let finalAddress = clientData.endereco || 'N/A';
             const number = clientData.numero || 'SN';
