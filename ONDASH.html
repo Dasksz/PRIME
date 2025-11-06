@@ -501,22 +501,22 @@
                 const fetchColumnarData = async (tableName) => {
                     const { data, error } = await supabaseClient
                         .from(tableName)
-                        .select('*'); 
-                    
+                        .select('*');
+
                     if (error) {
                         // Se houver um erro na busca (ex: tabela não encontrada), avisa no console e retorna um array vazio
                         console.warn(`Aviso: Não foi possível carregar dados da tabela '${tableName}'. Erro: ${error.message}. A aplicação continuará com dados vazios para esta tabela.`);
                         return [];
                     }
                     // Garante que, mesmo se a resposta for 'null' ou 'undefined', sempre retornemos um array
-                    return data || []; 
+                    return data || [];
                 };
 
                 loaderText.textContent = 'Buscando dados (1/9)...';
                 // ETAPA 3: Modificado para buscar das 9 tabelas colunares
                 const [
                     detailedData, historyData, clientsData, ordersData,
-                    productDetailsData, activeProductsData, stockData, 
+                    productDetailsData, activeProductsData, stockData,
                     innovationsData, metadata
                 ] = await Promise.all([
                     fetchColumnarData('data_detailed'),
@@ -533,7 +533,7 @@
                 loaderText.textContent = 'Renderizando dashboard...';
 
                 // ETAPA 4: Reconstrói o objeto 'embeddedData' a partir dos dados colunares
-                
+
                 // 4.1: Converte 'data_product_details' (array) para um objeto/mapa
                 const productDetails = (productDetailsData ?? []).reduce((acc, item) => {
                     acc[item.code] = {
@@ -562,7 +562,7 @@
                 // 4.4: Extrai o metadado 'passedWorkingDaysCurrentMonth'
                 const metadataValue = (metadata ?? []).find(m => m.key === 'passedWorkingDaysCurrentMonth')?.value;
                 const passedWorkingDaysCurrentMonth = metadataValue ? parseInt(metadataValue, 10) : 1;
-                
+
                 // 4.5: Monta o objeto final
                 window.embeddedData = {
                     detailed: detailedData ?? [],
