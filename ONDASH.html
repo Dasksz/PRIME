@@ -497,13 +497,19 @@
                 const { createClient } = supabase; // Corrigido: removido o ".auth"
                 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-                // ETAPA 3: Função para buscar os dados de TODAS as 9 tabelas (agora colunares)
+                // ETAPA 3: Função ROBUSTA para buscar os dados das tabelas colunares
                 const fetchColumnarData = async (tableName) => {
                     const { data, error } = await supabaseClient
                         .from(tableName)
                         .select('*');
-                    if (error) throw new Error(`Erro ao buscar dados da tabela ${tableName}: ${error.message}`);
-                    return data; 
+
+                    if (error) {
+                        // Se houver um erro na busca (ex: tabela não encontrada), avisa no console e retorna um array vazio
+                        console.warn(`Aviso: Não foi possível carregar dados da tabela '${tableName}'. Erro: ${error.message}. A aplicação continuará com dados vazios para esta tabela.`);
+                        return [];
+                    }
+                    // Garante que, mesmo se a resposta for 'null' ou 'undefined', sempre retornemos um array
+                    return data || [];
                 };
 
                 loaderText.textContent = 'Buscando dados (1/9)...';
