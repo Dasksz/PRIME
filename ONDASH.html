@@ -146,8 +146,8 @@
                     </div>
                     <!-- Outros Filtros -->
                     <div><label for="supervisor-filter" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label><select id="supervisor-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
-                    <div class="relative"><label for="vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="vendedor-filter-text">Todos Vendedores</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></button><div id="vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
-                    <div class="relative"><label for="tipo-venda-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Tipo Venda</label><button id="tipo-venda-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="tipo-venda-filter-text">Todos os Tipos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="tipo-venda-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                    <div class="relative"><label class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="vendedor-filter-text">Todos Vendedores</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></button><div id="vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                    <div class="relative"><label class="block mb-2 text-sm font-medium text-slate-400">Tipo Venda</label><button id="tipo-venda-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="tipo-venda-filter-text">Todos os Tipos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="tipo-venda-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
                     <div><label for="fornecedor-filter" class="block mb-2 text-sm font-medium text-slate-400">Fornecedor</label><select id="fornecedor-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
                     <div><label for="codcli-filter" class="block mb-2 text-sm font-medium text-slate-400">Cód. Cliente</label><input type="text" id="codcli-filter" placeholder="Digite o código..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"></div>
                     <div><label for="posicao-filter" class="block mb-2 text-sm font-medium text-slate-400">Posição</label><select id="posicao-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todas</option><option value="L">Liberado</option><option value="M">Montado</option><option value="F">Faturado</option></select></div>
@@ -160,7 +160,7 @@
                     <div class="mb-6 bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
                         <div class="flex justify-between items-center mb-4">
                             <div class="w-1/3">
-                                <label for="main-holiday-picker-btn" class="block mb-2 text-sm font-medium text-slate-400">Feriados do Mês</label>
+                                <label class="block mb-2 text-sm font-medium text-slate-400">Feriados do Mês</label>
                                 <button id="main-holiday-picker-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left focus:outline-none focus:ring-2 focus:ring-teal-500">Selecionar Feriados</button>
                             </div>
                             <div class="w-1/3 text-center">
@@ -239,7 +239,7 @@
                     </div>
                     <!-- Outros Filtros (Cidades) -->
                     <div><label for="city-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label><select id="city-supervisor-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
-                    <div class="relative"><label for="city-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="city-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="city-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="city-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                    <div class="relative"><label class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="city-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="city-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="city-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
                     <div class="relative"><label for="city-name-filter" class="block mb-2 text-sm font-medium text-slate-400">Cidade</label><input type="text" id="city-name-filter" placeholder="Digite a cidade..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off"><div id="city-suggestions" class="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar text-white"></div></div>
                     <div><label for="city-codcli-filter" class="block mb-2 text-sm font-medium text-slate-400">Cód. Cliente</label><input type="text" id="city-codcli-filter" placeholder="Digite o código..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"></div>
                 </div>
@@ -311,13 +311,13 @@
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                 <div><label for="comparison-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label><select id="comparison-supervisor-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
-                <div class="relative"><label for="comparison-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="comparison-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="comparison-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="comparison-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
-                <div class="relative"><label for="comparison-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Fornecedor</label><button id="comparison-supplier-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="comparison-supplier-filter-text">Todos Fornecedores</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="comparison-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                <div class="relative"><label class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="comparison-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="comparison-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="comparison-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                <div class="relative"><label class="block mb-2 text-sm font-medium text-slate-400">Fornecedor</label><button id="comparison-supplier-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="comparison-supplier-filter-text">Todos Fornecedores</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="comparison-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
                 <div class="relative"><label for="comparison-city-filter" class="block mb-2 text-sm font-medium text-slate-400">Cidade</label><input type="text" id="comparison-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off"><div id="comparison-city-suggestions" class="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar text-white"></div></div>
             </div>
             <div class="grid grid-cols-1 mt-4">
                 <div class="relative">
-                    <label for="comparison-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Filtrar por Produto</label>
+                    <label class="block mb-2 text-sm font-medium text-slate-400">Filtrar por Produto</label>
                     <button id="comparison-product-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="comparison-product-filter-text">Todos os Produtos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button>
                     <div id="comparison-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg">
                         <div class="p-2 border-b border-slate-700"><input type="text" id="comparison-product-search-input" placeholder="Buscar produto..." class="bg-slate-600 text-xs rounded-lg block w-full p-2 border border-slate-500 placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-teal-500"></div>
@@ -327,7 +327,7 @@
             </div>
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end border-t border-slate-700 pt-4 mt-4">
                 <div><label for="comparison-filial-filter" class="block mb-2 text-sm font-medium text-slate-400">Filial</label><select id="comparison-filial-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="ambas" selected>Ambas</option><option value="05">Filial 05</option><option value="08">Filial 08</option></select></div>
-                <div class="flex items-end"><div class="w-full"><label for="comparison-holiday-picker-btn" class="block mb-2 text-sm font-medium text-slate-400">Feriados do Mês</label><button id="comparison-holiday-picker-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left focus:outline-none focus:ring-2 focus:ring-teal-500">Selecionar Feriados</button></div></div>
+                <div class="flex items-end"><div class="w-full"><label class="block mb-2 text-sm font-medium text-slate-400">Feriados do Mês</label><button id="comparison-holiday-picker-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left focus:outline-none focus:ring-2 focus:ring-teal-500">Selecionar Feriados</button></div></div>
                 <button id="comparison-tendency-toggle" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2.5 px-4 rounded-lg">Calcular Tendência</button>
                 <button id="clear-comparison-filters-btn" class="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
             </div>
@@ -390,13 +390,13 @@
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                 <div><label for="stock-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label><select id="stock-supervisor-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
-                <div class="relative"><label for="stock-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="stock-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="stock-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="stock-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
-                <div class="relative"><label for="stock-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Fornecedor</label><button id="stock-supplier-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="stock-supplier-filter-text">Todos Fornecedores</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="stock-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                <div class="relative"><label class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="stock-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="stock-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="stock-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                <div class="relative"><label class="block mb-2 text-sm font-medium text-slate-400">Fornecedor</label><button id="stock-supplier-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="stock-supplier-filter-text">Todos Fornecedores</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="stock-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
                 <div class="relative"><label for="stock-city-filter" class="block mb-2 text-sm font-medium text-slate-400">Cidade</label><input type="text" id="stock-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off"><div id="stock-city-suggestions" class="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar text-white"></div></div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                 <div class="lg:col-span-2 relative">
-                    <label for="stock-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Produto</label>
+                    <label class="block mb-2 text-sm font-medium text-slate-400">Produto</label>
                     <button id="stock-product-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="stock-product-filter-text">Todos os Produtos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button>
                     <div id="stock-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg">
                         <div class="p-2 border-b border-slate-700"><input type="text" id="stock-product-search-input" placeholder="Buscar produto..." class="bg-slate-600 text-xs rounded-lg block w-full p-2 border border-slate-500 placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-teal-500"></div>
@@ -413,7 +413,7 @@
                 <h2 class="text-lg font-semibold text-white">Análise de Estoque e Tendência de Saída</h2>
                 <div class="flex items-end gap-4">
                     <div>
-                        <label for="stock-working-days-input" class="block text-xs font-medium text-slate-400 mb-1 text-center">Dias Úteis</la bel>
+                        <label for="stock-working-days-input" class="block text-xs font-medium text-slate-400 mb-1 text-center">Dias Úteis</label>
                         <div class="flex items-center justify-center gap-1">
                             <input type="number" id="stock-working-days-input" value="0" min="1" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg block w-20 p-1.5 text-center focus:outline-none focus:ring-2 focus:ring-teal-500">
                             <span id="max-working-days-label" class="text-xs text-slate-400 whitespace-nowrap">(Máx: 0)</span>
@@ -479,9 +479,6 @@
         const SUPABASE_URL = 'https://dhozwhfmrwiumwpcqabi.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRob3p3aGZtcndpdW13cGNxYWJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyNjMzNjAsImV4cCI6MjA3NzgzOTM2MH0.syWqcBCbfH5Ey5AB4NGrsF2-ZuBw4W3NZAPIAZb6Bq4';
         
-        // Variável global que o script de lógica espera
-        let embeddedData = {};
-
         // 8. MODIFICADO: Nova função para carregar dados das 8 tabelas
         async function carregarDadosDoSupabase() {
             const loader = document.getElementById('loader');
@@ -494,33 +491,54 @@
                     return;
                 }
                 
-                const { createClient } = supabase; // Corrigido: removido o ".auth"
+                const { createClient } = supabase;
                 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-                // ETAPA 3: Função ROBUSTA para buscar os dados das tabelas colunares
-                const fetchColumnarData = async (tableName) => {
-                    const { data, error } = await supabaseClient
-                        .from(tableName)
-                        .select('*');
-
+                const fetchColumnarData = async (tableName, columns = '*') => {
+                    const { data, error } = await supabaseClient.from(tableName).select(columns);
                     if (error) {
-                        // Se houver um erro na busca (ex: tabela não encontrada), avisa no console e retorna um array vazio
-                        console.warn(`Aviso: Não foi possível carregar dados da tabela '${tableName}'. Erro: ${error.message}. A aplicação continuará com dados vazios para esta tabela.`);
+                        console.error(`Erro ao buscar dados da tabela '${tableName}':`, error);
                         return [];
                     }
-                    // Garante que, mesmo se a resposta for 'null' ou 'undefined', sempre retornemos um array
                     return data || [];
                 };
 
-                loaderText.textContent = 'Buscando dados (1/9)...';
-                // ETAPA 3: Modificado para buscar das 9 tabelas colunares
+                loaderText.textContent = 'Buscando dados...';
+                const detailedColumns = 'dtped,codcli,vlvenda,totpesoliq,nome,superv,descricao,produto,fornecedor,codfor,observacaofor,posicao,tipovenda,codusur,filial,bairro,cidade,vlbonific,qtvenda_embalagem_master,pedido,dtsaida,cliente_nome';
+                const historyColumns = 'superv,dtped,vlvenda,codcli,filial,nome,codfor,produto,observacaofor,cidade,codusur,tipovenda,qtvenda_embalagem_master,vlbonific,fornecedor,totpesoliq,descricao';
+
+                const fetchHistoryInChunks = async () => {
+                    let allHistory = [];
+                    let offset = 0;
+                    const chunkSize = 25000;
+                    while (true) {
+                        const { data, error } = await supabaseClient
+                            .from('data_history')
+                            .select(historyColumns)
+                            .range(offset, offset + chunkSize - 1);
+
+                        if (error) {
+                            console.error(`Erro ao buscar chunk de 'data_history':`, error);
+                            break;
+                        }
+                        if (data) {
+                            allHistory = allHistory.concat(data);
+                        }
+                        if (!data || data.length < chunkSize) {
+                            break;
+                        }
+                        offset += chunkSize;
+                    }
+                    return allHistory;
+                };
+
                 const [
                     detailedData, historyData, clientsData, ordersData,
                     productDetailsData, activeProductsData, stockData,
                     innovationsData, metadata
                 ] = await Promise.all([
-                    fetchColumnarData('data_detailed'),
-                    fetchColumnarData('data_history'),
+                    fetchColumnarData('data_detailed', detailedColumns),
+                    fetchHistoryInChunks(),
                     fetchColumnarData('data_clients'),
                     fetchColumnarData('data_orders'),
                     fetchColumnarData('data_product_details'),
@@ -529,42 +547,33 @@
                     fetchColumnarData('data_innovations'),
                     fetchColumnarData('data_metadata')
                 ]);
+                console.log("DEBUG: clientsData length:", clientsData.length);
 
-                loaderText.textContent = 'Renderizando dashboard...';
+                loaderText.textContent = 'Processando dados...';
 
-                // ETAPA 4: Reconstrói o objeto 'embeddedData' a partir dos dados colunares
-
-                // 4.1: Converte 'data_product_details' (array) para um objeto/mapa
                 const productDetails = (productDetailsData ?? []).reduce((acc, item) => {
                     acc[item.code] = {
                         descricao: item.descricao,
                         fornecedor: item.fornecedor,
                         codfor: item.codfor,
-                        dtCadastro: item.dtCadastro // Mantém o nome da coluna original
+                        dtCadastro: item.dtCadastro
                     };
                     return acc;
                 }, {});
 
-                // 4.2: Converte 'data_active_products' (array) para um array simples de códigos
                 const activeProductCodes = (activeProductsData ?? []).map(item => item.code);
 
-                // 4.3: Converte 'data_stock' (array) para os dois mapas de estoque esperados
                 const stockMap05 = {};
                 const stockMap08 = {};
                 (stockData ?? []).forEach(item => {
-                    if (item.filial === '05') {
-                        stockMap05[item.product_code] = item.stock_qty;
-                    } else if (item.filial === '08') {
-                        stockMap08[item.product_code] = item.stock_qty;
-                    }
+                    if (item.filial === '05') stockMap05[item.product_code] = item.stock_qty;
+                    else if (item.filial === '08') stockMap08[item.product_code] = item.stock_qty;
                 });
 
-                // 4.4: Extrai o metadado 'passedWorkingDaysCurrentMonth'
                 const metadataValue = (metadata ?? []).find(m => m.key === 'passedWorkingDaysCurrentMonth')?.value;
                 const passedWorkingDaysCurrentMonth = metadataValue ? parseInt(metadataValue, 10) : 1;
 
-                // 4.5: Monta o objeto final
-                window.embeddedData = {
+                const embeddedData = {
                     detailed: detailedData ?? [],
                     history: historyData ?? [],
                     clients: clientsData ?? [],
@@ -576,87 +585,17 @@
                     stockMap08: stockMap08,
                     passedWorkingDaysCurrentMonth: passedWorkingDaysCurrentMonth
                 };
-// ===== ADICIONADO: Normaliza chaves recebidas (minúsculas/MAIÚSCULAS) =====
-(function normalizeEmbeddedDataKeys() {
-    const normalizeObj = (obj) => {
-        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
-        const newObj = {};
-        Object.keys(obj).forEach(k => {
-            const v = obj[k];
-            // preserve original key
-            if (!(k in newObj)) newObj[k] = v;
-            // also set lowercase and uppercase aliases (if different)
-            const lower = k.toLowerCase();
-            const upper = k.toUpperCase();
-            if (!(lower in newObj)) newObj[lower] = v;
-            if (!(upper in newObj)) newObj[upper] = v;
-        });
-        return newObj;
-    };
-    const normalizeArray = (arr) => Array.isArray(arr) ? arr.map(item => (item && typeof item === 'object' && !Array.isArray(item)) ? normalizeObj(item) : item) : arr;
 
-    try {
-        // Normalize top-level arrays/objects that the legacy logic expects
-        const candidateProps = Object.keys(window.embeddedData || {});
-        candidateProps.forEach(prop => {
-            const val = window.embeddedData[prop];
-            if (Array.isArray(val)) {
-                window.embeddedData[prop] = normalizeArray(val);
-            } else if (val && typeof val === 'object') {
-                // If it's an object of maps (e.g., productDetails, stockMap05), normalize its children if they are objects/arrays
-                const newMap = {};
-                Object.keys(val).forEach(k => {
-                    const v = val[k];
-                    if (Array.isArray(v)) {
-                        newMap[k] = normalizeArray(v);
-                    } else if (v && typeof v === 'object') {
-                        newMap[k] = normalizeObj(v);
-                    } else {
-                        newMap[k] = v;
-                    }
-                    // also add lowercase/uppercase aliases for the map key itself
-                    newMap[k.toLowerCase()] = newMap[k];
-                    newMap[k.toUpperCase()] = newMap[k];
-                });
-                window.embeddedData[prop] = newMap;
-            }
-        });
-
-        // Common specific normalization for productDetails (object), product maps, etc.
-        if (window.embeddedData.productDetails && typeof window.embeddedData.productDetails === 'object' && !Array.isArray(window.embeddedData.productDetails)) {
-            const pd = {};
-            Object.keys(window.embeddedData.productDetails).forEach(k => {
-                pd[k] = window.embeddedData.productDetails[k];
-                pd[k.toLowerCase()] = window.embeddedData.productDetails[k];
-                pd[k.toUpperCase()] = window.embeddedData.productDetails[k];
-            });
-            window.embeddedData.productDetails = pd;
-        }
-    } catch (e) {
-        console.warn("normalizeEmbeddedDataKeys falhou:", e);
-    }
-})();
- // ===== FIM DA NORMALIZAÇÃO =====
-
-
-
+                window.embeddedData = embeddedData;
                 
-                // ETAPA 5: Usa a data/hora atual para a mensagem de atualização
                 const generationDate = new Date().toLocaleString('pt-BR');
                 document.getElementById('generation-date').textContent = `Dados atualizados em: ${generationDate}`;
-
-                // Pega o conteúdo do script de lógica
-                const scriptLogicContent = document.getElementById('report-logic-script').textContent;
                 
-                // Cria um novo tag <script>
+                const scriptLogicContent = document.getElementById('report-logic-script').textContent;
                 const logicScript = document.createElement('script');
                 logicScript.textContent = scriptLogicContent;
-                
-                // Adiciona o script ao body, o que fará com que ele execute
-                // agora que 'window.embeddedData' já existe.
                 document.body.appendChild(logicScript);
 
-                // Mostra o dashboard e esconde o loader
                 mainDashboard.classList.remove('hidden');
                 loader.style.opacity = '0';
                 setTimeout(() => loader.classList.add('hidden'), 300);
@@ -677,19 +616,20 @@
       mas agora dentro de um <script type="text/template"> 
     -->
     <script id="report-logic-script" type="text/template">
-        const allSalesData = embeddedData.detailed;
-        const allHistoryData = embeddedData.history;
-        const aggregatedOrders = embeddedData.byOrder;
-        const allClientsData = embeddedData.clients;
+        //const embeddedData = window.embeddedData; // Esta linha será removida pois os dados virão como argumento
+        const allSalesData = embeddedData.detailed || [];
+        const allHistoryData = embeddedData.history || [];
+        const aggregatedOrders = embeddedData.byOrder || [];
+        const allClientsData = embeddedData.clients || [];
         const stockData05 = new Map(Object.entries(embeddedData.stockMap05 || {}));
         const stockData08 = new Map(Object.entries(embeddedData.stockMap08 || {}));
-        const innovationsMonthData = embeddedData.innovationsMonth;
-        const clientMapForKPIs = new Map(allClientsData.map(c => [String(c['Código']), c]));
+        const innovationsMonthData = embeddedData.innovationsMonth || [];
+        const clientMapForKPIs = new Map(allClientsData.map(c => [String(c['codigo_cliente']), c]));
         const activeProductCodesFromCadastro = new Set(embeddedData.activeProductCodes || []);
         const productDetailsMap = new Map(Object.entries(embeddedData.productDetails || {}));
         const passedWorkingDaysCurrentMonth = embeddedData.passedWorkingDaysCurrentMonth || 1;
 
-        const clientsWithSalesThisMonth = new Set(allSalesData.map(s => s.CODCLI));
+        const clientsWithSalesThisMonth = new Set(allSalesData.map(s => s.codcli));
 
         const optimizedData = {
             salesById: new Map(),
@@ -725,9 +665,31 @@
         let customWorkingDaysStock = 0;
 
         function initializeOptimizedDataStructures() {
+            try {
+            allClientsData.forEach(client => {
+                let rcaList = [];
+                if (client.rcas) {
+                    if (typeof client.rcas === 'string') {
+                        // Assuming string format like "{rca1,rca2}"
+                        rcaList = client.rcas.replace(/[{}]/g, '').split(',').filter(r => r);
+                    } else if (Array.isArray(client.rcas)) {
+                        rcaList = client.rcas;
+                    }
+                }
+                if (client.rca1 && !rcaList.includes(client.rca1)) rcaList.push(client.rca1);
+                if (client.rca2 && !rcaList.includes(client.rca2)) rcaList.push(client.rca2);
+                client.rcas = rcaList;
+            });
+            aggregatedOrders.sort((a, b) => {
+                const dateA = parseDate(a.DTPED);
+                const dateB = parseDate(b.DTPED);
+                if (!dateA) return 1;
+                if (!dateB) return -1;
+                return dateB - dateA;
+            });
             optimizedData.clientsByRca = new Map();
             allClientsData.forEach(client => {
-                clientRamoMap.set(client['Código'], client.ramo || 'N/A');
+                clientRamoMap.set(client['codigo_cliente'], client.ramo || 'N/A');
                 
                 const rca1 = client.rca1;
                 if (rca1) {
@@ -949,15 +911,10 @@
                  const daysInput = document.getElementById('stock-working-days-input');
                  if(daysInput) daysInput.value = customWorkingDaysStock;
             }, 0);
+        } catch (error) {
+                console.error("Erro fatal durante initializeOptimizedDataStructures:", error);
+            }
         }
-
-        aggregatedOrders.sort((a, b) => {
-            const dateA = parseDate(a.DTPED);
-            const dateB = parseDate(b.DTPED);
-            if (!dateA) return 1;
-            if (!dateB) return -1;
-            return dateB - dateA;
-        });
 
         Chart.register(ChartDataLabels);
 
@@ -1266,6 +1223,8 @@
             totalPages: 1
         };
 
+        initializeOptimizedDataStructures();
+
         const getFirstName = (fullName) => (fullName || '').split(' ')[0];
 
         function parseDate(dateString) {
@@ -1304,7 +1263,7 @@
 
             if (filial !== 'ambas') {
                 clients = clients.filter(c => {
-                    const lastBranch = clientLastBranch.get(c['Código']);
+                    const lastBranch = clientLastBranch.get(c['codigo_cliente']);
                     return lastBranch === filial;
                 });
             }
@@ -1380,7 +1339,7 @@
             }
 
             const activeClientsForCoverage = clients.filter(c => {
-                const codcli = c['Código'];
+                const codcli = c['codigo_cliente'];
                 const rca1 = String(c.rca1 || '').trim();
                 
                 // --- INÍCIO DA MODIFICAÇÃO ---
@@ -1399,7 +1358,7 @@
                 return (isAmericanas || rca1 !== '53');
             });
             const activeClientsCount = activeClientsForCoverage.length;
-            const activeClientCodes = new Set(activeClientsForCoverage.map(c => c['Código']));
+            const activeClientCodes = new Set(activeClientsForCoverage.map(c => c['codigo_cliente']));
 
             coverageActiveClientsKpi.textContent = activeClientsCount.toLocaleString('pt-BR');
 
@@ -1790,6 +1749,10 @@
 
 
         function updateTrendChart(currentSales, historicalSales) {
+            if (!currentSales || currentSales.length === 0 || !historicalSales || historicalSales.length === 0) {
+                showNoDataMessage('trendChart', 'Dados insuficientes para exibir a tendência.');
+                return;
+            }
             const currentYear = lastSaleDate.getFullYear();
             const currentMonth = lastSaleDate.getMonth();
             const totalWorkingDays = getWorkingDaysInMonth(currentYear, currentMonth, selectedHolidays);
@@ -1806,7 +1769,7 @@
                 if (typeof v !== 'number') return ''; // Proteção contra valores não numéricos
                 return (v >= 1000000 ? (v / 1000000).toFixed(2) + ' M' : (v / 1000).toFixed(0) + 'k');
             };
-
+            console.log("Debug: Dados para createChart (trendChart):", { labels: ['Média Faturamento Trimestre', 'Tendência Mês Atual'], data: lineChartDataset });
             createChart('trendChart', 'line', ['Média Faturamento Trimestre', 'Tendência Mês Atual'], lineChartDataset, {
                 layout: { padding: { top: 30 } },
                 plugins: {
@@ -1821,6 +1784,7 @@
         }
 
         function updateAllVisuals() {
+            console.log("Debug: updateAllVisuals chamada.");
             const supervisor = supervisorFilter.value;
             const posicao = posicaoFilter.value;
             const codcli = codcliFilter.value.trim();
@@ -1828,20 +1792,8 @@
 
             let clientBaseForCoverage = allClientsData.filter(c => {
                 const rca1 = String(c.rca1 || '').trim();
-
-                // --- INÍCIO DA MODIFICAÇÃO (PÁGINA PRINCIPAL) ---
-                // REGRA DE EXCLUSÃO REMOVIDA: Ignora clientes destes RCAs
-                /*
-                if (rca1 === '306' || rca1 === '300') {
-                    return false;
-                }
-                */
-                
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                
-                // Regra de inclusão (Americanas ou RCA 1 diferente de 53)
                 return (isAmericanas || rca1 !== '53');
-                // --- FIM DA MODIFICAÇÃO ---
             });
 
             if (mainRedeGroupFilter === 'com_rede') {
@@ -1852,123 +1804,52 @@
             } else if (mainRedeGroupFilter === 'sem_rede') {
                 clientBaseForCoverage = clientBaseForCoverage.filter(c => !c.ramo || c.ramo === 'N/A');
             }
-            const clientCodesInRede = new Set(clientBaseForCoverage.map(c => c['Código']));
+            const clientCodesInRede = new Set(clientBaseForCoverage.map(c => c['codigo_cliente']));
 
-            const intersectSets = (sets) => {
-                if (sets.length === 0) return new Set();
-                let result = new Set(sets[0]);
-                for (let i = 1; i < sets.length; i++) {
-                    result = new Set([...result].filter(item => sets[i].has(item)));
-                }
-                return result;
-            };
-
-            const getFilteredIds = (indices, dataMap) => {
-                let setsToIntersect = [];
-                let hasFilter = false;
-
-                if (codcli) {
-                    hasFilter = true;
-                    if (indices.byClient.has(codcli)) {
-                        setsToIntersect.push(indices.byClient.get(codcli));
-                    } else {
-                        return []; 
+            const getFilteredData = (sourceData) => {
+                return sourceData.filter(item => {
+                    let matches = true;
+                    if (mainRedeGroupFilter) {
+                        matches = matches && clientCodesInRede.has(item.CODCLI);
                     }
-                } else {
-                    if (supervisor) {
-                        hasFilter = true;
-                        if (indices.bySupervisor.has(supervisor)) {
-                            setsToIntersect.push(indices.bySupervisor.get(supervisor));
-                        } else {
-                            return [];
+                    if (codcli) {
+                        matches = matches && item.CODCLI === codcli;
+                    } else {
+                        if (supervisor) {
+                            matches = matches && item.SUPERV === supervisor;
+                        }
+                        if (selectedSellers.length > 0) {
+                            matches = matches && selectedSellers.includes(item.NOME);
                         }
                     }
-                    if (selectedSellers.length > 0) {
-                        hasFilter = true;
-                        const sellerIds = new Set();
-                        selectedSellers.forEach(seller => {
-                            (indices.byRca.get(seller) || []).forEach(id => sellerIds.add(id));
-                        });
-                        setsToIntersect.push(sellerIds);
+                    if (selectedTiposVenda.length > 0) {
+                        matches = matches && selectedTiposVenda.includes(item.TIPOVENDA);
                     }
-                }
-
-                if (selectedTiposVenda.length > 0) {
-                    hasFilter = true;
-                    const tipoVendaIds = new Set();
-                    selectedTiposVenda.forEach(tipo => {
-                        (indices.byTipoVenda.get(tipo) || []).forEach(id => tipoVendaIds.add(id));
-                    });
-                    setsToIntersect.push(tipoVendaIds);
-                }
-
-                if (currentFornecedor) {
-                    hasFilter = true;
-                    if (indices.byPasta.has(currentFornecedor)) {
-                        setsToIntersect.push(indices.byPasta.get(currentFornecedor));
-                    } else {
-                        return [];
+                    if (currentFornecedor) {
+                        if (item.FORNECEDORES_LIST) { // Para aggregatedOrders
+                            matches = matches && item.FORNECEDORES_LIST.includes(currentFornecedor);
+                        } else { // Para allSalesData/allHistoryData
+                            matches = matches && item.OBSERVACAOFOR === currentFornecedor;
+                        }
                     }
-                }
-                if (selectedFornecedor) {
-                    hasFilter = true;
-                    if (indices.bySupplier.has(selectedFornecedor)) {
-                        setsToIntersect.push(indices.bySupplier.get(selectedFornecedor));
-                    } else {
-                        return [];
+                    if (selectedFornecedor) {
+                         if (item.CODFORS_LIST) { // Para aggregatedOrders
+                            matches = matches && item.CODFORS_LIST.includes(selectedFornecedor);
+                        } else { // Para allSalesData/allHistoryData
+                            matches = matches && item.CODFOR == selectedFornecedor;
+                        }
                     }
-                }
-
-                if (indices.byPosition && posicao) { 
-                    hasFilter = true;
-                    if (indices.byPosition.has(posicao)) {
-                        setsToIntersect.push(indices.byPosition.get(posicao));
-                    } else {
-                        return [];
+                    if (posicao) {
+                        matches = matches && item.POSICAO === posicao;
                     }
-                }
-                
-                if (mainRedeGroupFilter) {
-                    hasFilter = true;
-                    const redeIds = new Set();
-                    clientCodesInRede.forEach(clientCode => {
-                         (indices.byClient.get(clientCode) || []).forEach(id => redeIds.add(id));
-                    });
-                    setsToIntersect.push(redeIds);
-                }
-
-                if (setsToIntersect.length === 0 && hasFilter) {
-                    return []; 
-                }
-                
-                if (setsToIntersect.length === 0 && !hasFilter) {
-                    return Array.from(dataMap.values()); 
-                }
-
-                const finalIds = intersectSets(setsToIntersect);
-                return Array.from(finalIds).map(id => dataMap.get(id));
+                    return matches;
+                });
             };
 
-            const filteredSalesData = getFilteredIds(optimizedData.indices.current, optimizedData.salesById);
-            const filteredHistoryData = getFilteredIds(optimizedData.indices.history, optimizedData.historyById);
+            const filteredSalesData = getFilteredData(allSalesData);
+            const filteredHistoryData = getFilteredData(allHistoryData);
+            const filteredTableData = getFilteredData(aggregatedOrders);
             
-            const filteredTableData = aggregatedOrders.filter(order => {
-                let matches = true;
-                if (mainRedeGroupFilter) {
-                    matches = matches && clientCodesInRede.has(order.CODCLI);
-                }
-                if (codcli) matches = matches && order.CODCLI === codcli;
-                else {
-                    if (supervisor) matches = matches && order.SUPERV === supervisor;
-                    if (selectedSellers.length > 0) matches = matches && selectedSellers.includes(order.NOME);
-                }
-                if (selectedTiposVenda.length > 0) matches = matches && selectedTiposVenda.includes(order.TIPOVENDA);
-                if (currentFornecedor) matches = matches && order.FORNECEDORES_LIST.includes(currentFornecedor);
-                if (selectedFornecedor) matches = matches && order.CODFORS_LIST && order.CODFORS_LIST.includes(selectedFornecedor);
-                if (posicao) matches = matches && order.POSICAO === posicao;
-                return matches;
-            });
-
             const isFiltered = !!supervisor || selectedSellers.length > 0 || !!codcli || !!currentFornecedor || !!mainRedeGroupFilter || !!selectedFornecedor || !!posicao || selectedTiposVenda.length > 0;
 
             const summary = calculateSummaryFromData(filteredSalesData, isFiltered, clientBaseForCoverage);
@@ -2224,7 +2105,7 @@
         function updateCityView() {
             const supervisor = citySupervisorFilter.value;
             const codcliFilterVal = cityCodCliFilter.value.trim();
-            if (codcliFilterVal && !allClientsData.some(c => String(c['Código']) === codcliFilterVal)) return;
+            if (codcliFilterVal && !allClientsData.some(c => String(c['codigo_cliente']) === codcliFilterVal)) return;
             let clientsForAnalysis = getRelevantClientsForCityFilter();
             const allAvailableCities = [...new Set(clientsForAnalysis.map(c => c.cidade).filter(Boolean))];
             const cidadeFiltroInput = cityNameFilter.value.trim();
@@ -2237,14 +2118,14 @@
 
             let salesForAnalysis = allSalesData;
 
-            const clientCodesForAnalysis = new Set(clientsForAnalysis.map(c => c['Código']));
+            const clientCodesForAnalysis = new Set(clientsForAnalysis.map(c => c['codigo_cliente']));
             salesForAnalysis = salesForAnalysis.filter(s => clientCodesForAnalysis.has(s.CODCLI));
 
             if (supervisor) salesForAnalysis = salesForAnalysis.filter(s => s.SUPERV === supervisor);
             if (selectedCitySellers.length > 0) salesForAnalysis = salesForAnalysis.filter(s => selectedCitySellers.includes(s.NOME));
 
             if (cidadeFiltro) { clientsForAnalysis = clientsForAnalysis.filter(c => c.cidade && c.cidade === cidadeFiltro); salesForAnalysis = salesForAnalysis.filter(s => s.CIDADE && s.CIDADE === cidadeFiltro); }
-            if (codcliFilterVal) { clientsForAnalysis = clientsForAnalysis.filter(c => String(c['Código']) === codcliFilterVal); salesForAnalysis = salesForAnalysis.filter(s => s.CODCLI === codcliFilterVal); }
+            if (codcliFilterVal) { clientsForAnalysis = clientsForAnalysis.filter(c => String(c['codigo_cliente']) === codcliFilterVal); salesForAnalysis = salesForAnalysis.filter(s => s.CODCLI === codcliFilterVal); }
 
             const salesThisMonth = allSalesData.filter(sale => {
                 const saleDate = parseDate(sale.DTPED);
@@ -2262,7 +2143,7 @@
             let inactiveClientsList = [];
 
             clientsForAnalysis.forEach(client => {
-                const codcli = String(client['Código']);
+                const codcli = String(client['codigo_cliente']);
                 if (codcli === '6720' || client.bloqueio === 'S') return;
 
                 const registrationDate = parseDate(client.dataCadastro);
@@ -2292,7 +2173,7 @@
 
             const salesByActiveClient = {};
             activeClientsList.forEach(client => {
-                const codcli = String(client['Código']);
+                const codcli = String(client['codigo_cliente']);
                 let clientSales = salesThisMonth.filter(s => s.CODCLI === codcli);
 
                 if (selectedCitySellers.length > 0) {
@@ -2318,7 +2199,7 @@
                 if (data.multimarcas > 0) tooltipParts.push(`MULTIMARCAS: ${data.multimarcas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
                 if (data.outros > 0.001) tooltipParts.push(`OUTROS: ${data.outros.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
                 const tooltipText = tooltipParts.length > 0 ? tooltipParts.join('<br>') : 'Sem detalhamento de categoria';
-                return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${data['Código']}">${data['Código']}</a></td><td class="px-4 py-2 flex items-center">${data.fantasia || data.razaoSocial}${novoLabel}</td><td class="px-4 py-2 text-right"><div class="tooltip">${data.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">${tooltipText}</span></div></td><td class="px-4 py-2">${data.cidade}</td><td class="px-4 py-2">${data.bairro}</td><td class="px-4 py-2">${data.rca1 || '-'}</td></tr>`
+                return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${data['codigo_cliente']}">${data['codigo_cliente']}</a></td><td class="px-4 py-2 flex items-center">${data.fantasia || data.razaoSocial}${novoLabel}</td><td class="px-4 py-2 text-right"><div class="tooltip">${data.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">${tooltipText}</span></div></td><td class="px-4 py-2">${data.cidade}</td><td class="px-4 py-2">${data.bairro}</td><td class="px-4 py-2">${data.rca1 || '-'}</td></tr>`
             }).join('');
 
             inactiveClientsList.sort((a, b) => {
@@ -2331,7 +2212,7 @@
             cityInactiveDetailTableBody.innerHTML = inactiveClientsList.map(client => {
                 const novoLabel = client.isNewForInactiveLabel ? `<span class="ml-2 text-xs font-semibold text-purple-400 bg-purple-900/50 px-2 py-0.5 rounded-full">NOVO</span>` : '';
                 const devolucaoLabel = client.isReturn ? `<span class="ml-2 text-xs font-semibold text-red-400 bg-red-900/50 px-2 py-0.5 rounded-full">DEVOLUÇÃO</span>` : '';
-                return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${client['Código']}">${client['Código']}</a></td><td class="px-4 py-2 flex items-center">${client.fantasia || client.razaoSocial}${novoLabel}${devolucaoLabel}</td><td class="px-4 py-2">${client.cidade}</td><td class="px-4 py-2">${client.bairro}</td><td class="px-4 py-2 text-center">${formatDate(client.ultimaCompra)}</td><td class="px-4 py-2">${client.rca1 || '-'}</td></tr>`
+                return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${client['codigo_cliente']}">${client['codigo_cliente']}</a></td><td class="px-4 py-2 flex items-center">${client.fantasia || client.razaoSocial}${novoLabel}${devolucaoLabel}</td><td class="px-4 py-2">${client.cidade}</td><td class="px-4 py-2">${client.bairro}</td><td class="px-4 py-2 text-center">${formatDate(client.ultimaCompra)}</td><td class="px-4 py-2">${client.rca1 || '-'}</td></tr>`
             }).join('');
 
             const cityChartTitleEl = document.getElementById('city-chart-title');
@@ -2679,7 +2560,7 @@
             } else if (comparisonRedeGroupFilter === 'sem_rede') {
                 clients = clients.filter(c => !c.ramo || c.ramo === 'N/A');
             }
-            const clientCodes = new Set(clients.map(c => c['Código']));
+            const clientCodes = new Set(clients.map(c => c['codigo_cliente']));
 
             const supervisor = comparisonSupervisorFilter.value;
             const sellers = selectedComparisonSellers;
@@ -2835,7 +2716,7 @@
                     clients = clients.filter(c => !c.ramo || c.ramo === 'N/A');
                 }
             }
-            const clientCodes = new Set(clients.map(c => c['Código']));
+            const clientCodes = new Set(clients.map(c => c['codigo_cliente']));
 
             const supervisor = stockSupervisorFilter.value;
             const sellers = selectedStockSellers;
@@ -3519,7 +3400,7 @@
             let clients = [...allClientsData];
             if (filial !== 'ambas') {
                 clients = clients.filter(c => {
-                    const lastBranch = clientLastBranch.get(c['Código']);
+                    const lastBranch = clientLastBranch.get(c['codigo_cliente']);
                     return lastBranch === filial;
                 });
             }
@@ -3595,7 +3476,7 @@
 
 
             const activeClientsForCoverage = clients.filter(c => {
-                const codcli = c['Código'];
+                const codcli = c['codigo_cliente'];
                 const rca1 = String(c.rca1 || '').trim();
                 
                 // --- INÍCIO DA MODIFICAÇÃO ---
@@ -3615,7 +3496,7 @@
             });
 
             const activeClientsCount = activeClientsForCoverage.length;
-            const activeClientCodes = new Set(activeClientsForCoverage.map(c => c['Código']));
+            const activeClientCodes = new Set(activeClientsForCoverage.map(c => c['codigo_cliente']));
 
             innovationsActiveClientsKpi.textContent = activeClientsCount.toLocaleString('pt-BR');
 
@@ -3808,7 +3689,7 @@
 
             if (filial !== 'ambas') {
                 clients = clients.filter(c => {
-                    const lastBranch = clientLastBranch.get(c['Código']);
+                    const lastBranch = clientLastBranch.get(c['codigo_cliente']);
                     return lastBranch === filial;
                 });
             }
@@ -3887,7 +3768,7 @@
 
 
             const activeClients = filteredClients.filter(c => {
-                const codcli = c['Código'];
+                const codcli = c['codigo_cliente'];
                 const rca1 = String(c.rca1 || '').trim();
                 
                 // --- INÍCIO DA MODIFICAÇÃO ---
@@ -3906,7 +3787,7 @@
                 return (isAmericanas || rca1 !== '53');
             });
             const activeClientsCount = activeClients.length;
-            const activeClientCodes = new Set(activeClients.map(c => c['Código']));
+            const activeClientCodes = new Set(activeClients.map(c => c['codigo_cliente']));
 
             const categoryAnalysis = {};
             let topCoverageItem = { name: '-', coverage: 0, clients: 0 };
@@ -4185,8 +4066,8 @@
             innovationsByClientTableHead.innerHTML = tableHeadHTML;
 
             const clientInnovationStatus = activeClients.map(client => {
-                const clientBoughtProducts = optimizedData.salesByClientAndRca_CurrentMonth.get(client['Código']) || new Map();
-                const clientBonusedProducts = innovationsMonthIncludeBonus ? optimizedData.bonificationsByClientAndRca_CurrentMonth.get(client['Código']) : null;
+                const clientBoughtProducts = optimizedData.salesByClientAndRca_CurrentMonth.get(client['codigo_cliente']) || new Map();
+                const clientBonusedProducts = innovationsMonthIncludeBonus ? optimizedData.bonificationsByClientAndRca_CurrentMonth.get(client['codigo_cliente']) : null;
                 const status = {};
                 categoryNames.forEach(catName => {
                     const productCodes = categories[catName].productCodes;
@@ -4221,7 +4102,7 @@
             clientInnovationStatus.forEach(client => {
                 tableBodyHTML += `
                     <tr class="hover:bg-slate-700/50">
-                        <td class="px-2 py-1.5 text-xs">${client['Código']}</td>
+                        <td class="px-2 py-1.5 text-xs">${client['codigo_cliente']}</td>
                         <td class="px-2 py-1.5 text-xs">${client.fantasia || client.razaoSocial}</td>
                         <td class="px-2 py-1.5 text-xs">${client.cidade}</td>
                         <td class="px-2 py-1.5 text-xs">${client.bairro}</td>
@@ -4324,7 +4205,7 @@
                 const clientInnovationsHead = [['Código', 'Cliente', 'Cidade', 'Bairro', 'Últ. Compra', ...categoryLegendForExport.map((_, i) => `${i + 1}`)]];
                 const clientInnovationsBody = innovationsByClientForExport.map(client => {
                     const row = [
-                        client['Código'],
+                        client['codigo_cliente'],
                         client.fantasia || client.razaoSocial,
                         client.cidade,
                         client.bairro,
@@ -4394,7 +4275,7 @@
             let finalAddress = clientData.endereco || 'N/A';
             const number = clientData.numero || 'SN';
             if (number !== 'SN' && finalAddress !== 'N/A' && !finalAddress.includes(number)) finalAddress += `, ${number}`;
-            clientModalContent.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"><div><p class="font-bold text-slate-400">Código:</p><p>${clientData['Código'] || 'N/A'}</p></div><div><p class="font-bold text-slate-400">CNPJ/CPF:</p><p>${clientData.cnpj_cpf || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Insc. Est. / Produtor:</p><p>${clientData.inscricaoEstadual || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Razão Social:</p><p>${clientData.razaoSocial || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Nome Fantasia:</p><p>${clientData.fantasia || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Endereço:</p><p>${finalAddress}</p></div><div><p class="font-bold text-slate-400">Bairro:</p><p>${clientData.bairro || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Cidade:</p><p>${clientData.cidade || 'N/A'}</p></div><div><p class="font-bold text-slate-400">CEP:</p><p>${clientData.cep || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Telefone:</p><p>${clientData.telefone || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">E-mail:</p><p>${clientData.email || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Ramo de Atividade:</p><p>${clientData.ramo || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Última Compra:</p><p>${formatDate(clientData.ultimaCompra)}</p></div></div>`;
+            clientModalContent.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"><div><p class="font-bold text-slate-400">Código:</p><p>${clientData['codigo_cliente'] || 'N/A'}</p></div><div><p class="font-bold text-slate-400">CNPJ/CPF:</p><p>${clientData.cnpj_cpf || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Insc. Est. / Produtor:</p><p>${clientData.inscricaoEstadual || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Razão Social:</p><p>${clientData.razaoSocial || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Nome Fantasia:</p><p>${clientData.fantasia || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Endereço:</p><p>${finalAddress}</p></div><div><p class="font-bold text-slate-400">Bairro:</p><p>${clientData.bairro || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Cidade:</p><p>${clientData.cidade || 'N/A'}</p></div><div><p class="font-bold text-slate-400">CEP:</p><p>${clientData.cep || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Telefone:</p><p>${clientData.telefone || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">E-mail:</p><p>${clientData.email || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Ramo de Atividade:</p><p>${clientData.ramo || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Última Compra:</p><p>${formatDate(clientData.ultimaCompra)}</p></div></div>`;
             clientModal.classList.remove('hidden');
         }
 
@@ -4426,7 +4307,7 @@
 
             const tableRows = [];
             clientList.forEach(client => {
-                const clientData = [ client['Código'] || '', client.fantasia || client.razaoSocial || '', client.bairro || '', client.cidade || '', formatDate(client.ultimaCompra) || 'N/A' ];
+                const clientData = [ client['codigo_cliente'] || '', client.fantasia || client.razaoSocial || '', client.bairro || '', client.cidade || '', formatDate(client.ultimaCompra) || 'N/A' ];
                 if (includeFaturamento) clientData.splice(2, 0, (client.total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
                 tableRows.push(clientData);
             });
