@@ -811,7 +811,7 @@
                         descricao: item.descricao,
                         fornecedor: item.fornecedor,
                         codfor: item.codfor,
-                        dtCadastro: item.dtCadastro
+                        dtcadastro: item.dtcadastro
                     };
                     return acc;
                 }, {});
@@ -1606,7 +1606,7 @@
                 */
                 // --- FIM DA MODIFICAÇÃO ---
 
-                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
+                const isAmericanas = (c.razaosocial || '').toUpperCase().includes('AMERICANAS');
                 // const isVdHiago = vdHiagoClients.has(codcli); // REGRA REMOVIDA
                 
                 // Regra de inclusão
@@ -1671,7 +1671,7 @@
                 const stockQty = activeStockMap.get(productCode) || 0;
                 const productAllSales = [...sales, ...history].filter(s => s.produto === productCode);
                 
-                const productCadastroDate = parseDate(productInfo.dtCadastro);
+                const productCadastroDate = parseDate(productInfo.dtcadastro);
                 let productFirstWorkingDayIndex = 0;
                 if (productCadastroDate) {
                     const cadastroDateString = productCadastroDate.toISOString().split('T')[0];
@@ -2047,7 +2047,7 @@
 
             let clientBaseForCoverage = allClientsData.filter(c => {
                 const rca1 = String(c.rca1 || '').trim();
-                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
+                const isAmericanas = (c.razaosocial || '').toUpperCase().includes('AMERICANAS');
                 return (isAmericanas || rca1 !== '53');
             });
 
@@ -2454,7 +2454,7 @@
                 if (data.multimarcas > 0) tooltipParts.push(`MULTIMARCAS: ${data.multimarcas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
                 if (data.outros > 0.001) tooltipParts.push(`OUTROS: ${data.outros.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
                 const tooltipText = tooltipParts.length > 0 ? tooltipParts.join('<br>') : 'Sem detalhamento de categoria';
-                return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${data['codigo_cliente']}">${data['codigo_cliente']}</a></td><td class="px-4 py-2 flex items-center">${data.fantasia || data.razaoSocial}${novoLabel}</td><td class="px-4 py-2 text-right"><div class="tooltip">${data.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">${tooltipText}</span></div></td><td class="px-4 py-2">${data.cidade}</td><td class="px-4 py-2">${data.bairro}</td><td class="px-4 py-2">${data.rca1 || '-'}</td></tr>`
+                return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${data['codigo_cliente']}">${data['codigo_cliente']}</a></td><td class="px-4 py-2 flex items-center">${data.fantasia || data.razaosocial}${novoLabel}</td><td class="px-4 py-2 text-right"><div class="tooltip">${data.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">${tooltipText}</span></div></td><td class="px-4 py-2">${data.cidade}</td><td class="px-4 py-2">${data.bairro}</td><td class="px-4 py-2">${data.rca1 || '-'}</td></tr>`
             }).join('');
 
             inactiveClientsList.sort((a, b) => {
@@ -2462,12 +2462,12 @@
                 if (!a.isReturn && b.isReturn) return 1;
                 if (a.isNewForInactiveLabel && !b.isNewForInactiveLabel) return -1;
                 if (!a.isNewForInactiveLabel && b.isNewForInactiveLabel) return 1;
-                return (parseDate(b.ultimaCompra) || 0) - (parseDate(a.ultimaCompra) || 0);
+                return (parseDate(b.ultimacompra) || 0) - (parseDate(a.ultimacompra) || 0);
             });
             cityInactiveDetailTableBody.innerHTML = inactiveClientsList.map(client => {
                 const novoLabel = client.isNewForInactiveLabel ? `<span class="ml-2 text-xs font-semibold text-purple-400 bg-purple-900/50 px-2 py-0.5 rounded-full">NOVO</span>` : '';
                 const devolucaoLabel = client.isReturn ? `<span class="ml-2 text-xs font-semibold text-red-400 bg-red-900/50 px-2 py-0.5 rounded-full">DEVOLUÇÃO</span>` : '';
-                return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${client['codigo_cliente']}">${client['codigo_cliente']}</a></td><td class="px-4 py-2 flex items-center">${client.fantasia || client.razaoSocial}${novoLabel}${devolucaoLabel}</td><td class="px-4 py-2">${client.cidade}</td><td class="px-4 py-2">${client.bairro}</td><td class="px-4 py-2 text-center">${formatDate(client.ultimaCompra)}</td><td class="px-4 py-2">${client.rca1 || '-'}</td></tr>`
+                return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${client['codigo_cliente']}">${client['codigo_cliente']}</a></td><td class="px-4 py-2 flex items-center">${client.fantasia || client.razaosocial}${novoLabel}${devolucaoLabel}</td><td class="px-4 py-2">${client.cidade}</td><td class="px-4 py-2">${client.bairro}</td><td class="px-4 py-2 text-center">${formatDate(client.ultimacompra)}</td><td class="px-4 py-2">${client.rca1 || '-'}</td></tr>`
             }).join('');
 
             const cityChartTitleEl = document.getElementById('city-chart-title');
@@ -3477,7 +3477,7 @@
                 const productCurrentSales = filteredSales.filter(s => s.produto === productCode);
                 const currentMonthSalesQty = productCurrentSales.reduce((sum, s) => sum + s.qtvenda_embalagem_master, 0);
 
-                const productCadastroDate = parseDate(details.dtCadastro);
+                const productCadastroDate = parseDate(details.dtcadastro);
                 let productFirstWorkingDayIndex = 0;
                 
                 if (productCadastroDate) {
@@ -3743,7 +3743,7 @@
                 */
                 // --- FIM DA MODIFICAÇÃO ---
 
-                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
+                const isAmericanas = (c.razaosocial || '').toUpperCase().includes('AMERICANAS');
                 // const isVdHiago = vdHiagoClients.has(codcli); // REGRA REMOVIDA
                 
                 // Regra de inclusão
@@ -4035,7 +4035,7 @@
                 */
                 // --- FIM DA MODIFICAÇÃO ---
                 
-                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
+                const isAmericanas = (c.razaosocial || '').toUpperCase().includes('AMERICANAS');
                 // const isVdHiago = vdHiagoClients.has(codcli); // REGRA REMOVIDA
                 
                 // Regra de inclusão
@@ -4358,10 +4358,10 @@
                 tableBodyHTML += `
                     <tr class="hover:bg-slate-700/50">
                         <td class="px-2 py-1.5 text-xs">${client['codigo_cliente']}</td>
-                        <td class="px-2 py-1.5 text-xs">${client.fantasia || client.razaoSocial}</td>
+                        <td class="px-2 py-1.5 text-xs">${client.fantasia || client.razaosocial}</td>
                         <td class="px-2 py-1.5 text-xs">${client.cidade}</td>
                         <td class="px-2 py-1.5 text-xs">${client.bairro}</td>
-                        <td class="px-2 py-1.5 text-xs text-center">${formatDate(client.ultimaCompra)}</td>
+                        <td class="px-2 py-1.5 text-xs text-center">${formatDate(client.ultimacompra)}</td>
                 `;
                 categoryNames.forEach(catName => {
                     tableBodyHTML += `<td class="px-2 py-1.5 text-center">${client.innovationStatus[catName] ? checkIcon : xIcon}</td>`;
@@ -4461,10 +4461,10 @@
                 const clientInnovationsBody = innovationsByClientForExport.map(client => {
                     const row = [
                         client['codigo_cliente'],
-                        client.fantasia || client.razaoSocial,
+                        client.fantasia || client.razaosocial,
                         client.cidade,
                         client.bairro,
-                        formatDate(client.ultimaCompra)
+                        formatDate(client.ultimacompra)
                     ];
                     categoryLegendForExport.forEach((cat, index) => {
                         const catName = cat.split(' - ')[1];
@@ -4530,7 +4530,7 @@
             let finalAddress = clientData.endereco || 'N/A';
             const number = clientData.numero || 'SN';
             if (number !== 'SN' && finalAddress !== 'N/A' && !finalAddress.includes(number)) finalAddress += `, ${number}`;
-            clientModalContent.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"><div><p class="font-bold text-slate-400">Código:</p><p>${clientData['codigo_cliente'] || 'N/A'}</p></div><div><p class="font-bold text-slate-400">CNPJ/CPF:</p><p>${clientData.cnpj_cpf || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Insc. Est. / Produtor:</p><p>${clientData.inscricaoEstadual || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Razão Social:</p><p>${clientData.razaoSocial || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Nome Fantasia:</p><p>${clientData.fantasia || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Endereço:</p><p>${finalAddress}</p></div><div><p class="font-bold text-slate-400">Bairro:</p><p>${clientData.bairro || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Cidade:</p><p>${clientData.cidade || 'N/A'}</p></div><div><p class="font-bold text-slate-400">CEP:</p><p>${clientData.cep || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Telefone:</p><p>${clientData.telefone || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">E-mail:</p><p>${clientData.email || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Ramo de Atividade:</p><p>${clientData.ramo || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Última Compra:</p><p>${formatDate(clientData.ultimaCompra)}</p></div><div><p class="font-bold text-slate-400">Data Cadastro:</p><p>${formatDate(clientData.dataCadastro)}</p></div><div><p class="font-bold text-slate-400">Bloqueio:</p><p>${clientData.bloqueio || 'N/A'}</p></div></div>`;
+            clientModalContent.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"><div><p class="font-bold text-slate-400">Código:</p><p>${clientData['codigo_cliente'] || 'N/A'}</p></div><div><p class="font-bold text-slate-400">CNPJ/CPF:</p><p>${clientData.cnpj_cpf || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Insc. Est. / Produtor:</p><p>${clientData.inscricaoestadual || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Razão Social:</p><p>${clientData.razaosocial || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Nome Fantasia:</p><p>${clientData.fantasia || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Endereço:</p><p>${finalAddress}</p></div><div><p class="font-bold text-slate-400">Bairro:</p><p>${clientData.bairro || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Cidade:</p><p>${clientData.cidade || 'N/A'}</p></div><div><p class="font-bold text-slate-400">CEP:</p><p>${clientData.cep || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Telefone:</p><p>${clientData.telefone || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">E-mail:</p><p>${clientData.email || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Ramo de Atividade:</p><p>${clientData.ramo || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Última Compra:</p><p>${formatDate(clientData.ultimacompra)}</p></div><div><p class="font-bold text-slate-400">Data Cadastro:</p><p>${formatDate(clientData.datacadastro)}</p></div><div><p class="font-bold text-slate-400">Bloqueio:</p><p>${clientData.bloqueio || 'N/A'}</p></div></div>`;
             clientModal.classList.remove('hidden');
         }
 
@@ -4562,7 +4562,7 @@
 
             const tableRows = [];
             clientList.forEach(client => {
-                const clientData = [ client['codigo_cliente'] || '', client.fantasia || client.razaoSocial || '', client.bairro || '', client.cidade || '', formatDate(client.ultimaCompra) || 'N/A' ];
+                const clientData = [ client['codigo_cliente'] || '', client.fantasia || client.razaosocial || '', client.bairro || '', client.cidade || '', formatDate(client.ultimacompra) || 'N/A' ];
                 if (includeFaturamento) clientData.splice(2, 0, (client.total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
                 tableRows.push(clientData);
             });
