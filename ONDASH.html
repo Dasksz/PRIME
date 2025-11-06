@@ -471,6 +471,261 @@
             </div>
         </div>
     </div>
+    
+    <!-- 
+      *********************************************************************
+      * INÍCIO DA CORREÇÃO: ADICIONANDO OS ECRÃS E MODAIS EM FALTA
+      *********************************************************************
+    -->
+
+    <!-- Ecrã Inovações (EM FALTA) -->
+    <div id="innovations-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
+        <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
+            <div class="flex justify-between items-center">
+                <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Inovações</p></div>
+                <div class="flex gap-4">
+                    <button id="innovations-month-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg">Inovações Mês</button>
+                    <button id="back-to-main-from-innovations-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button>
+                </div>
+            </div>
+        </header>
+        <!-- KPIs (Inovações) -->
+         <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-6">
+            <div class="kpi-card">
+                <p class="text-slate-400 text-sm font-medium">Clientes Ativos (Filtro)</p>
+                <p id="innovations-active-clients-kpi" class="text-3xl font-bold text-teal-400 my-1">0</p>
+                <p class="text-xs text-slate-500">Base para os KPIs</p>
+            </div>
+            <div class="kpi-card">
+                <p class="text-slate-400 text-sm font-medium">Cobertura Mês Anterior</p>
+                <p id="innovations-selection-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p>
+                <p id="innovations-selection-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p>
+            </div>
+            <div class="kpi-card">
+                <p class="text-slate-400 text-sm font-medium">Cobertura Mês Atual</p>
+                <p id="innovations-selection-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p>
+                <p id="innovations-selection-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p>
+            </div>
+            <div class="kpi-card">
+                <p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Ant.</p>
+                <p id="innovations-bonus-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p>
+                <p id="innovations-bonus-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p>
+            </div>
+            <div class="kpi-card">
+                <p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Atual</p>
+                <p id="innovations-bonus-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p>
+                <p id="innovations-bonus-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p>
+            </div>
+            <div class="kpi-card">
+                <p id="innovations-top-coverage-title" class="text-slate-400 text-sm font-medium">Item com Maior Cobertura</p>
+                <p id="innovations-top-coverage-value-kpi" class="text-3xl font-bold text-purple-400 my-1">0%</p>
+                <p id="innovations-top-coverage-product-kpi" class="text-xs text-slate-500 truncate" title="Nenhum item analisado">-</p>
+                <p id="innovations-top-coverage-count-kpi" class="text-xs text-slate-500">0 PDVs</p>
+            </div>
+        </div>
+        <!-- Filtros (Inovações) -->
+        <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+                <div><label for="innovations-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label><select id="innovations-supervisor-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
+                <div class="relative"><label for="innovations-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="innovations-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="innovations-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="innovations-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                <div class="relative"><label for="innovations-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Fornecedor</label><button id="innovations-supplier-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="innovations-supplier-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="innovations-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                <div class="relative"><label for="innovations-city-filter" class="block mb-2 text-sm font-medium text-slate-400">Cidade</label><input type="text" id="innovations-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off"><div id="innovations-city-suggestions" class="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar text-white"></div></div>
+                <div><label for="innovations-filial-filter" class="block mb-2 text-sm font-medium text-slate-400">Filial</label><select id="innovations-filial-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="ambas" selected>Ambas</option><option value="05">Filial 05</option><option value="08">Filial 08</option></select></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                <div class="lg:col-span-2 relative">
+                    <label for="innovations-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Produto (Obrigatório)</label>
+                    <button id="innovations-product-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="innovations-product-filter-text">Selecione um ou mais produtos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button>
+                    <div id="innovations-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg">
+                        <div class="p-2 border-b border-slate-700"><input type="text" id="innovations-product-search-input" placeholder="Buscar produto..." class="bg-slate-600 text-xs rounded-lg block w-full p-2 border border-slate-500 placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-teal-500"></div>
+                        <div id="innovations-product-list" class="max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
+                    </div>
+                </div>
+                <div class="flex items-center justify-start h-full pb-1"><div class="flex items-center"><input id="innovations-include-bonus" type="checkbox" checked class="w-4 h-4 text-teal-500 bg-slate-600 border-slate-500 rounded focus:ring-teal-500"><label for="innovations-include-bonus" class="ml-2 text-sm font-medium text-slate-300">Incluir Bonificações</label></div></div>
+                <button id="clear-innovations-filters-btn" class="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
+            </div>
+        </div>
+        <!-- Tabela (Inovações) -->
+        <div id="innovations-table-container" class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
+            <div id="innovations-placeholder" class="text-center py-16"><p class="text-slate-400 text-lg">Aguardando filtro de produtos...</p></div>
+            <div id="innovations-results" class="hidden overflow-auto custom-scrollbar" style="max-height: 60vh;">
+                <table class="min-w-full text-sm text-left text-slate-300">
+                    <thead class="text-xs text-slate-400 uppercase sticky-header">
+                        <tr><th class="px-2 py-2">PRODUTO</th><th class="px-2 py-2 text-right">ESTOQUE CAIXAS</th><th class="px-2 py-2 text-right">COBERTURA MÊS ANT.</th><th class="px-2 py-2 text-right">COBERTURA MÊS ATUAL</th><th class="px-2 py-2 text-right">VARIAÇÃO</th></tr>
+                    </thead>
+                    <tbody id="innovations-table-body" class="divide-y divide-slate-700"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ecrã Inovações Mês (EM FALTA) -->
+    <div id="innovations-month-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
+         <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
+            <div class="flex justify-between items-center">
+                <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Gráfico de Cobertura por Categoria de Inovação</p></div>
+                <div class="flex gap-4">
+                    <button id="export-innovations-month-pdf-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Exportar PDF</button>
+                    <button id="back-to-innovations-from-month-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar</button>
+                </div>
+            </div>
+        </header>
+         <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-6">
+            <div class="kpi-card"><p class="text-slate-400 text-sm font-medium">Clientes Ativos (Filtro)</p><p id="innovations-month-active-clients-kpi" class="text-3xl font-bold text-teal-400 my-1">0</p><p class="text-xs text-slate-500">Base para os KPIs</p></div>
+            <div class="kpi-card"><p class="text-slate-400 text-sm font-medium">Cobertura Mês Anterior</p><p id="innovations-month-selection-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p><p id="innovations-month-selection-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p></div>
+            <div class="kpi-card"><p class="text-slate-400 text-sm font-medium">Cobertura Mês Atual</p><p id="innovations-month-selection-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p><p id="innovations-month-selection-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p></div>
+            <div class="kpi-card"><p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Ant.</p><p id="innovations-month-bonus-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p><p id="innovations-month-bonus-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p></div>
+            <div class="kpi-card"><p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Atual</p><p id="innovations-month-bonus-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p><p id="innovations-month-bonus-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p></div>
+            <div class="kpi-card"><p id="innovations-month-top-coverage-title" class="text-slate-400 text-sm font-medium">Item com Maior Cobertura</p><p id="innovations-month-top-coverage-value-kpi" class="text-3xl font-bold text-purple-400 my-1">0%</p><p id="innovations-month-top-coverage-kpi" class="text-xs text-slate-500 truncate" title="Nenhum item analisado">-</p><p id="innovations-month-top-coverage-count-kpi" class="text-xs text-slate-500">0 PDVs</p></div>
+        </div>
+        <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
+                <div><label for="innovations-month-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label><select id="innovations-month-supervisor-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
+                <div class="relative"><label for="innovations-month-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="innovations-month-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="innovations-month-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="innovations-month-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                <div class="relative"><label for="innovations-month-city-filter" class="block mb-2 text-sm font-medium text-slate-400">Cidade</label><input type="text" id="innovations-month-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off"><div id="innovations-month-city-suggestions" class="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar text-white"></div></div>
+                <div><label for="innovations-month-filial-filter" class="block mb-2 text-sm font-medium text-slate-400">Filial</label><select id="innovations-month-filial-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="ambas" selected>Ambas</option><option value="05">Filial 05</option><option value="08">Filial 08</option></select></div>
+                <div class="flex items-center justify-start h-full pb-1"><div class="flex items-center"><input id="innovations-month-include-bonus" type="checkbox" checked class="w-4 h-4 text-teal-500 bg-slate-600 border-slate-500 rounded focus:ring-teal-500"><label for="innovations-month-include-bonus" class="ml-2 text-sm font-medium text-slate-300">Incluir Bonificações</label></div></div>
+                <button id="clear-innovations-month-filters-btn" class="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
+            </div>
+            <div class="mt-4 border-t border-slate-700 pt-4">
+                <label for="innovations-month-category-filter" class="block mb-2 text-sm font-medium text-slate-400">Filtrar por Categoria de Inovação</label>
+                <select id="innovations-month-category-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todas as Categorias</option></select>
+            </div>
+        </div>
+        <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm mb-6">
+            <div id="innovations-month-chartContainer" class="relative h-96"></div>
+        </div>
+        <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm mb-6">
+            <h2 class="text-lg font-semibold text-white mb-4 text-center">Dados do Gráfico</h2>
+            <div class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
+                <table class="min-w-full text-sm text-left text-slate-300">
+                    <thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-2 py-2">CATEGORIA</th><th class="px-2 py-2">PRODUTO</th><th class="px-2 py-2 text-right">ESTOQUE CAIXAS</th><th class="px-2 py-2 text-right">COBERTURA MÊS ANT.</th><th class="px-2 py-2 text-right">COBERTURA MÊS ATUAL</th><th class="px-2 py-2 text-right">VARIAÇÃO</th></tr></thead>
+                    <tbody id="innovations-month-table-body" class="divide-y divide-slate-700"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
+            <h2 class="text-lg font-semibold text-white mb-2 text-center">Inovações por cliente</h2>
+            <div id="innovations-by-client-legend" class="text-xs text-slate-400 mb-4 p-2 bg-slate-800 rounded"></div>
+            <div class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
+                <table class="min-w-full text-sm text-left text-slate-300">
+                    <thead id="innovations-by-client-table-head" class="text-xs text-slate-400 uppercase sticky-header"></thead>
+                    <tbody id="innovations-by-client-table-body" class="divide-y divide-slate-700"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ecrã Cobertura (EM FALTA) -->
+    <div id="coverage-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
+        <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
+            <div class="flex justify-between items-center">
+                <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Cobertura (Estoque x PDVs)</p></div>
+                <button id="back-to-main-from-coverage-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button>
+            </div>
+        </header>
+        <!-- KPIs (Cobertura) -->
+         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            <div class="kpi-card">
+                <p class="text-slate-400 text-sm font-medium">Clientes Ativos (Filtro)</p>
+                <p id="coverage-active-clients-kpi" class="text-3xl font-bold text-teal-400 my-1">0</p>
+                <p class="text-xs text-slate-500">Base para os KPIs</p>
+            </div>
+            <div class="kpi-card">
+                <p class="text-slate-400 text-sm font-medium">Cobertura Mês Anterior</p>
+                <p id="coverage-selection-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p>
+                <p id="coverage-selection-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p>
+            </div>
+            <div class="kpi-card">
+                <p class="text-slate-400 text-sm font-medium">Cobertura Mês Atual</p>
+                <p id="coverage-selection-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p>
+                <p id="coverage-selection-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p>
+            </div>
+            <div class="kpi-card">
+                <p class="text-slate-400 text-sm font-medium">Item com Maior Cobertura</p>
+                <p id="coverage-top-coverage-value-kpi" class="text-3xl font-bold text-purple-400 my-1">0%</p>
+                <p id="coverage-top-coverage-product-kpi" class="text-xs text-slate-500 truncate" title="Nenhum item analisado">-</p>
+            </div>
+        </div>
+        <!-- Filtros (Cobertura) -->
+        <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+                <div><label for="coverage-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label><select id="coverage-supervisor-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
+                <div class="relative"><label for="coverage-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="coverage-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="coverage-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="coverage-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                <div class="relative"><label for="coverage-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Fornecedor</LabeL><button id="coverage-supplier-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="coverage-supplier-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="coverage-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                <div class="relative"><label for="coverage-city-filter" class="block mb-2 text-sm font-medium text-slate-400">Cidade</label><input type="text" id="coverage-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off"><div id="coverage-city-suggestions" class="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar text-white"></div></div>
+                <div><label for="coverage-filial-filter" class="block mb-2 text-sm font-medium text-slate-400">Filial</label><select id="coverage-filial-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="ambas" selected>Ambas</option><option value="05">Filial 05</option><option value="08">Filial 08</option></select></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                <div class="lg:col-span-2 relative">
+                    <label for="coverage-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Produto</label>
+                    <button id="coverage-product-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="coverage-product-filter-text">Todos os Produtos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button>
+                    <div id="coverage-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg">
+                        <div class="p-2 border-b border-slate-700"><input type="text" id="coverage-product-search-input" placeholder="Buscar produto..." class="bg-slate-600 text-xs rounded-lg block w-full p-2 border border-slate-500 placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-teal-500"></div>
+                        <div id="coverage-product-list" class="max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
+                    </div>
+                </div>
+                <div class="flex items-center justify-start h-full pb-1"><div class="flex items-center"><input id="coverage-include-bonus" type="checkbox" checked class="w-4 h-4 text-teal-500 bg-slate-600 border-slate-500 rounded focus:ring-teal-500"><label for="coverage-include-bonus" class="ml-2 text-sm font-medium text-slate-300">Incluir Bonificações</label></div></div>
+                <button id="clear-coverage-filters-btn" class="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
+            </div>
+        </div>
+        <!-- Tabela (Cobertura) -->
+        <div id="coverage-table-container" class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
+            <div id="coverage-results" class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
+                <table class="min-w-full text-sm text-left text-slate-300">
+                    <thead class="text-xs text-slate-400 uppercase sticky-header">
+                        <tr><th class="px-2 py-2">PRODUTO</th><th class="px-2 py-2 text-right">ESTOQUE (Cx)</th><th class="px-2 py-2 text-right">COB. ESTOQUE (Dias)</th><th class="px-2 py-2 text-right">PDVs MÊS ANT.</th><th class="px-2 py-2 text-right">PDVs MÊS ATUAL</th><th class="px-2 py-2 text-right">COB. PDVs (%)</th></tr>
+                    </thead>
+                    <tbody id="coverage-table-body" class="divide-y divide-slate-700"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Detalhes do Pedido (EM FALTA) -->
+    <div id="order-details-modal" class="modal-overlay hidden">
+        <div class="bg-slate-800 rounded-lg shadow-2xl max-w-4xl w-full m-4 border border-slate-700">
+            <div class="p-6 border-b border-slate-700 flex justify-between items-center"><h2 class="text-xl font-bold text-white">Detalhes do Pedido <span id="modal-pedido-id"></span></h2><button id="modal-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button></div>
+            <div id="modal-header-info" class="p-6 text-left grid grid-cols-2 md:grid-cols-3 gap-4 text-sm text-slate-300"></div>
+            <div class="custom-scrollbar" style="max-height: 50vh; overflow-y: auto;">
+                <table class="min-w-full text-sm text-left text-slate-300">
+                    <thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-4 py-3">Produto</th><th class="px-4 py-3 text-right">Quantidade</th><th class="px-4 py-3 text-right">Peso (Kg)</th><th class="px-4 py-3 text-right">Valor Unitário</th></tr></thead>
+                    <tbody id="modal-table-body" class="divide-y divide-slate-700"></tbody>
+                </table>
+            </div>
+            <div id="modal-footer-total" class="p-6 border-t border-slate-700 flex justify-between items-center"></div>
+        </div>
+    </div>
+    
+    <!-- Modal Detalhes do Cliente (EM FALTA) -->
+    <div id="client-details-modal" class="modal-overlay hidden">
+        <div class="bg-slate-800 rounded-lg shadow-2xl max-w-2xl w-full m-4 border border-slate-700">
+            <div class="p-6 border-b border-slate-700 flex justify-between items-center"><h2 class="text-xl font-bold text-white">Resumo Cadastral</h2><button id="client-modal-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button></div>
+            <div id="client-modal-content" class="p-6 text-slate-300"></div>
+        </div>
+    </div>
+    
+    <!-- Modal Feriados (EM FALTA) -->
+    <div id="holiday-modal" class="modal-overlay hidden">
+        <div class="bg-slate-800 rounded-lg shadow-2xl max-w-xs w-full m-4 text-slate-300 border border-slate-700">
+            <div class="p-4 border-b border-slate-700 flex justify-between items-center">
+                <h2 class="text-lg font-bold text-white">Selecionar Feriados</h2>
+                <button id="holiday-modal-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button>
+            </div>
+            <div class="p-4">
+                <div id="calendar-container"></div>
+            </div>
+            <div class="p-4 border-t border-slate-700 text-right">
+                <button id="holiday-modal-done-btn" class="bg-teal-500 hover:bg-teal-400 text-white font-bold py-2 px-4 rounded-lg">Confirmar</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 
+      *********************************************************************
+      * FIM DA CORREÇÃO
+      *********************************************************************
+    -->
 
     <!-- 7. MODIFICADO: Script agora busca dados das 8 tabelas -->
     <script>
