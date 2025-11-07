@@ -1129,8 +1129,8 @@
     -->
     <script id="report-logic-script" type="text/template">
         //const embeddedData = window.embeddedData; // Esta linha será removida pois os dados virão como argumento
-        const allSalesData = embeddedData.detailed || [];
-        const allHistoryData = embeddedData.history || [];
+        let allSalesData = embeddedData.detailed || [];
+        let allHistoryData = embeddedData.history || [];
         const aggregatedOrders = embeddedData.byOrder || [];
         const allClientsData = embeddedData.clients || [];
         const stockData05 = new Map(Object.entries(embeddedData.stockMap05 || {}));
@@ -1178,6 +1178,56 @@
 
         function initializeOptimizedDataStructures() {
             try {
+            // 1. Criar um mapa de detalhes do vendedor (codusur -> {nome, supervisor})
+            const sellerDetailsMap = new Map();
+            const allDataForSellerMapping = [...allSalesData, ...allHistoryData];
+            allDataForSellerMapping.forEach(s => {
+                if (s.codusur && (!sellerDetailsMap.has(s.codusur) || s.nome)) { // Prioriza registros com nome
+                    sellerDetailsMap.set(s.codusur, { name: s.nome, supervisor: s.superv });
+                }
+            });
+
+            // 2. Criar um mapa do cliente para o seu vendedor principal atual (codcli -> codusur)
+            const clientToCurrentSellerMap = new Map();
+            let americanasCodCli = null;
+            allClientsData.forEach(client => {
+                if (client.codigo_cliente && client.rca1) {
+                    clientToCurrentSellerMap.set(String(client.codigo_cliente), String(client.rca1));
+                }
+                // 3. Identificar o código do cliente para "Americanas" para a exceção
+                if (client.razaosocial && client.razaosocial.toUpperCase().includes('AMERICANAS')) {
+                    americanasCodCli = String(client.codigo_cliente);
+                }
+            });
+
+            // 4. Função para reatribuir vendas baseada na nova regra
+            const remapSales = (salesData) => {
+                return salesData.map(sale => {
+                    const clientCode = String(sale.codcli);
+                    // Aplica a regra para todos, exceto para o cliente "Americanas"
+                    if (clientCode !== americanasCodCli) {
+                        const currentSellerCode = clientToCurrentSellerMap.get(clientCode);
+                        if (currentSellerCode) {
+                            const sellerDetails = sellerDetailsMap.get(currentSellerCode);
+                            if (sellerDetails) {
+                                // Cria um novo objeto para não modificar o original diretamente (imutabilidade)
+                                const remappedSale = { ...sale };
+                                remappedSale.codusur = currentSellerCode;
+                                remappedSale.nome = sellerDetails.name;
+                                remappedSale.superv = sellerDetails.supervisor;
+                                return remappedSale;
+                            }
+                        }
+                    }
+                    // Retorna a venda original se a regra não se aplicar
+                    return sale;
+                });
+            };
+
+            // 5. Substituir os dados originais pelos dados reatribuídos
+            allSalesData = remapSales(allSalesData);
+            allHistoryData = remapSales(allHistoryData);
+
             allClientsData.forEach(client => {
                 let rcaList = [];
                 if (client.rcas) {
@@ -1748,38 +1798,49 @@
 
         function parseDate(dateString) {
             if (!dateString) return null;
-            if (dateString instanceof Date) return !isNaN(dateString.getTime()) ? dateString : null;
-            if (typeof dateString === 'number') {
-                // This is an approximation for Excel date numbers. It creates a Date object
-                // whose UTC time is based on the number. Timezone of the server doesn't matter.
-                return new Date(Math.round((dateString - 25569) * 86400 * 1000));
-            }
-            if (typeof dateString !== 'string') return null;
-            
-            // Try to parse DD/MM/YYYY
-            const parts = dateString.split('/');
-            if (parts.length === 3) {
-                const [day, month, year] = parts;
-                if (day && month && year && day.length === 2 && month.length === 2 && year.length === 4) {
-                    return new Date(Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10)));
-                }
-            }
-            
-            // Try to parse YYYY-MM-DD (which can be problematic across browsers)
-            const isoMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
-            if (isoMatch) {
-                 // Slices the string to avoid time part and parses as UTC
-                const dateOnly = dateString.slice(0, 10);
-                return new Date(dateOnly + 'T00:00:00Z');
-            }
-            
-            // Fallback for full ISO strings (YYYY-MM-DDTHH:mm:ss.sssZ)
-            const isoDate = new Date(dateString);
-            if (!isNaN(isoDate.getTime())) {
-                return isoDate; // new Date() on full ISO strings is reliable
+
+            // Se já for um objeto Date, retorna diretamente
+            if (dateString instanceof Date) {
+                return !isNaN(dateString.getTime()) ? dateString : null;
             }
 
-            return null;
+            // Se for um número (formato Excel)
+            if (typeof dateString === 'number') {
+                return new Date(Math.round((dateString - 25569) * 86400 * 1000));
+            }
+            
+            if (typeof dateString !== 'string') return null;
+
+            // Tentativa de parse para 'YYYY-MM-DDTHH:mm:ss.sssZ' ou 'YYYY-MM-DD'
+            // O construtor do Date já lida bem com isso, mas vamos garantir o UTC.
+            if (dateString.includes('T') || dateString.includes('-')) {
+                 // Adiciona 'Z' se não tiver informação de fuso horário para forçar UTC
+                const isoString = dateString.endsWith('Z') ? dateString : dateString + 'Z';
+                const isoDate = new Date(isoString);
+                if (!isNaN(isoDate.getTime())) {
+                    return isoDate;
+                }
+            }
+
+            // Tentativa de parse para 'DD/MM/YYYY'
+            if (dateString.length === 10 && dateString.charAt(2) === '/' && dateString.charAt(5) === '/') {
+                const [day, month, year] = dateString.split('/');
+                if (year && month && day && year.length === 4) {
+                    // Cria a data em UTC para evitar problemas de fuso horário
+                    const utcDate = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
+                    if (!isNaN(utcDate.getTime())) {
+                        return utcDate;
+                    }
+                }
+            }
+
+            // Fallback para outros formatos que o `new Date()` consegue interpretar
+            const genericDate = new Date(dateString);
+            if (!isNaN(genericDate.getTime())) {
+                return genericDate;
+            }
+
+            return null; // Retorna nulo se nenhum formato corresponder
         }
 
         function formatDate(date) {
@@ -3191,8 +3252,7 @@
             const city = comparisonCityFilter.value.trim();
             const filial = comparisonFilialFilter.value;
 
-            const filterFunction = s =>
-                (clientCodes.has(s.codcli)) &&
+            const commonFilter = s =>
                 (filial === 'ambas' || s.filial === filial) &&
                 (excludeFilter === 'supervisor' || !supervisor || s.superv === supervisor) &&
                 (excludeFilter === 'seller' || sellers.length === 0 || sellers.includes(s.nome)) &&
@@ -3201,9 +3261,16 @@
                 (excludeFilter === 'pasta' || !pasta || s.observacaofor === pasta) &&
                 (excludeFilter === 'city' || !city || (s.cidade && s.cidade.toLowerCase() === city.toLowerCase()));
 
+            const currentSalesFilter = s => clientCodes.has(s.codcli) && commonFilter(s);
+
+            let filteredHistory = allHistoryData.filter(commonFilter);
+            if (comparisonRedeGroupFilter) {
+                 filteredHistory = filteredHistory.filter(s => clientCodes.has(s.codcli));
+            }
+
             return {
-                currentSales: allSalesData.filter(filterFunction),
-                historySales: allHistoryData.filter(filterFunction)
+                currentSales: allSalesData.filter(currentSalesFilter),
+                historySales: filteredHistory
             };
         }
 
@@ -3390,12 +3457,14 @@
         }
 
         function updateComparisonView() {
+            const getRevenue = (sale) => (sale.tipovenda === '1' || sale.tipovenda === '9') ? sale.vlvenda : 0;
+
             const filteredData = getComparisonFilteredData();
             const { currentSales, historySales } = filteredData;
 
             const historyMonthsCount = getUniqueMonthCount(historySales);
 
-            const currentTotalFat = currentSales.reduce((sum, item) => sum + item.vlvenda, 0);
+            const currentTotalFat = currentSales.reduce((sum, item) => sum + getRevenue(item), 0);
             const currentTotalPeso = currentSales.reduce((sum, item) => sum + item.totpesoliq, 0);
             const currentClients = getPositiveClientsWithNewLogic(currentSales);
             const currentTicket = currentClients > 0 ? currentTotalFat / currentClients : 0;
@@ -3406,7 +3475,7 @@
             const currentPositivacaoSalty = calculatePositivacaoPorCestaComDevolucao(currentSales, saltyCategories);
             const currentPositivacaoFoods = calculatePositivacaoPorCestaComDevolucao(currentSales, foodsCategories);
 
-            const historyTotalFat = historySales.reduce((sum, item) => sum + item.vlvenda, 0);
+            const historyTotalFat = historySales.reduce((sum, item) => sum + getRevenue(item), 0);
             const historyTotalPeso = historySales.reduce((sum, item) => sum + item.totpesoliq, 0);
 
             const historyAvgFat = historyMonthsCount > 0 ? historyTotalFat / historyMonthsCount : 0;
@@ -3476,7 +3545,7 @@
                 if (!saleDate) return;
                 const weekIndex = currentMonthWeeks.findIndex(week => saleDate >= week.start && saleDate <= week.end);
                 if (weekIndex !== -1) {
-                     currentSalesByWeek[weekIndex] += sale.vlvenda;
+                     currentSalesByWeek[weekIndex] += getRevenue(sale);
                 }
             });
 
@@ -3492,7 +3561,7 @@
                 if (weekIndex !== -1) {
                     if (!historySalesByWeekIndex[weekIndex]) historySalesByWeekIndex[weekIndex] = {};
                     if (!historySalesByWeekIndex[weekIndex][monthKey]) historySalesByWeekIndex[weekIndex][monthKey] = 0;
-                    historySalesByWeekIndex[weekIndex][monthKey] += sale.vlvenda;
+                    historySalesByWeekIndex[weekIndex][monthKey] += getRevenue(sale);
                 }
             });
 
@@ -3520,7 +3589,7 @@
                             const d = parseDate(s.dtped);
                             return d >= currentWeek.start && d <= today;
                         });
-                        const totalSoldThisWeek = salesThisWeekSoFar.reduce((sum, s) => sum + s.vlvenda, 0);
+                        const totalSoldThisWeek = salesThisWeekSoFar.reduce((sum, s) => sum + getRevenue(s), 0);
 
                         let workingDaysPassed = 0;
                         let totalWorkingDays = 0;
@@ -3574,20 +3643,20 @@
 
                     if (totalDays > 0 && passedDays > 0 && passedDays <= totalDays) {
                         const projectionFactor = totalDays / passedDays;
-                        const currentTotal = monthlyCurrentSales.reduce((sum, item) => sum + item.vlvenda, 0);
+                        const currentTotal = monthlyCurrentSales.reduce((sum, item) => sum + getRevenue(item), 0);
                         const projectedTotal = currentTotal * projectionFactor;
 
-                        monthlyCurrentSales = [{ vlvenda: projectedTotal, dtped: new Date() }];
+                        monthlyCurrentSales = [{ vlvenda: projectedTotal, dtped: new Date(), tipovenda: '1' }]; // Assume tipovenda '1' for projection
                     }
                 }
-                const monthlyCurrentTotalFat = monthlyCurrentSales.reduce((sum, item) => sum + item.vlvenda, 0);
+                const monthlyCurrentTotalFat = monthlyCurrentSales.reduce((sum, item) => sum + getRevenue(item), 0);
 
                 const salesByMonth = {};
                 historySales.forEach(sale => {
                     const saleDate = parseDate(sale.dtped);
                     if (!saleDate) return;
-                    const monthKey = `${saleDate.getFullYear()}-${String(saleDate.getMonth() + 1).padStart(2, '0')}`;
-                    salesByMonth[monthKey] = (salesByMonth[monthKey] || 0) + sale.vlvenda;
+                    const monthKey = `${saleDate.getUTCFullYear()}-${String(saleDate.getUTCMonth() + 1).padStart(2, '0')}`;
+                    salesByMonth[monthKey] = (salesByMonth[monthKey] || 0) + getRevenue(sale);
                 });
 
                 const sortedMonths = Object.keys(salesByMonth).sort();
@@ -3600,7 +3669,7 @@
                 let currentMonthLabel = 'Mês Atual';
                 if (currentSales.length > 0) {
                     const firstSaleDate = parseDate(currentSales[0].dtped) || new Date();
-                    currentMonthLabel = firstSaleDate.toLocaleString('pt-BR', { month: 'short', year: '2-digit' });
+                    currentMonthLabel = firstSaleDate.toLocaleString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' });
                 }
 
                 const existingIndex = monthLabels.indexOf(currentMonthLabel);
@@ -3646,7 +3715,7 @@
                 const weekIndex = currentMonthWeeks.findIndex(week => saleDate >= week.start && saleDate <= week.end);
                 if (weekIndex !== -1) {
                     const dayOfWeek = saleDate.getDay();
-                    salesByWeekAndDay[weekIndex + 1][dayOfWeek] += sale.vlvenda;
+                    salesByWeekAndDay[weekIndex + 1][dayOfWeek] += getRevenue(sale);
                 }
             });
 
@@ -3666,7 +3735,7 @@
                     if (weekIndex !== -1) {
                         if (!salesByWeekDayMonth[monthKey]) salesByWeekDayMonth[monthKey] = {};
                         if (!salesByWeekDayMonth[monthKey][weekIndex]) salesByWeekDayMonth[monthKey][weekIndex] = new Array(7).fill(0);
-                        salesByWeekDayMonth[monthKey][weekIndex][d.getDay()] += sale.vlvenda;
+                        salesByWeekDayMonth[monthKey][weekIndex][d.getDay()] += getRevenue(sale);
                     }
                 });
 
@@ -3762,8 +3831,8 @@
             const supervisorComparison = {};
             const activeSupervisors = [...new Set(allSalesData.map(s => s.superv))].filter(Boolean);
             activeSupervisors.forEach(sup => supervisorComparison[sup] = { current: 0, history: 0 });
-            currentSales.forEach(s => { if(s.superv && supervisorComparison[s.superv]) supervisorComparison[s.superv].current += s.vlvenda; });
-            historySales.forEach(s => { if(s.superv && supervisorComparison[s.superv]) supervisorComparison[s.superv].history += s.vlvenda; });
+            currentSales.forEach(s => { if(s.superv && supervisorComparison[s.superv]) supervisorComparison[s.superv].current += getRevenue(s); });
+            historySales.forEach(s => { if(s.superv && supervisorComparison[s.superv]) supervisorComparison[s.superv].history += getRevenue(s); });
             Object.keys(supervisorComparison).forEach(sup => supervisorComparison[sup].history /= historyMonthsCount);
             const supervisorTableBody = document.getElementById('supervisorComparisonTableBody');
             supervisorTableBody.innerHTML = Object.entries(supervisorComparison).map(([sup, data]) => { const variation = data.history > 0 ? ((data.current - data.history) / data.history) * 100 : (data.current > 0 ? 100 : 0); const colorClass = variation > 0 ? 'text-green-400' : variation < 0 ? 'text-red-400' : 'text-slate-400'; return `<tr><td class="px-4 py-2">${sup}</td><td class="px-4 py-2 text-right">${data.history.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right">${data.current.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right ${colorClass}">${variation.toFixed(2)}%</td></tr>`; }).join('');
