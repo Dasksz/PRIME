@@ -1178,12 +1178,29 @@
 
         function initializeOptimizedDataStructures() {
             try {
-            // 1. Criar um mapa de detalhes do vendedor (codusur -> {nome, supervisor})
+            // 1. Tornar o mapeamento de supervisores mais robusto
             const sellerDetailsMap = new Map();
             const allDataForSellerMapping = [...allSalesData, ...allHistoryData];
+
+            // Passo A: Mapear a relação mais recente de codusur -> supervisor
+            const supervisorMap = new Map();
             allDataForSellerMapping.forEach(s => {
-                if (s.codusur && (!sellerDetailsMap.has(s.codusur) || s.nome)) { // Prioriza registros com nome
-                    sellerDetailsMap.set(s.codusur, { name: s.nome, supervisor: s.superv });
+                if (s.codusur && s.superv) {
+                    supervisorMap.set(s.codusur, s.superv);
+                }
+            });
+
+            // Passo B: Preencher o mapa final com nome e o supervisor do mapa acima
+            allDataForSellerMapping.forEach(s => {
+                if (s.codusur) {
+                    const existing = sellerDetailsMap.get(s.codusur);
+                    // Apenas atualiza se não existir, ou se o registro atual tiver um nome e o anterior não
+                    if (!existing || (!existing.name && s.nome)) {
+                         sellerDetailsMap.set(s.codusur, {
+                            name: s.nome,
+                            supervisor: supervisorMap.get(s.codusur) // Usa o supervisor do mapa robusto
+                        });
+                    }
                 }
             });
 
@@ -1892,6 +1909,14 @@
 
             let sales = [...allSalesData];
             let history = [...allHistoryData];
+            
+            // CORREÇÃO: Filtra os dados de vendas e histórico para corresponder aos clientes já filtrados.
+            const clientCodes = new Set(clients.map(c => c['codigo_cliente']));
+            if (supervisor || sellers.length > 0 || city) { // Apenas filtra se houver filtro de cliente
+                sales = sales.filter(s => clientCodes.has(s.codcli));
+                history = history.filter(h => clientCodes.has(h.codcli));
+            }
+
             if (filial !== 'ambas') {
                  sales = sales.filter(s => s.filial === filial);
                  history = history.filter(s => s.filial === filial);
@@ -2041,7 +2066,7 @@
                 productAllSales.forEach(sale => {
                     const saleDate = parseDate(sale.dtped);
                     if (saleDate && saleDate >= startDate && saleDate <= endDate) {
-                        totalQtySoldInRange += sale.QTVENDA_EMBALAGEM_MASTER;
+                        totalQtySoldInRange += sale.qtvenda_embalagem_master;
                     }
                 });
 
@@ -2109,7 +2134,7 @@
             data.forEach(sale => {
                 const saleDate = parseDate(sale.dtped);
                 if (saleDate) {
-                    const monthKey = `${saleDate.getFullYear()}-${saleDate.getMonth()}`;
+                    const monthKey = `${saleDate.getUTCFullYear()}-${saleDate.getUTCMonth()}`;
                     months.add(monthKey);
                 }
             });
@@ -2916,7 +2941,8 @@
         }
 
         function populateWeeklyFilters() {
-            const supervisors = [...new Set(allSalesData.map(item => item.superv).filter(Boolean).filter(sup => sup !== 'BALCAO'))].sort();
+            // CORREÇÃO: Usa os dados remapeados para garantir que a lista de supervisores esteja correta
+            const supervisors = [...new Set([...allSalesData, ...allHistoryData].map(item => item.superv).filter(Boolean).filter(sup => sup !== 'BALCAO'))].sort();
             weeklySupervisorFilter.innerHTML = '';
             supervisors.forEach(sup => { weeklySupervisorFilter.innerHTML += `<div class="flex items-center"><input id="sup-check-${sup.replace(/\s+/g, '-')}" type="checkbox" value="${sup}" class="w-4 h-4 text-teal-600 bg-slate-700 border-slate-600 rounded focus:ring-teal-600 ring-offset-slate-800 focus:ring-2"><label for="sup-check-${sup.replace(/\s+/g, '-')}" class="ml-2 text-sm font-medium text-slate-300">${sup}</label></div>`; });
         }
@@ -3891,13 +3917,13 @@
 
                 const stock = activeStockMap.get(productCode) || 0;
                 const productAllSales = allCombinedSales.filter(s => s.produto === productCode);
-                const totalQtySold = productAllSales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
+                const totalQtySold = productAllSales.reduce((sum, s) => sum + s.qtvenda_embalagem_master, 0);
 
                 if (stock <= 0 && totalQtySold <= 0) return;
 
                 const productHistorySales = filteredHistory.filter(s => s.produto === productCode);
                 const productCurrentSales = filteredSales.filter(s => s.produto === productCode);
-                const currentMonthSalesQty = productCurrentSales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
+                const currentMonthSalesQty = productCurrentSales.reduce((sum, s) => sum + s.qtvenda_embalagem_master, 0);
 
                 const productCadastroDate = parseDate(details.dtcadastro);
                 let productFirstWorkingDayIndex = 0;
@@ -4137,6 +4163,7 @@
 
         function updateInnovationsView() {
             const productsToAnalyze = selectedInnovationsProducts;
+            // CORREÇÃO: Utiliza os dados de vendas e histórico já filtrados pela função getInnovationsFilteredData.
             const { clients, sales, history } = getInnovationsFilteredData();
 
             const supervisor = innovationsSupervisorFilter.value;
@@ -4387,7 +4414,22 @@
                 clients = clients.filter(c => c.cidade && c.cidade.toLowerCase() === city);
             }
 
-            return { clients };
+            // CORREÇÃO: Também retorna os dados de vendas/histórico filtrados
+            const clientCodes = new Set(clients.map(c => c['codigo_cliente']));
+            
+            let sales = [...allSalesData];
+            let history = [...allHistoryData];
+
+            if (supervisor || sellers.length > 0 || city) { // Apenas filtra se houver filtro de cliente
+                sales = sales.filter(s => clientCodes.has(s.codcli));
+                history = history.filter(h => clientCodes.has(h.codcli));
+            }
+             if (filial !== 'ambas') {
+                 sales = sales.filter(s => s.filial === filial);
+                 history = history.filter(s => s.filial === filial);
+            }
+
+            return { clients, sales, history };
         }
 
         function resetInnovationsMonthFilters() {
@@ -4405,7 +4447,8 @@
         function updateInnovationsMonthView() {
             const selectedCategory = innovationsMonthCategoryFilter.value;
 
-            const { clients: filteredClients } = getInnovationsMonthFilteredData();
+            // CORREÇÃO: Recebe os dados de vendas e histórico filtrados para garantir que a lógica subsequente tenha o contexto correto.
+            const { clients: filteredClients, sales, history } = getInnovationsMonthFilteredData();
 
             const supervisor = innovationsMonthSupervisorFilter.value;
             const sellers = selectedInnovationsMonthSellers;
