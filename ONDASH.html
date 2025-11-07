@@ -3262,7 +3262,7 @@
                 (excludeFilter === 'city' || !city || (s.cidade && s.cidade.toLowerCase() === city.toLowerCase()));
 
             const currentSalesFilter = s => clientCodes.has(s.codcli) && commonFilter(s);
-
+            
             let filteredHistory = allHistoryData.filter(commonFilter);
             if (comparisonRedeGroupFilter) {
                  filteredHistory = filteredHistory.filter(s => clientCodes.has(s.codcli));
@@ -3475,12 +3475,13 @@
             const currentPositivacaoSalty = calculatePositivacaoPorCestaComDevolucao(currentSales, saltyCategories);
             const currentPositivacaoFoods = calculatePositivacaoPorCestaComDevolucao(currentSales, foodsCategories);
 
-            const historyTotalFat = historySales.reduce((sum, item) => sum + getRevenue(item), 0);
-            const historyTotalPeso = historySales.reduce((sum, item) => sum + item.totpesoliq, 0);
-
-            const historyAvgFat = historyMonthsCount > 0 ? historyTotalFat / historyMonthsCount : 0;
-            const historyAvgPeso = historyMonthsCount > 0 ? historyTotalPeso / 1000 / historyMonthsCount : 0;
-
+            // Funções auxiliares para os cálculos de média mensal
+            const sumRevenue = (sales) => sales.reduce((sum, item) => sum + getRevenue(item), 0);
+            const sumWeight = (sales) => sales.reduce((sum, item) => sum + item.totpesoliq, 0);
+            
+            // Calcula corretamente a média de cada KPI, baseando-se nos totais de cada mês individualmente
+            const historyAvgFat = monthlyKpiAverage(historySales, sumRevenue);
+            const historyAvgPeso = monthlyKpiAverage(historySales, sumWeight) / 1000;
             const historyClientsAverage = monthlyKpiAverage(historySales, getPositiveClientsWithNewLogic);
             const historyTicketAverage = historyClientsAverage > 0 ? historyAvgFat / historyClientsAverage : 0;
             const historyMixPepsico = monthlyKpiAverage(historySales, calculateAverageMixComDevolucao, pepsicoCodfors);
@@ -3714,7 +3715,7 @@
                 if (!saleDate) return;
                 const weekIndex = currentMonthWeeks.findIndex(week => saleDate >= week.start && saleDate <= week.end);
                 if (weekIndex !== -1) {
-                    const dayOfWeek = saleDate.getDay();
+                    const dayOfWeek = saleDate.getUTCDay();
                     salesByWeekAndDay[weekIndex + 1][dayOfWeek] += getRevenue(sale);
                 }
             });
@@ -3729,13 +3730,13 @@
                 historySales.forEach(sale => {
                     const d = parseDate(sale.dtped);
                     if (!d) return;
-                    const monthKey = `${d.getFullYear()}-${d.getMonth()}`;
-                    const monthWeeks = getSundayBasedWeeks(d.getFullYear(), d.getMonth());
+                    const monthKey = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+                    const monthWeeks = getSundayBasedWeeks(d.getUTCFullYear(), d.getUTCMonth());
                     const weekIndex = monthWeeks.findIndex(w => d >= w.start && d <= w.end);
                     if (weekIndex !== -1) {
                         if (!salesByWeekDayMonth[monthKey]) salesByWeekDayMonth[monthKey] = {};
                         if (!salesByWeekDayMonth[monthKey][weekIndex]) salesByWeekDayMonth[monthKey][weekIndex] = new Array(7).fill(0);
-                        salesByWeekDayMonth[monthKey][weekIndex][d.getDay()] += getRevenue(sale);
+                        salesByWeekDayMonth[monthKey][weekIndex][d.getUTCDay()] += getRevenue(sale);
                     }
                 });
 
@@ -3775,12 +3776,14 @@
 
                     let futureDayWeights = [];
                     let totalFutureWeight = 0;
-                    for (let d = new Date(week.start); d <= week.end; d.setDate(d.getDate() + 1)) {
+                    for (let d = new Date(week.start); d <= week.end; d.setUTCDate(d.getUTCDate() + 1)) {
                         if (d > today) {
-                            const dayIndex = d.getDay();
-                            const weight = historicalDayWeights[currentWeekIndex][dayIndex];
-                            futureDayWeights.push({ day: dayIndex, weight: weight });
-                            totalFutureWeight += weight;
+                            const dayIndex = d.getUTCDay();
+                            if (dayIndex >= 1 && dayIndex <= 5) { // Apenas dias úteis
+                                const weight = historicalDayWeights[currentWeekIndex][dayIndex];
+                                futureDayWeights.push({ day: dayIndex, weight: weight });
+                                totalFutureWeight += weight;
+                            }
                         }
                     }
 
@@ -3804,8 +3807,9 @@
             });
 
             const weekLabelsForDailyChart = currentMonthWeeks.map((week, index) => {
-                const startDateStr = week.start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-                const endDateStr = week.end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                const options = { day: '2-digit', month: '2-digit', timeZone: 'UTC' };
+                const startDateStr = week.start.toLocaleDateString('pt-BR', options);
+                const endDateStr = week.end.toLocaleDateString('pt-BR', options);
                 return `S${index + 1} (${startDateStr} à ${endDateStr})`;
             });
 
