@@ -1129,8 +1129,8 @@
     -->
     <script id="report-logic-script" type="text/template">
         //const embeddedData = window.embeddedData; // Esta linha será removida pois os dados virão como argumento
-        const allSalesData = embeddedData.detailed || [];
-        const allHistoryData = embeddedData.history || [];
+        let allSalesData = embeddedData.detailed || [];
+        let allHistoryData = embeddedData.history || [];
         const aggregatedOrders = embeddedData.byOrder || [];
         const allClientsData = embeddedData.clients || [];
         const stockData05 = new Map(Object.entries(embeddedData.stockMap05 || {}));
@@ -1178,6 +1178,56 @@
 
         function initializeOptimizedDataStructures() {
             try {
+            // 1. Criar um mapa de detalhes do vendedor (codusur -> {nome, supervisor})
+            const sellerDetailsMap = new Map();
+            const allDataForSellerMapping = [...allSalesData, ...allHistoryData];
+            allDataForSellerMapping.forEach(s => {
+                if (s.codusur && (!sellerDetailsMap.has(s.codusur) || s.nome)) { // Prioriza registros com nome
+                    sellerDetailsMap.set(s.codusur, { name: s.nome, supervisor: s.superv });
+                }
+            });
+
+            // 2. Criar um mapa do cliente para o seu vendedor principal atual (codcli -> codusur)
+            const clientToCurrentSellerMap = new Map();
+            let americanasCodCli = null;
+            allClientsData.forEach(client => {
+                if (client.codigo_cliente && client.rca1) {
+                    clientToCurrentSellerMap.set(String(client.codigo_cliente), String(client.rca1));
+                }
+                // 3. Identificar o código do cliente para "Americanas" para a exceção
+                if (client.razaosocial && client.razaosocial.toUpperCase().includes('AMERICANAS')) {
+                    americanasCodCli = String(client.codigo_cliente);
+                }
+            });
+
+            // 4. Função para reatribuir vendas baseada na nova regra
+            const remapSales = (salesData) => {
+                return salesData.map(sale => {
+                    const clientCode = String(sale.codcli);
+                    // Aplica a regra para todos, exceto para o cliente "Americanas"
+                    if (clientCode !== americanasCodCli) {
+                        const currentSellerCode = clientToCurrentSellerMap.get(clientCode);
+                        if (currentSellerCode) {
+                            const sellerDetails = sellerDetailsMap.get(currentSellerCode);
+                            if (sellerDetails) {
+                                // Cria um novo objeto para não modificar o original diretamente (imutabilidade)
+                                const remappedSale = { ...sale };
+                                remappedSale.codusur = currentSellerCode;
+                                remappedSale.nome = sellerDetails.name;
+                                remappedSale.superv = sellerDetails.supervisor;
+                                return remappedSale;
+                            }
+                        }
+                    }
+                    // Retorna a venda original se a regra não se aplicar
+                    return sale;
+                });
+            };
+
+            // 5. Substituir os dados originais pelos dados reatribuídos
+            allSalesData = remapSales(allSalesData);
+            allHistoryData = remapSales(allHistoryData);
+
             allClientsData.forEach(client => {
                 let rcaList = [];
                 if (client.rcas) {
@@ -3202,8 +3252,7 @@
             const city = comparisonCityFilter.value.trim();
             const filial = comparisonFilialFilter.value;
 
-            const filterFunction = s =>
-                (clientCodes.has(s.codcli)) &&
+            const commonFilter = s =>
                 (filial === 'ambas' || s.filial === filial) &&
                 (excludeFilter === 'supervisor' || !supervisor || s.superv === supervisor) &&
                 (excludeFilter === 'seller' || sellers.length === 0 || sellers.includes(s.nome)) &&
@@ -3212,9 +3261,16 @@
                 (excludeFilter === 'pasta' || !pasta || s.observacaofor === pasta) &&
                 (excludeFilter === 'city' || !city || (s.cidade && s.cidade.toLowerCase() === city.toLowerCase()));
 
+            const currentSalesFilter = s => clientCodes.has(s.codcli) && commonFilter(s);
+
+            let filteredHistory = allHistoryData.filter(commonFilter);
+            if (comparisonRedeGroupFilter) {
+                 filteredHistory = filteredHistory.filter(s => clientCodes.has(s.codcli));
+            }
+
             return {
-                currentSales: allSalesData.filter(filterFunction),
-                historySales: allHistoryData.filter(filterFunction)
+                currentSales: allSalesData.filter(currentSalesFilter),
+                historySales: filteredHistory
             };
         }
 
