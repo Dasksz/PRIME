@@ -17,61 +17,64 @@
     <style>
         /* CSS Variables for Theming */
         :root, html[data-theme="light"] {
-            --bg-main: #FFFFFF;
-            --bg-content: #FFFFFF;
-            --bg-header-gradient-from: #1e2a5a;
-            --bg-header-gradient-to: #0d1126;
+            --bg-main: #F1F3F5;                     /* Cinza muito claro */
+            --bg-content: #FFFFFF;                  /* Branco */
+            --bg-header-gradient-from: #FD7E14;      /* Laranja refinado */
+            --bg-header-gradient-to: #E8590C;        /* Laranja mais escuro para gradiente */
             --bg-menu: #FFFFFF;
-            --bg-menu-button-hover: #f1f5f9;
-            --bg-modal-overlay: rgba(0,0,0,0.5);
-            --bg-modal-content: #ffffff;
-            --bg-input: #FFFFFF;
-            --bg-button: #f1f5f9;
-            --bg-button-hover: #e2e8f0;
-            --bg-button-active: #38b2ac;
-            --bg-tooltip: #1f2937;
-            --text-primary: #1e293b;
-            --text-secondary: #475569;
+            --header-span-text: #FFFFFF;
+            --bg-menu-button-hover: #F8F9FA;
+            --bg-modal-overlay: rgba(0,0,0,0.4);
+            --bg-modal-content: #FFFFFF;             /* Sólido */
+            --bg-input: #FFFFFF;                     /* Sólido */
+            --bg-button: #E9ECEF;
+            --bg-button-hover: #DEE2E6;
+            --bg-button-active: #FD7E14;
+            --bg-tooltip: #212529;
+            --text-primary: #212529;
+            --text-secondary: #868E96;
             --text-on-active-button: #ffffff;
             --text-on-dark-bg: #ffffff;
-            --text-menu: #334155;
-            --text-menu-header: #1e293b;
-            --text-menu-section: #64748b;
-            --border-primary: #e2e8f0;
-            --border-secondary: #f1f5f9;
-            --border-menu-section: #e2e8f0;
-            --scrollbar-track: #f1f5f9;
-            --scrollbar-thumb: #cbd5e1;
-            --kpi-card-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            --text-menu: #343A40;
+            --text-menu-header: #D95A0B;
+            --text-menu-section: #495057;
+            --border-primary: #E9ECEF;               /* Borda sutil */
+            --border-secondary: #F1F3F5;
+            --border-menu-section: #E9ECEF;
+            --scrollbar-track: #F1F3F5;
+            --scrollbar-thumb: #CED4DA;
+            --kpi-card-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
 
         html[data-theme="dark"] {
-            --bg-main: #0d1126;
-            --bg-content: #111827; /* <-- MODIFICADO: Unificado com o menu */
-            --bg-header-gradient-from: #1e2a5a;
-            --bg-header-gradient-to: #0d1126;
-            --bg-menu: #111827; /* Fundo do menu */
-            --bg-menu-button-hover: #1f2937;
-            --bg-modal-overlay: rgba(0,0,0,0.7);
-            --bg-modal-content: #111827; /* <-- MODIFICADO: Unificado com o menu */
-            --bg-input: #111827; /* <-- MODIFICADO: Unificado com o menu */
-            --bg-button: #374151;
-            --bg-button-hover: #4b5563;
-            --bg-button-active: #14b8a6;
-            --bg-tooltip: #374151;
-            --text-primary: #f9fafb;
-            --text-secondary: #d1d5db;
-            --text-on-active-button: #ffffff;
-            --text-on-dark-bg: #ffffff;
-            --text-menu: #e5e7eb;
-            --text-menu-header: #facc15;
-            --text-menu-section: #9ca3af;
-            --border-primary: #374151;
-            --border-secondary: #1f2937;
-            --border-menu-section: #374151;
-            --scrollbar-track: #0d1126;
-            --scrollbar-thumb: #374151;
-            --kpi-card-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            --bg-main: #222831;                      /* Cinza-azulado escuro */
+            --bg-content: #393E46;                   /* Cinza-azulado médio */
+            /* CORREÇÃO: Força o cabeçalho a ser laranja em ambos os temas */
+            --bg-header-gradient-from: #FD7E14;
+            --bg-header-gradient-to: #E8590C;
+            --bg-menu: #393E46;
+            --header-span-text: #FFD369;             /* Dourado/Âmbar */
+            --bg-menu-button-hover: #4A5058;
+            --bg-modal-overlay: rgba(0,0,0,0.6);
+            --bg-modal-content: #4A5058;             /* CORRIGIDO: Mais claro que o --bg-content */
+            --bg-input: #222831;                     /* Fundo escuro para contraste */
+            --bg-button: #4A5058;
+            --bg-button-hover: #5A6069;
+            --bg-button-active: #FFD369;
+            --bg-tooltip: #222831;
+            --text-primary: #EEEEEE;                 /* Branco suave */
+            --text-secondary: #ADB5BD;
+            --text-on-active-button: #222831;        /* Texto escuro no botão ativo */
+            --text-on-dark-bg: #EEEEEE;
+            --text-menu: #EEEEEE;
+            --text-menu-header: #FFD369;
+            --text-menu-section: #ADB5BD;
+            --border-primary: #ADB5BD;               /* CORRIGIDO: Borda mais clara para destaque */
+            --border-secondary: #4A5058;
+            --border-menu-section: #4A5058;
+            --scrollbar-track: #222831;
+            --scrollbar-thumb: #4A5058;
+            --kpi-card-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
 
         /* General Styles using Variables */
@@ -82,8 +85,27 @@
         ::-webkit-scrollbar-corner { background: var(--scrollbar-track); }
         .sticky-header th { position: sticky; top: 0; z-index: 10; background-color: var(--bg-content); border-bottom: 2px solid var(--border-secondary); }
         .hidden { display: none !important; }
-        .metric-btn, .fornecedor-btn, .comparison-toggle-btn, .group-btn, #main-rede-group-container > div > button, #city-rede-group-container > div > button, #comparison-rede-group-container > div > button, #stock-rede-group-container > div > button { background-color: var(--bg-button); color: var(--text-secondary); }
-        .metric-btn:hover, .fornecedor-btn:hover, .comparison-toggle-btn:hover, .group-btn:hover, #main-rede-group-container > div > button:hover, #city-rede-group-container > div > button:hover, #comparison-rede-group-container > div > button:hover, #stock-rede-group-container > div > button:hover { background-color: var(--bg-button-hover); }
+        
+        /* CORREÇÃO: Unifica a cor de fundo de todos os botões de filtro e dropdowns para corresponder aos <select> */
+        .metric-btn, .fornecedor-btn, .comparison-toggle-btn, .group-btn, 
+        #main-rede-group-container > div > button, #city-rede-group-container > div > button, #comparison-rede-group-container > div > button, #stock-rede-group-container > div > button,
+        #vendedor-filter-btn, #tipo-venda-filter-btn, #city-vendedor-filter-btn, #comparison-vendedor-filter-btn, #comparison-supplier-filter-btn, #comparison-product-filter-btn, #stock-vendedor-filter-btn, #stock-supplier-filter-btn, #stock-product-filter-btn, #innovations-vendedor-filter-btn, #innovations-supplier-filter-btn, #innovations-product-filter-btn, #coverage-vendedor-filter-btn, #coverage-supplier-filter-btn, #coverage-product-filter-btn,
+        #main-holiday-picker-btn, #comparison-holiday-picker-btn, #clear-filters-btn, #clear-city-filters-btn, #clear-weekly-filters-btn, #clear-comparison-filters-btn, #clear-stock-filters-btn, #clear-innovations-filters-btn, #clear-innovations-month-filters-btn, #clear-coverage-filters-btn { 
+            background-color: var(--bg-input); 
+            color: var(--text-secondary);
+        }
+        /* Adiciona borda aos botões que não a tinham, para consistência com os <select> */
+        .fornecedor-btn, #clear-filters-btn, #clear-city-filters-btn, #clear-weekly-filters-btn, #clear-comparison-filters-btn, #clear-stock-filters-btn, #clear-innovations-filters-btn, #clear-innovations-month-filters-btn, #clear-coverage-filters-btn {
+            border: 1px solid var(--border-primary);
+        }
+        
+        /* Regra de HOVER unificada para todos os botões de filtro */
+        .metric-btn:hover, .fornecedor-btn:hover, .comparison-toggle-btn:hover, .group-btn:hover, 
+        #main-rede-group-container > div > button:hover, #city-rede-group-container > div > button:hover, #comparison-rede-group-container > div > button:hover, #stock-rede-group-container > div > button:hover,
+        #vendedor-filter-btn:hover, #tipo-venda-filter-btn:hover, #city-vendedor-filter-btn:hover, #comparison-vendedor-filter-btn:hover, #comparison-supplier-filter-btn:hover, #comparison-product-filter-btn:hover, #stock-vendedor-filter-btn:hover, #stock-supplier-filter-btn:hover, #stock-product-filter-btn:hover, #innovations-vendedor-filter-btn:hover, #innovations-supplier-filter-btn:hover, #innovations-product-filter-btn:hover, #coverage-vendedor-filter-btn:hover, #coverage-supplier-filter-btn:hover, #coverage-product-filter-btn:hover,
+        #main-holiday-picker-btn:hover, #comparison-holiday-picker-btn:hover, #clear-filters-btn:hover, #clear-city-filters-btn:hover, #clear-weekly-filters-btn:hover, #clear-comparison-filters-btn:hover, #clear-stock-filters-btn:hover, #clear-innovations-filters-btn:hover, #clear-innovations-month-filters-btn:hover, #clear-coverage-filters-btn:hover { 
+            background-color: var(--bg-button-hover); 
+        }
         .metric-btn.active, .fornecedor-btn.active, .comparison-toggle-btn.active, .group-btn.active, #main-rede-group-container > div > button.active, #city-rede-group-container > div > button.active, #comparison-rede-group-container > div > button.active, #stock-rede-group-container > div > button.active { background-color: var(--bg-button-active); color: var(--text-on-active-button); }
         
         .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-modal-overlay); display: flex; align-items: center; justify-content: center; z-index: 1000; }
@@ -136,6 +158,16 @@
             margin-top: -0.25rem;
         }
 
+        /* CORREÇÃO: Nova classe para dar destaque aos KPIs da tela de Comparativo */
+        .comparison-kpi-card {
+            background-color: var(--bg-content);
+            border: 1px solid var(--border-primary);
+            box-shadow: var(--kpi-card-shadow);
+            border-radius: 0.75rem; /* rounded-xl */
+            padding: 1rem; /* p-4 */
+            text-align: center;
+        }
+
         .stock-trend-btn.active { outline: 2px solid var(--bg-button-active); outline-offset: 2px; transform: scale(1.1); }
         
         select, input[type=text], input[type=number] { background-color: var(--bg-input); border: 1px solid var(--border-primary); color: var(--text-primary); }
@@ -168,7 +200,7 @@
         }
         #loader-spinner {
             border: 4px solid #1d2347;
-            border-top: 4px solid #38b2ac;
+            border-top: 4px solid var(--bg-button-active);
             border-radius: 50%;
             width: 40px;
             height: 40px;
@@ -269,7 +301,7 @@
             border-radius: 50%;
         }
         input:checked + .slider {
-            background-color: #2196F3;
+            background-color: var(--bg-button-active);
         }
         input:checked + .slider:before {
             transform: translateX(14px);
@@ -317,7 +349,7 @@
             <header class="mb-8 p-6 bg-gradient-to-r rounded-b-lg shadow-lg">
                 <div class="flex flex-col sm:flex-row justify-between items-start gap-4">
                     <div class="text-center sm:text-left">
-                        <h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1>
+                        <h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span style="color: var(--header-span-text);">PRIME</span> DISTRIBUIÇÃO</h1>
                         <p id="generation-date" class="text-slate-300 mt-1">Dados atualizados em: ...</p>
                     </div>
                 </div>
@@ -424,7 +456,7 @@
     <!-- Ecrã de Cidades -->
     <div id="city-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
         <header class="mb-8 p-6 bg-gradient-to-r rounded-b-lg shadow-lg">
-            <div class="flex justify-between items-center"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Vendas por Cidade</p></div><button id="back-to-main-from-city-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
+            <div class="flex justify-between items-center"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span style="color: var(--header-span-text);">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Vendas por Cidade</p></div><button id="back-to-main-from-city-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
         </header>
         <div id="city-view-loader" class="text-center p-16"><p class="text-lg">Carregando dados...</p></div>
         <div id="city-view-content" class="hidden">
@@ -467,7 +499,7 @@
     <!-- Ecrã Semanal -->
     <div id="weekly-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
         <header class="mb-8 p-6 bg-gradient-to-r rounded-b-lg shadow-lg">
-            <div class="flex justify-between items-center"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Acompanhamento Semanal</p></div><button id="back-to-main-from-weekly-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
+            <div class="flex justify-between items-center"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span style="color: var(--header-span-text);">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Acompanhamento Semanal</p></div><button id="back-to-main-from-weekly-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
         </header>
         <div class="mb-6 p-4 bg-content rounded-xl shadow-sm border border-primary">
             <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -488,7 +520,7 @@
     <!-- Ecrã Comparativo -->
     <div id="comparison-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
         <header class="mb-8 p-6 bg-gradient-to-r rounded-b-lg shadow-lg">
-            <div class="flex justify-between items-center"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Comparativo entre Meses</p></div><button id="back-to-main-from-comparison-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
+            <div class="flex justify-between items-center"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span style="color: var(--header-span-text);">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Comparativo entre Meses</p></div><button id="back-to-main-from-comparison-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
         </header>
         <div class="mb-6 p-4 bg-content rounded-xl shadow-sm border border-primary">
             <div id="comparison-rede-filter-wrapper" class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
@@ -562,7 +594,7 @@
     <!-- Ecrã Estoque -->
     <div id="stock-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
         <header class="mb-8 p-6 bg-gradient-to-r rounded-b-lg shadow-lg">
-            <div class="flex justify-between items-center"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Estoque</p></div><button id="back-to-main-from-stock-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
+            <div class="flex justify-between items-center"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span style="color: var(--header-span-text);">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Estoque</p></div><button id="back-to-main-from-stock-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
         </header>
         <div class="mb-6 p-4 bg-content rounded-xl shadow-sm border border-primary">
             <div id="stock-rede-filter-wrapper" class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
@@ -678,7 +710,7 @@
     <div id="innovations-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
         <header class="mb-8 p-6 bg-gradient-to-r rounded-b-lg shadow-lg">
             <div class="flex justify-between items-center">
-                <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Inovações</p></div>
+                <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span style="color: var(--header-span-text);">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Inovações</p></div>
                 <div class="flex gap-4">
                     <button id="innovations-month-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg">Inovações Mês</button>
                     <button id="back-to-main-from-innovations-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button>
@@ -756,7 +788,7 @@
     <div id="innovations-month-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
          <header class="mb-8 p-6 bg-gradient-to-r rounded-b-lg shadow-lg">
             <div class="flex justify-between items-center">
-                <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Gráfico de Cobertura por Categoria de Inovação</p></div>
+                <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span style="color: var(--header-span-text);">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Gráfico de Cobertura por Categoria de Inovação</p></div>
                 <div class="flex gap-4">
                     <button id="export-innovations-month-pdf-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Exportar PDF</button>
                     <button id="back-to-innovations-from-month-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar</button>
@@ -813,7 +845,7 @@
     <div id="coverage-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
         <header class="mb-8 p-6 bg-gradient-to-r rounded-b-lg shadow-lg">
             <div class="flex justify-between items-center">
-                <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Cobertura (Estoque x PDVs)</p></div>
+                <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span style="color: var(--header-span-text);">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Cobertura (Estoque x PDVs)</p></div>
                 <button id="back-to-main-from-coverage-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button>
             </div>
         </header>
@@ -2118,13 +2150,16 @@
             const secondaryTextColor = getCSSVar('--text-secondary');
             const gridColor = getCSSVar('--border-primary');
             
-            const professionalPalette = ['#14b8a6', '#6366f1', '#ec4899', '#f97316', '#8b5cf6', '#06b6d4', '#f59e0b', '#ef4444', '#22c55e'];
+            const professionalPalette = [
+                '#84a98c', '#a5a58d', '#a5a58d', '#b7b7a4', '#cad2c5', // Tons suaves de verde e cinza
+                '#ffb4a2', '#ffcdb2', '#e5989b', '#b5838d', '#6d6875'  // Tons suaves de rosa e pêssego
+            ];
 
             let finalDatasets;
             if (Array.isArray(chartData) && chartData.length > 0 && typeof chartData[0] === 'object' && chartData[0].hasOwnProperty('label')) {
                 finalDatasets = chartData.map((dataset, index) => ({ ...dataset, backgroundColor: dataset.backgroundColor || professionalPalette[index % professionalPalette.length], borderColor: dataset.borderColor || professionalPalette[index % professionalPalette.length] }));
             } else {
-                 finalDatasets = [{ data: chartData || [], backgroundColor: canvasId === 'customerStatusChart' ? ['#2dd4bf', '#f59e0b'] : professionalPalette }];
+                 finalDatasets = [{ data: chartData || [], backgroundColor: canvasId === 'customerStatusChart' ? ['#84a98c', '#e5989b'] : professionalPalette }];
             }
             
             let baseOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false, labels: {color: textColor} }, datalabels: { display: false } }, scales: { y: { beginAtZero: true, ticks: { color: secondaryTextColor }, grid: { color: gridColor} }, x: { ticks: { color: secondaryTextColor }, grid: { color: gridColor} } } };
@@ -2876,7 +2911,7 @@
                     historicalDataForChart[4] += bests[5] || 0; // Fri
                 } 
             });
-            const historicalDataset = { type: 'line', label: 'Melhor Dia Mês Anterior', data: historicalDataForChart, borderColor: '#f59e0b', backgroundColor: 'transparent', pointBackgroundColor: '#f59e0b', pointRadius: 4, tension: 0.1, borderWidth: 2, yAxisID: 'y', datalabels: { display: false } };
+            const historicalDataset = { type: 'line', label: 'Melhor Dia Mês Anterior', data: historicalDataForChart, borderColor: '#b5838d', backgroundColor: 'transparent', pointBackgroundColor: '#b5838d', pointRadius: 4, tension: 0.1, borderWidth: 2, yAxisID: 'y', datalabels: { display: false } };
             const finalDatasets = [...currentMonthDatasets, historicalDataset];
             const weeklyChartOptions = { plugins: { legend: { display: true, position: 'top', onClick: (e, legendItem, legend) => { const index = legendItem.datasetIndex; const ci = legend.chart; if (ci.isDatasetVisible(index)) { ci.hide(index); legendItem.hidden = true; } else { ci.show(index); legendItem.hidden = false; } let newTotal = 0; ci.data.datasets.forEach((dataset, i) => { if (ci.isDatasetVisible(i) && dataset.type !== 'line') newTotal += dataset.data.reduce((acc, val) => acc + val, 0); }); totalMesSemanalEl.textContent = newTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); } } } };
             createChart('weeklySalesChart', 'bar', weekLabels, finalDatasets, weeklyChartOptions);
@@ -3011,7 +3046,8 @@
                     displayValue = formatValue(kpi.current, kpi.format);
                 }
 
-                return `<div class="p-4 rounded-xl text-center border border-primary bg-content">
+                /* CORREÇÃO: Usa a nova classe .comparison-kpi-card para aplicar o estilo com sombra e destaque. */
+                return `<div class="comparison-kpi-card">
                             <p class="text-sm">${kpi.title}</p>
                             <p class="text-2xl font-bold my-2">${displayValue}</p>
                             <p class="text-sm ${colorClass}">${variation.toFixed(2)}% vs Média do Trimestre</p>
