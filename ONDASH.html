@@ -4492,9 +4492,10 @@
                     if (!categories[categoryName]) {
                         categories[categoryName] = { productCodes: new Set(), products: [] };
                     }
-                    const productCode = String(item.Codigo).trim();
+                    // CORREÇÃO: Usar "codigo" e "produto" em minúsculas para corresponder aos dados do Supabase
+                    const productCode = String(item.codigo).trim();
                     categories[categoryName].productCodes.add(productCode);
-                    categories[categoryName].products.push({ ...item, Codigo: productCode });
+                    categories[categoryName].products.push({ ...item, codigo: productCode });
                 });
             }
 
@@ -4611,7 +4612,7 @@
                 topCoverageItem = { name: '-', coverage: 0, clients: 0 };
 
                 productsInCategory.forEach(product => {
-                    const productCode = product.Codigo;
+                    const productCode = product.codigo; // CORREÇÃO: "codigo" em minúsculas
                     let clientsWhoGotProduct = 0;
                     activeClientCodes.forEach(codcli => {
                         const currentSales = optimizedData.salesByClientAndRca_CurrentMonth.get(codcli);
@@ -4635,7 +4636,7 @@
 
                     const coverage = activeClientsCount > 0 ? (clientsWhoGotProduct / activeClientsCount) * 100 : 0;
                     if (coverage > topCoverageItem.coverage) {
-                        topCoverageItem = { name: `(${productCode}) ${product.Produto}`, coverage: coverage, clients: clientsWhoGotProduct };
+                        topCoverageItem = { name: `(${productCode}) ${product.produto}`, coverage: coverage, clients: clientsWhoGotProduct }; // CORREÇÃO: "produto" em minúsculas
                     }
                 });
             }
@@ -4711,8 +4712,8 @@
                 const categoryData = categories[categoryName];
 
                 categoryData.products.forEach((product) => {
-                    const productCode = product.Codigo;
-                    const productName = product.Produto;
+                    const productCode = product.codigo;   // CORREÇÃO: "codigo" em minúsculas
+                    const productName = product.produto; // CORREÇÃO: "produto" em minúsculas
 
                     const stock = activeStockMap.get(productCode) || 0;
 
