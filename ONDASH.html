@@ -2099,7 +2099,7 @@
                 productAllSales.forEach(sale => {
                     const saleDate = parseDate(sale.dtped);
                     if (saleDate && saleDate >= startDate && saleDate <= endDate) {
-                        totalQtySoldInRange += sale.QTVENDA_EMBALAGEM_MASTER;
+                        totalQtySoldInRange += sale.qtvenda_embalagem_master;
                     }
                 });
 
@@ -3945,13 +3945,13 @@
 
                 const stock = activeStockMap.get(productCode) || 0;
                 const productAllSales = allCombinedSales.filter(s => s.produto === productCode);
-                const totalQtySold = productAllSales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
+                const totalQtySold = productAllSales.reduce((sum, s) => sum + s.qtvenda_embalagem_master, 0);
 
                 if (stock <= 0 && totalQtySold <= 0) return;
 
                 const productHistorySales = filteredHistory.filter(s => s.produto === productCode);
                 const productCurrentSales = filteredSales.filter(s => s.produto === productCode);
-                const currentMonthSalesQty = productCurrentSales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
+                const currentMonthSalesQty = productCurrentSales.reduce((sum, s) => sum + s.qtvenda_embalagem_master, 0);
 
                 const productCadastroDate = parseDate(details.dtcadastro);
                 let productFirstWorkingDayIndex = 0;
