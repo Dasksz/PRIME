@@ -4487,7 +4487,7 @@
             const categories = {};
             if (innovationsMonthData && innovationsMonthData.length > 0) {
                 innovationsMonthData.forEach(item => {
-                    const categoryName = item.Inovacoes;
+                    const categoryName = item.inovacoes; // CORREÇÃO: Usar "inovacoes" em minúsculas
                     if (!categoryName) return;
                     if (!categories[categoryName]) {
                         categories[categoryName] = { productCodes: new Set(), products: [] };
