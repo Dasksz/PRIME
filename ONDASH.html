@@ -1189,6 +1189,17 @@
         //const embeddedData = window.embeddedData; // Esta linha será removida pois os dados virão como argumento
         let allSalesData = embeddedData.detailed || [];
         let allHistoryData = embeddedData.history || [];
+
+        // CORREÇÃO: Padroniza os campos de nome e supervisor para remover espaços
+        allSalesData.forEach(s => {
+            if (s.nome) s.nome = s.nome.trim();
+            if (s.superv) s.superv = s.superv.trim();
+        });
+        allHistoryData.forEach(s => {
+            if (s.nome) s.nome = s.nome.trim();
+            if (s.superv) s.superv = s.superv.trim();
+        });
+
         const aggregatedOrders = embeddedData.byOrder || [];
         const allClientsData = embeddedData.clients || [];
         const stockData05 = new Map(Object.entries(embeddedData.stockMap05 || {}));
@@ -2435,9 +2446,7 @@
             const totalWorkingDays = getWorkingDaysInMonth(currentYear, currentMonth, selectedHolidays);
             const passedWorkingDays = getPassedWorkingDaysInMonth(currentYear, currentMonth, selectedHolidays, lastSaleDate);
 
-            const monthCount = getUniqueMonthCount(historicalSales);
-            const pastQuarterRevenue = historicalSales.reduce((sum, sale) => sum + sale.vlvenda, 0);
-            const averageMonthlyRevenue = monthCount > 0 ? pastQuarterRevenue / monthCount : 0;
+            const averageMonthlyRevenue = monthlyKpiAverage(historicalSales, (sales) => sales.reduce((sum, s) => sum + s.vlvenda, 0));
             const currentMonthRevenue = currentSales.reduce((sum, sale) => sum + sale.vlvenda, 0);
             const trend = passedWorkingDays > 0 && totalWorkingDays > 0 ? (currentMonthRevenue / passedWorkingDays) * totalWorkingDays : 0;
             const lineChartDataset = [{ label: 'Valor', data: [averageMonthlyRevenue, trend], fill: true, borderColor: 'var(--bg-button-active)', backgroundColor: 'rgba(20, 184, 166, 0.1)', tension: 0.2, pointRadius: 6, pointBackgroundColor: 'var(--bg-button-active)', pointBorderColor: 'var(--bg-content)', pointBorderWidth: 2, pointHoverRadius: 8 }];
@@ -3887,8 +3896,13 @@
             const activeSupervisors = [...new Set(allSalesData.map(s => s.superv))].filter(Boolean);
             activeSupervisors.forEach(sup => supervisorComparison[sup] = { current: 0, history: 0 });
             currentSales.forEach(s => { if(s.superv && supervisorComparison[s.superv]) supervisorComparison[s.superv].current += getRevenue(s); });
-            historySales.forEach(s => { if(s.superv && supervisorComparison[s.superv]) supervisorComparison[s.superv].history += getRevenue(s); });
-            Object.keys(supervisorComparison).forEach(sup => supervisorComparison[sup].history /= historyMonthsCount);
+
+            // CORREÇÃO: Calcula a média histórica por supervisor usando a função 'monthlyKpiAverage'
+            Object.keys(supervisorComparison).forEach(sup => {
+                const supervisorHistorySales = historySales.filter(s => s.superv === sup);
+                supervisorComparison[sup].history = monthlyKpiAverage(supervisorHistorySales, (sales) => sales.reduce((sum, item) => sum + getRevenue(item), 0));
+            });
+
             const supervisorTableBody = document.getElementById('supervisorComparisonTableBody');
             supervisorTableBody.innerHTML = Object.entries(supervisorComparison).map(([sup, data]) => { const variation = data.history > 0 ? ((data.current - data.history) / data.history) * 100 : (data.current > 0 ? 100 : 0); const colorClass = variation > 0 ? 'text-green-400' : variation < 0 ? 'text-red-400' : 'text-slate-400'; return `<tr><td class="px-4 py-2">${sup}</td><td class="px-4 py-2 text-right">${data.history.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right">${data.current.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right ${colorClass}">${variation.toFixed(2)}%</td></tr>`; }).join('');
         }
@@ -3999,7 +4013,7 @@
                 const isNew = productMaxLifeInWorkingDays <= passedWorkingDaysCurrentMonth;
 
                 const trendDays = dailyAvgSale > 0 ? (stock / dailyAvgSale) : Infinity;
-                const monthlyAvgSale = getUniqueMonthCount(productAllSales) > 0 ? totalQtySold / getUniqueMonthCount(productAllSales) : 0;
+                const monthlyAvgSale = monthlyKpiAverage(productHistorySales, (sales) => sales.reduce((sum, s) => sum + s.qtvenda_embalagem_master, 0));
 
 
                 productAnalysis.set(productCode, {
