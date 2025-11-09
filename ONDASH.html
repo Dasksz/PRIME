@@ -3533,11 +3533,8 @@
             const currentPositivacaoSalty = calculatePositivacaoPorCestaComDevolucao(currentSales, saltyCategories);
             const currentPositivacaoFoods = calculatePositivacaoPorCestaComDevolucao(currentSales, foodsCategories);
 
-            const historyTotalFat = historySales.reduce((sum, item) => sum + getRevenue(item), 0);
-            const historyTotalPeso = historySales.reduce((sum, item) => sum + item.totpesoliq, 0);
-
-            const historyAvgFat = historyMonthsCount > 0 ? historyTotalFat / historyMonthsCount : 0;
-            const historyAvgPeso = historyMonthsCount > 0 ? historyTotalPeso / 1000 / historyMonthsCount : 0;
+            const historyAvgFat = monthlyKpiAverage(historySales, (sales) => sales.reduce((sum, item) => sum + getRevenue(item), 0));
+            const historyAvgPeso = monthlyKpiAverage(historySales, (sales) => sales.reduce((sum, item) => sum + item.totpesoliq, 0)) / 1000;
 
             const historyClientsAverage = monthlyKpiAverage(historySales, getPositiveClientsWithNewLogic);
             const historyTicketAverage = historyClientsAverage > 0 ? historyAvgFat / historyClientsAverage : 0;
