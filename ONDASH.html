@@ -13,6 +13,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <!-- 2. ADICIONADO: Biblioteca do Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- 3. ADICIONADO: Biblioteca para ler arquivos Excel (XLSX) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         /* CSS Variables for Theming */
@@ -953,6 +955,62 @@
       * FIM DA CORREÇÃO
       *********************************************************************
     -->
+
+    <!-- Admin Uploader Modal -->
+    <div id="admin-uploader-modal" class="modal-overlay hidden">
+        <div class="bg-modal-content rounded-lg shadow-2xl max-w-lg w-full m-4 border border-primary relative text-center p-8">
+            <button id="admin-modal-close-btn" class="absolute top-2 right-4 text-3xl font-bold hover:text-red-500 transition-colors">&times;</button>
+
+            <h1 class="text-2xl font-bold mb-4">Uploader (v5.1 - Parcial)</h1>
+            <p class="mb-6">Carregue os arquivos para enviar os dados ao Supabase. Você pode carregar um ou mais arquivos de cada vez.</p>
+
+            <div class="space-y-4 mb-6 text-left">
+                <div>
+                    <label for="supabase-url" class="block text-sm font-medium mb-2">URL do Projeto Supabase</label>
+                    <input type="text" id="supabase-url" placeholder="https://[seu-id].supabase.co" class="w-full text-sm p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-input border-primary text-primary" value="https://dhozwhfmrwiumwpcqabi.supabase.co">
+                </div>
+                <div>
+                    <label for="supabase-key" class="block text-sm font-medium mb-2">Chave Secreta (service_role) 🤫</label>
+                    <input type="password" id="supabase-key" placeholder="Cole sua chave secreta aqui..." class="w-full text-sm p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-input border-primary text-primary">
+                    <p class="text-xs mt-1">Esta chave NUNCA é salva. Você deve digitá-la toda vez que for usar.</p>
+                </div>
+            </div>
+
+            <div class="space-y-4 mb-6 border-t border-primary pt-6">
+                <div>
+                    <label for="sales-file-input" class="block text-sm font-medium mb-2">1. Arquivo de Vendas (Mês Atual)</label>
+                    <input type="file" id="sales-file-input" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-button file:text-secondary hover:file:bg-button-hover" accept=".csv, .xls, .xlsx"/>
+                </div>
+                <div>
+                    <label for="clients-file-input" class="block text-sm font-medium mb-2">2. Cadastro de Clientes</label>
+                    <input type="file" id="clients-file-input" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-button file:text-secondary hover:file:bg-button-hover" accept=".csv, .xls, .xlsx"/>
+                </div>
+                <div>
+                    <label for="products-file-input" class="block text-sm font-medium mb-2">3. Cadastro de Produtos</label>
+                    <input type="file" id="products-file-input" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-button file:text-secondary hover:file:bg-button-hover" accept=".csv, .xls, .xlsx"/>
+                </div>
+                <div>
+                    <label for="history-file-input" class="block text-sm font-medium mb-2">4. Histórico de Vendas (Trimestre Anterior)</label>
+                    <input type="file" id="history-file-input" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-button file:text-secondary hover:file:bg-button-hover" accept=".csv, .xls, .xlsx"/>
+                </div>
+                 <div>
+                    <label for="innovations-file-input" class="block text-sm font-medium mb-2">5. Planilha de Inovações (Mês)</label>
+                    <input type="file" id="innovations-file-input" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-button file:text-secondary hover:file:bg-button-hover" accept=".csv, .xls, .xlsx"/>
+                </div>
+            </div>
+
+            <button id="generate-btn" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg w-full disabled:bg-slate-500 disabled:hover:bg-slate-500 disabled:cursor-not-allowed">
+                Enviar Dados para o Supabase
+            </button>
+
+            <div id="status-container" class="hidden mt-6 text-sm h-12 flex flex-col justify-center">
+                <p id="status-text" class="mb-2"></p>
+                <div class="w-full h-2 rounded-lg overflow-hidden bg-slate-700">
+                    <div id="progress-bar" class="bg-teal-500 h-full transition-all duration-300"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- 7. MODIFICADO: Script agora busca dados das 8 tabelas -->
     <script>
@@ -5076,6 +5134,12 @@
                         { id: 'nav-weekly-view', text: 'Acompanhamento Semanal', viewId: 'weekly-view' },
                         { id: 'nav-city-view', text: 'Análise por Cidade', viewId: 'city-view' }
                     ]
+                },
+                {
+                    title: 'Admin',
+                    buttons: [
+                        { id: 'nav-admin-uploader', text: 'Uploader de Dados', viewId: 'admin-uploader-modal' }
+                    ]
                 }
             ];
 
@@ -5164,6 +5228,16 @@
                 if (e.target.matches('.nav-btn')) {
                     const targetViewId = e.target.dataset.view;
                     
+                    // ADIÇÃO: Lógica para abrir o modal do admin
+                    if (targetViewId === 'admin-uploader-modal') {
+                        document.getElementById('admin-uploader-modal').classList.remove('hidden');
+                        // Não alterna a view principal, apenas mostra o modal
+                        mainNav.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+                        e.target.classList.add('active');
+                        toggleMenu(); // Fecha o menu após abrir o modal
+                        return; // Interrompe a execução para não tratar como uma troca de view
+                    }
+
                     // Atualiza botão ativo
                     mainNav.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
                     e.target.classList.add('active');
@@ -5926,6 +6000,323 @@
         
         updateAllVisuals();
         renderTable(aggregatedOrders);
+    </script>
+
+    <!-- Script do Uploader -->
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const supabaseUrlInput = document.getElementById('supabase-url');
+        const supabaseKeyInput = document.getElementById('supabase-key');
+        const salesFileInput = document.getElementById('sales-file-input');
+        const clientsFileInput = document.getElementById('clients-file-input');
+        const productsFileInput = document.getElementById('products-file-input');
+        const historyFileInput = document.getElementById('history-file-input');
+        const innovationsFileInput = document.getElementById('innovations-file-input');
+        const generateBtn = document.getElementById('generate-btn');
+        const statusContainer = document.getElementById('status-container');
+        const statusText = document.getElementById('status-text');
+        const progressBar = document.getElementById('progress-bar');
+        const adminModalCloseBtn = document.getElementById('admin-modal-close-btn');
+
+        // Lógica para fechar o modal
+        adminModalCloseBtn.addEventListener('click', () => {
+            document.getElementById('admin-uploader-modal').classList.add('hidden');
+            const adminNavBtn = document.getElementById('nav-admin-uploader');
+            if (adminNavBtn) {
+                adminNavBtn.classList.remove('active');
+            }
+        });
+
+        const checkInputs = () => {
+            const hasUrl = supabaseUrlInput.value.trim() !== '';
+            const hasKey = supabaseKeyInput.value.trim() !== '';
+            const hasAnyFile = salesFileInput.files.length > 0 ||
+                             clientsFileInput.files.length > 0 ||
+                             productsFileInput.files.length > 0 ||
+                             historyFileInput.files.length > 0 ||
+                             innovationsFileInput.files.length > 0;
+            generateBtn.disabled = !(hasUrl && hasKey && hasAnyFile);
+        };
+
+        [supabaseUrlInput, supabaseKeyInput, salesFileInput, clientsFileInput, productsFileInput, historyFileInput, innovationsFileInput].forEach(input => {
+            input.addEventListener('input', checkInputs);
+            input.addEventListener('change', checkInputs);
+        });
+
+        generateBtn.addEventListener('click', () => {
+            statusContainer.classList.remove('hidden');
+            progressBar.style.width = '0%';
+            generateBtn.disabled = true;
+
+            const files = {
+                sales: salesFileInput.files[0],
+                clients: clientsFileInput.files[0],
+                products: productsFileInput.files[0],
+                history: historyFileInput.files[0],
+                innovations: innovationsFileInput.files[0]
+            };
+
+            const worker = new Worker(URL.createObjectURL(new Blob([`
+                self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+
+                function detectDelimiter(csv) {
+                    const delimiters = [',', ';', '\\t', '|'];
+                    let bestDelimiter = ',';
+                    let maxCount = 0;
+                    delimiters.forEach(delimiter => {
+                        const count = (csv.match(new RegExp(\`\\\${delimiter}\`, 'g')) || []).length;
+                        if (count > maxCount) {
+                            maxCount = count;
+                            bestDelimiter = delimiter;
+                        }
+                    });
+                    return bestDelimiter;
+                }
+
+                function parseCSV(csv, delimiter) {
+                    const lines = csv.split(/\\r\\n|\\n/);
+                    const headers = lines[0].split(delimiter).map(h => h.trim());
+                    const data = [];
+                    for (let i = 1; i < lines.length; i++) {
+                        if (!lines[i]) continue;
+                        const values = lines[i].split(delimiter);
+                        const entry = {};
+                        for (let j = 0; j < headers.length; j++) {
+                            entry[headers[j].trim()] = values[j] ? values[j].trim() : '';
+                        }
+                        data.push(entry);
+                    }
+                    return data;
+                }
+
+                function isNumeric(n) {
+                    return !isNaN(parseFloat(n)) && isFinite(n);
+                }
+
+                function convertExcelDate(excelDate) {
+                    if (!isNumeric(excelDate)) return excelDate;
+                    const date = new Date(Math.round((excelDate - 25569) * 86400 * 1000));
+                    return date.toISOString().split('T')[0];
+                }
+
+                function parseDate(dateString) {
+                    if (!dateString) return null;
+                    if (isNumeric(dateString)) return convertExcelDate(dateString);
+                    if (dateString.includes('/')) {
+                        const parts = dateString.split(' ')[0].split('/');
+                        if (parts.length === 3) {
+                            return \`\${parts[2]}-\${parts[1].padStart(2, '0')}-\${parts[0].padStart(2, '0')}\`;
+                        }
+                    }
+                    return dateString;
+                }
+
+                async function readFile(file) {
+                    return new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            const data = event.target.result;
+                            if (file.name.endsWith('.csv')) {
+                                const decoder = new TextDecoder('iso-8859-1');
+                                const csv = decoder.decode(data);
+                                const delimiter = detectDelimiter(csv);
+                                resolve(parseCSV(csv, delimiter));
+                            } else {
+                                const workbook = XLSX.read(data, { type: 'array' });
+                                const sheetName = workbook.SheetNames[0];
+                                resolve(XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { raw: false }));
+                            }
+                        };
+                        reader.onerror = (error) => reject(error);
+                        if (file.name.endsWith('.csv')) {
+                            reader.readAsArrayBuffer(file);
+                        } else {
+                            reader.readAsArrayBuffer(file);
+                        }
+                    });
+                }
+
+                function processSalesFile(data, clientData, productData) {
+                    const clientMap = new Map(clientData.map(c => [c.CODCLI, { nome: c.CLIENTE, cidade: c.CIDADE, bairro: c.BAIRRO }]));
+                    const productMap = new Map(productData.map(p => [p.PRODUTO, { desc: p.DESCRICAO, forn: p.FORNECEDOR, codfor: p.CODFOR, obs: p.OBSERVACAOFOR }]));
+
+                    return data.map(row => {
+                        const clientInfo = clientMap.get(row.CODCLI) || {};
+                        const productInfo = productMap.get(row.PRODUTO) || {};
+                        return {
+                            dtped: parseDate(row.DTPED),
+                            codcli: row.CODCLI,
+                            cliente_nome: clientInfo.nome || 'N/A',
+                            vlvenda: parseFloat(String(row.VLVENDA).replace(',', '.')) || 0,
+                            totpesoliq: parseFloat(String(row.TOTPESOLIQ).replace(',', '.')) || 0,
+                            nome: row.NOME,
+                            superv: row.SUPERV,
+                            descricao: productInfo.desc || 'N/A',
+                            produto: row.PRODUTO,
+                            fornecedor: productInfo.forn || 'N/A',
+                            codfor: productInfo.codfor || 'N/A',
+                            observacaofor: productInfo.obs || 'N/A',
+                            posicao: row.POSICAO,
+                            tipovenda: row.TIPOVENDA,
+                            codusur: row.CODUSUR,
+                            filial: row.FILIAL,
+                            bairro: clientInfo.bairro || 'N/A',
+                            cidade: clientInfo.cidade || 'N/A',
+                            vlbonific: parseFloat(String(row.VLBONIFIC).replace(',', '.')) || 0,
+                            qtvenda_embalagem_master: parseFloat(String(row.QTVENDA_EMBALAGEM_MASTER).replace(',', '.')) || 0,
+                            pedido: row.PEDIDO,
+                            dtsaida: parseDate(row.DTSAIDA),
+                            qtvenda: parseFloat(String(row.QTVENDA).replace(',', '.')) || 0
+                        };
+                    });
+                }
+
+                function processClientsFile(data) {
+                    return data.map(row => ({
+                        codigo_cliente: row.CODCLI,
+                        razaosocial: row.CLIENTE,
+                        fantasia: row.FANTASIA,
+                        cnpj_cpf: row.CGC_CPF,
+                        inscricaoestadual: row.IE_RG,
+                        endereco: row.ENDERECO,
+                        numero: row.NUMERO,
+                        bairro: row.BAIRRO,
+                        cidade: row.CIDADE,
+                        cep: row.CEP,
+                        telefone: row.TELEFONE,
+                        email: row.EMAIL,
+                        ramo: row.RAMO,
+                        ultimacompra: parseDate(row.ULTIMACOMPRA),
+                        datacadastro: parseDate(row.DATACADASTRO),
+                        bloqueio: row.BLOQUEIO,
+                        rca1: row.RCA1,
+                        rca2: row.RCA2,
+                    }));
+                }
+
+                function processProductsFile(data) {
+                    return data.map(row => ({
+                        code: row.PRODUTO,
+                        descricao: row.DESCRICAO,
+                        fornecedor: row.FORNECEDOR,
+                        codfor: row.CODFOR,
+                        dtcadastro: parseDate(row.DTCADASTRO)
+                    }));
+                }
+
+                function getWorkingDays(salesData) {
+                    const workingDays = new Set();
+                    salesData.forEach(sale => {
+                        const date = new Date(sale.dtped + 'T00:00:00Z');
+                        if (date.getUTCDay() >= 1 && date.getUTCDay() <= 5) {
+                            workingDays.add(sale.dtped);
+                        }
+                    });
+                    return workingDays.size;
+                }
+
+                self.onmessage = async (e) => {
+                    const { files } = e.data;
+                    try {
+                        let clientData = [], productData = [], salesData = [], historyData = [], innovationsData = [];
+
+                        if (files.clients) {
+                            self.postMessage({ status: 'progress', message: 'Lendo clientes...', progress: 5 });
+                            clientData = await readFile(files.clients);
+                        }
+                        if (files.products) {
+                            self.postMessage({ status: 'progress', message: 'Lendo produtos...', progress: 10 });
+                            productData = await readFile(files.products);
+                        }
+
+                        if (files.sales) {
+                            self.postMessage({ status: 'progress', message: 'Lendo e processando vendas do mês...', progress: 20 });
+                            const rawSales = await readFile(files.sales);
+                            salesData = processSalesFile(rawSales, clientData, productData);
+                        }
+                        if (files.history) {
+                            self.postMessage({ status: 'progress', message: 'Lendo e processando histórico de vendas...', progress: 50 });
+                            const rawHistory = await readFile(files.history);
+                            historyData = processSalesFile(rawHistory, clientData, productData);
+                        }
+                        if (files.innovations) {
+                             self.postMessage({ status: 'progress', message: 'Lendo inovações...', progress: 85 });
+                            innovationsData = await readFile(files.innovations);
+                        }
+
+                        const passedWorkingDays = getWorkingDays(salesData);
+
+                        self.postMessage({ status: 'progress', message: 'Finalizando...', progress: 95 });
+                        self.postMessage({
+                            status: 'success',
+                            data: {
+                                sales: salesData,
+                                clients: processClientsFile(clientData),
+                                products: processProductsFile(productData),
+                                history: historyData,
+                                innovations: innovationsData,
+                                metadata: [{ key: 'passedWorkingDaysCurrentMonth', value: passedWorkingDays }]
+                            }
+                        });
+                    } catch (error) {
+                        self.postMessage({ status: 'error', error: error.message });
+                    }
+                };
+            `], { type: 'application/javascript' })));
+
+            worker.onmessage = async (e) => {
+                const { status, message, progress, data, error } = e.data;
+
+                if (status === 'progress') {
+                    statusText.textContent = message;
+                    progressBar.style.width = `${progress}%`;
+                } else if (status === 'error') {
+                    statusText.textContent = `Erro: ${error}`;
+                    generateBtn.disabled = false;
+                } else if (status === 'success') {
+                    const supabaseClient = supabase.createClient(supabaseUrlInput.value.trim(), supabaseKeyInput.value.trim());
+                    const tablesToUpdate = [
+                        { name: 'data_clients', data: data.clients, label: 'clientes' },
+                        { name: 'data_product_details', data: data.products, label: 'produtos' },
+                        { name: 'data_detailed', data: data.sales, label: 'vendas do mês' },
+                        { name: 'data_history', data: data.history, label: 'histórico de vendas' },
+                        { name: 'data_innovations', data: data.innovations, label: 'inovações' },
+                        { name: 'data_metadata', data: data.metadata, label: 'metadados' }
+                    ].filter(t => t.data && t.data.length > 0);
+
+                    const totalUploadSteps = tablesToUpdate.length * 2;
+                    let completedUploadSteps = 0;
+
+                    try {
+                        for (const table of tablesToUpdate) {
+                            statusText.textContent = `Limpando tabela de ${table.label}...`;
+                            const { error: deleteError } = await supabaseClient.from(table.name).delete().gt('id', -1);
+                            if (deleteError) throw new Error(`Falha ao limpar ${table.name}: ${deleteError.message}`);
+                            completedUploadSteps++;
+                            progressBar.style.width = `${95 + (completedUploadSteps / totalUploadSteps) * 5}%`;
+
+                            statusText.textContent = `Enviando dados de ${table.label}...`;
+                            const { error: insertError } = await supabaseClient.from(table.name).insert(table.data);
+                            if (insertError) throw new Error(`Falha ao inserir em ${table.name}: ${insertError.message}`);
+                            completedUploadSteps++;
+                            progressBar.style.width = `${95 + (completedUploadSteps / totalUploadSteps) * 5}%`;
+                        }
+
+                        statusText.textContent = 'Upload concluído! A página será recarregada.';
+                        progressBar.style.width = '100%';
+                        setTimeout(() => window.location.reload(), 2000);
+
+                    } catch (uploadError) {
+                        statusText.textContent = `Erro no upload: ${uploadError.message}`;
+                        generateBtn.disabled = false;
+                    }
+                }
+            };
+
+            worker.postMessage({ files });
+        });
+        checkInputs();
+    });
     </script>
 </body>
 </html>
