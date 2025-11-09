@@ -1459,15 +1459,15 @@
                 }
             });
 
-            const currentMonth = lastSaleDate.getMonth();
-            const currentYear = lastSaleDate.getFullYear();
+            const currentMonth = lastSaleDate.getUTCMonth();
+            const currentYear = lastSaleDate.getUTCFullYear();
             const previousMonth = (currentMonth === 0) ? 11 : currentMonth - 1;
             const previousMonthYear = (currentMonth === 0) ? currentYear - 1 : currentYear;
 
             optimizedData.salesByClientAndRca_PreviousMonth = new Map();
             allHistoryData.forEach(s => {
                 const saleDate = parseDate(s.dtped);
-                if (s.vlvenda > 0 && s.codcli && s.produto && s.codusur && saleDate?.getMonth() === previousMonth && saleDate?.getFullYear() === previousMonthYear) {
+                if (s.vlvenda > 0 && s.codcli && s.produto && s.codusur && saleDate?.getUTCMonth() === previousMonth && saleDate?.getUTCFullYear() === previousMonthYear) {
                      if (!optimizedData.salesByClientAndRca_PreviousMonth.has(s.codcli)) {
                         optimizedData.salesByClientAndRca_PreviousMonth.set(s.codcli, new Map());
                     }
@@ -1496,7 +1496,7 @@
             optimizedData.bonificationsByClientAndRca_PreviousMonth = new Map();
             allHistoryData.forEach(s => {
                 const saleDate = parseDate(s.dtped);
-                if (s.vlbonific > 0 && s.codcli && s.produto && s.codusur && saleDate?.getMonth() === previousMonth && saleDate?.getFullYear() === previousMonthYear) {
+                if (s.vlbonific > 0 && s.codcli && s.produto && s.codusur && saleDate?.getUTCMonth() === previousMonth && saleDate?.getUTCFullYear() === previousMonthYear) {
                      if (!optimizedData.bonificationsByClientAndRca_PreviousMonth.has(s.codcli)) {
                         optimizedData.bonificationsByClientAndRca_PreviousMonth.set(s.codcli, new Map());
                     }
@@ -4303,9 +4303,14 @@
                     }
 
                     if(boughtCurrent || bonusCurrent) clientsWhoGotProductCurrent++;
+                    });
 
 
-                    const clientSalesPrevious = optimizedData.salesByClientAndRca_PreviousMonth.get(codcli);
+                    // CORREÇÃO: Lógica para Mês Anterior movida para fora do loop de clientes
+                    // e agora usa o mapa pré-calculado corretamente.
+                    const clientsWhoGotProductPreviousSet = new Set();
+                    activeClientCodes.forEach(codcli => {
+                         const clientSalesPrevious = optimizedData.salesByClientAndRca_PreviousMonth.get(codcli);
                     const clientBonusPrevious = innovationsIncludeBonus ? optimizedData.bonificationsByClientAndRca_PreviousMonth.get(codcli) : null;
 
                     let boughtPrevious = false;
@@ -4322,9 +4327,11 @@
                             bonusPrevious = true;
                         }
                     }
-                    if(boughtPrevious || bonusPrevious) clientsWhoGotProductPrevious++;
-
+                        if(boughtPrevious || bonusPrevious) {
+                            clientsWhoGotProductPreviousSet.add(codcli);
+                        }
                 });
+                    clientsWhoGotProductPrevious = clientsWhoGotProductPreviousSet.size;
 
                 const coverageCurrent = activeClientsCount > 0 ? (clientsWhoGotProductCurrent / activeClientsCount) * 100 : 0;
                 const coveragePrevious = activeClientsCount > 0 ? (clientsWhoGotProductPrevious / activeClientsCount) * 100 : 0;
