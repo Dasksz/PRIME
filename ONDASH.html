@@ -5114,6 +5114,18 @@
             };
         }
 
+        function updateSideNavActiveState(targetViewId) {
+            mainNav.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+
+            // Lógica especial para 'table-view', que deve ativar o 'main-dashboard'
+            const navTargetId = targetViewId === 'table-view' ? 'main-dashboard' : targetViewId;
+
+            const activeButton = mainNav.querySelector(`.nav-btn[data-view="${navTargetId}"]`);
+            if (activeButton) {
+                activeButton.classList.add('active');
+            }
+        }
+
         function populateSideMenu() {
             const navConfig = [
                 {
@@ -5252,7 +5264,7 @@
                             case 'stock-view': handleStockFilterChange(); break;
                             case 'coverage-view': updateCoverageFilters(); updateCoverageView(); break;
                             case 'innovations-view': updateInnovationsFilters(); updateInnovationsView(); break;
-                            case 'weekly-view': updateWeeklyView(); break;
+                            case 'weekly-view': populateWeeklyFilters(); updateWeeklyView(); break;
                             case 'city-view': updateCityView(); break;
                         }
                     }
@@ -5262,12 +5274,12 @@
             });
 
             // Botões de "Voltar"
-            backToMainFromComparisonBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); });
-            backToMainFromStockBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); });
-            backToMainFromCoverageBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); });
-            backToMainFromInnovationsBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); });
-            backToMainFromWeeklyBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); });
-            backToMainFromCityBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); });
+            backToMainFromComparisonBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
+            backToMainFromStockBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
+            backToMainFromCoverageBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
+            backToMainFromInnovationsBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
+            backToMainFromWeeklyBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
+            backToMainFromCityBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
 
             supervisorFilter.addEventListener('change', () => { selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); mainTableState.currentPage = 1; updateAllVisuals(); });
             fornecedorFilter.addEventListener('change', () => { mainTableState.currentPage = 1; updateAllVisuals(); });
@@ -5667,8 +5679,9 @@
             });
 
             backToInnovationsFromMonthBtn.addEventListener('click', () => {
-                innovationsMonthView.classList.add('hidden');
-                innovationsView.classList.remove('hidden');
+                switchView('main-dashboard');
+                updateAllVisuals();
+                updateSideNavActiveState('main-dashboard');
             });
 
             innovationsMonthCategoryFilter.addEventListener('change', updateInnovationsMonthView);
