@@ -4138,6 +4138,7 @@
             const sellers = selectedInnovationsSellers;
             const city = innovationsCityFilter.value.trim().toLowerCase();
             const filial = innovationsFilialFilter.value;
+            const suppliers = selectedInnovationsSuppliers;
 
             let clients = [...allClientsData];
             if (filial !== 'ambas') {
@@ -4163,14 +4164,21 @@
                 clients = clients.filter(c => c.cidade && c.cidade.toLowerCase() === city);
             }
 
-            let sales = [...allSalesData];
-            let history = [...allHistoryData];
-            if (filial !== 'ambas') {
-                 sales = sales.filter(s => s.filial === filial);
-                 history = history.filter(s => s.filial === filial);
-            }
+            const clientCodes = new Set(clients.map(c => c['codigo_cliente']));
 
-            return { sales, history, clients };
+            const filterFunction = s =>
+                (clientCodes.has(s.codcli)) &&
+                (filial === 'ambas' || s.filial === filial) &&
+                (!supervisor || s.superv === supervisor) &&
+                (sellers.length === 0 || sellers.includes(s.nome)) &&
+                (suppliers.length === 0 || suppliers.includes(String(s.codfor))) &&
+                (!city || (s.cidade && s.cidade.toLowerCase() === city));
+
+            return {
+                sales: allSalesData.filter(filterFunction),
+                history: allHistoryData.filter(filterFunction),
+                clients
+            };
         }
 
         function updateInnovationsFilters() {
@@ -5275,7 +5283,13 @@
                             case 'comparison-view': updateAllComparisonFilters(); updateComparisonView(); break;
                             case 'stock-view': handleStockFilterChange(); break;
                             case 'coverage-view': updateCoverageFilters(); updateCoverageView(); break;
-                            case 'innovations-view': updateInnovationsFilters(); updateInnovationsView(); break;
+                            case 'innovations-view':
+                                populateSupervisors('innovations-supervisor-filter', allSalesData);
+                                updateSellerFilter('', innovationsVendedorFilterDropdown, innovationsVendedorFilterText, [], allSalesData);
+                                updateSupplierFilter(innovationsSupplierFilterDropdown, innovationsSupplierFilterText, [], allSalesData, 'innovations');
+                                updateInnovationsFilters();
+                                updateInnovationsView();
+                                break;
                             case 'weekly-view': populateWeeklyFilters(); updateWeeklyView(); break;
                             case 'city-view': updateCityView(); break;
                         }
@@ -5712,8 +5726,9 @@
             innovationsCityFilter.addEventListener('input', () => {
                 const cityDataSource = getInnovationsFilteredData().clients;
                 updateCitySuggestions(innovationsCityFilter, innovationsCitySuggestions, cityDataSource);
-                debouncedUpdateInnovations();
+                // Apenas atualiza as sugestões, não dispara o filtro ainda
             });
+            innovationsCityFilter.addEventListener('change', debouncedUpdateInnovations);
             innovationsCityFilter.addEventListener('focus', () => {
                 const cityDataSource = getInnovationsFilteredData().clients;
                 innovationsCitySuggestions.classList.remove('manual-hide');
