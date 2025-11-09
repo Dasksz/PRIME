@@ -6708,10 +6708,13 @@
                         statusText.textContent = \`(Etapa \${progressoInicial < 40 ? '1' : '2'}/9) Limpando dados antigos de \${nomeTabela}...\`;
 
                         // *** O 'deleteError' AQUI VAI FINALMENTE PARAR DE ACONTECER ***
+                        // CORREÇÃO: Usa um filtro genérico que não depende do nome da coluna.
+                        // Apaga todos os registros onde a chave primária não é um valor impossível,
+                        // efetivamente limpando a tabela de forma segura.
                         const { error: deleteError } = await supabaseClient
                             .from(nomeTabela)
                             .delete()
-                            .not(anyColumn, 'is', null); // Apaga tudo
+                            .neq(primaryKeys[0], 'IMPOSSIBLE_VALUE_TO_MATCH');
 
                         if (deleteError) throw new Error(\`Falha ao limpar \${nomeTabela}: \${deleteError.message}\`);
 
