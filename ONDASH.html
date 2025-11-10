@@ -2174,14 +2174,34 @@
         // <!-- FIM DO CÓDIGO RESTAURADO -->
 
         function getUniqueMonthCount(data) {
+            if (!data || data.length === 0) return 1;
+
+            const dates = data.map(sale => parseDate(sale.dtped)).filter(Boolean);
+            if (dates.length === 0) return 1;
+
+            dates.sort((a, b) => a - b);
+
+            const firstDate = dates[0];
+            const lastDate = dates[dates.length - 1];
+
             const months = new Set();
-            data.forEach(sale => {
-                const saleDate = parseDate(sale.dtped);
-                if (saleDate) {
-                    const monthKey = `${saleDate.getFullYear()}-${saleDate.getMonth()}`;
-                    months.add(monthKey);
+            for (const date of dates) {
+                const monthKey = `${date.getUTCFullYear()}-${date.getUTCMonth()}`;
+                months.add(monthKey);
+            }
+
+            // Se o primeiro mês contém apenas datas a partir do dia 20,
+            // é provável que seja um "resto" de mês para completar a primeira semana.
+            // Nesse caso, não o contamos como um mês completo para a média.
+            if (firstDate.getUTCDate() > 20) {
+                const firstMonthKey = `${firstDate.getUTCFullYear()}-${firstDate.getUTCMonth()}`;
+
+                // Garantir que estamos removendo o mês correto e que há mais de um mês no total
+                if (months.has(firstMonthKey) && months.size > 1) {
+                    months.delete(firstMonthKey);
                 }
-            });
+            }
+
             return months.size > 0 ? months.size : 1;
         }
 
