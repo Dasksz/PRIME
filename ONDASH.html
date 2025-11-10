@@ -3617,8 +3617,8 @@
             historySales.forEach(sale => {
                 const saleDate = parseDate(sale.dtped);
                 if (!saleDate) return;
-                const saleYear = saleDate.getFullYear();
-                const saleMonth = saleDate.getMonth();
+                const saleYear = saleDate.getUTCFullYear();
+                const saleMonth = saleDate.getUTCMonth();
                 const monthKey = `${saleYear}-${saleMonth}`;
                 const monthWeeks = getSundayBasedWeeks(saleYear, saleMonth);
                 const weekIndex = monthWeeks.findIndex(week => saleDate >= week.start && saleDate <= week.end);
@@ -3635,8 +3635,7 @@
                 const weeklyTotals = Object.values(weekDataByMonth);
                 if (weeklyTotals.length > 0) {
                     const totalSum = weeklyTotals.reduce((a, b) => a + b, 0);
-                    const divisor = Math.max(historyMonthsCount, 1);
-                    historyAvgSalesByWeek[i] = totalSum / divisor;
+                    historyAvgSalesByWeek[i] = totalSum / weeklyTotals.length;
                 }
             }
 
