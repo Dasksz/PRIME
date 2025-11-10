@@ -2446,8 +2446,8 @@
             const totalWorkingDays = getWorkingDaysInMonth(currentYear, currentMonth, selectedHolidays);
             const passedWorkingDays = getPassedWorkingDaysInMonth(currentYear, currentMonth, selectedHolidays, lastSaleDate);
 
-            const averageMonthlyRevenue = monthlyKpiAverage(historicalSales, (sales) => sales.reduce((sum, s) => sum + s.vlvenda, 0));
-            const currentMonthRevenue = currentSales.reduce((sum, sale) => sum + sale.vlvenda, 0);
+            const averageMonthlyRevenue = monthlyKpiAverage(historicalSales, (sales) => sales.reduce((sum, s) => sum + getRevenue(s), 0));
+            const currentMonthRevenue = currentSales.reduce((sum, sale) => sum + getRevenue(sale), 0);
             const trend = passedWorkingDays > 0 && totalWorkingDays > 0 ? (currentMonthRevenue / passedWorkingDays) * totalWorkingDays : 0;
             const lineChartDataset = [{ label: 'Valor', data: [averageMonthlyRevenue, trend], fill: true, borderColor: 'var(--bg-button-active)', backgroundColor: 'rgba(20, 184, 166, 0.1)', tension: 0.2, pointRadius: 6, pointBackgroundColor: 'var(--bg-button-active)', pointBorderColor: 'var(--bg-content)', pointBorderWidth: 2, pointHoverRadius: 8 }];
             
@@ -2920,6 +2920,10 @@
                 const sortedCidades = Object.entries(salesByCity).sort(([, a], [, b]) => b - a).slice(0, 10);
                 createChart('salesByClientInCityChart', 'bar', sortedCidades.map(([name]) => name), sortedCidades.map(([, total]) => total), cityChartOptions);
             }
+            
+            // CORREÇÃO: Garante que o loader da página de cidade seja escondido e o conteúdo exibido
+            document.getElementById('city-view-loader').classList.add('hidden');
+            document.getElementById('city-view-content').classList.remove('hidden');
         }
 
         function getWeekOfMonth(date) {
@@ -2960,7 +2964,7 @@
                 const dateString = saleDate.toISOString().split('T')[0]; // This is already in YYYY-MM-DD format from UTC
                 if (!salesBySupervisorByDay[supervisor]) salesBySupervisorByDay[supervisor] = {};
                 if (!salesBySupervisorByDay[supervisor][dateString]) salesBySupervisorByDay[supervisor][dateString] = 0;
-                salesBySupervisorByDay[supervisor][dateString] += sale.vlvenda;
+                salesBySupervisorByDay[supervisor][dateString] += getRevenue(sale);
             });
             
             const bestDayByWeekdayBySupervisor = {};
@@ -3005,7 +3009,7 @@
                 return saleDate && saleDate.getUTCMonth() === currentMonth && saleDate.getUTCFullYear() === currentYear; 
             });
             
-            const totalMes = monthSales.reduce((sum, item) => sum + item.vlvenda, 0);
+            const totalMes = monthSales.reduce((sum, item) => sum + getRevenue(item), 0);
             totalMesSemanalEl.textContent = totalMes.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             
             const salesByWeekAndDay = {}; 
@@ -3020,7 +3024,7 @@
                 if (!salesByWeekAndDay[weekNum]) { 
                     salesByWeekAndDay[weekNum] = { 'Segunda': 0, 'Terça': 0, 'Quarta': 0, 'Quinta': 0, 'Sexta': 0 }; 
                 } 
-                salesByWeekAndDay[weekNum][dayName] = (salesByWeekAndDay[weekNum][dayName] || 0) + sale.vlvenda; 
+                salesByWeekAndDay[weekNum][dayName] = (salesByWeekAndDay[weekNum][dayName] || 0) + getRevenue(sale);
             });
             
             const weekLabels = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
@@ -3067,7 +3071,7 @@
             const positivacaoRank = Object.entries(positivacao).map(([v, c]) => ({ vendedor: v, total: c.size })).sort((a, b) => b.total - a.total).slice(0, 10);
             if (positivacaoRank.length > 0) createChart('positivacaoChart', 'bar', positivacaoRank.map(r => getFirstName(r.vendedor)), positivacaoRank.map(r => r.total));
             else showNoDataMessage('positivacaoChart', 'Sem dados para o ranking.');
-            const salesBySeller = {}; dataForRankings.forEach(d => { if (!d.nome) return; salesBySeller[d.nome] = (salesBySeller[d.nome] || 0) + d.vlvenda; });
+            const salesBySeller = {}; dataForRankings.forEach(d => { if (!d.nome) return; salesBySeller[d.nome] = (salesBySeller[d.nome] || 0) + getRevenue(d); });
             const topSellersRank = Object.entries(salesBySeller).sort(([, a], [, b]) => b - a).slice(0, 10);
             if (topSellersRank.length > 0) createChart('topSellersChart', 'bar', topSellersRank.map(r => getFirstName(r[0])), topSellersRank.map(r => r[1]));
             else showNoDataMessage('topSellersChart', 'Sem dados para o ranking.');
@@ -3173,6 +3177,8 @@
             return null;
         };
 
+        const getRevenue = (sale) => (sale.tipovenda === '1' || sale.tipovenda === '9') ? sale.vlvenda : 0;
+
         function renderKpiCards(kpis) {
             const container = document.getElementById('comparison-kpi-container');
 
@@ -3212,7 +3218,8 @@
                 const clientProducts = clientProductNetValue.get(sale.codcli);
 
                 const currentValue = clientProducts.get(sale.produto) || 0;
-                clientProducts.set(sale.produto, currentValue + (Number(sale.vlvenda) || 0));
+                // CORREÇÃO: Aplicar a função getRevenue para consistência.
+                clientProducts.set(sale.produto, currentValue + getRevenue(sale));
             }
 
             const mixValues = [];
@@ -3251,7 +3258,8 @@
                     clientProducts.set(sale.produto, { netValue: 0, description: sale.descricao });
                 }
                 const productData = clientProducts.get(sale.produto);
-                productData.netValue += (Number(sale.vlvenda) || 0);
+                // CORREÇÃO: Aplicar a função getRevenue para consistência.
+                productData.netValue += getRevenue(sale);
             }
 
             const clientPurchasedCategories = new Map();
@@ -3300,35 +3308,30 @@
 
         function monthlyKpiAverage(historySales, kpiFn, ...kpiArgs) {
             const salesByMonth = groupSalesByMonth(historySales);
-
-            // Garante que os meses estão em ordem cronológica
             let sortedMonths = Object.keys(salesByMonth).sort();
 
-            const currentReportMonthKey = lastSaleDate.getUTCFullYear() + '-' + String(lastSaleDate.getUTCMonth() + 1).padStart(2, '0');
+            // CORREÇÃO: Remove o mês parcial inicial se a data da primeira venda for após o dia 20
+            if (sortedMonths.length > 0) {
+                const firstMonthKey = sortedMonths[0];
+                const firstSaleInFirstMonth = salesByMonth[firstMonthKey].reduce((earliest, sale) => {
+                    const saleDate = parseDate(sale.dtped);
+                    return (!earliest || (saleDate && saleDate < earliest)) ? saleDate : earliest;
+                }, null);
 
-            // Remove o último mês do histórico se ele for um "stub" (mês parcial igual ao mês atual)
-            if (sortedMonths.length > 0 && sortedMonths[sortedMonths.length - 1] === currentReportMonthKey) {
-                sortedMonths.pop();
+                if (firstSaleInFirstMonth && firstSaleInFirstMonth.getUTCDate() > 20) {
+                    sortedMonths.shift();
+                }
             }
+            
+            // Pega os últimos 3 meses para o cálculo da média
+            const monthsToAverage = sortedMonths.slice(-3);
 
-            // CORREÇÃO: Se houver mais de 3 meses (indicando um mês parcial no início),
-            // remove o primeiro mês para garantir que a média seja calculada apenas sobre o trimestre completo.
-            if (sortedMonths.length > 3) {
-                 sortedMonths.shift(); // Remove o mês mais antigo (o parcial)
-            }
-
-            // Pega os meses restantes para a média (deve ser 3 ou menos)
-            const monthsToAverage = sortedMonths;
-
-            // Calcula o KPI para cada um dos meses
             const kpiValues = monthsToAverage.map(monthKey => {
                 const salesForMonth = salesByMonth[monthKey];
                 return kpiFn(salesForMonth, ...kpiArgs);
             });
 
             if (kpiValues.length === 0) return 0;
-
-            // Calcula a média
             return kpiValues.reduce((a, b) => a + b, 0) / kpiValues.length;
         }
 
@@ -3559,8 +3562,6 @@
         }
 
         function updateComparisonView() {
-            const getRevenue = (sale) => (sale.tipovenda === '1' || sale.tipovenda === '9') ? sale.vlvenda : 0;
-
             const filteredData = getComparisonFilteredData();
             const { currentSales, historySales } = filteredData;
 
@@ -3673,9 +3674,11 @@
 
             // Pré-agrupa as vendas históricas por data para busca rápida
             const historicalSalesByDate = new Map();
-            // CORREÇÃO: Usa `historySales` (todos os dados históricos filtrados) em vez de
-            // apenas os últimos 3 meses, para garantir que as semanas que cruzam meses sejam calculadas corretamente.
-            historySales.forEach(sale => {
+            // CORREÇÃO: Usa `allHistoryData` (dados históricos completos) para garantir que
+            // a média semanal encontre dados de meses anteriores, mesmo que eles não
+            // passem nos filtros atuais (ex: outro vendedor). A filtragem por data
+            // dentro do loop de `currentMonthWeeks` garante o escopo correto.
+            allHistoryData.forEach(sale => {
                 const saleDate = parseDate(sale.dtped);
                 if (!saleDate) return;
                 const dateString = saleDate.toISOString().split('T')[0];
@@ -4079,8 +4082,10 @@
                 let totalQtySoldInRange = 0;
                 productAllSales.forEach(sale => {
                     const saleDate = parseDate(sale.dtped);
+                    // A data da venda precisa estar dentro do período de dias úteis efetivos
+                    // que está sendo considerado para o cálculo da média.
                     if (saleDate && saleDate >= startDate && saleDate <= endDate) {
-                        totalQtySoldInRange += sale.qtvenda_embalagem_master;
+                        totalQtySoldInRange += (sale.qtvenda_embalagem_master || 0);
                     }
                 });
 
@@ -4089,7 +4094,7 @@
                 const isNew = productMaxLifeInWorkingDays <= passedWorkingDaysCurrentMonth;
 
                 const trendDays = dailyAvgSale > 0 ? (stock / dailyAvgSale) : Infinity;
-                const monthlyAvgSale = monthlyKpiAverage(productHistorySales, (sales) => sales.reduce((sum, s) => sum + s.qtvenda_embalagem_master, 0));
+                const monthlyAvgSale = monthlyKpiAverage(productHistorySales, (sales) => sales.reduce((sum, s) => sum + (s.qtvenda_embalagem_master || 0), 0));
 
 
                 productAnalysis.set(productCode, {
