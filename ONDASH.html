@@ -3632,7 +3632,7 @@
                 }
             });
 
-            // CORREÇÃO INÍCIO: Lógica de média semanal refeita para ser mais precisa e corrigir bugs de fuso horário.
+            // CORREÇÃO INÍCIO: Lógica de média semanal refeita para ser mais precisa e corrigir bugs de fuso horário e de semanas que cruzam meses.
             const historySalesByMonth = groupSalesByMonth(historySales);
             const sortedHistoryMonths = Object.keys(historySalesByMonth).sort();
             const currentReportMonthKey = lastSaleDate.getUTCFullYear() + '-' + String(lastSaleDate.getUTCMonth() + 1).padStart(2, '0');
@@ -3643,33 +3643,62 @@
             const lastThreeMonthKeys = sortedHistoryMonths.slice(-3);
             const lastThreeMonthsData = lastThreeMonthKeys.flatMap(key => historySalesByMonth[key] || []);
 
-            const historySalesByWeek = {};
+            // Função auxiliar para subtrair meses de forma segura
+            const subtractMonths = (date, months) => {
+                const d = new Date(date);
+                d.setUTCHours(0, 0, 0, 0); // Normaliza a hora
+                const originalDay = d.getUTCDate();
+                d.setUTCMonth(d.getUTCMonth() - months);
+                // Se o dia do mês mudou (ex: de 31 para 3), ajusta para o último dia do mês anterior.
+                if (d.getUTCDate() !== originalDay) {
+                    d.setUTCDate(0);
+                }
+                return d;
+            };
 
+            const historyAvgSalesByWeek = new Array(currentMonthWeeks.length).fill(0);
+
+            // Pré-agrupa as vendas históricas por data para busca rápida
+            const historicalSalesByDate = new Map();
             lastThreeMonthsData.forEach(sale => {
                 const saleDate = parseDate(sale.dtped);
                 if (!saleDate) return;
-
-                const saleYear = saleDate.getUTCFullYear();
-                const saleMonth = saleDate.getUTCMonth();
-
-                const monthWeeks = getSundayBasedWeeks(saleYear, saleMonth);
-                const weekIndex = monthWeeks.findIndex(week => saleDate >= week.start && saleDate <= week.end);
-
-                if (weekIndex !== -1) {
-                    if (!historySalesByWeek[weekIndex]) {
-                        historySalesByWeek[weekIndex] = 0;
-                    }
-                    historySalesByWeek[weekIndex] += getRevenue(sale);
-                }
+                const dateString = saleDate.toISOString().split('T')[0];
+                const currentTotal = historicalSalesByDate.get(dateString) || 0;
+                historicalSalesByDate.set(dateString, currentTotal + getRevenue(sale));
             });
 
-            const historyAvgSalesByWeek = new Array(currentMonthWeeks.length).fill(0);
-            const divisor = lastThreeMonthKeys.length > 0 ? lastThreeMonthKeys.length : 1;
-            for (let i = 0; i < currentMonthWeeks.length; i++) {
-                if (historySalesByWeek[i]) {
-                    historyAvgSalesByWeek[i] = historySalesByWeek[i] / divisor;
+            // Itera sobre cada semana do mês atual para encontrar sua média histórica correspondente
+            currentMonthWeeks.forEach((currentWeek, weekIndex) => {
+                let totalHistoricalRevenueForThisSlot = 0;
+                let monthsFound = 0;
+
+                // Para cada semana atual, calcula a receita para a mesma "janela" de semana nos 3 meses anteriores
+                for (let i = 1; i <= 3; i++) {
+                    const historicalWeekStart = subtractMonths(currentWeek.start, i);
+                    const historicalWeekEnd = subtractMonths(currentWeek.end, i);
+
+                    let revenueForMonth = 0;
+                    let currentDate = new Date(historicalWeekStart);
+
+                    // Soma as vendas diárias dentro do intervalo da semana histórica
+                    while (currentDate <= historicalWeekEnd) {
+                        const dateString = currentDate.toISOString().split('T')[0];
+                        if (historicalSalesByDate.has(dateString)) {
+                            revenueForMonth += historicalSalesByDate.get(dateString);
+                        }
+                        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+                    }
+
+                    if(revenueForMonth > 0) {
+                        monthsFound++;
+                    }
+                    totalHistoricalRevenueForThisSlot += revenueForMonth;
                 }
-            }
+
+                const divisor = monthsFound > 0 ? monthsFound : (lastThreeMonthKeys.length > 0 ? lastThreeMonthKeys.length : 1);
+                historyAvgSalesByWeek[weekIndex] = totalHistoricalRevenueForThisSlot / divisor;
+            });
             // CORREÇÃO FIM
 
             if (useTendencyComparison) {
