@@ -3032,17 +3032,25 @@
                 backgroundColor: professionalPalette[index % professionalPalette.length] 
             }));
             
-            const supervisorsForHistory = selectedSupervisors.length > 0 ? selectedSupervisors : Object.keys(historicalBests).map(s => s.toLowerCase().replace(/(?:^|\s)\S/g, a => a.toUpperCase()));
             const historicalDataForChart = [0, 0, 0, 0, 0];
-            supervisorsForHistory.forEach(sup => { 
-                const bests = historicalBests[sup.toUpperCase()]; 
-                if(bests) { 
+            const supervisorsToConsider = selectedSupervisors.length > 0
+                ? selectedSupervisors.map(s => s.toUpperCase())
+                : Object.keys(historicalBests);
+
+            // CORREÇÃO: A lógica foi simplificada para usar sempre chaves em maiúsculas,
+            // tornando a correspondência com os dados históricos mais robusta.
+            supervisorsToConsider.forEach(supKey => {
+                // Procura a chave diretamente no objeto historicalBests.
+                // Se estamos a iterar a partir dos filtros, a chave foi convertida para maiúsculas.
+                // Se estamos a iterar sobre todos os supervisores, a chave já está em maiúsculas.
+                const bests = historicalBests[supKey];
+                if (bests) {
                     historicalDataForChart[0] += bests[1] || 0; // Mon
                     historicalDataForChart[1] += bests[2] || 0; // Tue
                     historicalDataForChart[2] += bests[3] || 0; // Wed
                     historicalDataForChart[3] += bests[4] || 0; // Thu
                     historicalDataForChart[4] += bests[5] || 0; // Fri
-                } 
+                }
             });
             const historicalDataset = { type: 'line', label: 'Melhor Dia Mês Anterior', data: historicalDataForChart, borderColor: '#b5838d', backgroundColor: 'transparent', pointBackgroundColor: '#b5838d', pointRadius: 4, tension: 0.1, borderWidth: 2, yAxisID: 'y', datalabels: { display: false } };
             const finalDatasets = [...currentMonthDatasets, historicalDataset];
@@ -3292,9 +3300,9 @@
 
         function monthlyKpiAverage(historySales, kpiFn, ...kpiArgs) {
             const salesByMonth = groupSalesByMonth(historySales);
-            
+
             // Garante que os meses estão em ordem cronológica
-            const sortedMonths = Object.keys(salesByMonth).sort();
+            let sortedMonths = Object.keys(salesByMonth).sort();
 
             const currentReportMonthKey = lastSaleDate.getUTCFullYear() + '-' + String(lastSaleDate.getUTCMonth() + 1).padStart(2, '0');
 
@@ -3303,18 +3311,24 @@
                 sortedMonths.pop();
             }
 
-            // Pega os últimos 3 meses completos
-            const lastThreeMonths = sortedMonths.slice(-3);
+            // CORREÇÃO: Se houver mais de 3 meses (indicando um mês parcial no início),
+            // remove o primeiro mês para garantir que a média seja calculada apenas sobre o trimestre completo.
+            if (sortedMonths.length > 3) {
+                 sortedMonths.shift(); // Remove o mês mais antigo (o parcial)
+            }
 
-            // Calcula o KPI para cada um dos 3 meses
-            const kpiValues = lastThreeMonths.map(monthKey => {
+            // Pega os meses restantes para a média (deve ser 3 ou menos)
+            const monthsToAverage = sortedMonths;
+
+            // Calcula o KPI para cada um dos meses
+            const kpiValues = monthsToAverage.map(monthKey => {
                 const salesForMonth = salesByMonth[monthKey];
                 return kpiFn(salesForMonth, ...kpiArgs);
             });
 
             if (kpiValues.length === 0) return 0;
-            
-            // Calcula a média dos 3 meses
+
+            // Calcula a média
             return kpiValues.reduce((a, b) => a + b, 0) / kpiValues.length;
         }
 
@@ -3641,7 +3655,6 @@
                 sortedHistoryMonths.pop();
             }
             const lastThreeMonthKeys = sortedHistoryMonths.slice(-3);
-            const lastThreeMonthsData = lastThreeMonthKeys.flatMap(key => historySalesByMonth[key] || []);
 
             // Função auxiliar para subtrair meses de forma segura
             const subtractMonths = (date, months) => {
@@ -3660,7 +3673,9 @@
 
             // Pré-agrupa as vendas históricas por data para busca rápida
             const historicalSalesByDate = new Map();
-            lastThreeMonthsData.forEach(sale => {
+            // CORREÇÃO: Usa `historySales` (todos os dados históricos filtrados) em vez de
+            // apenas os últimos 3 meses, para garantir que as semanas que cruzam meses sejam calculadas corretamente.
+            historySales.forEach(sale => {
                 const saleDate = parseDate(sale.dtped);
                 if (!saleDate) return;
                 const dateString = saleDate.toISOString().split('T')[0];
@@ -3677,10 +3692,10 @@
                 for (let i = 1; i <= 3; i++) {
                     const historicalWeekStart = subtractMonths(currentWeek.start, i);
                     const historicalWeekEnd = subtractMonths(currentWeek.end, i);
-                    
+
                     let revenueForMonth = 0;
                     let currentDate = new Date(historicalWeekStart);
-                    
+
                     // Soma as vendas diárias dentro do intervalo da semana histórica
                     while (currentDate <= historicalWeekEnd) {
                         const dateString = currentDate.toISOString().split('T')[0];
@@ -3695,7 +3710,7 @@
                     }
                     totalHistoricalRevenueForThisSlot += revenueForMonth;
                 }
-                
+
                 const divisor = monthsFound > 0 ? monthsFound : (lastThreeMonthKeys.length > 0 ? lastThreeMonthKeys.length : 1);
                 historyAvgSalesByWeek[weekIndex] = totalHistoricalRevenueForThisSlot / divisor;
             });
@@ -5081,9 +5096,14 @@
             const orderInfo = aggregatedOrders.find(order => order.pedido == pedidoId);
             const itemsDoPedido = allSalesData.filter(item => item.pedido == pedidoId);
             if (!orderInfo) return;
+
+            // CORREÇÃO: Busca o nome do cliente no mapa principal para garantir consistência
+            const clientDetails = clientMapForKPIs.get(String(orderInfo.codcli));
+            const clientName = clientDetails ? (clientDetails.fantasia || clientDetails.razaosocial) : (orderInfo.cliente_nome || 'N/A');
+
             modalPedidoId.textContent = pedidoId;
-            modalHeaderInfo.innerHTML = `<div><p class="font-bold">Cód. Cliente:</p><p>${orderInfo.codcli || 'N/A'}</p></div><div><p class="font-bold">Cliente:</p><p>${orderInfo.cliente_nome || 'N/A'}</p></div><div><p class="font-bold">Vendedor:</p><p>${orderInfo.nome || 'N/A'}</p></div><div><p class="font-bold">Data Pedido:</p><p>${formatDate(orderInfo.dtped)}</p></div><div><p class="font-bold">Data Faturamento:</p><p>${formatDate(orderInfo.dtsaida)}</p></div><div><p class="font-bold">Cidade:</p><p>${orderInfo.cidade || 'N/A'}</p></div>`;
-            // CORREÇÃO 2: Usar 'item.qtvenda' (minúsculas) em vez de 'item.QTVENDA'
+            modalHeaderInfo.innerHTML = `<div><p class="font-bold">Cód. Cliente:</p><p>${orderInfo.codcli || 'N/A'}</p></div><div><p class="font-bold">Cliente:</p><p>${clientName}</p></div><div><p class="font-bold">Vendedor:</p><p>${orderInfo.nome || 'N/A'}</p></div><div><p class="font-bold">Data Pedido:</p><p>${formatDate(orderInfo.dtped)}</p></div><div><p class="font-bold">Data Faturamento:</p><p>${formatDate(orderInfo.dtsaida)}</p></div><div><p class="font-bold">Cidade:</p><p>${orderInfo.cidade || 'N/A'}</p></div>`;
+
             modalTableBody.innerHTML = itemsDoPedido.map(item => { const unitPrice = (item.qtvenda > 0) ? (item.vlvenda / item.qtvenda) : 0; return `<tr><td class="px-4 py-2">(${item.produto}) ${item.descricao}</td><td class="px-4 py-2 text-right">${item.qtvenda}</td><td class="px-4 py-2 text-right">${item.totpesoliq.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Kg</td><td class="px-4 py-2 text-right"><div class="tooltip">${unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">Subtotal: ${item.vlvenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div></td></tr>`; }).join('');
             modalFooterTotal.innerHTML = `<p class="text-lg font-bold text-teal-400">Mix de Produtos: ${itemsDoPedido.length}</p><p class="text-lg font-bold text-emerald-400">Total do Pedido: ${orderInfo.vlvenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>`;
             modal.classList.remove('hidden');
