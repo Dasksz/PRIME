@@ -3292,7 +3292,7 @@
 
         function monthlyKpiAverage(historySales, kpiFn, ...kpiArgs) {
             const salesByMonth = groupSalesByMonth(historySales);
-
+            
             // Garante que os meses estão em ordem cronológica
             const sortedMonths = Object.keys(salesByMonth).sort();
 
@@ -3313,7 +3313,7 @@
             });
 
             if (kpiValues.length === 0) return 0;
-
+            
             // Calcula a média dos 3 meses
             return kpiValues.reduce((a, b) => a + b, 0) / kpiValues.length;
         }
@@ -3677,10 +3677,10 @@
                 for (let i = 1; i <= 3; i++) {
                     const historicalWeekStart = subtractMonths(currentWeek.start, i);
                     const historicalWeekEnd = subtractMonths(currentWeek.end, i);
-
+                    
                     let revenueForMonth = 0;
                     let currentDate = new Date(historicalWeekStart);
-
+                    
                     // Soma as vendas diárias dentro do intervalo da semana histórica
                     while (currentDate <= historicalWeekEnd) {
                         const dateString = currentDate.toISOString().split('T')[0];
@@ -3695,7 +3695,7 @@
                     }
                     totalHistoricalRevenueForThisSlot += revenueForMonth;
                 }
-
+                
                 const divisor = monthsFound > 0 ? monthsFound : (lastThreeMonthKeys.length > 0 ? lastThreeMonthKeys.length : 1);
                 historyAvgSalesByWeek[weekIndex] = totalHistoricalRevenueForThisSlot / divisor;
             });
@@ -5275,6 +5275,12 @@
             });
         }
 
+        function populateCityFilters() {
+            populateSupervisors('city-supervisor-filter', allSalesData);
+            updateSellerFilter('', cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData);
+            updateRedeFilter(cityRedeFilterDropdown, cityComRedeBtnText, selectedCityRedes, allClientsData);
+        }
+
         function setupEventListeners() {
             // Lógica do Menu Retrátil
             const toggleMenu = () => {
@@ -5359,7 +5365,7 @@
                                 updateInnovationsView();
                                 break;
                             case 'weekly-view': populateWeeklyFilters(); updateWeeklyView(); break;
-                            case 'city-view': updateCityView(); break;
+                            case 'city-view': populateCityFilters(); updateCityView(); break;
                         }
                     }
                     
