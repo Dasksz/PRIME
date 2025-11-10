@@ -6068,7 +6068,7 @@
             if (dateString.length === 10 && dateString.charAt(2) === '/' && dateString.charAt(5) === '/') {
                 const [day, month, year] = dateString.split('/');
                 if (year.length === 4) {
-                    return new Date(\`\${year}-\${month}-\${day}T00:00:00\`);
+                    return new Date(`${year}-${month}-${day}T00:00:00`);
                 }
             }
 
@@ -6128,7 +6128,7 @@
                             let bestDelimiter = ',';
                             let maxCount = 0;
                             delimiters.forEach(d => {
-                                const count = (firstLine.match(new RegExp(\`\\\${d}\`, 'g')) || []).length;
+                                const count = (firstLine.match(new RegExp(`\\${d}`, 'g')) || []).length;
                                 if (count > maxCount) {
                                     maxCount = count;
                                     bestDelimiter = d;
@@ -6161,7 +6161,7 @@
                         reject(error);
                     }
                 };
-                reader.onerror = () => reject(new Error(\`Erro ao ler o arquivo '\${file.name}'.\`));
+                reader.onerror = () => reject(new Error(`Erro ao ler o arquivo '${file.name}'.`));
                 reader.readAsArrayBuffer(file);
             });
         };
@@ -6380,7 +6380,7 @@
                         if (!productDetailsMap.has(productCode)) {
                             productDetailsMap.set(productCode, {
                                 code: productCode,
-                                descricao: String(prod['Descrição'] || \`Produto \${productCode}\`),
+                                descricao: String(prod['Descrição'] || `Produto ${productCode}`),
                                 fornecedor: String(prod['Nome do fornecedor'] || 'N/A'),
                                 codfor: String(prod['Fornecedor'] || 'N/A'),
                                 // CORREÇÃO: Removido o '1,' que estava a causar o SyntaxError
@@ -6602,7 +6602,8 @@
                 });
 
             } catch (error) {
-                self.postMessage({ type: 'error', message: error.message + (error.stack ? \`\nStack: \${error.stack}\`: '') });
+                self.postMessage({ type: 'error', message: error.message + (error.stack ? `
+Stack: ${error.stack}`: '') });
             }
         };
     </script>
