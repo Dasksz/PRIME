@@ -317,6 +317,34 @@
 </head>
 <body class="antialiased">
 
+    <!-- INÍCIO DO CÓDIGO PARA COPIAR -->
+
+    <!-- Tela de Login (quando deslogado) -->
+    <div id="tela-login" class="container" style="display: none; font-family: 'Inter', sans-serif; padding: 2.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1); max-width: 400px; width: 90%; margin: 5rem auto; background: #fff; text-align: center; z-index: 2000; position: relative;">
+        <h1 style="color: #333; margin-top: 0; font-size: 1.8rem; font-weight: 700;">Acesso Restrito</h1>
+        <p style="color: #555; line-height: 1.6;">Este é um sistema privado. Por favor, faça login para solicitar acesso.</p>
+        <button id="login-button" style="background-color: #007bff; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background-color 0.3s ease; width: 100%; margin-top: 1rem;">
+            Entrar com Google
+        </button>
+    </div>
+
+    <!-- Tela de Carregamento -->
+    <div id="tela-loading" class="container" style="display: none; font-family: 'Inter', sans-serif; padding: 2.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1); max-width: 400px; width: 90%; margin: 5rem auto; background: #fff; text-align: center; z-index: 2000; position: relative;">
+        <h2 style="color: #333; margin-top: 0; font-size: 1.5rem; font-weight: 600;">Carregando...</h2>
+        <p style="color: #555; line-height: 1.6;">Verificando seu status de aprovação.</p>
+    </div>
+
+    <!-- Tela de Espera (Pendente) -->
+    <div id="tela-pendente" class="container" style="display: none; font-family: 'Inter', sans-serif; padding: 2.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1); max-width: 400px; width: 90%; margin: 5rem auto; background: #fff; text-align: center; z-index: 2000; position: relative;">
+        <h2 style="color: #333; margin-top: 0; font-size: 1.5rem; font-weight: 600;">Sua conta está aguardando aprovação.</h2>
+        <p style="color: #555; line-height: 1.6;">Por favor, aguarde o administrador liberar seu acesso. Você será notificado (ou pode tentar novamente mais tarde).</p>
+        <button id="logout-button-pendente" class="logout" style="background-color: #dc3545; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background-color 0.3s ease; width: 100%; margin-top: 1rem;">
+            Sair
+        </button>
+    </div>
+
+    <!-- FIM DO CÓDIGO PARA COPIAR -->
+
     <!-- Botão do Menu Hamburguer (Fixo no Canto) -->
     <button id="menu-toggle-btn" class="fixed top-4 left-4 z-[1100] p-2 rounded-md transition-colors" style="background-color: var(--bg-button); color: var(--text-secondary);">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1176,8 +1204,7 @@
             }
         }
 
-        // Inicia o carregamento assim que a página estiver pronta
-        document.addEventListener('DOMContentLoaded', carregarDadosDoSupabase);
+        // A lógica do porteiro agora controla quando esta função é chamada.
     </script>
 
 
@@ -6928,6 +6955,123 @@ Stack: ${error.stack}`: '') });
                 }
             }
             checkFiles();
+        });
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- INÍCIO DO SCRIPT DO PORTEIRO ---
+
+            const SUPABASE_URL = 'https://dhozwhfmrwiumwpcqabi.supabase.co';
+            const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRob3p3aGZtcndpdW13cGNxYWJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyNjMzNjAsImV4cCI6MjA3NzgzOTM2MH0.syWqcBCbfH5Ey5AB4NGrsF2-ZuBw4W3NZAPIAZb6Bq4';
+
+            const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+            // Elementos de tela
+            const telaLogin = document.getElementById('tela-login');
+            const telaLoading = document.getElementById('tela-loading');
+            const telaPendente = document.getElementById('tela-pendente');
+            const mainDashboard = document.getElementById('main-dashboard');
+            const loader = document.getElementById('loader'); // Loader principal
+
+            // Botões
+            const loginButton = document.getElementById('login-button');
+            const logoutButtonPendente = document.getElementById('logout-button-pendente');
+            
+            // Função para mostrar a tela correta
+            const mostrarTela = (tela) => {
+                [telaLogin, telaLoading, telaPendente, mainDashboard, loader].forEach(el => {
+                    if (el) el.style.display = 'none';
+                });
+                if (tela) {
+                    tela.style.display = 'block';
+                    if (tela.id === 'main-dashboard' || tela.id === 'loader') {
+                         tela.style.display = 'flex'; // ou o display original
+                    }
+                }
+            };
+            
+            // Função para verificar o status do perfil
+            const verificarStatus = async (user) => {
+                if (!user) {
+                    mostrarTela(telaLogin);
+                    return;
+                }
+
+                mostrarTela(telaLoading);
+
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('status')
+                    .eq('id', user.id)
+                    .single();
+
+                if (error && error.code !== 'PGRST116') { // PGRST116 = 'not found'
+                    console.error('Erro ao buscar perfil:', error);
+                    mostrarTela(telaLogin); // Volta para o login em caso de erro
+                    return;
+                }
+
+                if (data && data.status === 'aprovado') {
+                    // Usuário aprovado -> Inicia o carregamento normal do dashboard
+                    mostrarTela(loader);
+                    carregarDadosDoSupabase(); // Chamada direta da função
+                } else if (data && data.status === 'pendente') {
+                    mostrarTela(telaPendente);
+                } else {
+                    // Sem perfil ou status desconhecido
+                    mostrarTela(telaPendente);
+                }
+            };
+            
+            // Lógica de Login
+            loginButton.addEventListener('click', async () => {
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                });
+                if (error) {
+                    console.error('Erro no login:', error);
+                }
+            });
+
+            // Lógica de Logout
+            const handleLogout = async () => {
+                await supabase.auth.signOut();
+                mostrarTela(telaLogin);
+            };
+
+            if(logoutButtonPendente) {
+                 logoutButtonPendente.addEventListener('click', handleLogout);
+            }
+
+            // Monitora mudanças na autenticação
+            supabase.auth.onAuthStateChange(async (event, session) => {
+                if (event === 'SIGNED_IN') {
+                    await verificarStatus(session.user);
+                } else if (event === 'SIGNED_OUT') {
+                    mostrarTela(telaLogin);
+                }
+            });
+            
+            // Verificação Inicial ao carregar a página
+            const verificarSessaoInicial = async () => {
+                const { data: { session }, error } = await supabase.auth.getSession();
+                 if (error) {
+                    console.error("Erro ao obter sessão:", error);
+                    mostrarTela(telaLogin);
+                    return;
+                }
+                if (session) {
+                    await verificarStatus(session.user);
+                } else {
+                    mostrarTela(telaLogin);
+                }
+            };
+            
+            // Inicia a verificação
+            verificarSessaoInicial();
+            
+            // --- FIM DO SCRIPT DO PORTEIRO ---
         });
     </script>
 </body>
