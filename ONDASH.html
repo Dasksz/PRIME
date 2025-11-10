@@ -6769,15 +6769,15 @@ Stack: ${error.stack}`: '') });
 
                     const tasks = [];
 
-                    if (data.detailed) tasks.push({ name: 'Vendas Atuais', tableName: 'data_detailed', data: data.detailed, keys: ['id'] });
-                    if (data.history) tasks.push({ name: 'Histórico', tableName: 'data_history', data: data.history, keys: ['id'] });
-                    if (data.byOrder) tasks.push({ name: 'Pedidos', tableName: 'data_orders', data: data.byOrder, keys: ['id'] });
+                    if (data.detailed) tasks.push({ name: 'Vendas Atuais', tableName: 'data_detailed', data: data.detailed, keys: ['pedido'] });
+                    if (data.history) tasks.push({ name: 'Histórico', tableName: 'data_history', data: data.history, keys: ['pedido'] });
+                    if (data.byOrder) tasks.push({ name: 'Pedidos', tableName: 'data_orders', data: data.byOrder, keys: ['pedido'] });
                     // *** AQUI ESTÁ A MUDANÇA ***
                     if (data.clients) tasks.push({ name: 'Clientes', tableName: 'data_clients', data: data.clients, keys: ['codigo_cliente'] }); // CORRIGIDO
                     if (data.product_details) tasks.push({ name: 'Detalhes de Produtos', tableName: 'data_product_details', data: data.product_details, keys: ['code'] });
                     if (data.active_products) tasks.push({ name: 'Produtos Ativos', tableName: 'data_active_products', data: data.active_products, keys: ['code'] });
-                    if (data.stock) tasks.push({ name: 'Estoque', tableName: 'data_stock', data: data.stock, keys: ['id'] });
-                    if (data.innovations) tasks.push({ name: 'Inovações', tableName: 'data_innovations', data: data.innovations, keys: ['id'] });
+                    if (data.stock) tasks.push({ name: 'Estoque', tableName: 'data_stock', data: data.stock, keys: ['product_code'] });
+                    if (data.innovations) tasks.push({ name: 'Inovações', tableName: 'data_innovations', data: data.innovations, keys: ['codigo'] });
                     if (data.metadata) tasks.push({ name: 'Metadados', tableName: 'data_metadata', data: data.metadata, keys: ['key'] });
 
                     if (tasks.length === 0) {
