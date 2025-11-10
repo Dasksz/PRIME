@@ -2174,14 +2174,34 @@
         // <!-- FIM DO CÓDIGO RESTAURADO -->
 
         function getUniqueMonthCount(data) {
+            if (!data || data.length === 0) return 1;
+
+            const dates = data.map(sale => parseDate(sale.dtped)).filter(Boolean);
+            if (dates.length === 0) return 1;
+
+            dates.sort((a, b) => a - b);
+
+            const firstDate = dates[0];
+            const lastDate = dates[dates.length - 1];
+
             const months = new Set();
-            data.forEach(sale => {
-                const saleDate = parseDate(sale.dtped);
-                if (saleDate) {
-                    const monthKey = `${saleDate.getFullYear()}-${saleDate.getMonth()}`;
-                    months.add(monthKey);
+            for (const date of dates) {
+                const monthKey = `${date.getUTCFullYear()}-${date.getUTCMonth()}`;
+                months.add(monthKey);
+            }
+
+            // Se o primeiro mês contém apenas datas a partir do dia 20,
+            // é provável que seja um "resto" de mês para completar a primeira semana.
+            // Nesse caso, não o contamos como um mês completo para a média.
+            if (firstDate.getUTCDate() > 20) {
+                const firstMonthKey = `${firstDate.getUTCFullYear()}-${firstDate.getUTCMonth()}`;
+
+                // Garantir que estamos removendo o mês correto e que há mais de um mês no total
+                if (months.has(firstMonthKey) && months.size > 1) {
+                    months.delete(firstMonthKey);
                 }
-            });
+            }
+
             return months.size > 0 ? months.size : 1;
         }
 
@@ -3617,8 +3637,8 @@
             historySales.forEach(sale => {
                 const saleDate = parseDate(sale.dtped);
                 if (!saleDate) return;
-                const saleYear = saleDate.getFullYear();
-                const saleMonth = saleDate.getMonth();
+                const saleYear = saleDate.getUTCFullYear();
+                const saleMonth = saleDate.getUTCMonth();
                 const monthKey = `${saleYear}-${saleMonth}`;
                 const monthWeeks = getSundayBasedWeeks(saleYear, saleMonth);
                 const weekIndex = monthWeeks.findIndex(week => saleDate >= week.start && saleDate <= week.end);
@@ -3635,8 +3655,7 @@
                 const weeklyTotals = Object.values(weekDataByMonth);
                 if (weeklyTotals.length > 0) {
                     const totalSum = weeklyTotals.reduce((a, b) => a + b, 0);
-                    const divisor = Math.max(historyMonthsCount, 1);
-                    historyAvgSalesByWeek[i] = totalSum / divisor;
+                    historyAvgSalesByWeek[i] = totalSum / weeklyTotals.length;
                 }
             }
 
@@ -3778,7 +3797,7 @@
                 if (!saleDate) return;
                 const weekIndex = currentMonthWeeks.findIndex(week => saleDate >= week.start && saleDate <= week.end);
                 if (weekIndex !== -1) {
-                    const dayOfWeek = saleDate.getDay();
+                    const dayOfWeek = saleDate.getUTCDay();
                     salesByWeekAndDay[weekIndex + 1][dayOfWeek] += getRevenue(sale);
                 }
             });
@@ -3868,8 +3887,8 @@
             });
 
             const weekLabelsForDailyChart = currentMonthWeeks.map((week, index) => {
-                const startDateStr = week.start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-                const endDateStr = week.end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                const startDateStr = week.start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
+                const endDateStr = week.end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
                 return `S${index + 1} (${startDateStr} à ${endDateStr})`;
             });
 
