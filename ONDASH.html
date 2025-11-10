@@ -6666,14 +6666,14 @@ Stack: ${error.stack}`: '') });
 
                 if (type === 'progress') {
                     statusText.textContent = status;
-                    progressBar.style.width = \`\${percentage}%\`;
+                    progressBar.style.width = `${percentage}%`;
                 } else if (type === 'result') {
                     statusText.textContent = 'Dados processados! Enviando para o Supabase...';
                     progressBar.style.width = '100%';
                     enviarDadosParaSupabase(data);
                 } else if (type === 'error') {
                     statusContainer.classList.remove('hidden');
-                    statusText.innerHTML = \`<p class="text-red-500">Erro no Worker: \${message}</p>\`;
+                    statusText.innerHTML = `<p class="text-red-500">Erro no Worker: ${message}</p>`;
                     progressBar.style.width = '0%';
                     generateBtn.disabled = false;
                 }
@@ -6706,7 +6706,7 @@ Stack: ${error.stack}`: '') });
                         const totalLotes = Math.ceil(dados.length / TAMANHO_LOTE);
 
                         const anyColumn = primaryKeys[0];
-                        statusText.textContent = \`(Etapa \${progressoInicial < 40 ? '1' : '2'}/9) Limpando dados antigos de \${nomeTabela}...\`;
+                        statusText.textContent = `(Etapa ${progressoInicial < 40 ? '1' : '2'}/9) Limpando dados antigos de ${nomeTabela}...`;
 
                         // *** O 'deleteError' AQUI VAI FINALMENTE PARAR DE ACONTECER ***
                         // CORREÇÃO: Usa um filtro genérico que não depende do nome da coluna.
@@ -6717,14 +6717,14 @@ Stack: ${error.stack}`: '') });
                             .delete()
                             .neq(primaryKeys[0], 'IMPOSSIBLE_VALUE_TO_MATCH');
 
-                        if (deleteError) throw new Error(\`Falha ao limpar \${nomeTabela}: \${deleteError.message}\`);
+                        if (deleteError) throw new Error(`Falha ao limpar ${nomeTabela}: ${deleteError.message}`);
 
                         for (let i = 0; i < totalLotes; i++) {
                             const inicio = i * TAMANHO_LOTE;
                             const fim = inicio + TAMANHO_LOTE;
                             const lote = dados.slice(inicio, fim);
 
-                            const statusMsg = \`(Etapa \${progressoInicial < 40 ? '1' : '2'}/8) Enviando \${nomeTabela} (Lote \${i + 1}/\${totalLotes})...\`;
+                            const statusMsg = `(Etapa ${progressoInicial < 40 ? '1' : '2'}/8) Enviando ${nomeTabela} (Lote ${i + 1}/${totalLotes})...`;
                             statusText.textContent = statusMsg;
 
                             const { error: insertError } = await supabaseClient
@@ -6732,16 +6732,16 @@ Stack: ${error.stack}`: '') });
                                 .insert(lote);
 
                             if (insertError) {
-                                console.error(\`Erro no lote \${i+1} de \${nomeTabela}:\`, insertError);
-                                throw new Error(\`Erro ao inserir \${nomeTabela} (Lote \${i + 1}): \${insertError.message}\`);
+                                console.error(`Erro no lote ${i+1} de ${nomeTabela}:`, insertError);
+                                throw new Error(`Erro ao inserir ${nomeTabela} (Lote ${i + 1}): ${insertError.message}`);
                             }
 
                             const progressoLote = (i + 1) / totalLotes;
                             const progressoTotal = progressoInicial + (progressoLote * (progressoFinal - progressoInicial));
-                            progressBar.style.width = \`\${progressoTotal}%\`;
+                            progressBar.style.width = `${progressoTotal}%`;
                         }
                     } else {
-                        progressBar.style.width = \`\${progressoFinal}%\`;
+                        progressBar.style.width = `${progressoFinal}%`;
                     }
                 } catch (error) {
                     throw error;
@@ -6755,7 +6755,7 @@ Stack: ${error.stack}`: '') });
                 const SUPABASE_KEY = supabaseKeyInput.value;
 
                 if (!SUPABASE_URL || !SUPABASE_KEY) {
-                    statusText.innerHTML = \`<p class="text-red-500">Erro: URL ou Chave Secreta do Supabase não informada.</p>\`;
+                    statusText.innerHTML = `<p class="text-red-500">Erro: URL ou Chave Secreta do Supabase não informada.</p>`;
                     generateBtn.disabled = false;
                     return;
                 }
@@ -6769,18 +6769,19 @@ Stack: ${error.stack}`: '') });
 
                     const tasks = [];
 
-                    if (data.detailed) tasks.push({ name: 'Vendas Atuais', tableName: 'data_detailed', data: data.detailed, keys: ['pedido'] });
-                    if (data.history) tasks.push({ name: 'Histórico', tableName: 'data_history', data: data.history, keys: ['pedido'] });
-                    if (data.byOrder) tasks.push({ name: 'Pedidos', tableName: 'data_orders', data: data.byOrder, keys: ['pedido'] });
-                    if (data.clients) tasks.push({ name: 'Clientes', tableName: 'data_clients', data: data.clients, keys: ['codigo_cliente'] });
+                    if (data.detailed) tasks.push({ name: 'Vendas Atuais', tableName: 'data_detailed', data: data.detailed, keys: ['id'] });
+                    if (data.history) tasks.push({ name: 'Histórico', tableName: 'data_history', data: data.history, keys: ['id'] });
+                    if (data.byOrder) tasks.push({ name: 'Pedidos', tableName: 'data_orders', data: data.byOrder, keys: ['id'] });
+                    // *** AQUI ESTÁ A MUDANÇA ***
+                    if (data.clients) tasks.push({ name: 'Clientes', tableName: 'data_clients', data: data.clients, keys: ['codigo_cliente'] }); // CORRIGIDO
                     if (data.product_details) tasks.push({ name: 'Detalhes de Produtos', tableName: 'data_product_details', data: data.product_details, keys: ['code'] });
                     if (data.active_products) tasks.push({ name: 'Produtos Ativos', tableName: 'data_active_products', data: data.active_products, keys: ['code'] });
-                    if (data.stock) tasks.push({ name: 'Estoque', tableName: 'data_stock', data: data.stock, keys: ['product_code'] });
-                    if (data.innovations) tasks.push({ name: 'Inovações', tableName: 'data_innovations', data: data.innovations, keys: ['codigo'] });
+                    if (data.stock) tasks.push({ name: 'Estoque', tableName: 'data_stock', data: data.stock, keys: ['id'] });
+                    if (data.innovations) tasks.push({ name: 'Inovações', tableName: 'data_innovations', data: data.innovations, keys: ['id'] });
                     if (data.metadata) tasks.push({ name: 'Metadados', tableName: 'data_metadata', data: data.metadata, keys: ['key'] });
 
                     if (tasks.length === 0) {
-                        statusText.innerHTML = \`<p class="text-yellow-500">Nenhum dado novo foi processado.</p>\`;
+                        statusText.innerHTML = `<p class="text-yellow-500">Nenhum dado novo foi processado.</p>`;
                         generateBtn.disabled = false;
                         return;
                     }
@@ -6793,7 +6794,7 @@ Stack: ${error.stack}`: '') });
                         const progressoInicial = (i / totalTasks) * 100;
                         const progressoFinal = taskProgress * 100;
 
-                        statusText.textContent = \`Enviando (\${i + 1}/\${totalTasks}): \${task.name}...\`;
+                        statusText.textContent = `Enviando (${i + 1}/${totalTasks}): ${task.name}...`;
 
                         await enviarDadosEmLotes(
                             supabaseClient,
@@ -6809,7 +6810,7 @@ Stack: ${error.stack}`: '') });
 
                     // CORREÇÃO: Removido o 'E' que estava a causar um SyntaxError
                     // SUCESSO!
-                    statusText.innerHTML = \`<p class="text-green-500">Sucesso! Dados do dashboard atualizados.</p>\`;
+                    statusText.innerHTML = `<p class="text-green-500">Sucesso! Dados do dashboard atualizados.</p>`;
                     progressBar.style.width = '100%';
                     generateBtn.disabled = false;
 
@@ -6824,7 +6825,7 @@ Stack: ${error.stack}`: '') });
 
                 } catch (error) {
                     console.error('Erro no Supabase:', error);
-                    statusText.innerHTML = \`<p class="text-red-500">Erro ao enviar: \${error.message}</p>\`;
+                    statusText.innerHTML = `<p class="text-red-500">Erro ao enviar: ${error.message}</p>`;
                     progressBar.style.width = '0%';
                     generateBtn.disabled = false;
                 }
