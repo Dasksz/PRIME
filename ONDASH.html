@@ -3778,7 +3778,7 @@
                 if (!saleDate) return;
                 const weekIndex = currentMonthWeeks.findIndex(week => saleDate >= week.start && saleDate <= week.end);
                 if (weekIndex !== -1) {
-                    const dayOfWeek = saleDate.getDay();
+                    const dayOfWeek = saleDate.getUTCDay();
                     salesByWeekAndDay[weekIndex + 1][dayOfWeek] += getRevenue(sale);
                 }
             });
@@ -3868,8 +3868,8 @@
             });
 
             const weekLabelsForDailyChart = currentMonthWeeks.map((week, index) => {
-                const startDateStr = week.start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-                const endDateStr = week.end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                const startDateStr = week.start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
+                const endDateStr = week.end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
                 return `S${index + 1} (${startDateStr} à ${endDateStr})`;
             });
 
