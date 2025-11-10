@@ -2174,34 +2174,14 @@
         // <!-- FIM DO CÓDIGO RESTAURADO -->
 
         function getUniqueMonthCount(data) {
-            if (!data || data.length === 0) return 1;
-
-            const dates = data.map(sale => parseDate(sale.dtped)).filter(Boolean);
-            if (dates.length === 0) return 1;
-
-            dates.sort((a, b) => a - b);
-
-            const firstDate = dates[0];
-            const lastDate = dates[dates.length - 1];
-
             const months = new Set();
-            for (const date of dates) {
-                const monthKey = `${date.getUTCFullYear()}-${date.getUTCMonth()}`;
-                months.add(monthKey);
-            }
-
-            // Se o primeiro mês contém apenas datas a partir do dia 20,
-            // é provável que seja um "resto" de mês para completar a primeira semana.
-            // Nesse caso, não o contamos como um mês completo para a média.
-            if (firstDate.getUTCDate() > 20) {
-                const firstMonthKey = `${firstDate.getUTCFullYear()}-${firstDate.getUTCMonth()}`;
-
-                // Garantir que estamos removendo o mês correto e que há mais de um mês no total
-                if (months.has(firstMonthKey) && months.size > 1) {
-                    months.delete(firstMonthKey);
+            data.forEach(sale => {
+                const saleDate = parseDate(sale.dtped);
+                if (saleDate) {
+                    const monthKey = `${saleDate.getFullYear()}-${saleDate.getMonth()}`;
+                    months.add(monthKey);
                 }
-            }
-
+            });
             return months.size > 0 ? months.size : 1;
         }
 
@@ -3312,8 +3292,29 @@
 
         function monthlyKpiAverage(historySales, kpiFn, ...kpiArgs) {
             const salesByMonth = groupSalesByMonth(historySales);
-            const kpiValues = Object.values(salesByMonth).map(sales => kpiFn(sales, ...kpiArgs));
+
+            // Garante que os meses estão em ordem cronológica
+            const sortedMonths = Object.keys(salesByMonth).sort();
+
+            const currentReportMonthKey = lastSaleDate.getUTCFullYear() + '-' + String(lastSaleDate.getUTCMonth() + 1).padStart(2, '0');
+
+            // Remove o último mês do histórico se ele for um "stub" (mês parcial igual ao mês atual)
+            if (sortedMonths.length > 0 && sortedMonths[sortedMonths.length - 1] === currentReportMonthKey) {
+                sortedMonths.pop();
+            }
+
+            // Pega os últimos 3 meses completos
+            const lastThreeMonths = sortedMonths.slice(-3);
+
+            // Calcula o KPI para cada um dos 3 meses
+            const kpiValues = lastThreeMonths.map(monthKey => {
+                const salesForMonth = salesByMonth[monthKey];
+                return kpiFn(salesForMonth, ...kpiArgs);
+            });
+
             if (kpiValues.length === 0) return 0;
+
+            // Calcula a média dos 3 meses
             return kpiValues.reduce((a, b) => a + b, 0) / kpiValues.length;
         }
 
@@ -3549,8 +3550,6 @@
             const filteredData = getComparisonFilteredData();
             const { currentSales, historySales } = filteredData;
 
-            const historyMonthsCount = getUniqueMonthCount(historySales);
-
             const currentTotalFat = currentSales.reduce((sum, item) => sum + getRevenue(item), 0);
             const currentTotalPeso = currentSales.reduce((sum, item) => sum + item.totpesoliq, 0);
             const currentClients = getPositiveClientsWithNewLogic(currentSales);
@@ -3589,7 +3588,7 @@
             if (currentMonthWeeks.length > 0) {
                 const lastWeek = currentMonthWeeks[currentMonthWeeks.length - 1];
                 const lastWeekStartDate = lastWeek.start;
-                const startDay = lastWeekStartDate.getDay();
+                const startDay = lastWeekStartDate.getUTCDay();
 
                 let daysInCurrentMonth = 0;
                 let tempDate = new Date(lastWeek.start);
@@ -3633,31 +3632,45 @@
                 }
             });
 
-            const historySalesByWeekIndex = {};
-            historySales.forEach(sale => {
+            // CORREÇÃO INÍCIO: Lógica de média semanal refeita para ser mais precisa e corrigir bugs de fuso horário.
+            const historySalesByMonth = groupSalesByMonth(historySales);
+            const sortedHistoryMonths = Object.keys(historySalesByMonth).sort();
+            const currentReportMonthKey = lastSaleDate.getUTCFullYear() + '-' + String(lastSaleDate.getUTCMonth() + 1).padStart(2, '0');
+
+            if (sortedHistoryMonths.length > 0 && sortedHistoryMonths[sortedHistoryMonths.length - 1] === currentReportMonthKey) {
+                sortedHistoryMonths.pop();
+            }
+            const lastThreeMonthKeys = sortedHistoryMonths.slice(-3);
+            const lastThreeMonthsData = lastThreeMonthKeys.flatMap(key => historySalesByMonth[key] || []);
+
+            const historySalesByWeek = {};
+
+            lastThreeMonthsData.forEach(sale => {
                 const saleDate = parseDate(sale.dtped);
                 if (!saleDate) return;
+
                 const saleYear = saleDate.getUTCFullYear();
                 const saleMonth = saleDate.getUTCMonth();
-                const monthKey = `${saleYear}-${saleMonth}`;
+
                 const monthWeeks = getSundayBasedWeeks(saleYear, saleMonth);
                 const weekIndex = monthWeeks.findIndex(week => saleDate >= week.start && saleDate <= week.end);
+
                 if (weekIndex !== -1) {
-                    if (!historySalesByWeekIndex[weekIndex]) historySalesByWeekIndex[weekIndex] = {};
-                    if (!historySalesByWeekIndex[weekIndex][monthKey]) historySalesByWeekIndex[weekIndex][monthKey] = 0;
-                    historySalesByWeekIndex[weekIndex][monthKey] += getRevenue(sale);
+                    if (!historySalesByWeek[weekIndex]) {
+                        historySalesByWeek[weekIndex] = 0;
+                    }
+                    historySalesByWeek[weekIndex] += getRevenue(sale);
                 }
             });
 
             const historyAvgSalesByWeek = new Array(currentMonthWeeks.length).fill(0);
+            const divisor = lastThreeMonthKeys.length > 0 ? lastThreeMonthKeys.length : 1;
             for (let i = 0; i < currentMonthWeeks.length; i++) {
-                const weekDataByMonth = historySalesByWeekIndex[i] || {};
-                const weeklyTotals = Object.values(weekDataByMonth);
-                if (weeklyTotals.length > 0) {
-                    const totalSum = weeklyTotals.reduce((a, b) => a + b, 0);
-                    historyAvgSalesByWeek[i] = totalSum / weeklyTotals.length;
+                if (historySalesByWeek[i]) {
+                    historyAvgSalesByWeek[i] = historySalesByWeek[i] / divisor;
                 }
             }
+            // CORREÇÃO FIM
 
             if (useTendencyComparison) {
                 const today = lastSaleDate;
@@ -3677,7 +3690,7 @@
                         let workingDaysPassed = 0;
                         let totalWorkingDays = 0;
                         for (let d = new Date(currentWeek.start); d <= currentWeek.end; d.setDate(d.getDate() + 1)) {
-                            const dayOfWeek = d.getDay();
+                            const dayOfWeek = d.getUTCDay();
                             if (dayOfWeek >= 1 && dayOfWeek <= 5 && !isHoliday(d, selectedHolidays)) {
                                 totalWorkingDays++;
                                 if (d <= today) {
@@ -3818,7 +3831,7 @@
                     if (weekIndex !== -1) {
                         if (!salesByWeekDayMonth[monthKey]) salesByWeekDayMonth[monthKey] = {};
                         if (!salesByWeekDayMonth[monthKey][weekIndex]) salesByWeekDayMonth[monthKey][weekIndex] = new Array(7).fill(0);
-                        salesByWeekDayMonth[monthKey][weekIndex][d.getDay()] += getRevenue(sale);
+                        salesByWeekDayMonth[monthKey][weekIndex][d.getUTCDay()] += getRevenue(sale);
                     }
                 });
 
@@ -3860,7 +3873,7 @@
                     let totalFutureWeight = 0;
                     for (let d = new Date(week.start); d <= week.end; d.setDate(d.getDate() + 1)) {
                         if (d > today) {
-                            const dayIndex = d.getDay();
+                            const dayIndex = d.getUTCDay();
                             const weight = historicalDayWeights[currentWeekIndex][dayIndex];
                             futureDayWeights.push({ day: dayIndex, weight: weight });
                             totalFutureWeight += weight;
@@ -3887,8 +3900,8 @@
             });
 
             const weekLabelsForDailyChart = currentMonthWeeks.map((week, index) => {
-                const startDateStr = week.start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
-                const endDateStr = week.end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
+                const startDateStr = week.start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                const endDateStr = week.end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
                 return `S${index + 1} (${startDateStr} à ${endDateStr})`;
             });
 
@@ -5113,7 +5126,7 @@
                 </div>
                 <div id="calendar-grid" class="grid grid-cols-7 gap-1">
             `;
-            const firstDay = new Date(year, month, 1).getDay();
+            const firstDay = new Date(Date.UTC(year, month, 1)).getUTCDay();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
 
             for (let i = 0; i < firstDay; i++) {
@@ -6306,9 +6319,11 @@
 
         function getPassedWorkingDaysInSpecificMonth(year, month, today) {
             let count = 0;
-            const date = new Date(year, month, 1);
-            while (date <= today && date.getMonth() === month) {
-                const dayOfWeek = date.getDay();
+            const date = new Date(Date.UTC(year, month, 1));
+            const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+
+            while (date <= todayUTC && date.getUTCMonth() === month) {
+                const dayOfWeek = date.getUTCDay();
                 if (dayOfWeek >= 1 && dayOfWeek <= 5) {
                     count++;
                 }
@@ -6734,7 +6749,7 @@ Stack: ${error.stack}`: '') });
                         const { error: deleteError } = await supabaseClient
                             .from(nomeTabela)
                             .delete()
-                            .not(primaryKeys[0], 'is', null);
+                            .neq(primaryKeys[0], 'IMPOSSIBLE_VALUE_TO_MATCH');
 
                         if (deleteError) throw new Error(`Falha ao limpar ${nomeTabela}: ${deleteError.message}`);
 
@@ -6788,14 +6803,15 @@ Stack: ${error.stack}`: '') });
 
                     const tasks = [];
 
-                    if (data.detailed) tasks.push({ name: 'Vendas Atuais', tableName: 'data_detailed', data: data.detailed, keys: ['pedido'] });
-                    if (data.history) tasks.push({ name: 'Histórico', tableName: 'data_history', data: data.history, keys: ['pedido'] });
-                    if (data.byOrder) tasks.push({ name: 'Pedidos', tableName: 'data_orders', data: data.byOrder, keys: ['pedido'] });
-                    if (data.clients) tasks.push({ name: 'Clientes', tableName: 'data_clients', data: data.clients, keys: ['codigo_cliente'] });
+                    if (data.detailed) tasks.push({ name: 'Vendas Atuais', tableName: 'data_detailed', data: data.detailed, keys: ['id'] });
+                    if (data.history) tasks.push({ name: 'Histórico', tableName: 'data_history', data: data.history, keys: ['id'] });
+                    if (data.byOrder) tasks.push({ name: 'Pedidos', tableName: 'data_orders', data: data.byOrder, keys: ['id'] });
+                    // *** AQUI ESTÁ A MUDANÇA ***
+                    if (data.clients) tasks.push({ name: 'Clientes', tableName: 'data_clients', data: data.clients, keys: ['codigo_cliente'] }); // CORRIGIDO
                     if (data.product_details) tasks.push({ name: 'Detalhes de Produtos', tableName: 'data_product_details', data: data.product_details, keys: ['code'] });
                     if (data.active_products) tasks.push({ name: 'Produtos Ativos', tableName: 'data_active_products', data: data.active_products, keys: ['code'] });
-                    if (data.stock) tasks.push({ name: 'Estoque', tableName: 'data_stock', data: data.stock, keys: ['product_code'] });
-                    if (data.innovations) tasks.push({ name: 'Inovações', tableName: 'data_innovations', data: data.innovations, keys: ['codigo'] });
+                    if (data.stock) tasks.push({ name: 'Estoque', tableName: 'data_stock', data: data.stock, keys: ['id'] });
+                    if (data.innovations) tasks.push({ name: 'Inovações', tableName: 'data_innovations', data: data.innovations, keys: ['id'] });
                     if (data.metadata) tasks.push({ name: 'Metadados', tableName: 'data_metadata', data: data.metadata, keys: ['key'] });
 
                     if (tasks.length === 0) {
