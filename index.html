@@ -392,9 +392,6 @@
     <div id="loader" class="hidden">
         <div id="loader-spinner"></div>
         <p id="loader-text" class="text-slate-300 mt-4">Carregando dados do Supabase...</p>
-        <button id="logout-button-main-loader" class="logout mt-4" style="background-color: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background-color 0.3s ease;">
-            Sair / Deslogar
-        </button>
     </div>
 
     <!-- 6. ADICIONADO: Todo o HTML do seu dashboard escuro original -->
@@ -6327,107 +6324,146 @@
             });
     }
 
-    let isHandlingAuth = false; // Flag de bloqueio para evitar re-entrância
-
     document.addEventListener('DOMContentLoaded', () => {
+        let dashboardInitialized = false; // Flag de controle
+        let isInitializing = false; // Flag de bloqueio para condição de corrida
+        // As variáveis já estão no escopo global do outro script
+        // const SUPABASE_URL = '...';
+        // const SUPABASE_ANON_KEY = '...';
+
         const { createClient } = supabase;
         const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+        // Referências aos elementos da tela
         const telaLogin = document.getElementById('tela-login');
         const telaLoading = document.getElementById('tela-loading');
         const telaPendente = document.getElementById('tela-pendente');
         const mainDashboard = document.getElementById('main-dashboard');
         const loader = document.getElementById('loader');
-        const loginButton = document.getElementById('login-button');
 
+        // Botões
+        const loginButton = document.getElementById('login-button');
+        const logoutButtonPendente = document.getElementById('logout-button-pendente');
+
+        // Função simplificada para mostrar uma tela de "gatekeeper" (login, loading, pendente)
         const showScreen = (screenId) => {
-            [telaLogin, telaLoading, telaPendente].forEach(el => el && el.classList.add('hidden'));
+            [telaLogin, telaLoading, telaPendente].forEach(el => {
+                if (el) el.classList.add('hidden');
+            });
             if (screenId) {
                 const targetScreen = document.getElementById(screenId);
-                if (targetScreen) targetScreen.classList.remove('hidden');
+                if (targetScreen) {
+                    targetScreen.classList.remove('hidden');
+                }
             }
         };
 
+        // Event Listeners
         loginButton.addEventListener('click', async () => {
             const { error } = await supabaseClient.auth.signInWithOAuth({
                 provider: 'google',
-                options: { redirectTo: window.location.href }
+                options: {
+                    redirectTo: 'https://dasksz.github.io/PRIME/index.html'
+                }
             });
             if (error) console.error('Erro no login:', error);
         });
 
-        const handleLogout = async () => {
-            const { error } = await supabaseClient.auth.signOut();
-            if (error) {
-                console.error('Erro no logout:', error);
-                Object.keys(localStorage).forEach(key => {
-                    if (key.startsWith('sb-')) localStorage.removeItem(key);
-                });
-                window.location.reload();
-            }
+        const handleLogout = () => {
+            // Limpa o token de sessão do Supabase do localStorage
+            // Isso é mais eficaz do que apenas chamar signOut() para forçar uma reavaliação
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('sb-dhozwhfmrwiumwpcqabi-auth-token')) { // Chave específica do token
+                    localStorage.removeItem(key);
+                }
+            });
+            // Força uma navegação limpa para a URL base, que é mais confiável que location.reload()
+            const cleanUrl = window.location.origin + window.location.pathname;
+            window.location.href = cleanUrl;
         };
 
+        // Adiciona o listener de evento a todos os botões de logout usando delegação de evento no corpo do documento
         document.body.addEventListener('click', (event) => {
+            // Verifica se o elemento clicado é um botão com a classe 'logout'
             if (event.target && event.target.matches('button.logout')) {
                 handleLogout();
             }
         });
 
+        // Ouve por mudanças no estado de autenticação (login/logout)
         supabaseClient.auth.onAuthStateChange(async (event, session) => {
-            if (isHandlingAuth) {
-                console.log("Evento de autenticação ignorado, processo já em andamento.");
+            // Esconde o dashboard principal por padrão em qualquer mudança de estado
+            if (mainDashboard) mainDashboard.classList.add('hidden');
+
+            // Se o usuário deslogou, mostra a tela de login.
+            if (event === 'SIGNED_OUT') {
+                dashboardInitialized = false; // Reseta o estado
+                isInitializing = false; // Reseta o bloqueio
+                showScreen('tela-login');
                 return;
             }
-            isHandlingAuth = true;
 
-            try {
-                if (!session) { // Cobre SIGNED_OUT e INITIAL_SESSION sem sessão
-                    showScreen('tela-login');
-                    mainDashboard.classList.add('hidden');
-                    stopProfilesListener(supabaseClient);
-                    isHandlingAuth = false; // Libera o bloqueio
-                    return;
+            // Se for o carregamento inicial ou um novo login e já tivermos a sessão
+            if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && session) {
+
+                // CORREÇÃO 1: Adicionar a verificação do evento 'SIGNED_IN' aqui
+                // Isso força a rechecagem do status APÓS a conclusão do login/redirect.
+                if (event === 'SIGNED_IN') {
+                    // Força um novo ciclo de inicialização após login/redirect
+                    dashboardInitialized = false;
                 }
 
-                // A partir daqui, temos uma sessão (INITIAL_SESSION ou SIGNED_IN)
-                showScreen('tela-loading');
+                // E o dashboard ainda não foi inicializado E NÃO ESTÁ inicializando
+                if (!dashboardInitialized && !isInitializing) {
+                    isInitializing = true; // Define o bloqueio
+                    showScreen('tela-loading');
+                    try {
+                        const { data: profile, error } = await supabaseClient
+                            .from('profiles')
+                            .select('status')
+                            .eq('id', session.user.id)
+                            .single();
 
-                const { data: profile, error } = await supabaseClient
-                    .from('profiles')
-                    .select('status')
-                    .eq('id', session.user.id)
-                    .single();
+                        if (error && error.code !== 'PGRST116') {
+                            // Lança o erro para ser pego pelo bloco catch centralizado.
+                            throw new Error(`Erro ao buscar perfil: ${error.message}`);
+                        }
 
-                if (error && error.code !== 'PGRST116') {
-                    throw new Error(`Erro ao buscar perfil: ${error.message}`);
-                }
+                        if (profile && profile.status === 'aprovado') {
+                            dashboardInitialized = true; // Marca como inicializado
+                            showScreen(null); // Esconde as telas de gatekeeper
+                            loader.classList.remove('hidden'); // Mostra o loader principal
+                            await carregarDadosDoSupabase(supabaseClient);
+                            // isInitializing permanece true para evitar re-execução.
+                        } else if (profile && profile.status === 'pendente') {
+                            showScreen('tela-pendente');
+                            isInitializing = false; // Libera o bloqueio, pois a UI está estável.
 
-                if (profile && profile.status === 'aprovado') {
-                    showScreen(null);
-                    loader.classList.remove('hidden');
-                    await carregarDadosDoSupabase(supabaseClient);
-                    isHandlingAuth = false; // CORREÇÃO: Libera o bloqueio após o sucesso.
-                } else if (profile && profile.status === 'pendente') {
-                    showScreen('tela-pendente');
-                    isHandlingAuth = false; // Libera o bloqueio para permitir que o listener funcione
-                    startProfilesRealtimeListener(supabaseClient, session.user.id, () => {
-                        // A maneira mais simples e robusta de transitar para o estado 'aprovado'
-                        // é recarregar a página. O fluxo de autenticação será re-executado.
-                        window.location.reload();
-                    });
-                } else {
-                    throw new Error('Perfil não encontrado ou status inválido.');
+                            startProfilesRealtimeListener(supabaseClient, session.user.id, () => {
+                                // A verificação !dashboardInitialized previne múltiplas execuções se o callback for chamado mais de uma vez
+                                if (!dashboardInitialized) {
+                                    dashboardInitialized = true;
+                                    showScreen(null);
+                                    loader.classList.remove('hidden');
+                                    carregarDadosDoSupabase(supabaseClient);
+                                }
+                            });
+                        } else {
+                            // Perfil não encontrado ou status inválido, lança erro.
+                            throw new Error('Perfil não encontrado ou com status inválido.');
+                        }
+                    } catch (e) {
+                        // Este bloco agora captura falhas de rede, timeouts E erros lógicos.
+                        console.error('Falha na inicialização da sessão:', e);
+                        showScreen('tela-login');
+                        await supabaseClient.auth.signOut();
+                        isInitializing = false; // Libera o bloqueio em QUALQUER caso de erro.
+                    }
                 }
-            } catch (e) {
-                console.error('Falha na inicialização da sessão:', e);
-                const loader = document.getElementById('loader');
-                const loaderText = document.getElementById('loader-text');
-                if (loaderText && loader) {
-                    showScreen(null);
-                    loader.classList.remove('hidden');
-                    loaderText.innerHTML = `<span class="text-red-400">Falha ao verificar o perfil: ${e.message}<br>Tente recarregar a página ou use o botão "Sair".</span>`;
-                }
-                isHandlingAuth = false; // Libera o bloqueio em caso de erro para permitir nova tentativa
+            }
+            // Se for o carregamento inicial e não houver sessão
+            else if (event === 'INITIAL_SESSION' && !session) {
+                showScreen('tela-login');
             }
         });
     });
