@@ -6802,6 +6802,11 @@ Stack: ${error.stack}`: '') });
             loginButton.addEventListener('click', async () => {
                 const { error } = await supabase.auth.signInWithOAuth({
                     provider: 'google',
+                    options: {
+                        // FORÇA O REDIRECIONAMENTO PARA O LUGAR CORRETO
+                        // Isso ignora o "Site URL" do painel
+                        redirectTo: 'https://dasksz.github.io/PRIME/'
+                    }
                 });
                 if (error) {
                     console.error('Erro no login:', error);
