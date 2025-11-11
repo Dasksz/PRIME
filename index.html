@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel de Vendas - PRIME DISTRIBUIÇÃO</title>
-    <link rel="icon" type="image/jpeg" href="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSnaaZ2WnZBJIxPRfabS4Ug78PKK6Gu3nbHlw&s">
+    <link rel="icon" type="image/jpeg" href="https://i.imgur.com/4iQuDCd.png">
     <!-- 1. ADICIONADO: Scripts necessários para o dashboard -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -333,12 +333,12 @@
         transition: background-color 0.2s, box-shadow 0.2s;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-    
+
     .google-login-btn:hover {
         background-color: var(--bg-menu-button-hover);
         box-shadow: 0 4px 8px rgba(0,0,0,0.08);
     }
-    
+
     /* Centraliza as telas de login no meio da página */
     #tela-login, #tela-loading, #tela-pendente {
         position: fixed;
@@ -371,20 +371,20 @@
         margin: 0;
         z-index: 2000;
     }
-    
+
     .status-screen h2 {
         color: var(--text-primary);
         margin-top: 0;
         font-size: 1.6rem; /* Um pouco menor que o h1 do login */
         font-weight: 700;
     }
-    
+
     .status-screen p {
         color: var(--text-secondary);
         line-height: 1.6;
         margin-bottom: 2rem;
     }
-    
+
     /* Estilo do botão de logout, para ser mais profissional */
     .logout-btn {
         width: 100%;
@@ -399,7 +399,7 @@
         transition: background-color 0.2s, box-shadow 0.2s;
         box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
     }
-    
+
     .logout-btn:hover {
         background-color: #c82333;
         box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
@@ -412,13 +412,13 @@
 
     <!-- Tela de Login (quando deslogado) -->
     <div id="tela-login" class="container" style="display: none; font-family: 'Inter', sans-serif; padding: 2.5rem 3rem 3rem 3rem; border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); max-width: 420px; width: 90%; margin: 5rem auto; background: var(--bg-content); text-align: center; z-index: 2000; position: relative; border: 1px solid var(--border-primary);">
-        
+
         <!-- Logo da PRIME -->
-        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSnaaZ2WnZBJIxPRfabS4Ug78PKK6Gu3nbHlw&s" alt="Logo PRIME" style="width: 70px; height: 70px; margin: 0 auto 1.5rem auto; border-radius: 50%;">
+        <img src="https://i.imgur.com/4iQuDCd.png" alt="Logo PRIME" style="width: 70px; height: 70px; margin: 0 auto 1.5rem auto; border-radius: 50%;">
 
         <h1 style="color: var(--text-primary); margin-top: 0; font-size: 1.8rem; font-weight: 700;">Acesso Restrito</h1>
         <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 2rem;">Este é um sistema privado da PRIME. Por favor, faça login para solicitar seu acesso.</p>
-        
+
         <!-- Botão "Entrar com Google" com logo -->
         <button id="login-button" class="google-login-btn">
             <!-- SVG do Logo do Google -->
@@ -6858,20 +6858,27 @@ Stack: ${error.stack}`: '') });
             // Botões
             const loginButton = document.getElementById('login-button');
             const logoutButtonPendente = document.getElementById('logout-button-pendente');
-            
+            const menuToggleBtn = document.getElementById('menu-toggle-btn');
+
             // Função para mostrar a tela correta
             const mostrarTela = (tela) => {
                 [telaLogin, telaLoading, telaPendente, mainDashboard, loader].forEach(el => {
                     if (el) el.style.display = 'none';
                 });
+
+                // Esconde o botão de menu por padrão e mostra apenas quando necessário
+                if (menuToggleBtn) menuToggleBtn.style.display = 'none';
+
                 if (tela) {
                     tela.style.display = 'block';
+                    // Se a tela for o dashboard principal ou o loader que o precede, mostre o botão
                     if (tela.id === 'main-dashboard' || tela.id === 'loader') {
                          tela.style.display = 'flex'; // ou o display original
+                         if (menuToggleBtn) menuToggleBtn.style.display = 'block';
                     }
                 }
             };
-            
+
             // CORREÇÃO: Variável de controle para evitar execução dupla
             let dashboardInitialized = false;
 
@@ -6900,7 +6907,7 @@ Stack: ${error.stack}`: '') });
                     // CORREÇÃO: Verifica se o dashboard já foi inicializado
                     if (dashboardInitialized) return;
                     dashboardInitialized = true;
-                    
+
                     // Usuário aprovado -> Inicia o carregamento normal do dashboard
                     mostrarTela(loader);
                     carregarDadosDoSupabase(); // Chamada direta da função
@@ -6911,7 +6918,7 @@ Stack: ${error.stack}`: '') });
                     mostrarTela(telaPendente);
                 }
             };
-            
+
             // Lógica de Login
             loginButton.addEventListener('click', async () => {
                 const { error } = await supabase.auth.signInWithOAuth({
@@ -6945,7 +6952,7 @@ Stack: ${error.stack}`: '') });
                     mostrarTela(telaLogin);
                 }
             });
-            
+
             // Verificação Inicial ao carregar a página
             const verificarSessaoInicial = async () => {
                 const { data: { session }, error } = await supabase.auth.getSession();
@@ -6960,10 +6967,10 @@ Stack: ${error.stack}`: '') });
                     mostrarTela(telaLogin);
                 }
             };
-            
+
             // Inicia a verificação
             verificarSessaoInicial();
-            
+
             // --- FIM DO SCRIPT DO PORTEIRO ---
         });
 
