@@ -320,7 +320,7 @@
 <!-- INÍCIO DO CÓDIGO PARA COPIAR -->
 
 <!-- Tela de Login (quando deslogado) -->
-<div id="tela-login" class="container fixed inset-0 flex items-center justify-center z-[2000] hidden">
+<div id="tela-login" class="fixed inset-0 flex items-center justify-center z-[2000] hidden">
     <div style="font-family: 'Inter', sans-serif; padding: 2.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1); max-width: 400px; width: 90%; background: var(--bg-content); text-align: center; border: 1px solid var(--border-primary);">
         <img src="https://i.imgur.com/Xv8Tb6d.png" alt="Logo da Empresa" style="width: 80px; height: 80px; margin: 0 auto 1.5rem; border-radius: 50%;">
         <h1 style="color: var(--text-primary); margin-top: 0; font-size: 1.8rem; font-weight: 700;">Acesso Restrito</h1>
@@ -339,7 +339,7 @@
 
 
 <!-- Tela de Carregamento -->
-<div id="tela-loading" class="container fixed inset-0 flex items-center justify-center z-[2000] hidden">
+<div id="tela-loading" class="fixed inset-0 flex items-center justify-center z-[2000] hidden">
    <div style="font-family: 'Inter', sans-serif; padding: 2.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1); max-width: 400px; width: 90%; background: var(--bg-content); text-align: center; border: 1px solid var(--border-primary);">
         <h2 style="color: var(--text-primary); margin-top: 0; font-size: 1.5rem; font-weight: 600;">Carregando...</h2>
         <p style="color: var(--text-secondary); line-height: 1.6;">Verificando seu status de aprovação.</p>
@@ -348,7 +348,7 @@
 
 
 <!-- Tela de Espera (Pendente) -->
-<div id="tela-pendente" class="container fixed inset-0 flex items-center justify-center z-[2000] hidden">
+<div id="tela-pendente" class="fixed inset-0 flex items-center justify-center z-[2000] hidden">
     <div style="font-family: 'Inter', sans-serif; padding: 2.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1); max-width: 400px; width: 90%; background: var(--bg-content); text-align: center; border: 1px solid var(--border-primary);">
         <h2 style="color: var(--text-primary); margin-top: 0; font-size: 1.5rem; font-weight: 600;">Sua conta está aguardando aprovação.</h2>
         <p style="color: var(--text-secondary); line-height: 1.6;">Por favor, aguarde o administrador liberar seu acesso. Você será notificado (ou pode tentar novamente mais tarde).</p>
@@ -386,7 +386,7 @@
 
 
     <!-- 5. ADICIONADO: Loader que será exibido enquanto os dados carregam -->
-    <div id="loader">
+    <div id="loader" class="hidden">
         <div id="loader-spinner"></div>
         <p id="loader-text" class="text-slate-300 mt-4">Carregando dados do Supabase...</p>
     </div>
@@ -6199,17 +6199,11 @@
         const loginButton = document.getElementById('login-button');
         const logoutButtonPendente = document.getElementById('logout-button-pendente');
 
-        // Função para mostrar uma tela específica e esconder as outras
+        // Função simplificada para mostrar uma tela de "gatekeeper" (login, loading, pendente)
         const showScreen = (screenId) => {
-            // Esconde todas as telas principais (login, pendente, etc.)
-            [telaLogin, telaLoading, telaPendente, mainDashboard].forEach(el => {
+            [telaLogin, telaLoading, telaPendente].forEach(el => {
                 if (el) el.classList.add('hidden');
             });
-
-            // O loader principal é tratado separadamente, pois pode sobrepor o dashboard.
-            if (loader) loader.classList.add('hidden');
-
-            // Mostra a tela de destino específica.
             if (screenId) {
                 const targetScreen = document.getElementById(screenId);
                 if (targetScreen) {
@@ -6240,6 +6234,9 @@
 
         // Ouve por mudanças no estado de autenticação (login/logout)
         supabaseClient.auth.onAuthStateChange(async (event, session) => {
+            // Esconde o dashboard principal por padrão em qualquer mudança de estado
+            if (mainDashboard) mainDashboard.classList.add('hidden');
+
             // Se o usuário deslogou, mostra a tela de login.
             if (event === 'SIGNED_OUT') {
                 dashboardInitialized = false; // Reseta o estado
@@ -6250,6 +6247,14 @@
 
             // Se for o carregamento inicial ou um novo login e já tivermos a sessão
             if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && session) {
+
+                // CORREÇÃO 1: Adicionar a verificação do evento 'SIGNED_IN' aqui
+                // Isso força a rechecagem do status APÓS a conclusão do login/redirect.
+                if (event === 'SIGNED_IN') {
+                    // Força um novo ciclo de inicialização após login/redirect
+                    dashboardInitialized = false;
+                }
+
                 // E o dashboard ainda não foi inicializado E NÃO ESTÁ inicializando
                 if (!dashboardInitialized && !isInitializing) {
                     isInitializing = true; // Define o bloqueio
@@ -6271,16 +6276,14 @@
 
                     if (profile && profile.status === 'aprovado') {
                         dashboardInitialized = true; // Marca como inicializado
-                        showScreen(null); // Esconde todas as telas
-                        loader.classList.remove('hidden'); // Mostra o loader
+                        showScreen(null); // Esconde as telas de gatekeeper
+                        loader.classList.remove('hidden'); // Mostra o loader principal
                         carregarDadosDoSupabase(supabaseClient);
                         // Não liberamos o isInitializing aqui, pois o dashboard está carregado.
-                        // Ele será liberado no logout.
                     } else if (profile && profile.status === 'pendente') {
                         showScreen('tela-pendente');
                         isInitializing = false; // Libera o bloqueio se o usuário estiver pendente
 
-                        // ADICIONADO: Escuta por mudanças no perfil do usuário em tempo real
                         const channel = supabaseClient
                             .channel(`profiles:id=eq.${session.user.id}`)
                             .on(
@@ -6292,25 +6295,22 @@
                                     filter: `id=eq.${session.user.id}`
                                 },
                                 (payload) => {
-                                    console.log('Recebida atualização de perfil:', payload);
-                                    if (payload.new && payload.new.status === 'aprovado') {
-                                        // O status mudou! Remove a escuta e carrega o dashboard.
+                                    if (payload.new && payload.new.status === 'aprovado' && !dashboardInitialized) {
                                         supabaseClient.removeChannel(channel);
-
-                                        if (!dashboardInitialized) { // Garante que não inicialize duas vezes
-                                            dashboardInitialized = true;
-                                            showScreen(null); // Esconde todas as telas
-                                            loader.classList.remove('hidden'); // Mostra o loader
-                                            carregarDadosDoSupabase(supabaseClient);
-                                        }
+                                        dashboardInitialized = true;
+                                        showScreen(null);
+                                        loader.classList.remove('hidden');
+                                        carregarDadosDoSupabase(supabaseClient);
                                     }
                                 }
                             )
                             .subscribe();
 
                     } else {
+                        // CORREÇÃO 2: Tratar caso de perfil não encontrado ou status inválido como logout.
                         showScreen('tela-login');
-                        isInitializing = false; // Libera o bloqueio se não houver perfil/status
+                        await supabaseClient.auth.signOut();
+                        isInitializing = false;
                     }
                 }
             }
