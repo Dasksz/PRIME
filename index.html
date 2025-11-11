@@ -1070,12 +1070,33 @@
                 // A verificação de URL/Chave e a criação do cliente foram movidas para o script do porteiro
 
                 const fetchColumnarData = async (tableName, columns = '*') => {
-                    const { data, error } = await supabaseClient.from(tableName).select(columns);
-                    if (error) {
-                        console.error(`Erro ao buscar dados da tabela '${tableName}':`, error);
-                        return [];
+                    // Adiciona um AbortController para timeout
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos
+
+                    try {
+                        // Inclui o sinal de aborto na requisição
+                        const { data, error } = await supabaseClient
+                            .from(tableName)
+                            .select(columns)
+                            .abortSignal(controller.signal); // <--- ADICIONADO: Sinal de aborto
+
+                        clearTimeout(timeoutId);
+
+                        if (error) {
+                            console.error(`Erro ao buscar dados da tabela '${tableName}':`, error);
+                            // CORREÇÃO: Lança o erro para ser capturado externamente
+                            throw new Error(`Falha no fetch da tabela ${tableName}: ${error.message}`);
+                        }
+                        return data || [];
+                    } catch (e) {
+                        clearTimeout(timeoutId);
+                        // Se for erro de timeout, lança uma mensagem clara.
+                        if (e.name === 'AbortError') {
+                             throw new Error(`Timeout atingido ao buscar dados da tabela ${tableName}.`);
+                        }
+                        throw e; // Relança outros erros
                     }
-                    return data || [];
                 };
 
                 loaderText.textContent = 'Buscando dados...';
@@ -1088,50 +1109,80 @@
                     let allHistory = [];
                     let offset = 0;
                     const chunkSize = 25000;
-                    while (true) {
-                        const { data, error } = await supabaseClient
-                            .from('data_history')
-                            .select(historyColumns)
-                            .range(offset, offset + chunkSize - 1);
+                    // CRIA UM NOVO CONTROLADOR PARA CADA CHUNK MAS LIMITA O TEMPO TOTAL
+                    const controller = new AbortController();
+                    const timeoutTotalId = setTimeout(() => controller.abort(), 60000); // Timeout total de 60s
 
-                        if (error) {
-                            console.error(`Erro ao buscar chunk de 'data_history':`, error);
-                            break;
+                    try {
+                        while (true) {
+                            // AQUI: Adiciona abortSignal(controller.signal)
+                            const { data, error } = await supabaseClient
+                                .from('data_history')
+                                .select(historyColumns)
+                                .range(offset, offset + chunkSize - 1)
+                                .abortSignal(controller.signal); // <--- ADICIONADO AQUI
+
+                            if (error) {
+                                console.error(`Erro ao buscar chunk de 'data_history':`, error);
+                                throw new Error(`Falha no chunk de histórico: ${error.message}`);
+                            }
+                            if (data) {
+                                allHistory = allHistory.concat(data);
+                            }
+                            if (!data || data.length < chunkSize) {
+                                break;
+                            }
+                            offset += chunkSize;
                         }
-                        if (data) {
-                            allHistory = allHistory.concat(data);
+                        clearTimeout(timeoutTotalId);
+                        return allHistory;
+                    } catch (e) {
+                        clearTimeout(timeoutTotalId);
+                        if (e.name === 'AbortError') {
+                             throw new Error(`Timeout atingido ao buscar Histórico. A conexão travou.`);
                         }
-                        if (!data || data.length < chunkSize) {
-                            break;
-                        }
-                        offset += chunkSize;
+                        throw e;
                     }
-                    return allHistory;
                 };
 
                 const fetchDetailedInChunks = async () => {
                     let allDetailed = [];
                     let offset = 0;
-                    const chunkSize = 20000; // <-- REDUZIDO de 25000 para 20000
-                    while (true) {
-                        const { data, error } = await supabaseClient
-                            .from('data_detailed')
-                            .select(detailedColumns)
-                            .range(offset, offset + chunkSize - 1);
+                    const chunkSize = 20000;
+                    // CRIA UM NOVO CONTROLADOR PARA CADA CHUNK MAS LIMITA O TEMPO TOTAL
+                    const controller = new AbortController();
+                    const timeoutTotalId = setTimeout(() => controller.abort(), 60000); // Timeout total de 60s
 
-                        if (error) {
-                            console.error(`Erro ao buscar chunk de 'data_detailed':`, error);
-                            break;
+                    try {
+                        while (true) {
+                            // AQUI: Adiciona abortSignal(controller.signal)
+                            const { data, error } = await supabaseClient
+                                .from('data_detailed')
+                                .select(detailedColumns)
+                                .range(offset, offset + chunkSize - 1)
+                                .abortSignal(controller.signal); // <--- ADICIONADO AQUI
+
+                            if (error) {
+                                console.error(`Erro ao buscar chunk de 'data_detailed':`, error);
+                                throw new Error(`Falha no chunk de detalhamento: ${error.message}`);
+                            }
+                            if (data) {
+                                allDetailed = allDetailed.concat(data);
+                            }
+                            if (!data || data.length < chunkSize) {
+                                break;
+                            }
+                            offset += chunkSize;
                         }
-                        if (data) {
-                            allDetailed = allDetailed.concat(data);
+                        clearTimeout(timeoutTotalId);
+                        return allDetailed;
+                    } catch (e) {
+                        clearTimeout(timeoutTotalId);
+                         if (e.name === 'AbortError') {
+                             throw new Error(`Timeout atingido ao buscar Detalhamento. A conexão travou.`);
                         }
-                        if (!data || data.length < chunkSize) {
-                            break;
-                        }
-                        offset += chunkSize;
+                        throw e;
                     }
-                    return allDetailed;
                 };
 
                 const [
@@ -6275,7 +6326,7 @@
                             dashboardInitialized = true; // Marca como inicializado
                             showScreen(null); // Esconde as telas de gatekeeper
                             loader.classList.remove('hidden'); // Mostra o loader principal
-                            carregarDadosDoSupabase(supabaseClient);
+                            await carregarDadosDoSupabase(supabaseClient);
                             // isInitializing permanece true para evitar re-execução.
                         } else if (profile && profile.status === 'pendente') {
                             showScreen('tela-pendente');
