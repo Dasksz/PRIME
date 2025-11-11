@@ -6180,6 +6180,7 @@
     <!-- NOVO SCRIPT DO PORTEIRO -->
     <script>
     document.addEventListener('DOMContentLoaded', () => {
+        let dashboardInitialized = false; // Flag de controle
         // As variáveis já estão no escopo global do outro script
         // const SUPABASE_URL = '...';
         // const SUPABASE_ANON_KEY = '...';
@@ -6217,6 +6218,7 @@
         };
 
         const checkUserStatus = async () => {
+            if (dashboardInitialized) return; // Impede a reexecução
             showScreen(telaLoading);
 
             const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
@@ -6249,6 +6251,7 @@
             }
 
             if (profile && profile.status === 'aprovado') {
+                dashboardInitialized = true; // Define a flag
                 showScreen(null); // Esconde todas as telas de login/loading
                 // O loader principal do dashboard será exibido pela função de carregar dados
                 loader.style.display = 'flex';
@@ -6267,7 +6270,7 @@
             const { error } = await supabaseClient.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: 'https://dasksz.github.io/PRIME/ONDASH.html'
+                    redirectTo: 'https://dasksz.github.io/PRIME/index.html'
                 }
             });
             if (error) console.error('Erro no login:', error);
