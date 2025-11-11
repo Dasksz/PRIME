@@ -216,7 +216,7 @@ drop policy IF exists "Usuários podem ver o próprio perfil" on public.profiles
 
 create policy "Usuários podem ver o próprio perfil" on public.profiles for
 select
-  using (id = (select auth.uid()));
+  using (id = auth.uid());
 
 -- -----------------------------------------------------------------
 -- Regras para as 9 Tabelas de Dados (Apenas usuários 'aprovado')
@@ -232,7 +232,7 @@ create policy "Apenas usuários aprovados podem acessar" on data_detailed for al
     from
       public.profiles
     where
-      profiles.id = (select auth.uid())
+      profiles.id = auth.uid()
       and profiles.status = 'aprovado'
   )
 );
@@ -250,7 +250,7 @@ create policy "Apenas usuários aprovados podem acessar" on data_history for all
     from
       public.profiles
     where
-      profiles.id = (select auth.uid())
+      profiles.id = auth.uid()
       and profiles.status = 'aprovado'
   )
 );
@@ -268,7 +268,7 @@ create policy "Apenas usuários aprovados podem acessar" on data_clients for all
     from
       public.profiles
     where
-      profiles.id = (select auth.uid())
+      profiles.id = auth.uid()
       and profiles.status = 'aprovado'
   )
 );
@@ -286,7 +286,7 @@ create policy "Apenas usuários aprovados podem acessar" on data_orders for all 
     from
       public.profiles
     where
-      profiles.id = (select auth.uid())
+      profiles.id = auth.uid()
       and profiles.status = 'aprovado'
   )
 );
@@ -304,7 +304,7 @@ create policy "Apenas usuários aprovados podem acessar" on data_product_details
     from
       public.profiles
     where
-      profiles.id = (select auth.uid())
+      profiles.id = auth.uid()
       and profiles.status = 'aprovado'
   )
 );
@@ -322,7 +322,7 @@ create policy "Apenas usuários aprovados podem acessar" on data_active_products
     from
       public.profiles
     where
-      profiles.id = (select auth.uid())
+      profiles.id = auth.uid()
       and profiles.status = 'aprovado'
   )
 );
@@ -340,7 +340,7 @@ create policy "Apenas usuários aprovados podem acessar" on data_stock for all u
     from
       public.profiles
     where
-      profiles.id = (select auth.uid())
+      profiles.id = auth.uid()
       and profiles.status = 'aprovado'
   )
 );
@@ -358,7 +358,7 @@ create policy "Apenas usuários aprovados podem acessar" on data_innovations for
     from
       public.profiles
     where
-      profiles.id = (select auth.uid())
+      profiles.id = auth.uid()
       and profiles.status = 'aprovado'
   )
 );
@@ -376,7 +376,7 @@ create policy "Apenas usuários aprovados podem acessar" on data_metadata for al
     from
       public.profiles
     where
-      profiles.id = (select auth.uid())
+      profiles.id = auth.uid()
       and profiles.status = 'aprovado'
   )
 );
