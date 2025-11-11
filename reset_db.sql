@@ -25,6 +25,9 @@ drop table if exists public.profiles;
 -- Adicionado 'cascade' para apagar o trigger que depende dela
 drop function if exists public.handle_new_user cascade;
 
+-- Apaga a nova função de verificação (para garantir que seja recriada)
+drop function if exists public.is_caller_approved cascade;
+
 -- =================================================================
 -- ETAPA 2: Criar as 10 tabelas (9 de dados + 1 de perfis)
 -- =================================================================
@@ -207,6 +210,22 @@ after insert on auth.users for each row
 execute procedure public.handle_new_user ();
 
 -- =================================================================
+-- ETAPA 3.5: Criar Função de Verificação de Status Aprovado
+-- =================================================================
+create function public.is_caller_approved () returns boolean as $$
+begin
+  return exists (
+    select
+      1
+    from
+      public.profiles
+    where
+      id = (select auth.uid()) and status = 'aprovado'
+  );
+end;
+$$ language plpgsql security definer;
+
+-- =================================================================
 -- ETAPA 4: Habilitar RLS e Definir Políticas de Segurança
 -- =================================================================
 -- Regra para a Tabela 'profiles' (Permite que o usuário LEIA o próprio status)
@@ -216,7 +235,7 @@ drop policy IF exists "Usuários podem ver o próprio perfil" on public.profiles
 
 create policy "Usuários podem ver o próprio perfil" on public.profiles for
 select
-  using (id = auth.uid());
+  using (id = (select auth.uid()));
 
 -- -----------------------------------------------------------------
 -- Regras para as 9 Tabelas de Dados (Apenas usuários 'aprovado')
@@ -226,15 +245,7 @@ alter table data_detailed ENABLE row LEVEL SECURITY;
 drop policy IF exists "Permitir leitura pública detailed" on data_detailed;
 drop policy IF exists "Apenas usuários aprovados podem acessar" on data_detailed;
 create policy "Apenas usuários aprovados podem acessar" on data_detailed for all using (
-  exists (
-    select
-      1
-    from
-      public.profiles
-    where
-      profiles.id = auth.uid()
-      and profiles.status = 'aprovado'
-  )
+  is_caller_approved()
 );
 drop policy IF exists "Permitir apagar (delete) para service_role" on data_detailed;
 create policy "Permitir apagar (delete) para service_role" on data_detailed for DELETE to service_role using (true);
@@ -244,15 +255,7 @@ alter table data_history ENABLE row LEVEL SECURITY;
 drop policy IF exists "Permititir leitura pública history" on data_history;
 drop policy IF exists "Apenas usuários aprovados podem acessar" on data_history;
 create policy "Apenas usuários aprovados podem acessar" on data_history for all using (
-  exists (
-    select
-      1
-    from
-      public.profiles
-    where
-      profiles.id = auth.uid()
-      and profiles.status = 'aprovado'
-  )
+  is_caller_approved()
 );
 drop policy IF exists "Permitir apagar (delete) para service_role" on data_history;
 create policy "Permitir apagar (delete) para service_role" on data_history for DELETE to service_role using (true);
@@ -262,15 +265,7 @@ alter table data_clients ENABLE row LEVEL SECURITY;
 drop policy IF exists "Permitir leitura pública clients" on data_clients;
 drop policy IF exists "Apenas usuários aprovados podem acessar" on data_clients;
 create policy "Apenas usuários aprovados podem acessar" on data_clients for all using (
-  exists (
-    select
-      1
-    from
-      public.profiles
-    where
-      profiles.id = auth.uid()
-      and profiles.status = 'aprovado'
-  )
+  is_caller_approved()
 );
 drop policy IF exists "Permitir apagar (delete) para service_role" on data_clients;
 create policy "Permitir apagar (delete) para service_role" on data_clients for DELETE to service_role using (true);
@@ -280,15 +275,7 @@ alter table data_orders ENABLE row LEVEL SECURITY;
 drop policy IF exists "Permitir leitura pública orders" on data_orders;
 drop policy IF exists "Apenas usuários aprovados podem acessar" on data_orders;
 create policy "Apenas usuários aprovados podem acessar" on data_orders for all using (
-  exists (
-    select
-      1
-    from
-      public.profiles
-    where
-      profiles.id = auth.uid()
-      and profiles.status = 'aprovado'
-  )
+  is_caller_approved()
 );
 drop policy IF exists "Permitir apagar (delete) para service_role" on data_orders;
 create policy "Permitir apagar (delete) para service_role" on data_orders for DELETE to service_role using (true);
@@ -298,15 +285,7 @@ alter table data_product_details ENABLE row LEVEL SECURITY;
 drop policy IF exists "Permitir leitura pública product_details" on data_product_details;
 drop policy IF exists "Apenas usuários aprovados podem acessar" on data_product_details;
 create policy "Apenas usuários aprovados podem acessar" on data_product_details for all using (
-  exists (
-    select
-      1
-    from
-      public.profiles
-    where
-      profiles.id = auth.uid()
-      and profiles.status = 'aprovado'
-  )
+  is_caller_approved()
 );
 drop policy IF exists "Permitir apagar (delete) para service_role" on data_product_details;
 create policy "Permitir apagar (delete) para service_role" on data_product_details for DELETE to service_role using (true);
@@ -316,15 +295,7 @@ alter table data_active_products ENABLE row LEVEL SECURITY;
 drop policy IF exists "Permitir leitura pública active_products" on data_active_products;
 drop policy IF exists "Apenas usuários aprovados podem acessar" on data_active_products;
 create policy "Apenas usuários aprovados podem acessar" on data_active_products for all using (
-  exists (
-    select
-      1
-    from
-      public.profiles
-    where
-      profiles.id = auth.uid()
-      and profiles.status = 'aprovado'
-  )
+  is_caller_approved()
 );
 drop policy IF exists "Permitir apagar (delete) para service_role" on data_active_products;
 create policy "Permitir apagar (delete) para service_role" on data_active_products for DELETE to service_role using (true);
@@ -334,15 +305,7 @@ alter table data_stock ENABLE row LEVEL SECURITY;
 drop policy IF exists "Permitir leitura pública stock" on data_stock;
 drop policy IF exists "Apenas usuários aprovados podem acessar" on data_stock;
 create policy "Apenas usuários aprovados podem acessar" on data_stock for all using (
-  exists (
-    select
-      1
-    from
-      public.profiles
-    where
-      profiles.id = auth.uid()
-      and profiles.status = 'aprovado'
-  )
+  is_caller_approved()
 );
 drop policy IF exists "Permitir apagar (delete) para service_role" on data_stock;
 create policy "Permitir apagar (delete) para service_role" on data_stock for DELETE to service_role using (true);
@@ -352,15 +315,7 @@ alter table data_innovations ENABLE row LEVEL SECURITY;
 drop policy IF exists "Permitir leitura pública innovations" on data_innovations;
 drop policy IF exists "Apenas usuários aprovados podem acessar" on data_innovations;
 create policy "Apenas usuários aprovados podem acessar" on data_innovations for all using (
-  exists (
-    select
-      1
-    from
-      public.profiles
-    where
-      profiles.id = auth.uid()
-      and profiles.status = 'aprovado'
-  )
+  is_caller_approved()
 );
 drop policy IF exists "Permitir apagar (delete) para service_role" on data_innovations;
 create policy "Permitir apagar (delete) para service_role" on data_innovations for DELETE to service_role using (true);
@@ -370,15 +325,7 @@ alter table data_metadata ENABLE row LEVEL SECURITY;
 drop policy IF exists "Permitir leitura pública metadata" on data_metadata;
 drop policy IF exists "Apenas usuários aprovados podem acessar" on data_metadata;
 create policy "Apenas usuários aprovados podem acessar" on data_metadata for all using (
-  exists (
-    select
-      1
-    from
-      public.profiles
-    where
-      profiles.id = auth.uid()
-      and profiles.status = 'aprovado'
-  )
+  is_caller_approved()
 );
 drop policy IF exists "Permitir apagar (delete) para service_role" on data_metadata;
 create policy "Permitir apagar (delete) para service_role" on data_metadata for DELETE to service_role using (true);
