@@ -6279,12 +6279,22 @@
             if (screenId) document.getElementById(screenId)?.classList.remove('hidden');
         };
 
-        // Função de logout centralizada
-        const handleLogout = async () => {
-            clearTimeout(initializationTimeout); // Limpa qualquer timeout pendente
-            stopStatusListener(); // Para listeners de status
-            await supabaseClient.auth.signOut();
-            // O evento onAuthStateChange('SIGNED_OUT') cuidará do resto.
+        // Função de logout centralizada (UX OTIMIZADA)
+        // Limpa apenas o token local corrompido para forçar uma nova negociação
+        const handleLogout = () => {
+            // 1. Limpa qualquer timeout pendente
+            clearTimeout(initializationTimeout); 
+            // 2. Para listeners de status
+            stopStatusListener(); 
+
+            // **A CHAVE:** Remove APENAS o item de token do Supabase do Local Storage.
+            // Isso forçará o cliente Supabase a negociar um novo token no reload,
+            // mas PRESERVARÁ o cookie de sessão do Google, evitando o 2FA.
+            localStorage.removeItem('sb-dhozwhfmrwiumwpcqabi-auth-token'); 
+            
+            // 3. Força o navegador a recarregar a página, ignorando o cache.
+            // O próximo carregamento usará o cookie de sessão do Google para login rápido.
+            window.location.reload(true); 
         };
 
         // Para todos os listeners de status (realtime e polling)
