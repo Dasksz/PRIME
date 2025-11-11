@@ -6418,11 +6418,18 @@
                     isInitializing = true; // Define o bloqueio
                     showScreen('tela-loading');
                     try {
-                        const { data: profile, error } = await supabaseClient
+                        // Adiciona um timeout de 10 segundos à verificação de perfil
+                        const profilePromise = supabaseClient
                             .from('profiles')
                             .select('status')
                             .eq('id', session.user.id)
                             .single();
+
+                        const timeoutPromise = new Promise((_, reject) =>
+                            setTimeout(() => reject(new Error('Timeout de 10s ao verificar o perfil.')), 10000)
+                        );
+
+                        const { data: profile, error } = await Promise.race([profilePromise, timeoutPromise]);
 
                         if (error && error.code !== 'PGRST116') {
                             // Lança o erro para ser pego pelo bloco catch centralizado.
