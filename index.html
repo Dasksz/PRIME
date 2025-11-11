@@ -6434,6 +6434,7 @@
                             showScreen(null); // Esconde as telas de gatekeeper
                             loader.classList.remove('hidden'); // Mostra o loader principal
                             await carregarDadosDoSupabase(supabaseClient);
+                            sessionStorage.removeItem('reloadAttempted'); // Reseta a proteção contra loop
                             // isInitializing permanece true para evitar re-execução.
                         } else if (profile && profile.status === 'pendente') {
                             showScreen('tela-pendente');
@@ -6453,11 +6454,18 @@
                             throw new Error('Perfil não encontrado ou com status inválido.');
                         }
                     } catch (e) {
-                        // Este bloco agora captura falhas de rede, timeouts E erros lógicos.
-                        console.error('Falha na inicialização da sessão:', e);
-                        showScreen('tela-login');
-                        await supabaseClient.auth.signOut();
-                        isInitializing = false; // Libera o bloqueio em QUALQUER caso de erro.
+                        console.error('Falha na inicialização da sessão, tentando recuperação automática:', e);
+                        // Lógica de proteção contra loop infinito
+                        if (sessionStorage.getItem('reloadAttempted')) {
+                            // Se a tentativa de recarregamento já aconteceu e falhou, execute o reset completo.
+                            console.error('A segunda tentativa de recarregamento falhou. Executando reset completo para evitar loop.');
+                            sessionStorage.removeItem('reloadAttempted'); // Limpa a flag
+                            handleLogout(); // Função de reset robusta
+                        } else {
+                            // Marca a primeira tentativa e recarrega a página.
+                            sessionStorage.setItem('reloadAttempted', 'true');
+                            window.location.reload();
+                        }
                     }
                 }
             }
