@@ -6263,8 +6263,6 @@
         const mainDashboard = document.getElementById('main-dashboard');
         const loader = document.getElementById('loader');
         const loginButton = document.getElementById('login-button');
-        const logoutButtonPendente = document.getElementById('logout-button-pendente');
-        const logoutButtonLoading = document.getElementById('logout-button-loading'); // NOVO
 
         // --- Estado Global do Módulo ---
         let dashboardInitialized = false;
@@ -6365,8 +6363,13 @@
         loginButton?.addEventListener('click', async () => {
             await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.href } });
         });
-        logoutButtonPendente?.addEventListener('click', handleLogout);
-        logoutButtonLoading?.addEventListener('click', handleLogout); // NOVO
+
+        // CORREÇÃO: Usa delegação de eventos para garantir que os botões de logout sempre funcionem
+        document.addEventListener('click', (event) => {
+            if (event.target && (event.target.id === 'logout-button-pendente' || event.target.id === 'logout-button-loading')) {
+                handleLogout();
+            }
+        });
 
 
         // Ouve por mudanças no estado de autenticação (login, logout, refresh)
