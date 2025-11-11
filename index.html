@@ -6181,6 +6181,7 @@
     <script>
     document.addEventListener('DOMContentLoaded', () => {
         let dashboardInitialized = false; // Flag de controle
+        let isInitializing = false; // Flag de bloqueio para condição de corrida
         // As variáveis já estão no escopo global do outro script
         // const SUPABASE_URL = '...';
         // const SUPABASE_ANON_KEY = '...';
@@ -6242,14 +6243,16 @@
             // Se o usuário deslogou, mostra a tela de login.
             if (event === 'SIGNED_OUT') {
                 dashboardInitialized = false; // Reseta o estado
+                isInitializing = false; // Reseta o bloqueio
                 showScreen(telaLogin);
                 return;
             }
 
             // Se for o carregamento inicial ou um novo login e já tivermos a sessão
             if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && session) {
-                // E o dashboard ainda não foi inicializado
-                if (!dashboardInitialized) {
+                // E o dashboard ainda não foi inicializado E NÃO ESTÁ inicializando
+                if (!dashboardInitialized && !isInitializing) {
+                    isInitializing = true; // Define o bloqueio
                     showScreen(telaLoading);
                     
                     const { data: profile, error } = await supabaseClient
@@ -6262,6 +6265,7 @@
                         console.error('Erro ao buscar perfil:', error);
                         showScreen(telaLogin);
                         await supabaseClient.auth.signOut();
+                        isInitializing = false; // Libera o bloqueio em caso de erro
                         return;
                     }
 
@@ -6270,10 +6274,14 @@
                         showScreen(null); 
                         loader.style.display = 'flex';
                         carregarDadosDoSupabase(supabaseClient);
+                        // Não liberamos o isInitializing aqui, pois o dashboard está carregado.
+                        // Ele será liberado no logout.
                     } else if (profile && profile.status === 'pendente') {
                         showScreen(telaPendente);
+                        isInitializing = false; // Libera o bloqueio se o usuário estiver pendente
                     } else {
                         showScreen(telaLogin);
+                        isInitializing = false; // Libera o bloqueio se não houver perfil/status
                     }
                 }
             } 
