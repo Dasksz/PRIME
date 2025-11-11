@@ -5385,7 +5385,7 @@
                         viewToShow.classList.remove('hidden');
                     }
                 }
-                
+
                 // Retorna a referência do elemento principal da visualização para a lógica de atualização de dados.
                 return viewToShow;
             };
@@ -6205,7 +6205,7 @@
             [telaLogin, telaLoading, telaPendente, mainDashboard, loader].forEach(el => {
                 if (el) {
                     // Usa a classe .hidden para consistência, em vez de display: none
-                    el.classList.add('hidden'); 
+                    el.classList.add('hidden');
                 }
             });
 
@@ -6252,7 +6252,7 @@
                 if (!dashboardInitialized && !isInitializing) {
                     isInitializing = true; // Define o bloqueio
                     showScreen('tela-loading');
-                    
+
                     const { data: profile, error } = await supabaseClient
                         .from('profiles')
                         .select('status')
@@ -6277,15 +6277,15 @@
                     } else if (profile && profile.status === 'pendente') {
                         showScreen('tela-pendente');
                         isInitializing = false; // Libera o bloqueio se o usuário estiver pendente
-                        
+
                         // ADICIONADO: Escuta por mudanças no perfil do usuário em tempo real
                         const channel = supabaseClient
                             .channel(`profiles:id=eq.${session.user.id}`)
                             .on(
                                 'postgres_changes',
-                                { 
-                                    event: 'UPDATE', 
-                                    schema: 'public', 
+                                {
+                                    event: 'UPDATE',
+                                    schema: 'public',
                                     table: 'profiles',
                                     filter: `id=eq.${session.user.id}`
                                 },
@@ -6294,7 +6294,7 @@
                                     if (payload.new && payload.new.status === 'aprovado') {
                                         // O status mudou! Remove a escuta e carrega o dashboard.
                                         supabaseClient.removeChannel(channel);
-                                        
+
                                         if (!dashboardInitialized) { // Garante que não inicialize duas vezes
                                             dashboardInitialized = true;
                                             showScreen(null); // Esconde todas as telas
@@ -6311,7 +6311,7 @@
                         isInitializing = false; // Libera o bloqueio se não houver perfil/status
                     }
                 }
-            } 
+            }
             // Se for o carregamento inicial e não houver sessão
             else if (event === 'INITIAL_SESSION' && !session) {
                 showScreen('tela-login');
