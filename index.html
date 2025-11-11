@@ -5357,37 +5357,36 @@
             const allViews = [mainDashboard, tableView, chartView, comparisonView, stockView, coverageView, innovationsView, weeklyView, cityView, innovationsMonthView];
 
             const switchView = (targetViewId) => {
-                let viewToShow = null;
+                // Define os contêineres de visualização de nível superior.
+                const topLevelViews = [mainDashboard, comparisonView, stockView, coverageView, innovationsView, weeklyView, cityView, innovationsMonthView];
                 
-                allViews.forEach(view => {
-                    // Casos especiais para o dashboard principal
-                    if (targetViewId === 'main-dashboard' && (view.id === 'main-dashboard' || view.id === 'chartView')) {
-                        view.classList.remove('hidden');
-                        if (view.id === 'main-dashboard') viewToShow = view;
-                    } 
-                    // Caso especial para a tabela de pedidos
-                    else if (targetViewId === 'table-view' && (view.id === 'main-dashboard' || view.id === 'tableView')) {
-                         view.classList.remove('hidden');
-                         if(view.id === 'main-dashboard') viewToShow = view;
-                    }
-                    // Demais casos
-                    else if (view.id === targetViewId) {
-                        view.classList.remove('hidden');
-                        viewToShow = view;
-                    } else {
-                        view.classList.add('hidden');
-                    }
-                });
+                // Primeiro, esconde todas as visualizações de nível superior para um estado limpo.
+                topLevelViews.forEach(view => view.classList.add('hidden'));
 
-                // Lógica para mostrar/esconder a tabela vs gráficos no dashboard principal
-                if (targetViewId === 'main-dashboard') {
-                    chartView.classList.remove('hidden');
-                    tableView.classList.add('hidden');
-                } else if (targetViewId === 'table-view') {
-                    chartView.classList.add('hidden');
-                    tableView.classList.remove('hidden');
+                let viewToShow;
+
+                // Lógica para o dashboard principal e suas sub-visualizações (gráfico/tabela)
+                if (targetViewId === 'main-dashboard' || targetViewId === 'table-view') {
+                    viewToShow = mainDashboard;
+                    mainDashboard.classList.remove('hidden'); // Garante que o contêiner principal esteja visível
+
+                    // Alterna entre a visualização de gráfico e tabela
+                    if (targetViewId === 'main-dashboard') {
+                        chartView.classList.remove('hidden');
+                        tableView.classList.add('hidden');
+                    } else { // targetViewId === 'table-view'
+                        chartView.classList.add('hidden');
+                        tableView.classList.remove('hidden');
+                    }
+                } else {
+                    // Para todas as outras visualizações de nível superior, encontra e mostra a correta.
+                    viewToShow = topLevelViews.find(v => v.id === targetViewId);
+                    if (viewToShow) {
+                        viewToShow.classList.remove('hidden');
+                    }
                 }
-
+                
+                // Retorna a referência do elemento principal da visualização para a lógica de atualização de dados.
                 return viewToShow;
             };
 
@@ -6279,6 +6278,35 @@
                     } else if (profile && profile.status === 'pendente') {
                         showScreen(telaPendente);
                         isInitializing = false; // Libera o bloqueio se o usuário estiver pendente
+                        
+                        // ADICIONADO: Escuta por mudanças no perfil do usuário em tempo real
+                        const channel = supabaseClient
+                            .channel(`profiles:id=eq.${session.user.id}`)
+                            .on(
+                                'postgres_changes',
+                                { 
+                                    event: 'UPDATE', 
+                                    schema: 'public', 
+                                    table: 'profiles',
+                                    filter: `id=eq.${session.user.id}`
+                                },
+                                (payload) => {
+                                    console.log('Recebida atualização de perfil:', payload);
+                                    if (payload.new && payload.new.status === 'aprovado') {
+                                        // O status mudou! Remove a escuta e carrega o dashboard.
+                                        supabaseClient.removeChannel(channel);
+                                        
+                                        if (!dashboardInitialized) { // Garante que não inicialize duas vezes
+                                            dashboardInitialized = true;
+                                            showScreen(null); 
+                                            loader.style.display = 'flex';
+                                            carregarDadosDoSupabase(supabaseClient);
+                                        }
+                                    }
+                                }
+                            )
+                            .subscribe();
+
                     } else {
                         showScreen(telaLogin);
                         isInitializing = false; // Libera o bloqueio se não houver perfil/status
