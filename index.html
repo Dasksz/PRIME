@@ -1070,32 +1070,28 @@
                 // A verificação de URL/Chave e a criação do cliente foram movidas para o script do porteiro
 
                 const fetchColumnarData = async (tableName, columns = '*') => {
-                    // Adiciona um AbortController para timeout
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos
+                    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos de timeout
 
                     try {
-                        // Inclui o sinal de aborto na requisição
                         const { data, error } = await supabaseClient
                             .from(tableName)
                             .select(columns)
-                            .abortSignal(controller.signal); // <--- ADICIONADO: Sinal de aborto
+                            .abortSignal(controller.signal);
 
                         clearTimeout(timeoutId);
 
                         if (error) {
                             console.error(`Erro ao buscar dados da tabela '${tableName}':`, error);
-                            // CORREÇÃO: Lança o erro para ser capturado externamente
                             throw new Error(`Falha no fetch da tabela ${tableName}: ${error.message}`);
                         }
                         return data || [];
                     } catch (e) {
                         clearTimeout(timeoutId);
-                        // Se for erro de timeout, lança uma mensagem clara.
                         if (e.name === 'AbortError') {
-                             throw new Error(`Timeout atingido ao buscar dados da tabela ${tableName}.`);
+                             throw new Error(`Timeout de 15s atingido ao buscar a tabela ${tableName}.`);
                         }
-                        throw e; // Relança outros erros
+                        throw e;
                     }
                 };
 
@@ -1109,18 +1105,16 @@
                     let allHistory = [];
                     let offset = 0;
                     const chunkSize = 25000;
-                    // CRIA UM NOVO CONTROLADOR PARA CADA CHUNK MAS LIMITA O TEMPO TOTAL
                     const controller = new AbortController();
                     const timeoutTotalId = setTimeout(() => controller.abort(), 60000); // Timeout total de 60s
 
                     try {
                         while (true) {
-                            // AQUI: Adiciona abortSignal(controller.signal)
                             const { data, error } = await supabaseClient
                                 .from('data_history')
                                 .select(historyColumns)
                                 .range(offset, offset + chunkSize - 1)
-                                .abortSignal(controller.signal); // <--- ADICIONADO AQUI
+                                .abortSignal(controller.signal);
 
                             if (error) {
                                 console.error(`Erro ao buscar chunk de 'data_history':`, error);
@@ -1139,7 +1133,7 @@
                     } catch (e) {
                         clearTimeout(timeoutTotalId);
                         if (e.name === 'AbortError') {
-                             throw new Error(`Timeout atingido ao buscar Histórico. A conexão travou.`);
+                             throw new Error(`Timeout de 60s atingido ao buscar o Histórico de Vendas.`);
                         }
                         throw e;
                     }
@@ -1149,18 +1143,16 @@
                     let allDetailed = [];
                     let offset = 0;
                     const chunkSize = 20000;
-                    // CRIA UM NOVO CONTROLADOR PARA CADA CHUNK MAS LIMITA O TEMPO TOTAL
                     const controller = new AbortController();
                     const timeoutTotalId = setTimeout(() => controller.abort(), 60000); // Timeout total de 60s
 
                     try {
                         while (true) {
-                            // AQUI: Adiciona abortSignal(controller.signal)
                             const { data, error } = await supabaseClient
                                 .from('data_detailed')
                                 .select(detailedColumns)
                                 .range(offset, offset + chunkSize - 1)
-                                .abortSignal(controller.signal); // <--- ADICIONADO AQUI
+                                .abortSignal(controller.signal);
 
                             if (error) {
                                 console.error(`Erro ao buscar chunk de 'data_detailed':`, error);
@@ -1179,7 +1171,7 @@
                     } catch (e) {
                         clearTimeout(timeoutTotalId);
                          if (e.name === 'AbortError') {
-                             throw new Error(`Timeout atingido ao buscar Detalhamento. A conexão travou.`);
+                             throw new Error(`Timeout de 60s atingido ao buscar o Detalhamento de Vendas.`);
                         }
                         throw e;
                     }
