@@ -6266,6 +6266,9 @@
         loginButton.addEventListener('click', async () => {
             const { error } = await supabaseClient.auth.signInWithOAuth({
                 provider: 'google',
+                options: {
+                    redirectTo: 'https://dasksz.github.io/PRIME/ONDASH.html'
+                }
             });
             if (error) console.error('Erro no login:', error);
         });
