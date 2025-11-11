@@ -1070,12 +1070,29 @@
                 // A verificação de URL/Chave e a criação do cliente foram movidas para o script do porteiro
 
                 const fetchColumnarData = async (tableName, columns = '*') => {
-                    const { data, error } = await supabaseClient.from(tableName).select(columns);
-                    if (error) {
-                        console.error(`Erro ao buscar dados da tabela '${tableName}':`, error);
-                        return [];
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos de timeout
+
+                    try {
+                        const { data, error } = await supabaseClient
+                            .from(tableName)
+                            .select(columns)
+                            .abortSignal(controller.signal);
+
+                        clearTimeout(timeoutId);
+
+                        if (error) {
+                            console.error(`Erro ao buscar dados da tabela '${tableName}':`, error);
+                            throw new Error(`Falha no fetch da tabela ${tableName}: ${error.message}`);
+                        }
+                        return data || [];
+                    } catch (e) {
+                        clearTimeout(timeoutId);
+                        if (e.name === 'AbortError') {
+                             throw new Error(`Timeout de 15s atingido ao buscar a tabela ${tableName}.`);
+                        }
+                        throw e;
                     }
-                    return data || [];
                 };
 
                 loaderText.textContent = 'Buscando dados...';
@@ -1088,50 +1105,76 @@
                     let allHistory = [];
                     let offset = 0;
                     const chunkSize = 25000;
-                    while (true) {
-                        const { data, error } = await supabaseClient
-                            .from('data_history')
-                            .select(historyColumns)
-                            .range(offset, offset + chunkSize - 1);
+                    const controller = new AbortController();
+                    const timeoutTotalId = setTimeout(() => controller.abort(), 60000); // Timeout total de 60s
 
-                        if (error) {
-                            console.error(`Erro ao buscar chunk de 'data_history':`, error);
-                            break;
+                    try {
+                        while (true) {
+                            const { data, error } = await supabaseClient
+                                .from('data_history')
+                                .select(historyColumns)
+                                .range(offset, offset + chunkSize - 1)
+                                .abortSignal(controller.signal);
+
+                            if (error) {
+                                console.error(`Erro ao buscar chunk de 'data_history':`, error);
+                                throw new Error(`Falha no chunk de histórico: ${error.message}`);
+                            }
+                            if (data) {
+                                allHistory = allHistory.concat(data);
+                            }
+                            if (!data || data.length < chunkSize) {
+                                break;
+                            }
+                            offset += chunkSize;
                         }
-                        if (data) {
-                            allHistory = allHistory.concat(data);
+                        clearTimeout(timeoutTotalId);
+                        return allHistory;
+                    } catch (e) {
+                        clearTimeout(timeoutTotalId);
+                        if (e.name === 'AbortError') {
+                             throw new Error(`Timeout de 60s atingido ao buscar o Histórico de Vendas.`);
                         }
-                        if (!data || data.length < chunkSize) {
-                            break;
-                        }
-                        offset += chunkSize;
+                        throw e;
                     }
-                    return allHistory;
                 };
 
                 const fetchDetailedInChunks = async () => {
                     let allDetailed = [];
                     let offset = 0;
-                    const chunkSize = 20000; // <-- REDUZIDO de 25000 para 20000
-                    while (true) {
-                        const { data, error } = await supabaseClient
-                            .from('data_detailed')
-                            .select(detailedColumns)
-                            .range(offset, offset + chunkSize - 1);
+                    const chunkSize = 20000;
+                    const controller = new AbortController();
+                    const timeoutTotalId = setTimeout(() => controller.abort(), 60000); // Timeout total de 60s
 
-                        if (error) {
-                            console.error(`Erro ao buscar chunk de 'data_detailed':`, error);
-                            break;
+                    try {
+                        while (true) {
+                            const { data, error } = await supabaseClient
+                                .from('data_detailed')
+                                .select(detailedColumns)
+                                .range(offset, offset + chunkSize - 1)
+                                .abortSignal(controller.signal);
+
+                            if (error) {
+                                console.error(`Erro ao buscar chunk de 'data_detailed':`, error);
+                                throw new Error(`Falha no chunk de detalhamento: ${error.message}`);
+                            }
+                            if (data) {
+                                allDetailed = allDetailed.concat(data);
+                            }
+                            if (!data || data.length < chunkSize) {
+                                break;
+                            }
+                            offset += chunkSize;
                         }
-                        if (data) {
-                            allDetailed = allDetailed.concat(data);
+                        clearTimeout(timeoutTotalId);
+                        return allDetailed;
+                    } catch (e) {
+                        clearTimeout(timeoutTotalId);
+                         if (e.name === 'AbortError') {
+                             throw new Error(`Timeout de 60s atingido ao buscar o Detalhamento de Vendas.`);
                         }
-                        if (!data || data.length < chunkSize) {
-                            break;
-                        }
-                        offset += chunkSize;
+                        throw e;
                     }
-                    return allDetailed;
                 };
 
                 const [
@@ -6168,6 +6211,27 @@
         populateSideMenu();
         initializeTheme();
         setupEventListeners();
+
+        // CORREÇÃO: Força a re-renderização dos gráficos e tabelas ao mudar a visibilidade da aba
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                // Atualiza os gráficos existentes
+                Object.values(charts).forEach(chart => {
+                    if (chart && typeof chart.update === 'function') {
+                        chart.update();
+                    }
+                });
+
+                // Força o redesenho do DOM para corrigir tabelas e layout
+                const mainContent = document.getElementById('app-container');
+                if (mainContent) {
+                    mainContent.style.opacity = '0.999';
+                    setTimeout(() => {
+                        mainContent.style.opacity = '1';
+                    }, 0);
+                }
+            }
+        });
         
         // Assegura que os dados históricos estão prontos antes da primeira renderização
         // calculateHistoricalBests(); // <-- REMOVIDA DAQUI
@@ -6178,6 +6242,85 @@
 
     <!-- NOVO SCRIPT DO PORTEIRO -->
     <script>
+    let profilesListener = null;
+    let pollingInterval = null;
+
+    function stopProfilesListener(supabaseClient) {
+        if (profilesListener) {
+            supabaseClient.removeChannel(profilesListener);
+            profilesListener = null;
+            console.log('Realtime listener parado.');
+        }
+        if (pollingInterval) {
+            clearInterval(pollingInterval);
+            pollingInterval = null;
+            console.log('Polling de status parado.');
+        }
+    }
+
+    async function startPendingStatusPolling(supabaseClient, userId, onApproval) {
+        console.log('Iniciando polling de status via HTTP...');
+        if (pollingInterval) clearInterval(pollingInterval); // Limpa o anterior
+
+        pollingInterval = setInterval(async () => {
+            try {
+                const { data: profile, error } = await supabaseClient
+                    .from('profiles')
+                    .select('status')
+                    .eq('id', userId)
+                    .single();
+
+                if (error && error.code !== 'PGRST116') {
+                    console.error('Erro no polling:', error);
+                    return;
+                }
+
+                if (profile && profile.status === 'aprovado') {
+                    console.log('Status "aprovado" detectado via polling. Acionando callback...');
+                    stopProfilesListener(supabaseClient);
+                    if(onApproval) onApproval();
+                }
+            } catch (e) {
+                console.error('Falha na requisição de polling:', e);
+            }
+        }, 30000);
+    }
+
+    function startProfilesRealtimeListener(supabaseClient, userId, onApproval) {
+        stopProfilesListener(supabaseClient);
+
+        console.log('Iniciando listener de realtime para status...');
+        profilesListener = supabaseClient
+            .channel(`profiles:id=eq.${userId}`)
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'profiles',
+                filter: `id=eq.${userId}`
+            },
+            (payload) => {
+                if (payload.new && payload.new.status === 'aprovado') {
+                    console.log('Status "aprovado" detectado via realtime. Acionando callback...');
+                    stopProfilesListener(supabaseClient);
+                    if(onApproval) onApproval();
+                }
+            })
+            .subscribe((status, err) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log('Conectado ao canal de realtime com sucesso.');
+                    if (pollingInterval) {
+                        clearInterval(pollingInterval);
+                        pollingInterval = null;
+                        console.log('Polling de status parado, WebSocket conectado.');
+                    }
+                }
+                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || err) {
+                    console.error('Falha ao conectar no canal de realtime, iniciando polling como fallback:', err || status);
+                    startPendingStatusPolling(supabaseClient, userId, onApproval);
+                }
+            });
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         let dashboardInitialized = false; // Flag de controle
         let isInitializing = false; // Flag de bloqueio para condição de corrida
@@ -6275,26 +6418,21 @@
                             dashboardInitialized = true; // Marca como inicializado
                             showScreen(null); // Esconde as telas de gatekeeper
                             loader.classList.remove('hidden'); // Mostra o loader principal
-                            carregarDadosDoSupabase(supabaseClient);
+                            await carregarDadosDoSupabase(supabaseClient);
                             // isInitializing permanece true para evitar re-execução.
                         } else if (profile && profile.status === 'pendente') {
                             showScreen('tela-pendente');
                             isInitializing = false; // Libera o bloqueio, pois a UI está estável.
 
-                            const channel = supabaseClient
-                                .channel(`profiles:id=eq.${session.user.id}`)
-                                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${session.user.id}` },
-                                    (payload) => {
-                                        if (payload.new && payload.new.status === 'aprovado' && !dashboardInitialized) {
-                                            supabaseClient.removeChannel(channel);
-                                            dashboardInitialized = true;
-                                            showScreen(null);
-                                            loader.classList.remove('hidden');
-                                            carregarDadosDoSupabase(supabaseClient);
-                                        }
-                                    }
-                                )
-                                .subscribe();
+                            startProfilesRealtimeListener(supabaseClient, session.user.id, () => {
+                                // A verificação !dashboardInitialized previne múltiplas execuções se o callback for chamado mais de uma vez
+                                if (!dashboardInitialized) {
+                                    dashboardInitialized = true;
+                                    showScreen(null);
+                                    loader.classList.remove('hidden');
+                                    carregarDadosDoSupabase(supabaseClient);
+                                }
+                            });
                         } else {
                             // Perfil não encontrado ou status inválido, lança erro.
                             throw new Error('Perfil não encontrado ou com status inválido.');
