@@ -343,6 +343,9 @@
    <div style="font-family: 'Inter', sans-serif; padding: 2.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1); max-width: 400px; width: 90%; background: var(--bg-content); text-align: center; border: 1px solid var(--border-primary);">
         <h2 style="color: var(--text-primary); margin-top: 0; font-size: 1.5rem; font-weight: 600;">Carregando...</h2>
         <p style="color: var(--text-secondary); line-height: 1.6;">Verificando seu status de aprovação.</p>
+        <button id="logout-button-loading" class="logout" style="background-color: #6c757d; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background-color 0.3s ease; width: 100%; margin-top: 1rem;">
+            Sair / Deslogar
+        </button>
     </div>
 </div>
 
@@ -6242,213 +6245,191 @@
 
     <!-- NOVO SCRIPT DO PORTEIRO -->
     <script>
-    let profilesListener = null;
-    let pollingInterval = null;
-
-    function stopProfilesListener(supabaseClient) {
-        if (profilesListener) {
-            supabaseClient.removeChannel(profilesListener);
-            profilesListener = null;
-            console.log('Realtime listener parado.');
-        }
-        if (pollingInterval) {
-            clearInterval(pollingInterval);
-            pollingInterval = null;
-            console.log('Polling de status parado.');
-        }
-    }
-
-    async function startPendingStatusPolling(supabaseClient, userId, onApproval) {
-        console.log('Iniciando polling de status via HTTP...');
-        if (pollingInterval) clearInterval(pollingInterval); // Limpa o anterior
-
-        pollingInterval = setInterval(async () => {
-            try {
-                const { data: profile, error } = await supabaseClient
-                    .from('profiles')
-                    .select('status')
-                    .eq('id', userId)
-                    .single();
-
-                if (error && error.code !== 'PGRST116') {
-                    console.error('Erro no polling:', error);
-                    return;
-                }
-
-                if (profile && profile.status === 'aprovado') {
-                    console.log('Status "aprovado" detectado via polling. Acionando callback...');
-                    stopProfilesListener(supabaseClient);
-                    if(onApproval) onApproval();
-                }
-            } catch (e) {
-                console.error('Falha na requisição de polling:', e);
-            }
-        }, 30000); 
-    }
-
-    function startProfilesRealtimeListener(supabaseClient, userId, onApproval) {
-        stopProfilesListener(supabaseClient); 
-
-        console.log('Iniciando listener de realtime para status...');
-        profilesListener = supabaseClient
-            .channel(`profiles:id=eq.${userId}`)
-            .on('postgres_changes', { 
-                event: 'UPDATE', 
-                schema: 'public', 
-                table: 'profiles', 
-                filter: `id=eq.${userId}` 
-            },
-            (payload) => {
-                if (payload.new && payload.new.status === 'aprovado') {
-                    console.log('Status "aprovado" detectado via realtime. Acionando callback...');
-                    stopProfilesListener(supabaseClient);
-                    if(onApproval) onApproval();
-                }
-            })
-            .subscribe((status, err) => {
-                if (status === 'SUBSCRIBED') {
-                    console.log('Conectado ao canal de realtime com sucesso.');
-                    if (pollingInterval) {
-                        clearInterval(pollingInterval);
-                        pollingInterval = null;
-                        console.log('Polling de status parado, WebSocket conectado.');
-                    }
-                }
-                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || err) {
-                    console.error('Falha ao conectar no canal de realtime, iniciando polling como fallback:', err || status);
-                    startPendingStatusPolling(supabaseClient, userId, onApproval);
-                }
-            });
-    }
+    // Gerenciador de estado de autenticação (Gatekeeper)
+    // Responsável por:
+    // 1. Lidar com login/logout e redirecionamentos.
+    // 2. Verificar o status ('aprovado' vs 'pendente') do usuário.
+    // 3. Mostrar as telas corretas (login, carregando, pendente, dashboard).
+    // 4. Implementar salvaguardas contra loops e timeouts.
 
     document.addEventListener('DOMContentLoaded', () => {
-        let dashboardInitialized = false; // Flag de controle
-        let isInitializing = false; // Flag de bloqueio para condição de corrida
-        // As variáveis já estão no escopo global do outro script
-        // const SUPABASE_URL = '...';
-        // const SUPABASE_ANON_KEY = '...';
-
         const { createClient } = supabase;
         const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // Referências aos elementos da tela
+        // --- Referências de Elementos ---
         const telaLogin = document.getElementById('tela-login');
         const telaLoading = document.getElementById('tela-loading');
         const telaPendente = document.getElementById('tela-pendente');
         const mainDashboard = document.getElementById('main-dashboard');
         const loader = document.getElementById('loader');
-
-        // Botões
         const loginButton = document.getElementById('login-button');
-        const logoutButtonPendente = document.getElementById('logout-button-pendente');
 
-        // Função simplificada para mostrar uma tela de "gatekeeper" (login, loading, pendente)
+        // --- Estado Global do Módulo ---
+        let dashboardInitialized = false;
+        let isInitializing = false;
+        let initializationTimeout = null;
+        let realtimeChannel = null;
+        let pollingInterval = null;
+
+        // --- Funções Auxiliares ---
+
+        // Mostra uma das telas de gatekeeper e esconde as outras
         const showScreen = (screenId) => {
-            [telaLogin, telaLoading, telaPendente].forEach(el => {
-                if (el) el.classList.add('hidden');
-            });
-            if (screenId) {
-                const targetScreen = document.getElementById(screenId);
-                if (targetScreen) {
-                    targetScreen.classList.remove('hidden');
-                }
+            [telaLogin, telaLoading, telaPendente].forEach(el => el?.classList.add('hidden'));
+            if (screenId) document.getElementById(screenId)?.classList.remove('hidden');
+        };
+
+        // Função de logout centralizada
+        const handleLogout = async () => {
+            clearTimeout(initializationTimeout); // Limpa qualquer timeout pendente
+            stopStatusListener(); // Para listeners de status
+            await supabaseClient.auth.signOut();
+            // O evento onAuthStateChange('SIGNED_OUT') cuidará do resto.
+        };
+
+        // Para todos os listeners de status (realtime e polling)
+        const stopStatusListener = () => {
+            if (realtimeChannel) {
+                supabaseClient.removeChannel(realtimeChannel);
+                realtimeChannel = null;
+                console.log('Listener de Realtime parado.');
+            }
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+                console.log('Polling de status parado.');
             }
         };
 
-        // Event Listeners
-        loginButton.addEventListener('click', async () => {
-            const { error } = await supabaseClient.auth.signInWithOAuth({
-                provider: 'google',
-                options: {
-                    redirectTo: 'https://dasksz.github.io/PRIME/index.html'
-                }
-            });
-            if (error) console.error('Erro no login:', error);
-        });
-
-        const handleLogout = async () => {
-            await supabaseClient.auth.signOut();
-            showScreen(telaLogin);
+        // Inicia o processo principal de carregar o dashboard
+        const initializeDashboard = async () => {
+            if (dashboardInitialized) return; // Previne re-inicialização
+            dashboardInitialized = true;
+            stopStatusListener();
+            showScreen(null); // Esconde telas de login/pendente/loading
+            loader.classList.remove('hidden'); // Mostra o loader de dados
+            await carregarDadosDoSupabase(supabaseClient);
         };
 
-        if(logoutButtonPendente) {
-            logoutButtonPendente.addEventListener('click', handleLogout);
-        }
+        // Fallback: Verifica o status do usuário via HTTP a cada 30s se o WebSocket falhar
+        const startPendingStatusPolling = (userId) => {
+            console.log('Iniciando polling de status via HTTP...');
+            stopStatusListener(); // Garante que apenas um método esteja ativo
 
-        // Ouve por mudanças no estado de autenticação (login/logout)
+            pollingInterval = setInterval(async () => {
+                const { data, error } = await supabaseClient.from('profiles').select('status').eq('id', userId).single();
+                if (data?.status === 'aprovado') {
+                    console.log('Status "aprovado" detectado via polling.');
+                    initializeDashboard();
+                } else if (error && error.code !== 'PGRST116') {
+                    console.error('Erro no polling:', error);
+                }
+            }, 30000);
+        };
+
+        // Método principal: Ouve por mudanças de status em tempo real via WebSocket
+        const startRealtimeStatusListener = (userId) => {
+            console.log('Iniciando listener de Realtime para status...');
+            stopStatusListener(); // Garante que apenas um método esteja ativo
+
+            realtimeChannel = supabaseClient.channel(`profile-status:${userId}`)
+                .on('postgres_changes', {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'profiles',
+                    filter: `id=eq.${userId}`
+                },
+                (payload) => {
+                    if (payload.new?.status === 'aprovado') {
+                        console.log('Status "aprovado" detectado via Realtime.');
+                        initializeDashboard();
+                    }
+                })
+                .subscribe((status, err) => {
+                    if (status === 'SUBSCRIBED') {
+                        console.log('Conectado ao canal de Realtime com sucesso.');
+                    }
+                    if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || err) {
+                        console.error('Falha na conexão Realtime, usando polling como fallback:', err || status);
+                        startPendingStatusPolling(userId);
+                    }
+                });
+        };
+
+
+        // --- Lógica Principal de Autenticação ---
+
+        // Associa os eventos de clique aos botões de login/logout
+        loginButton?.addEventListener('click', async () => {
+            await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.href } });
+        });
+
+        // CORREÇÃO: Usa delegação de eventos para garantir que os botões de logout sempre funcionem
+        document.addEventListener('click', (event) => {
+            if (event.target && (event.target.id === 'logout-button-pendente' || event.target.id === 'logout-button-loading')) {
+                handleLogout();
+            }
+        });
+
+
+        // Ouve por mudanças no estado de autenticação (login, logout, refresh)
         supabaseClient.auth.onAuthStateChange(async (event, session) => {
-            // Esconde o dashboard principal por padrão em qualquer mudança de estado
-            if (mainDashboard) mainDashboard.classList.add('hidden');
+            mainDashboard?.classList.add('hidden'); // Sempre esconde o dashboard em uma mudança
+            stopStatusListener(); // E para qualquer listener de status antigo
 
-            // Se o usuário deslogou, mostra a tela de login.
-            if (event === 'SIGNED_OUT') {
-                dashboardInitialized = false; // Reseta o estado
-                isInitializing = false; // Reseta o bloqueio
+            // 1. Usuário deslogou ou não tem sessão
+            if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
+                dashboardInitialized = false;
+                isInitializing = false;
+                clearTimeout(initializationTimeout);
                 showScreen('tela-login');
                 return;
             }
 
-            // Se for o carregamento inicial ou um novo login e já tivermos a sessão
-            if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && session) {
-
-                // CORREÇÃO 1: Adicionar a verificação do evento 'SIGNED_IN' aqui
-                // Isso força a rechecagem do status APÓS a conclusão do login/redirect.
+            // 2. Usuário está logado (sessão existe)
+            if (session) {
+                // Se for um novo login (após redirect), reseta o estado do dashboard
                 if (event === 'SIGNED_IN') {
-                    // Força um novo ciclo de inicialização após login/redirect
                     dashboardInitialized = false;
                 }
 
-                // E o dashboard ainda não foi inicializado E NÃO ESTÁ inicializando
-                if (!dashboardInitialized && !isInitializing) {
-                    isInitializing = true; // Define o bloqueio
-                    showScreen('tela-loading');
-                    try {
-                        const { data: profile, error } = await supabaseClient
-                            .from('profiles')
-                            .select('status')
-                            .eq('id', session.user.id)
-                            .single();
-
-                        if (error && error.code !== 'PGRST116') {
-                            // Lança o erro para ser pego pelo bloco catch centralizado.
-                            throw new Error(`Erro ao buscar perfil: ${error.message}`);
-                        }
-
-                        if (profile && profile.status === 'aprovado') {
-                            dashboardInitialized = true; // Marca como inicializado
-                            showScreen(null); // Esconde as telas de gatekeeper
-                            loader.classList.remove('hidden'); // Mostra o loader principal
-                            await carregarDadosDoSupabase(supabaseClient);
-                            // isInitializing permanece true para evitar re-execução.
-                        } else if (profile && profile.status === 'pendente') {
-                            showScreen('tela-pendente');
-                            isInitializing = false; // Libera o bloqueio, pois a UI está estável.
-
-                            startProfilesRealtimeListener(supabaseClient, session.user.id, () => {
-                                // A verificação !dashboardInitialized previne múltiplas execuções se o callback for chamado mais de uma vez
-                                if (!dashboardInitialized) { 
-                                    dashboardInitialized = true;
-                                    showScreen(null);
-                                    loader.classList.remove('hidden');
-                                    carregarDadosDoSupabase(supabaseClient);
-                                }
-                            });
-                        } else {
-                            // Perfil não encontrado ou status inválido, lança erro.
-                            throw new Error('Perfil não encontrado ou com status inválido.');
-                        }
-                    } catch (e) {
-                        // Este bloco agora captura falhas de rede, timeouts E erros lógicos.
-                        console.error('Falha na inicialização da sessão:', e);
-                        showScreen('tela-login');
-                        await supabaseClient.auth.signOut();
-                        isInitializing = false; // Libera o bloqueio em QUALQUER caso de erro.
-                    }
+                // Previne múltiplas inicializações se o evento disparar várias vezes
+                if (dashboardInitialized || isInitializing) {
+                    return;
                 }
-            }
-            // Se for o carregamento inicial e não houver sessão
-            else if (event === 'INITIAL_SESSION' && !session) {
-                showScreen('tela-login');
+
+                isInitializing = true;
+                showScreen('tela-loading');
+
+                // NOVO: Timeout de segurança para evitar loop infinito na tela de loading
+                clearTimeout(initializationTimeout);
+                initializationTimeout = setTimeout(() => {
+                    console.error("Timeout de 20s atingido. A verificação de perfil falhou ou demorou demais. Deslogando.");
+                    handleLogout();
+                }, 20000); // 20 segundos
+
+                try {
+                    const { data: profile, error } = await supabaseClient.from('profiles').select('status').eq('id', session.user.id).single();
+
+                    clearTimeout(initializationTimeout); // Sucesso, limpa o timeout
+
+                    if (error && error.code !== 'PGRST116') { // PGRST116 = 0 rows, o que é um estado válido (perfil não existe)
+                        throw new Error(`Erro ao buscar perfil: ${error.message}`);
+                    }
+
+                    if (profile?.status === 'aprovado') {
+                        await initializeDashboard();
+                        // Deixa isInitializing como true para bloquear re-entradas nesta sessão
+                    } else {
+                        // Status é 'pendente', não existe, ou é inválido. Trata como pendente.
+                        isInitializing = false; // Libera o bloqueio para permitir nova tentativa se necessário
+                        showScreen('tela-pendente');
+                        startRealtimeStatusListener(session.user.id);
+                    }
+                } catch (e) {
+                    console.error("Falha crítica na inicialização da sessão:", e);
+                    handleLogout(); // Desloga o usuário em caso de erro grave
+                }
             }
         });
     });
