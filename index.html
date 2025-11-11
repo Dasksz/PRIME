@@ -6217,54 +6217,6 @@
             }
         };
 
-        const checkUserStatus = async () => {
-            if (dashboardInitialized) return; // Impede a reexecução
-            showScreen(telaLoading);
-
-            const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
-
-            if (sessionError) {
-                console.error('Erro ao obter sessão:', sessionError);
-                showScreen(telaLogin);
-                return;
-            }
-
-            if (!session) {
-                showScreen(telaLogin);
-                return;
-            }
-            
-            // Força o cliente a usar o token da sessão atual
-            supabaseClient.auth.setSession(session);
-
-            // Agora, com o cliente autenticado, busca o perfil
-            const { data: profile, error } = await supabaseClient
-                .from('profiles')
-                .select('status')
-                .single();
-
-            if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
-                console.error('Erro ao buscar perfil:', error);
-                showScreen(telaLogin); 
-                await supabaseClient.auth.signOut();
-                return;
-            }
-
-            if (profile && profile.status === 'aprovado') {
-                dashboardInitialized = true; // Define a flag
-                showScreen(null); // Esconde todas as telas de login/loading
-                // O loader principal do dashboard será exibido pela função de carregar dados
-                loader.style.display = 'flex';
-                // Inicia o carregamento dos dados do dashboard
-                carregarDadosDoSupabase(supabaseClient); // Passa o cliente já autenticado
-            } else if (profile && profile.status === 'pendente') {
-                showScreen(telaPendente);
-            } else {
-                // Se não tiver perfil ou status for 'rejeitado', manda para o login
-                showScreen(telaLogin);
-            }
-        };
-
         // Event Listeners
         loginButton.addEventListener('click', async () => {
             const { error } = await supabaseClient.auth.signInWithOAuth({
@@ -6285,13 +6237,49 @@
             logoutButtonPendente.addEventListener('click', handleLogout);
         }
 
-        // Inicia a verificação quando a página carrega
-        checkUserStatus();
-
         // Ouve por mudanças no estado de autenticação (login/logout)
-        supabaseClient.auth.onAuthStateChange((event, session) => {
-            if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
-                checkUserStatus();
+        supabaseClient.auth.onAuthStateChange(async (event, session) => {
+            // Se o usuário deslogou, mostra a tela de login.
+            if (event === 'SIGNED_OUT') {
+                dashboardInitialized = false; // Reseta o estado
+                showScreen(telaLogin);
+                return;
+            }
+
+            // Se for o carregamento inicial ou um novo login e já tivermos a sessão
+            if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && session) {
+                // E o dashboard ainda não foi inicializado
+                if (!dashboardInitialized) {
+                    showScreen(telaLoading);
+
+                    const { data: profile, error } = await supabaseClient
+                        .from('profiles')
+                        .select('status')
+                        .eq('id', session.user.id)
+                        .single();
+
+                    if (error && error.code !== 'PGRST116') {
+                        console.error('Erro ao buscar perfil:', error);
+                        showScreen(telaLogin);
+                        await supabaseClient.auth.signOut();
+                        return;
+                    }
+
+                    if (profile && profile.status === 'aprovado') {
+                        dashboardInitialized = true; // Marca como inicializado
+                        showScreen(null);
+                        loader.style.display = 'flex';
+                        carregarDadosDoSupabase(supabaseClient);
+                    } else if (profile && profile.status === 'pendente') {
+                        showScreen(telaPendente);
+                    } else {
+                        showScreen(telaLogin);
+                    }
+                }
+            }
+            // Se for o carregamento inicial e não houver sessão
+            else if (event === 'INITIAL_SESSION' && !session) {
+                showScreen(telaLogin);
             }
         });
     });
