@@ -6259,58 +6259,52 @@
                 if (!dashboardInitialized && !isInitializing) {
                     isInitializing = true; // Define o bloqueio
                     showScreen('tela-loading');
+                    try {
+                        const { data: profile, error } = await supabaseClient
+                            .from('profiles')
+                            .select('status')
+                            .eq('id', session.user.id)
+                            .single();
 
-                    const { data: profile, error } = await supabaseClient
-                        .from('profiles')
-                        .select('status')
-                        .eq('id', session.user.id)
-                        .single();
+                        if (error && error.code !== 'PGRST116') {
+                            // Lança o erro para ser pego pelo bloco catch centralizado.
+                            throw new Error(`Erro ao buscar perfil: ${error.message}`);
+                        }
 
-                    if (error && error.code !== 'PGRST116') {
-                        console.error('Erro ao buscar perfil:', error);
-                        showScreen('tela-login');
-                        await supabaseClient.auth.signOut();
-                        isInitializing = false; // Libera o bloqueio em caso de erro
-                        return;
-                    }
+                        if (profile && profile.status === 'aprovado') {
+                            dashboardInitialized = true; // Marca como inicializado
+                            showScreen(null); // Esconde as telas de gatekeeper
+                            loader.classList.remove('hidden'); // Mostra o loader principal
+                            carregarDadosDoSupabase(supabaseClient);
+                            // isInitializing permanece true para evitar re-execução.
+                        } else if (profile && profile.status === 'pendente') {
+                            showScreen('tela-pendente');
+                            isInitializing = false; // Libera o bloqueio, pois a UI está estável.
 
-                    if (profile && profile.status === 'aprovado') {
-                        dashboardInitialized = true; // Marca como inicializado
-                        showScreen(null); // Esconde as telas de gatekeeper
-                        loader.classList.remove('hidden'); // Mostra o loader principal
-                        carregarDadosDoSupabase(supabaseClient);
-                        // Não liberamos o isInitializing aqui, pois o dashboard está carregado.
-                    } else if (profile && profile.status === 'pendente') {
-                        showScreen('tela-pendente');
-                        isInitializing = false; // Libera o bloqueio se o usuário estiver pendente
-
-                        const channel = supabaseClient
-                            .channel(`profiles:id=eq.${session.user.id}`)
-                            .on(
-                                'postgres_changes',
-                                {
-                                    event: 'UPDATE',
-                                    schema: 'public',
-                                    table: 'profiles',
-                                    filter: `id=eq.${session.user.id}`
-                                },
-                                (payload) => {
-                                    if (payload.new && payload.new.status === 'aprovado' && !dashboardInitialized) {
-                                        supabaseClient.removeChannel(channel);
-                                        dashboardInitialized = true;
-                                        showScreen(null);
-                                        loader.classList.remove('hidden');
-                                        carregarDadosDoSupabase(supabaseClient);
+                            const channel = supabaseClient
+                                .channel(`profiles:id=eq.${session.user.id}`)
+                                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${session.user.id}` },
+                                    (payload) => {
+                                        if (payload.new && payload.new.status === 'aprovado' && !dashboardInitialized) {
+                                            supabaseClient.removeChannel(channel);
+                                            dashboardInitialized = true;
+                                            showScreen(null);
+                                            loader.classList.remove('hidden');
+                                            carregarDadosDoSupabase(supabaseClient);
+                                        }
                                     }
-                                }
-                            )
-                            .subscribe();
-
-                    } else {
-                        // CORREÇÃO 2: Tratar caso de perfil não encontrado ou status inválido como logout.
+                                )
+                                .subscribe();
+                        } else {
+                            // Perfil não encontrado ou status inválido, lança erro.
+                            throw new Error('Perfil não encontrado ou com status inválido.');
+                        }
+                    } catch (e) {
+                        // Este bloco agora captura falhas de rede, timeouts E erros lógicos.
+                        console.error('Falha na inicialização da sessão:', e);
                         showScreen('tela-login');
                         await supabaseClient.auth.signOut();
-                        isInitializing = false;
+                        isInitializing = false; // Libera o bloqueio em QUALQUER caso de erro.
                     }
                 }
             }
