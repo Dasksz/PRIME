@@ -314,31 +314,138 @@
             transform: translateX(14px);
         }
     </style>
+<style>
+    /* Estilos para o novo botão de login do Google */
+    .google-login-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem; /* 12px */
+        width: 100%;
+        padding: 10px 16px;
+        border: 1px solid var(--border-primary);
+        border-radius: 8px;
+        background-color: var(--bg-content);
+        color: var(--text-primary);
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s, box-shadow 0.2s;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .google-login-btn:hover {
+        background-color: var(--bg-menu-button-hover);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+    }
+    
+    /* Centraliza as telas de login no meio da página */
+    #tela-login, #tela-loading, #tela-pendente {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        margin: 0;
+        z-index: 2000;
+    }
+</style>
+<style>
+    /* Estilos para as telas de 'Pendente' e 'Carregando' */
+    .status-screen {
+        display: none;
+        font-family: 'Inter', sans-serif;
+        padding: 2.5rem 3rem 3rem 3rem;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        max-width: 420px;
+        width: 90%;
+        background: var(--bg-content);
+        text-align: center;
+        border: 1px solid var(--border-primary);
+
+        /* Posicionamento centralizado herdado de #tela-login */
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        margin: 0;
+        z-index: 2000;
+    }
+    
+    .status-screen h2 {
+        color: var(--text-primary);
+        margin-top: 0;
+        font-size: 1.6rem; /* Um pouco menor que o h1 do login */
+        font-weight: 700;
+    }
+    
+    .status-screen p {
+        color: var(--text-secondary);
+        line-height: 1.6;
+        margin-bottom: 2rem;
+    }
+    
+    /* Estilo do botão de logout, para ser mais profissional */
+    .logout-btn {
+        width: 100%;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        background-color: #dc3545; /* Vermelho para 'sair' */
+        color: white;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s, box-shadow 0.2s;
+        box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
+    }
+    
+    .logout-btn:hover {
+        background-color: #c82333;
+        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+    }
+</style>
 </head>
 <body class="antialiased">
 
     <!-- INÍCIO DO CÓDIGO PARA COPIAR -->
 
     <!-- Tela de Login (quando deslogado) -->
-    <div id="tela-login" class="container" style="display: none; font-family: 'Inter', sans-serif; padding: 2.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1); max-width: 400px; width: 90%; margin: 5rem auto; background: #fff; text-align: center; z-index: 2000; position: relative;">
-        <h1 style="color: #333; margin-top: 0; font-size: 1.8rem; font-weight: 700;">Acesso Restrito</h1>
-        <p style="color: #555; line-height: 1.6;">Este é um sistema privado. Por favor, faça login para solicitar acesso.</p>
-        <button id="login-button" style="background-color: #007bff; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background-color 0.3s ease; width: 100%; margin-top: 1rem;">
-            Entrar com Google
+    <div id="tela-login" class="container" style="display: none; font-family: 'Inter', sans-serif; padding: 2.5rem 3rem 3rem 3rem; border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); max-width: 420px; width: 90%; margin: 5rem auto; background: var(--bg-content); text-align: center; z-index: 2000; position: relative; border: 1px solid var(--border-primary);">
+        
+        <!-- Logo da PRIME -->
+        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSnaaZ2WnZBJIxPRfabS4Ug78PKK6Gu3nbHlw&s" alt="Logo PRIME" style="width: 70px; height: 70px; margin: 0 auto 1.5rem auto; border-radius: 50%;">
+
+        <h1 style="color: var(--text-primary); margin-top: 0; font-size: 1.8rem; font-weight: 700;">Acesso Restrito</h1>
+        <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 2rem;">Este é um sistema privado da PRIME. Por favor, faça login para solicitar seu acesso.</p>
+        
+        <!-- Botão "Entrar com Google" com logo -->
+        <button id="login-button" class="google-login-btn">
+            <!-- SVG do Logo do Google -->
+            <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" style="width: 20px; height: 20px;">
+                <g>
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                    <path fill="none" d="M0 0h48v48H0z"></path>
+                </g>
+            </svg>
+            <span>Entrar com Google</span>
         </button>
     </div>
 
     <!-- Tela de Carregamento -->
-    <div id="tela-loading" class="container" style="display: none; font-family: 'Inter', sans-serif; padding: 2.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1); max-width: 400px; width: 90%; margin: 5rem auto; background: #fff; text-align: center; z-index: 2000; position: relative;">
-        <h2 style="color: #333; margin-top: 0; font-size: 1.5rem; font-weight: 600;">Carregando...</h2>
-        <p style="color: #555; line-height: 1.6;">Verificando seu status de aprovação.</p>
+    <div id="tela-loading" class="status-screen">
+        <h2>Carregando...</h2>
+        <p>Verificando seu status de aprovação.</p>
     </div>
 
     <!-- Tela de Espera (Pendente) -->
-    <div id="tela-pendente" class="container" style="display: none; font-family: 'Inter', sans-serif; padding: 2.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1); max-width: 400px; width: 90%; margin: 5rem auto; background: #fff; text-align: center; z-index: 2000; position: relative;">
-        <h2 style="color: #333; margin-top: 0; font-size: 1.5rem; font-weight: 600;">Sua conta está aguardando aprovação.</h2>
-        <p style="color: #555; line-height: 1.6;">Por favor, aguarde o administrador liberar seu acesso. Você será notificado (ou pode tentar novamente mais tarde).</p>
-        <button id="logout-button-pendente" class="logout" style="background-color: #dc3545; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background-color 0.3s ease; width: 100%; margin-top: 1rem;">
+    <div id="tela-pendente" class="status-screen">
+        <h2>Aguardando Aprovação</h2>
+        <p>Sua conta está pendente. Por favor, aguarde o administrador liberar seu acesso ou tente novamente mais tarde.</p>
+        <button id="logout-button-pendente" class="logout-btn">
             Sair
         </button>
     </div>
@@ -1080,7 +1187,7 @@
                 const fetchHistoryInChunks = async () => {
                     let allHistory = [];
                     let offset = 0;
-                    const chunkSize = 25000;
+                    const chunkSize = 10000; // <-- REDUZIDO
                     while (true) {
                         const { data, error } = await supabaseClient
                             .from('data_history')
@@ -1105,7 +1212,7 @@
                 const fetchDetailedInChunks = async () => {
                     let allDetailed = [];
                     let offset = 0;
-                    const chunkSize = 20000; // <-- REDUZIDO de 25000 para 20000
+                    const chunkSize = 10000; // <-- REDUZIDO
                     while (true) {
                         const { data, error } = await supabaseClient
                             .from('data_detailed')
@@ -6765,6 +6872,9 @@ Stack: ${error.stack}`: '') });
                 }
             };
             
+            // CORREÇÃO: Variável de controle para evitar execução dupla
+            let dashboardInitialized = false;
+
             // Função para verificar o status do perfil
             const verificarStatus = async (user) => {
                 if (!user) {
@@ -6787,6 +6897,10 @@ Stack: ${error.stack}`: '') });
                 }
 
                 if (data && data.status === 'aprovado') {
+                    // CORREÇÃO: Verifica se o dashboard já foi inicializado
+                    if (dashboardInitialized) return;
+                    dashboardInitialized = true;
+                    
                     // Usuário aprovado -> Inicia o carregamento normal do dashboard
                     mostrarTela(loader);
                     carregarDadosDoSupabase(); // Chamada direta da função
