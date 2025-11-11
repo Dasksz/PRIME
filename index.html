@@ -6200,20 +6200,19 @@
         const logoutButtonPendente = document.getElementById('logout-button-pendente');
 
         // Função para mostrar uma tela específica e esconder as outras
-        const showScreen = (screen) => {
-            [telaLogin, telaLoading, telaPendente, mainDashboard, loader].forEach(s => {
-                if (s) s.style.display = 'none';
-            });
-             if (mainDashboard) mainDashboard.classList.add('hidden');
-
-
-            if (screen) {
-                 if (screen.id === 'main-dashboard') {
-                    screen.classList.remove('hidden');
-                    screen.style.display = ''; 
-                } else {
-                    screen.style.display = 'flex';
+        const showScreen = (screenId) => {
+            // Esconde todos os elementos de tela de nível superior.
+            [telaLogin, telaLoading, telaPendente, mainDashboard, loader].forEach(el => {
+                if (el) {
+                    // Usa a classe .hidden para consistência, em vez de display: none
+                    el.classList.add('hidden'); 
                 }
+            });
+
+            // Mostra o elemento da tela de destino.
+            const targetScreen = document.getElementById(screenId);
+            if (targetScreen) {
+                targetScreen.classList.remove('hidden');
             }
         };
 
@@ -6243,7 +6242,7 @@
             if (event === 'SIGNED_OUT') {
                 dashboardInitialized = false; // Reseta o estado
                 isInitializing = false; // Reseta o bloqueio
-                showScreen(telaLogin);
+                showScreen('tela-login');
                 return;
             }
 
@@ -6252,7 +6251,7 @@
                 // E o dashboard ainda não foi inicializado E NÃO ESTÁ inicializando
                 if (!dashboardInitialized && !isInitializing) {
                     isInitializing = true; // Define o bloqueio
-                    showScreen(telaLoading);
+                    showScreen('tela-loading');
                     
                     const { data: profile, error } = await supabaseClient
                         .from('profiles')
@@ -6262,7 +6261,7 @@
 
                     if (error && error.code !== 'PGRST116') {
                         console.error('Erro ao buscar perfil:', error);
-                        showScreen(telaLogin);
+                        showScreen('tela-login');
                         await supabaseClient.auth.signOut();
                         isInitializing = false; // Libera o bloqueio em caso de erro
                         return;
@@ -6270,13 +6269,13 @@
 
                     if (profile && profile.status === 'aprovado') {
                         dashboardInitialized = true; // Marca como inicializado
-                        showScreen(null); 
-                        loader.style.display = 'flex';
+                        showScreen(null); // Esconde todas as telas
+                        loader.classList.remove('hidden'); // Mostra o loader
                         carregarDadosDoSupabase(supabaseClient);
                         // Não liberamos o isInitializing aqui, pois o dashboard está carregado.
                         // Ele será liberado no logout.
                     } else if (profile && profile.status === 'pendente') {
-                        showScreen(telaPendente);
+                        showScreen('tela-pendente');
                         isInitializing = false; // Libera o bloqueio se o usuário estiver pendente
                         
                         // ADICIONADO: Escuta por mudanças no perfil do usuário em tempo real
@@ -6298,8 +6297,8 @@
                                         
                                         if (!dashboardInitialized) { // Garante que não inicialize duas vezes
                                             dashboardInitialized = true;
-                                            showScreen(null); 
-                                            loader.style.display = 'flex';
+                                            showScreen(null); // Esconde todas as telas
+                                            loader.classList.remove('hidden'); // Mostra o loader
                                             carregarDadosDoSupabase(supabaseClient);
                                         }
                                     }
@@ -6308,14 +6307,14 @@
                             .subscribe();
 
                     } else {
-                        showScreen(telaLogin);
+                        showScreen('tela-login');
                         isInitializing = false; // Libera o bloqueio se não houver perfil/status
                     }
                 }
             } 
             // Se for o carregamento inicial e não houver sessão
             else if (event === 'INITIAL_SESSION' && !session) {
-                showScreen(telaLogin);
+                showScreen('tela-login');
             }
         });
     });
