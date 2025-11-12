@@ -6397,6 +6397,7 @@
 
             // Se o usuário deslogou, mostra a tela de login.
             if (event === 'SIGNED_OUT') {
+                localStorage.removeItem('userStatus'); // Limpa o cache no logout
                 dashboardInitialized = false; // Reseta o estado
                 isInitializing = false; // Reseta o bloqueio
                 showScreen('tela-login');
@@ -6405,6 +6406,18 @@
 
             // Se for o carregamento inicial ou um novo login e já tivermos a sessão
             if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && session) {
+
+                // Lógica de Cache
+                if (localStorage.getItem('userStatus') === 'aprovado' && !dashboardInitialized) {
+                    console.log('Status "aprovado" encontrado no cache. Carregando dashboard...');
+                    isInitializing = true;
+                    dashboardInitialized = true;
+                    showScreen(null);
+                    loader.classList.remove('hidden');
+                    carregarDadosDoSupabase(supabaseClient);
+                    return; // Pula a verificação do banco de dados
+                }
+
 
                 // CORREÇÃO 1: Adicionar a verificação do evento 'SIGNED_IN' aqui
                 // Isso força a rechecagem do status APÓS a conclusão do login/redirect.
@@ -6437,6 +6450,7 @@
                         }
 
                         if (profile && profile.status === 'aprovado') {
+                            localStorage.setItem('userStatus', 'aprovado'); // Salva no cache
                             dashboardInitialized = true; // Marca como inicializado
                             showScreen(null); // Esconde as telas de gatekeeper
                             loader.classList.remove('hidden'); // Mostra o loader principal
@@ -6444,16 +6458,15 @@
                             sessionStorage.removeItem('reloadAttempted'); // Reseta a proteção contra loop
                             // isInitializing permanece true para evitar re-execução.
                         } else if (profile && profile.status === 'pendente') {
+                            localStorage.setItem('userStatus', 'pendente'); // Atualiza cache
                             showScreen('tela-pendente');
                             isInitializing = false; // Libera o bloqueio, pois a UI está estável.
 
                             startProfilesRealtimeListener(supabaseClient, session.user.id, () => {
                                 // A verificação !dashboardInitialized previne múltiplas execuções se o callback for chamado mais de uma vez
                                 if (!dashboardInitialized) {
-                                    dashboardInitialized = true;
-                                    showScreen(null);
-                                    loader.classList.remove('hidden');
-                                    carregarDadosDoSupabase(supabaseClient);
+                                    localStorage.setItem('userStatus', 'aprovado'); // Atualiza o cache antes de recarregar
+                                    window.location.reload(true); // Recarrega a página para o fluxo de cache funcionar
                                 }
                             });
                         } else {
@@ -6485,6 +6498,7 @@
                                     }
 
                                     if (profile && profile.status === 'aprovado') {
+                                        localStorage.setItem('userStatus', 'aprovado'); // Salva no cache
                                         dashboardInitialized = true;
                                         showScreen(null);
                                         loader.classList.remove('hidden');
@@ -6492,14 +6506,13 @@
                                         sessionStorage.removeItem('reloadAttempted'); // Reseta a proteção contra loop em caso de sucesso
                                         return; // Sucesso, sai da função
                                     } else if (profile && profile.status === 'pendente') {
+                                        localStorage.setItem('userStatus', 'pendente'); // Atualiza cache
                                         showScreen('tela-pendente');
                                         isInitializing = false;
                                         startProfilesRealtimeListener(supabaseClient, session.user.id, () => {
                                             if (!dashboardInitialized) {
-                                                dashboardInitialized = true;
-                                                showScreen(null);
-                                                loader.classList.remove('hidden');
-                                                carregarDadosDoSupabase(supabaseClient);
+                                                localStorage.setItem('userStatus', 'aprovado');
+                                                window.location.reload(true);
                                             }
                                         });
                                         return; // Status pendente, sai da função
