@@ -338,16 +338,7 @@
 </div>
 
 
-<!-- Tela de Carregamento -->
-<div id="tela-loading" class="fixed inset-0 flex items-center justify-center z-[2000] hidden">
-   <div style="font-family: 'Inter', sans-serif; padding: 2.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1); max-width: 400px; width: 90%; background: var(--bg-content); text-align: center; border: 1px solid var(--border-primary);">
-        <h2 style="color: var(--text-primary); margin-top: 0; font-size: 1.5rem; font-weight: 600;">Carregando...</h2>
-        <p style="color: var(--text-secondary); line-height: 1.6;">Verificando seu status de aprovação.</p>
-        <button id="logout-button-loading" class="logout" style="background-color: #dc3545; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background-color 0.3s ease; width: 100%; margin-top: 1rem;">
-            Sair / Deslogar
-        </button>
-    </div>
-</div>
+<!-- Tela de Carregamento (REMOVIDA) -->
 
 
 <!-- Tela de Espera (Pendente) -->
@@ -377,8 +368,17 @@
         <nav id="main-nav" class="flex-grow space-y-4">
              <!-- As seções e botões de navegação serão inseridos aqui -->
         </nav>
+        <!-- Botão de Logout -->
+        <div class="mt-auto pt-4 border-t border-border-menu-section">
+            <button class="logout nav-btn w-full flex items-center gap-3 text-red-500 hover:bg-red-500/10 hover:text-red-400">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clip-rule="evenodd" />
+                </svg>
+                <span>Sair / Deslogar</span>
+            </button>
+        </div>
         <!-- Theme Switcher -->
-        <div class="theme-switcher mt-auto">
+        <div class="theme-switcher">
             <span class="text-sm font-medium" style="color: var(--text-menu-section);">Tema</span>
             <label class="switch">
                 <input type="checkbox" id="theme-toggle-checkbox">
@@ -6336,7 +6336,6 @@
 
         // Referências aos elementos da tela
         const telaLogin = document.getElementById('tela-login');
-        const telaLoading = document.getElementById('tela-loading');
         const telaPendente = document.getElementById('tela-pendente');
         const mainDashboard = document.getElementById('main-dashboard');
         const loader = document.getElementById('loader');
@@ -6345,11 +6344,14 @@
         const loginButton = document.getElementById('login-button');
         const logoutButtonPendente = document.getElementById('logout-button-pendente');
 
-        // Função simplificada para mostrar uma tela de "gatekeeper" (login, loading, pendente)
+        // Função simplificada para mostrar uma tela de "gatekeeper" (login, pendente)
         const showScreen = (screenId) => {
-            [telaLogin, telaLoading, telaPendente].forEach(el => {
+            [telaLogin, telaPendente].forEach(el => {
                 if (el) el.classList.add('hidden');
             });
+            // O loader principal é controlado separadamente para evitar condições de corrida
+            if(loader) loader.classList.add('hidden');
+
             if (screenId) {
                 const targetScreen = document.getElementById(screenId);
                 if (targetScreen) {
@@ -6416,20 +6418,17 @@
                 // E o dashboard ainda não foi inicializado E NÃO ESTÁ inicializando
                 if (!dashboardInitialized && !isInitializing) {
                     isInitializing = true; // Define o bloqueio
-                    showScreen('tela-loading');
+                    // REMOVIDO: showScreen('tela-loading');
+                    // ADICIONADO: Mostra o loader principal imediatamente.
+                    if(loader) loader.classList.remove('hidden');
+
                     try {
-                        // Adiciona um timeout de 10 segundos à verificação de perfil
-                        const profilePromise = supabaseClient
+                        // REMOVIDO: Lógica de timeout de 10 segundos.
+                        const { data: profile, error } = await supabaseClient
                             .from('profiles')
                             .select('status')
                             .eq('id', session.user.id)
                             .single();
-
-                        const timeoutPromise = new Promise((_, reject) =>
-                            setTimeout(() => reject(new Error('Timeout de 10s ao verificar o perfil.')), 10000)
-                        );
-
-                        const { data: profile, error } = await Promise.race([profilePromise, timeoutPromise]);
 
                         if (error && error.code !== 'PGRST116') {
                             // Lança o erro para ser pego pelo bloco catch centralizado.
