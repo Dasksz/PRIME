@@ -33,8 +33,8 @@
             --bg-button-hover: #DEE2E6;
             --bg-button-active: #FD7E14;
             --bg-tooltip: #212529;
-            --text-primary: #111315;
-            --text-secondary: #495057;
+            --text-primary: #212529;
+            --text-secondary: #495057;               /* CORRIGIDO: Cinza mais escuro para melhor contraste */
             --text-on-active-button: #ffffff;
             --text-on-dark-bg: #ffffff;
             --text-menu: #343A40;
@@ -64,8 +64,8 @@
             --bg-button-hover: #5A6069;
             --bg-button-active: #FFD369;
             --bg-tooltip: #222831;
-            --text-primary: #F8F9FA;                 /* Branco suave */
-            --text-secondary: #CED4DA;
+            --text-primary: #EEEEEE;                 /* Branco suave */
+            --text-secondary: #ADB5BD;
             --text-on-active-button: #222831;        /* Texto escuro no botão ativo */
             --text-on-dark-bg: #EEEEEE;
             --text-menu: #EEEEEE;
@@ -172,12 +172,6 @@
 
         .stock-trend-btn.active { outline: 2px solid var(--bg-button-active); outline-offset: 2px; transform: scale(1.1); }
         
-        /* ADICIONADO: Estilo para destacar os valores de variação */
-        .variation-value {
-            font-weight: bold;
-            font-size: 0.9rem; /* Ligeiramente maior que o texto da tabela (text-xs = 0.75rem) */
-        }
-
         /* CORREÇÃO: Classes de fundo personalizadas que faltavam */
         .bg-content { background-color: var(--bg-content); }
         .bg-input { background-color: var(--bg-input); }
@@ -406,16 +400,13 @@
         <p id="loader-text" class="text-slate-300 mt-4">Carregando dados do Supabase...</p>
     </div>
 
-    <!-- 6. INÍCIO DA REFATORAÇÃO: Dashboard Principal e Pedidos Detalhados agora são independentes -->
-
-    <!-- Dashboard Principal (Gráficos) -->
-    <div id="dashboard-view" class="hidden"> <!-- Começa escondido -->
+    <!-- 6. ADICIONADO: Todo o HTML do seu dashboard escuro original -->
+    <div id="main-dashboard" class="hidden"> <!-- Começa escondido -->
         <div class="container mx-auto p-4 sm:p-6 lg:p-8">
             <header class="mb-8 p-6 header-gradient rounded-b-lg shadow-lg">
                 <div class="flex flex-col sm:flex-row justify-between items-start gap-4">
                     <div class="text-center sm:text-left">
                         <h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span style="color: var(--header-span-text);">PRIME</span> DISTRIBUIÇÃO</h1>
-                        <p class="text-lg text-white -mt-1">Dashboard Principal</p>
                         <p id="generation-date" class="text-white mt-1">Dados atualizados em: ...</p>
                     </div>
                 </div>
@@ -471,7 +462,7 @@
                     <div class="md:col-start-6"><button id="clear-filters-btn" class="w-full font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button></div>
                 </div>
             </div>
-            <main>
+            <main id="app-container">
                 <div id="chartView" class="">
                     <div class="mb-6 p-4 rounded-xl border border-primary shadow-sm bg-content">
                         <div class="flex justify-between items-center mb-4">
@@ -500,93 +491,63 @@
                         <div id="salesByProductBarChartContainer" class="relative h-80"></div>
                     </div>
                 </div>
+                <!-- A tableView foi movida para sua própria div de view de nível superior -->
             </main>
         </div>
     </div>
 
-    <!-- Pedidos Detalhados (Tabela) -->
-    <div id="orders-view" class="hidden"> <!-- Começa escondido -->
-        <div class="container mx-auto p-4 sm:p-6 lg:p-8">
-            <header class="mb-8 p-6 header-gradient rounded-b-lg shadow-lg">
-                <div class="flex flex-col sm:flex-row justify-between items-start gap-4">
-                    <div class="text-center sm:text-left">
-                        <h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span style="color: var(--header-span-text);">PRIME</span> DISTRIBUIÇÃO</h1>
-                        <p class="text-lg text-white -mt-1">Pedidos Detalhados</p>
-                        <p id="orders-generation-date" class="text-white mt-1">Dados atualizados em: ...</p>
-                    </div>
-                </div>
-            </header>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <div class="kpi-card" style="--kpi-border-color: #6366f1;">
-                    <h3>Volume Tons</h3>
-                    <p id="orders-total-peso">0,0</p>
-                </div>
-                <div class="kpi-card" style="--kpi-border-color: #14b8a6;">
-                    <h3>Faturamento R$</h3>
-                    <p id="orders-total-vendas">R$ 0,00</p>
-                </div>
-                <div class="kpi-card" style="--kpi-border-color: #22c55e;">
-                    <h3>SKU/PDV</h3>
-                    <p id="orders-kpi-sku-pdv">0,0</p>
-                </div>
-                <div class="kpi-card" style="--kpi-border-color: #8b5cf6;">
-                    <h3>Cobertura PDVs</h3>
-                    <p id="orders-kpi-positivacao">0,0%</p>
-                    <p id="orders-kpi-positivacao-percent" class="kpi-subtext">0 PDVs</p>
+    <!-- Ecrã Pedidos Detalhados -->
+    <div id="orders-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
+        <header class="mb-8 p-6 header-gradient rounded-b-lg shadow-lg">
+            <div class="flex flex-col sm:flex-row justify-between items-start gap-4">
+                <div class="text-center sm:text-left">
+                    <h1 class="text-2xl font-bold text-white">PEDIDOS DETALHADOS - <span style="color: var(--header-span-text);">PRIME</span> DISTRIBUIÇÃO</h1>
+                    <p id="orders-generation-date" class="text-white mt-1">Dados atualizados em: ...</p>
                 </div>
             </div>
+        </header>
 
-            <div class="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div id="orders-fornecedor-toggle-container" class="w-full sm:w-auto rounded-lg p-1 flex justify-center sm:justify-start gap-2">
-                    <button data-fornecedor="PEPSICO" class="fornecedor-btn font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">PEPSICO</button>
-                    <button data-fornecedor="MULTIMARCAS" class="fornecedor-btn font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">MULTIMARCAS</button>
+        <!-- Filtros Duplicados para a View de Pedidos -->
+        <div id="orders-filters" class="mb-8 p-4 bg-content rounded-xl shadow-sm border border-primary">
+            <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+                <div id="orders-rede-filter-wrapper" class="relative">
+                    <label class="block mb-2 text-sm font-medium text-secondary">Rede</label>
+                    <div id="orders-rede-group-container" class="inline-flex rounded-md shadow-sm" role="group">
+                        <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium border rounded-l-lg">Todos</button>
+                        <button type="button" data-group="com_rede" id="orders-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium border-t border-b flex items-center gap-2">
+                            <span id="orders-com-rede-btn-text">Com Rede</span>
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium border rounded-r-lg">Sem Rede</button>
+                    </div>
+                    <div id="orders-rede-filter-dropdown" class="hidden absolute z-20 w-56 mt-1 top-full left-0 bg-modal-content border border-primary rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left"></div>
                 </div>
+                <div><label class="block mb-2 text-sm font-medium text-secondary">Supervisor</label><select id="orders-supervisor-filter" class="text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
+                <div class="relative"><label class="block mb-2 text-sm font-medium text-secondary">Vendedor</label><button id="orders-vendedor-filter-btn" class="w-full border text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="orders-vendedor-filter-text">Todos Vendedores</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></button><div id="orders-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-modal-content border border-primary rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div></div>
+                <div class="relative"><label class="block mb-2 text-sm font-medium text-secondary">Tipo Venda</label><button id="orders-tipo-venda-filter-btn" class="w-full border text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="orders-tipo-venda-filter-text">Todos os Tipos</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="orders-tipo-venda-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-modal-content border border-primary rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div></div>
+                <div><label class="block mb-2 text-sm font-medium text-secondary">Fornecedor</label><select id="orders-fornecedor-filter" class="text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
+                <div><label class="block mb-2 text-sm font-medium text-secondary">Cód. Cliente</label><input type="text" id="orders-codcli-filter" placeholder="Digite o código..." class="text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"></div>
+                <div><label class="block mb-2 text-sm font-medium text-secondary">Posição</label><select id="orders-posicao-filter" class="text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todas</option><option value="L">Liberado</option><option value="M">Montado</option><option value="F">Faturado</option></select></div>
+                <div class="md:col-start-6"><button id="clear-orders-filters-btn" class="w-full font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button></div>
             </div>
-
-            <div id="orders-filters" class="mb-8 p-4 bg-content rounded-xl shadow-sm border border-primary">
-                <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
-                    <div id="orders-rede-filter-wrapper" class="relative">
-                        <label class="block mb-2 text-sm font-medium text-secondary">Rede</label>
-                        <div id="orders-rede-group-container" class="inline-flex rounded-md shadow-sm" role="group">
-                            <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium border rounded-l-lg">Todos</button>
-                            <button type="button" data-group="com_rede" id="orders-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium border-t border-b flex items-center gap-2">
-                                <span id="orders-com-rede-btn-text">Com Rede</span>
-                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                            </button>
-                            <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium border rounded-r-lg">Sem Rede</button>
-                        </div>
-                        <div id="orders-rede-filter-dropdown" class="hidden absolute z-20 w-56 mt-1 top-full left-0 bg-modal-content border border-primary rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left"></div>
-                    </div>
-                    <div><label class="block mb-2 text-sm font-medium text-secondary">Supervisor</label><select id="orders-supervisor-filter" class="text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
-                    <div class="relative"><label class="block mb-2 text-sm font-medium text-secondary">Vendedor</label><button id="orders-vendedor-filter-btn" class="w-full border text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="orders-vendedor-filter-text">Todos Vendedores</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></button><div id="orders-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-modal-content border border-primary rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div></div>
-                    <div class="relative"><label class="block mb-2 text-sm font-medium text-secondary">Tipo Venda</label><button id="orders-tipo-venda-filter-btn" class="w-full border text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="orders-tipo-venda-filter-text">Todos os Tipos</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="orders-tipo-venda-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-modal-content border border-primary rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div></div>
-                    <div><label class="block mb-2 text-sm font-medium text-secondary">Fornecedor</label><select id="orders-fornecedor-filter" class="text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
-                    <div><label class="block mb-2 text-sm font-medium text-secondary">Cód. Cliente</label><input type="text" id="orders-codcli-filter" placeholder="Digite o código..." class="text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"></div>
-                    <div><label class="block mb-2 text-sm font-medium text-secondary">Posição</label><select id="orders-posicao-filter" class="text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todas</option><option value="L">Liberado</option><option value="M">Montado</option><option value="F">Faturado</option></select></div>
-                    <div class="md:col-start-6"><button id="orders-clear-filters-btn" class="w-full font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button></div>
-                </div>
-            </div>
-            <main>
-                <div id="tableView">
-                    <div class="overflow-x-auto bg-content rounded-xl border border-primary shadow-sm" style="max-height: 60vh;">
-                        <table class="min-w-full text-sm text-left">
-                            <thead class="text-xs uppercase sticky-header">
-                                <tr><th class="px-4 py-3">Nº Pedido</th><th class="px-4 py-3">Cód. Cliente</th><th class="px-4 py-3">Vendedor</th><th class="px-4 py-3">Fornecedor</th><th class="px-4 py-3">Data Pedido</th><th class="px-4 py-3">Data Fat.</th><th class="px-4 py-3 text-right">Peso Total</th><th class="px-4 py-3 text-right">Faturamento Total</th><th class="px-4 py-3 text-center">Posição</th></tr>
-                            </thead>
-                            <tbody id="report-table-body" class="divide-y divide-border-secondary"></tbody>
-                        </table>
-                    </div>
-                    <div id="table-pagination-controls" class="hidden mt-4 flex justify-between items-center">
-                        <button id="prev-page-btn" class="border font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Anterior</button>
-                        <span id="page-info-text">Página 1 de 1</span>
-                        <button id="next-page-btn" class="border font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Próxima</button>
-                    </div>
-                </div>
-            </main>
         </div>
+
+        <main id="orders-app-container">
+            <div class="overflow-x-auto bg-content rounded-xl border border-primary shadow-sm" style="max-height: 60vh;">
+                <table class="min-w-full text-sm text-left">
+                    <thead class="text-xs uppercase sticky-header">
+                        <tr><th class="px-4 py-3">Nº Pedido</th><th class="px-4 py-3">Cód. Cliente</th><th class="px-4 py-3">Vendedor</th><th class="px-4 py-3">Fornecedor</th><th class="px-4 py-3">Data Pedido</th><th class="px-4 py-3">Data Fat.</th><th class="px-4 py-3 text-right">Peso Total</th><th class="px-4 py-3 text-right">Faturamento Total</th><th class="px-4 py-3 text-center">Posição</th></tr>
+                    </thead>
+                    <tbody id="orders-table-body" class="divide-y divide-border-secondary"></tbody>
+                </table>
+            </div>
+            <div id="orders-pagination-controls" class="hidden mt-4 flex justify-between items-center">
+                <button id="orders-prev-page-btn" class="border font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Anterior</button>
+                <span id="orders-page-info-text">Página 1 de 1</span>
+                <button id="orders-next-page-btn" class="border font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Próxima</button>
+            </div>
+        </main>
     </div>
-    <!-- FIM DA REFATORAÇÃO -->
     
     <!-- Ecrã de Cidades -->
     <div id="city-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
@@ -1151,7 +1112,7 @@
         async function carregarDadosDoSupabase(supabaseClient) { // MODIFICADO: Recebe o cliente
             const loader = document.getElementById('loader');
             const loaderText = document.getElementById('loader-text');
-            const dashboardView = document.getElementById('dashboard-view'); // CORREÇÃO: Alvo agora é a nova view
+            const mainDashboard = document.getElementById('main-dashboard');
             
             try {
                 // A verificação de URL/Chave e a criação do cliente foram movidas para o script do porteiro
@@ -1335,7 +1296,7 @@
                 }
                 
                 // CORREÇÃO: Torna o dashboard visível ANTES de executar o script de lógica
-                dashboardView.classList.remove('hidden');
+                mainDashboard.classList.remove('hidden');
                 
                 document.body.appendChild(logicScript);
 
@@ -1723,8 +1684,8 @@
 
         Chart.register(ChartDataLabels);
 
-        const dashboardView = document.getElementById('dashboard-view');
-        const ordersView = document.getElementById('orders-view');
+        const mainDashboard = document.getElementById('main-dashboard');
+        const ordersView = document.getElementById('orders-view'); // ADICIONADO: Nova view de Pedidos
         const cityView = document.getElementById('city-view');
         const weeklyView = document.getElementById('weekly-view');
         const comparisonView = document.getElementById('comparison-view');
@@ -1744,8 +1705,15 @@
         const kpiPositivacaoPercentEl = document.getElementById('kpi-positivacao-percent');
 
 
-        const chartView = document.getElementById('chartView'); // Continua existindo dentro de #dashboard-view
-        const tableView = document.getElementById('tableView'); // Continua existindo dentro de #orders-view
+        const viewChartBtn = document.getElementById('viewChartBtn');
+        const viewTableBtn = document.getElementById('viewTableBtn');
+        const viewComparisonBtn = document.getElementById('viewComparisonBtn');
+        const viewStockBtn = document.getElementById('viewStockBtn');
+        const chartView = document.getElementById('chartView');
+
+        // A tableView foi movida para sua própria div de view de nível superior
+        // const tableView = document.getElementById('tableView');
+
         const faturamentoBtn = document.getElementById('faturamentoBtn');
         const pesoBtn = document.getElementById('pesoBtn');
 
@@ -1828,6 +1796,29 @@
         const sideMenu = document.getElementById('side-menu');
         const menuOverlay = document.getElementById('menu-overlay');
         const mainNav = document.getElementById('main-nav');
+
+        // ADICIONADO: Elementos da nova View de Pedidos
+        const ordersSupervisorFilter = document.getElementById('orders-supervisor-filter');
+        const ordersVendedorFilterBtn = document.getElementById('orders-vendedor-filter-btn');
+        const ordersVendedorFilterText = document.getElementById('orders-vendedor-filter-text');
+        const ordersVendedorFilterDropdown = document.getElementById('orders-vendedor-filter-dropdown');
+        const ordersTipoVendaFilterBtn = document.getElementById('orders-tipo-venda-filter-btn');
+        const ordersTipoVendaFilterText = document.getElementById('orders-tipo-venda-filter-text');
+        const ordersTipoVendaFilterDropdown = document.getElementById('orders-tipo-venda-filter-dropdown');
+        const ordersFornecedorFilter = document.getElementById('orders-fornecedor-filter');
+        const ordersCodcliFilter = document.getElementById('orders-codcli-filter');
+        const ordersPosicaoFilter = document.getElementById('orders-posicao-filter');
+        const clearOrdersFiltersBtn = document.getElementById('clear-orders-filters-btn');
+        const ordersTableBody = document.getElementById('orders-table-body');
+        const ordersPaginationControls = document.getElementById('orders-pagination-controls');
+        const ordersPrevPageBtn = document.getElementById('orders-prev-page-btn');
+        const ordersNextPageBtn = document.getElementById('orders-next-page-btn');
+        const ordersPageInfoText = document.getElementById('orders-page-info-text');
+        const ordersRedeGroupContainer = document.getElementById('orders-rede-group-container');
+        const ordersComRedeBtn = document.getElementById('orders-com-rede-btn');
+        const ordersComRedeBtnText = document.getElementById('orders-com-rede-btn-text');
+        const ordersRedeFilterDropdown = document.getElementById('orders-rede-filter-dropdown');
+
 
         const stockFilialFilter = document.getElementById('stock-filial-filter');
         const stockRedeGroupContainer = document.getElementById('stock-rede-group-container');
@@ -1965,15 +1956,9 @@
         const comparisonHolidayPickerBtn = document.getElementById('comparison-holiday-picker-btn');
         const calendarContainer = document.getElementById('calendar-container');
         
-        const tablePaginationControls = document.getElementById('table-pagination-controls');
-        const prevPageBtn = document.getElementById('prev-page-btn');
-        const nextPageBtn = document.getElementById('next-page-btn');
-        const pageInfoText = document.getElementById('page-info-text');
-
         let charts = {};
         let currentProductMetric = 'faturamento';
         let currentFornecedor = '';
-        let currentOrdersFornecedor = '';
         let currentWeeklyFornecedor = '';
         let currentComparisonFornecedor = '';
         let currentStockFornecedor = '';
@@ -1982,12 +1967,12 @@
         let activeClientsForExport = [];
         let inactiveClientsForExport = [];
         let selectedSellers = [];
-        let selectedOrdersSellers = [];
+        let selectedOrdersSellers = []; // ADICIONADO: Vendedores para a view de Pedidos
         let selectedCitySellers = [];
         let selectedComparisonSellers = [];
         let selectedStockSellers = [];
         let selectedTiposVenda = [];
-        let selectedOrdersTiposVenda = [];
+        let selectedOrdersTiposVenda = []; // ADICIONADO: Tipos de Venda para a view de Pedidos
         let selectedComparisonSuppliers = [];
         let selectedComparisonProducts = [];
         let selectedStockSuppliers = [];
@@ -1997,13 +1982,12 @@
         let stockTrendFilter = 'all';
 
         let selectedMainRedes = [];
-        let selectedOrdersRedes = [];
         let selectedCityRedes = [];
         let selectedComparisonRedes = [];
         let selectedStockRedes = [];
 
         let mainRedeGroupFilter = '';
-        let ordersRedeGroupFilter = '';
+        let ordersRedeGroupFilter = ''; // ADICIONADO: Grupo de Rede para a view de Pedidos
         let cityRedeGroupFilter = '';
         let comparisonRedeGroupFilter = '';
         let stockRedeGroupFilter = '';
@@ -2029,7 +2013,8 @@
         let selectedCoverageProducts = [];
         let coverageIncludeBonus = true;
         
-        let mainTableState = {
+        // ADICIONADO: Estado dedicado para a tabela da view de Pedidos
+        let ordersTableState = {
             currentPage: 1,
             itemsPerPage: 50,
             filteredData: [],
@@ -2461,7 +2446,8 @@
             const gridColor = getCSSVar('--border-primary');
             
             const professionalPalette = [
-                '#3b82f6', '#14b8a6', '#ec4899', '#f97316', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444'
+                '#84a98c', '#a5a58d', '#a5a58d', '#b7b7a4', '#cad2c5', // Tons suaves de verde e cinza
+                '#ffb4a2', '#ffcdb2', '#e5989b', '#b5838d', '#6d6875'  // Tons suaves de rosa e pêssego
             ];
 
             let finalDatasets;
@@ -2518,105 +2504,50 @@
             createChart('salesByProductBarChart', 'bar', labels, values);
         }
 
-        function updateOrdersViewVisuals() {
-            console.log("Debug: updateOrdersViewVisuals chamada.");
-            const supervisor = document.getElementById('orders-supervisor-filter').value;
-            const posicao = document.getElementById('orders-posicao-filter').value;
-            const codcli = document.getElementById('orders-codcli-filter').value.trim();
-            const selectedFornecedor = document.getElementById('orders-fornecedor-filter').value;
+        function renderOrdersTable(data) {
+            if (!ordersTableBody) return;
 
-            let clientBaseForCoverage = allClientsData.filter(c => {
-                const rca1 = String(c.rca1 || '').trim();
-                const isAmericanas = (c.razaosocial || '').toUpperCase().includes('AMERICANAS');
-                return (isAmericanas || rca1 !== '53');
-            });
-
-            if (ordersRedeGroupFilter === 'com_rede') {
-                clientBaseForCoverage = clientBaseForCoverage.filter(c => c.ramo && c.ramo !== 'N/A');
-                if (selectedOrdersRedes.length > 0) {
-                    clientBaseForCoverage = clientBaseForCoverage.filter(c => selectedOrdersRedes.includes(c.ramo));
-                }
-            } else if (ordersRedeGroupFilter === 'sem_rede') {
-                clientBaseForCoverage = clientBaseForCoverage.filter(c => !c.ramo || c.ramo === 'N/A');
-            }
-            const clientCodesInRede = new Set(clientBaseForCoverage.map(c => c['codigo_cliente']));
-
-            const getFilteredData = (sourceData, filterFn) => sourceData.filter(filterFn);
-
-            const filterPredicate = item => {
-                let matches = true;
-                if (ordersRedeGroupFilter) {
-                    matches = matches && clientCodesInRede.has(item.codcli);
-                }
-                if (codcli) {
-                    matches = matches && item.codcli === codcli;
-                } else {
-                    if (supervisor) {
-                        matches = matches && item.superv === supervisor;
-                    }
-                    if (selectedOrdersSellers.length > 0) {
-                        matches = matches && selectedOrdersSellers.includes(item.nome);
-                    }
-                }
-                if (selectedOrdersTiposVenda.length > 0) {
-                    matches = matches && selectedOrdersTiposVenda.includes(item.tipovenda);
-                }
-                if (currentOrdersFornecedor) {
-                    matches = matches && (item.fornecedores_list ? item.fornecedores_list.includes(currentOrdersFornecedor) : item.observacaofor === currentOrdersFornecedor);
-                }
-                if (selectedFornecedor) {
-                     matches = matches && (item.codfors_list ? item.codfors_list.includes(selectedFornecedor) : item.codfor == selectedFornecedor);
-                }
-                if (posicao) {
-                    matches = matches && item.posicao === posicao;
-                }
-                return matches;
-            };
-
-            const filteredSalesData = getFilteredData(allSalesData, filterPredicate);
-            const filteredTableData = getFilteredData(aggregatedOrders, filterPredicate);
-
-            const summary = calculateSummaryFromData(filteredSalesData, true, clientBaseForCoverage);
-
-            document.getElementById('orders-total-vendas').textContent = summary.totalFaturamento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            document.getElementById('orders-total-peso').textContent = `${(summary.totalPeso / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
-            document.getElementById('orders-kpi-sku-pdv').textContent = summary.skuPdv.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-            document.getElementById('orders-kpi-positivacao').textContent = `${summary.positivacaoPercent.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
-            document.getElementById('orders-kpi-positivacao-percent').textContent = `${summary.positivacaoCount.toLocaleString('pt-BR')} PDVs`;
-            document.getElementById('orders-generation-date').textContent = `Dados atualizados em: ${new Date().toLocaleString('pt-BR')}`;
-
-            renderTable(filteredTableData);
-        }
-
-        function renderTable(data) {
-            const tableBody = document.getElementById('report-table-body');
-            if (!tableBody) return;
-
-            mainTableState.filteredData = data;
-            mainTableState.totalPages = Math.ceil(data.length / mainTableState.itemsPerPage);
-            if (mainTableState.currentPage > mainTableState.totalPages && mainTableState.totalPages > 0) {
-                mainTableState.currentPage = mainTableState.totalPages;
-            } else if (mainTableState.totalPages === 0) {
-                 mainTableState.currentPage = 1;
+            ordersTableState.filteredData = data;
+            ordersTableState.totalPages = Math.ceil(data.length / ordersTableState.itemsPerPage);
+            if (ordersTableState.currentPage > ordersTableState.totalPages && ordersTableState.totalPages > 0) {
+                ordersTableState.currentPage = ordersTableState.totalPages;
+            } else if (ordersTableState.totalPages === 0) {
+                 ordersTableState.currentPage = 1;
             }
 
-            const startIndex = (mainTableState.currentPage - 1) * mainTableState.itemsPerPage;
-            const endIndex = startIndex + mainTableState.itemsPerPage;
+            const startIndex = (ordersTableState.currentPage - 1) * ordersTableState.itemsPerPage;
+            const endIndex = startIndex + ordersTableState.itemsPerPage;
             const pageData = data.slice(startIndex, endIndex);
 
             const getPosicaoBadge = (posicao) => {
                 if (!posicao) return '<span>-</span>';
-                let classes = '';
+
+                // CORREÇÃO: Novas classes com maior contraste para os ícones de Posição
+                // Usam cores de fundo mais claras e cores de texto escuras, melhorando a legibilidade em ambos os temas.
+                let lightModeClasses = '';
+                let darkModeClasses = ''; // Para manter a consistência, definimos para o modo escuro também
+
                 switch (posicao) {
-                    case 'L': classes = 'bg-green-500/20 text-green-300'; break;
-                    case 'M': classes = 'bg-blue-500/20 text-blue-300'; break;
-                    case 'F': classes = 'bg-yellow-500/20 text-yellow-300'; break;
-                    default: return `<span>${posicao}</span>`;
+                    case 'L':
+                        lightModeClasses = 'bg-green-100 text-green-800';
+                        darkModeClasses = 'dark:bg-green-900 dark:text-green-300';
+                        break;
+                    case 'M':
+                        lightModeClasses = 'bg-blue-100 text-blue-800';
+                        darkModeClasses = 'dark:bg-blue-900 dark:text-blue-300';
+                        break;
+                    case 'F':
+                        lightModeClasses = 'bg-yellow-100 text-yellow-800';
+                        darkModeClasses = 'dark:bg-yellow-900 dark:text-yellow-300';
+                        break;
+                    default:
+                        return `<span>${posicao}</span>`;
                 }
-                return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${classes}">${posicao}</span>`;
+                // Combina as classes para funcionar com o seletor de tema do Tailwind
+                return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${lightModeClasses} ${darkModeClasses}">${posicao}</span>`;
             };
             
-            tableBody.innerHTML = pageData.map(row => `
+            ordersTableBody.innerHTML = pageData.map(row => `
                 <tr>
                     <td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-pedido-id="${row.pedido}">${row.pedido}</a></td>
                     <td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${row.codcli}">${row.codcli}</a></td>
@@ -2631,15 +2562,15 @@
             `).join('');
 
             if (data.length > 0) {
-                pageInfoText.textContent = `Página ${mainTableState.currentPage} de ${mainTableState.totalPages} (Total: ${data.length} pedidos)`;
-                prevPageBtn.disabled = mainTableState.currentPage === 1;
-                nextPageBtn.disabled = mainTableState.currentPage === mainTableState.totalPages;
-                tablePaginationControls.classList.remove('hidden');
+                ordersPageInfoText.textContent = `Página ${ordersTableState.currentPage} de ${ordersTableState.totalPages} (Total: ${data.length} pedidos)`;
+                ordersPrevPageBtn.disabled = ordersTableState.currentPage === 1;
+                ordersNextPageBtn.disabled = ordersTableState.currentPage === ordersTableState.totalPages;
+                ordersPaginationControls.classList.remove('hidden');
             } else {
-                pageInfoText.textContent = 'Nenhum pedido encontrado.';
-                prevPageBtn.disabled = true;
-                nextPageBtn.disabled = true;
-                tablePaginationControls.classList.add('hidden');
+                ordersPageInfoText.textContent = 'Nenhum pedido encontrado.';
+                ordersPrevPageBtn.disabled = true;
+                ordersNextPageBtn.disabled = true;
+                ordersPaginationControls.classList.add('hidden');
             }
         }
 
@@ -2715,8 +2646,8 @@
             });
         }
 
-        function updateDashboardViewVisuals() {
-            console.log("Debug: updateDashboardViewVisuals chamada.");
+        function updateAllVisuals() {
+            console.log("Debug: updateAllVisuals chamada.");
             const supervisor = supervisorFilter.value;
             const posicao = posicaoFilter.value;
             const codcli = codcliFilter.value.trim();
@@ -2780,7 +2711,9 @@
 
             const filteredSalesData = getFilteredData(allSalesData);
             const filteredHistoryData = getFilteredData(allHistoryData);
-            const filteredTableData = getFilteredData(aggregatedOrders);
+
+            // REMOVIDO: A filtragem da tabela agora é feita na sua própria função
+            // const filteredTableData = getFilteredData(aggregatedOrders);
             
             const isFiltered = !!supervisor || selectedSellers.length > 0 || !!codcli || !!currentFornecedor || !!mainRedeGroupFilter || !!selectedFornecedor || !!posicao || selectedTiposVenda.length > 0;
 
@@ -2792,10 +2725,12 @@
             kpiPositivacaoEl.textContent = `${summary.positivacaoPercent.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
             kpiPositivacaoPercentEl.textContent = `${summary.positivacaoCount.toLocaleString('pt-BR')} PDVs`;
 
-
+            // REMOVIDO: A renderização da tabela foi movida para sua própria view
+            /*
             if (!tableView.classList.contains('hidden')) {
                 renderTable(filteredTableData);
             }
+            */
 
             if (!chartView.classList.contains('hidden')) {
                 updateTrendChart(filteredSalesData, filteredHistoryData);
@@ -2911,30 +2846,78 @@
             populateSupervisors('supervisor-filter', allSalesData);
             selectedSellers = updateSellerFilter('', vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
             selectedTiposVenda = updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
-            updateDashboardViewVisuals();
+            updateAllVisuals();
+        }
+
+        function updateOrdersView() {
+            const supervisor = ordersSupervisorFilter.value;
+            const posicao = ordersPosicaoFilter.value;
+            const codcli = ordersCodcliFilter.value.trim();
+            const fornecedor = ordersFornecedorFilter.value;
+
+            // Filtra a base de clientes primeiro, se o filtro de rede estiver ativo
+            let clientBase = allClientsData;
+            if (ordersRedeGroupFilter === 'com_rede') {
+                clientBase = clientBase.filter(c => c.ramo && c.ramo !== 'N/A');
+                if (selectedOrdersRedes.length > 0) {
+                    clientBase = clientBase.filter(c => selectedOrdersRedes.includes(c.ramo));
+                }
+            } else if (ordersRedeGroupFilter === 'sem_rede') {
+                clientBase = clientBase.filter(c => !c.ramo || c.ramo === 'N/A');
+            }
+            const clientCodesInRede = new Set(clientBase.map(c => c['codigo_cliente']));
+
+            const filteredData = aggregatedOrders.filter(item => {
+                let matches = true;
+
+                if (ordersRedeGroupFilter) {
+                    matches = matches && clientCodesInRede.has(item.codcli);
+                }
+                if (codcli) {
+                    matches = matches && item.codcli === codcli;
+                } else {
+                    if (supervisor) matches = matches && item.superv === supervisor;
+                    if (selectedOrdersSellers.length > 0) matches = matches && selectedOrdersSellers.includes(item.nome);
+                }
+                if (selectedOrdersTiposVenda.length > 0) matches = matches && selectedOrdersTiposVenda.includes(item.tipovenda);
+                if (fornecedor) matches = matches && item.codfors_list.includes(fornecedor);
+                if (posicao) matches = matches && item.posicao === posicao;
+
+                return matches;
+            });
+
+            renderOrdersTable(filteredData);
         }
 
         function resetOrdersFilters() {
-            document.getElementById('orders-supervisor-filter').value = '';
-            document.getElementById('orders-fornecedor-filter').value = '';
-            document.getElementById('orders-posicao-filter').value = '';
-            document.getElementById('orders-codcli-filter').value = '';
-            currentOrdersFornecedor = '';
+            ordersSupervisorFilter.value = '';
+            ordersPosicaoFilter.value = '';
+            ordersCodcliFilter.value = '';
+            ordersFornecedorFilter.value = '';
             selectedOrdersSellers = [];
             selectedOrdersTiposVenda = [];
             ordersRedeGroupFilter = '';
             selectedOrdersRedes = [];
-            mainTableState.currentPage = 1;
+            ordersTableState.currentPage = 1;
 
-            document.getElementById('orders-rede-group-container').querySelectorAll('button').forEach(b => b.classList.remove('active'));
-            document.getElementById('orders-rede-group-container').querySelector('button[data-group=""]').classList.add('active');
-            updateRedeFilter(document.getElementById('orders-rede-filter-dropdown'), document.getElementById('orders-com-rede-btn-text'), selectedOrdersRedes, allClientsData);
+            ordersRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            ordersRedeGroupContainer.querySelector('button[data-group=""]').classList.add('active');
+            updateRedeFilter(ordersRedeFilterDropdown, ordersComRedeBtnText, selectedOrdersRedes, allClientsData);
 
-            document.querySelectorAll('#orders-fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
-            populateSupervisors('orders-supervisor-filter', allSalesData);
-            updateSellerFilter('', document.getElementById('orders-vendedor-filter-dropdown'), document.getElementById('orders-vendedor-filter-text'), selectedOrdersSellers, allSalesData);
-            updateTipoVendaFilter(document.getElementById('orders-tipo-venda-filter-dropdown'), document.getElementById('orders-tipo-venda-filter-text'), selectedOrdersTiposVenda, allSalesData);
-            updateOrdersViewVisuals();
+            selectedOrdersSellers = updateSellerFilter(
+                ordersSupervisorFilter.value,
+                ordersVendedorFilterDropdown,
+                ordersVendedorFilterText,
+                selectedOrdersSellers,
+                allSalesData
+            );
+            selectedOrdersTiposVenda = updateTipoVendaFilter(
+                ordersTipoVendaFilterDropdown,
+                ordersTipoVendaFilterText,
+                selectedOrdersTiposVenda,
+                allSalesData
+            );
+            updateOrdersView();
         }
 
         function resetCityFilters() {
@@ -3296,7 +3279,7 @@
             
             const weekLabels = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
             const weekNumbers = Object.keys(salesByWeekAndDay).sort((a,b) => a - b);
-            const professionalPalette = ['#3b82f6', '#14b8a6', '#ec4899', '#f97316', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444'];
+            const professionalPalette = ['#14b8a6', '#6366f1', '#ec4899', '#f97316', '#8b5cf6'];
             const currentMonthDatasets = weekNumbers.map((weekNum, index) => ({ 
                 label: `Semana ${weekNum}`, 
                 data: weekLabels.map(day => salesByWeekAndDay[weekNum][day] || 0), 
@@ -4204,7 +4187,7 @@
             }
 
             const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-            const professionalPalette = ['#3b82f6', '#14b8a6', '#ec4899', '#f97316', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444'];
+            const professionalPalette = ['#a855f7', '#6366f1', '#ec4899', '#f97316', '#8b5cf6', '#06b6d4', '#f59e0b'];
             const dailyBreakdownDatasets = dayNames.map((dayName, dayIndex) => {
                 return {
                     label: dayName,
@@ -4250,16 +4233,7 @@
             });
 
             const supervisorTableBody = document.getElementById('supervisorComparisonTableBody');
-            const supervisorDataForSort = Object.entries(supervisorComparison).map(([sup, data]) => {
-                const variation = data.history > 0 ? ((data.current - data.history) / data.history) * 100 : (data.current > 0 ? 100 : 0);
-                return { sup, ...data, variation };
-            });
-            supervisorDataForSort.sort((a, b) => b.variation - a.variation);
-            supervisorTableBody.innerHTML = supervisorDataForSort.map(item => {
-                const { sup, history, current, variation } = item;
-                const colorClass = variation > 0 ? 'text-green-400' : variation < 0 ? 'text-red-400' : 'text-slate-400';
-                return `<tr><td class="px-4 py-2">${sup}</td><td class="px-4 py-2 text-right">${history.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right">${current.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right ${colorClass} variation-value">${variation.toFixed(2)}%</td></tr>`;
-            }).join('');
+            supervisorTableBody.innerHTML = Object.entries(supervisorComparison).map(([sup, data]) => { const variation = data.history > 0 ? ((data.current - data.history) / data.history) * 100 : (data.current > 0 ? 100 : 0); const colorClass = variation > 0 ? 'text-green-400' : variation < 0 ? 'text-red-400' : 'text-slate-400'; return `<tr><td class="px-4 py-2">${sup}</td><td class="px-4 py-2 text-right">${data.history.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right">${data.current.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right ${colorClass}">${variation.toFixed(2)}%</td></tr>`; }).join('');
         }
 
         function updateStockView() {
@@ -4310,68 +4284,70 @@
                 };
 
                 const stock = activeStockMap.get(productCode) || 0;
+                // CORREÇÃO: productAllSales combina vendas atuais e históricas para a média diária e tendência
                 const productAllSales = allCombinedSales.filter(s => s.produto === productCode);
-                const totalQtySold = productAllSales.reduce((sum, s) => sum + s.qtvenda_embalagem_master, 0);
+                // CORREÇÃO: Garante que qtvenda_embalagem_master nulo/undefined não quebre a soma
+                const totalQtySold = productAllSales.reduce((sum, s) => sum + (s.qtvenda_embalagem_master || 0), 0);
 
                 if (stock <= 0 && totalQtySold <= 0) return;
 
+                // CORREÇÃO: productHistorySales é usado *apenas* para a média mensal
                 const productHistorySales = filteredHistory.filter(s => s.produto === productCode);
                 const productCurrentSales = filteredSales.filter(s => s.produto === productCode);
-                const currentMonthSalesQty = productCurrentSales.reduce((sum, s) => sum + s.qtvenda_embalagem_master, 0);
+                const currentMonthSalesQty = productCurrentSales.reduce((sum, s) => sum + (s.qtvenda_embalagem_master || 0), 0);
 
-                const productCadastroDate = parseDate(details.dtcadastro);
-                let productFirstWorkingDayIndex = 0;
-                
-                if (productCadastroDate) {
-                    const cadastroDateString = productCadastroDate.toISOString().split('T')[0];
-                    productFirstWorkingDayIndex = sortedWorkingDays.findIndex(d => d >= cadastroDateString);
-                    if (productFirstWorkingDayIndex === -1) {
-                        productFirstWorkingDayIndex = sortedWorkingDays.length; 
-                    }
-                }
-                
-                const productMaxLifeInWorkingDays = sortedWorkingDays.length - productFirstWorkingDayIndex;
+                const productCadastroDate = parseDate(details.dtcadastro);
+                let productFirstWorkingDayIndex = 0;
 
-                const daysFromBox = customWorkingDaysStock;
+                if (productCadastroDate) {
+                    const cadastroDateString = productCadastroDate.toISOString().split('T')[0];
+                    productFirstWorkingDayIndex = sortedWorkingDays.findIndex(d => d >= cadastroDateString);
+                    if (productFirstWorkingDayIndex === -1) {
+                        productFirstWorkingDayIndex = sortedWorkingDays.length;
+                    }
+                }
 
-                let effectiveDaysToCalculate;
-                
-                const isFactuallyNewOrReactivated = (productHistorySales.length === 0 && productCurrentSales.length > 0);
+                const productMaxLifeInWorkingDays = sortedWorkingDays.length - productFirstWorkingDayIndex;
 
-                if (isFactuallyNewOrReactivated) {
-                    const daysToConsider = (daysFromBox > 0) ? daysFromBox : passedWorkingDaysCurrentMonth;
-                    effectiveDaysToCalculate = Math.min(passedWorkingDaysCurrentMonth, daysToConsider);
-                } else {
-                    if (daysFromBox > 0) {
-                        effectiveDaysToCalculate = Math.min(daysFromBox, productMaxLifeInWorkingDays);
-                } else {
-                        effectiveDaysToCalculate = productMaxLifeInWorkingDays; 
-                    }
-                }
-                
-                const daysDivisor = effectiveDaysToCalculate > 0 ? effectiveDaysToCalculate : 1;
-                
-                const endDate = parseDate(sortedWorkingDays[sortedWorkingDays.length - 1]);
-                const targetIndex = Math.max(0, sortedWorkingDays.length - daysDivisor); 
-                const startDate = parseDate(sortedWorkingDays[targetIndex]);
-                
-                let totalQtySoldInRange = 0;
-                productAllSales.forEach(sale => {
-                    const saleDate = parseDate(sale.dtped);
-                    // A data da venda precisa estar dentro do período de dias úteis efetivos
-                    // que está sendo considerado para o cálculo da média.
-                    if (saleDate && saleDate >= startDate && saleDate <= endDate) {
-                        totalQtySoldInRange += (sale.qtvenda_embalagem_master || 0);
-                    }
-                });
+                const daysFromBox = customWorkingDaysStock;
 
-                let dailyAvgSale = totalQtySoldInRange / daysDivisor;
+                let effectiveDaysToCalculate;
 
-                const isNew = productMaxLifeInWorkingDays <= passedWorkingDaysCurrentMonth;
+                const isFactuallyNewOrReactivated = (productHistorySales.length === 0 && productCurrentSales.length > 0);
 
+                if (isFactuallyNewOrReactivated) {
+                    const daysToConsider = (daysFromBox > 0) ? daysFromBox : passedWorkingDaysCurrentMonth;
+                    effectiveDaysToCalculate = Math.min(passedWorkingDaysCurrentMonth, daysToConsider);
+                } else {
+                    if (daysFromBox > 0) {
+                        effectiveDaysToCalculate = Math.min(daysFromBox, productMaxLifeInWorkingDays);
+                    } else {
+                        effectiveDaysToCalculate = productMaxLifeInWorkingDays;
+                    }
+                }
+
+                const daysDivisor = effectiveDaysToCalculate > 0 ? effectiveDaysToCalculate : 1;
+
+                const endDate = parseDate(sortedWorkingDays[sortedWorkingDays.length - 1]);
+                const targetIndex = Math.max(0, sortedWorkingDays.length - daysDivisor);
+                const startDate = parseDate(sortedWorkingDays[targetIndex]);
+
+                let totalQtySoldInRange = 0;
+                productAllSales.forEach(sale => {
+                    const saleDate = parseDate(sale.dtped);
+                    if (saleDate && saleDate >= startDate && saleDate <= endDate) {
+                        totalQtySoldInRange += (sale.qtvenda_embalagem_master || 0);
+                    }
+                });
+
+                let dailyAvgSale = totalQtySoldInRange / daysDivisor;
+
+                const isNew = productMaxLifeInWorkingDays <= passedWorkingDaysCurrentMonth;
+
+                // CORREÇÃO: Média diária (e, por consequência, a tendência) agora usam os dados combinados (productAllSales)
                 const trendDays = dailyAvgSale > 0 ? (stock / dailyAvgSale) : Infinity;
+                // CORREÇÃO: Média mensal continua usando apenas os dados históricos (productHistorySales)
                 const monthlyAvgSale = monthlyKpiAverage(productHistorySales, (sales) => sales.reduce((sum, s) => sum + (s.qtvenda_embalagem_master || 0), 0));
-
 
                 productAnalysis.set(productCode, {
                     code: productCode,
@@ -4389,19 +4365,9 @@
 
 
             let sortedAnalysis = [...productAnalysis.values()].sort((a, b) => {
-                const isAFinite = isFinite(a.trendDays);
-                const isBFinite = isFinite(b.trendDays);
-
-                if (isAFinite && isBFinite) {
-                    return b.trendDays - a.trendDays; // Ambos são números, ordena decrescente
-                }
-                if (isAFinite && !isBFinite) {
-                    return -1; // A é número, B é Infinito, A vem primeiro
-                }
-                if (!isAFinite && isBFinite) {
-                    return 1; // A é Infinito, B é número, B vem primeiro
-                }
-                return 0; // Ambos são Infinitos, mantém a ordem
+                 const trendA = isFinite(a.trendDays) ? a.trendDays : -1;
+                 const trendB = isFinite(b.trendDays) ? b.trendDays : -1;
+                return trendB - trendA;
             });
 
 
@@ -4452,23 +4418,18 @@
             const lostProducts = [];
 
             productAnalysis.forEach(p => {
-                // CORREÇÃO: Produtos vendidos este mês, mas sem histórico de vendas (ou com média 0), são 'Novos'.
-                if (p.soldThisMonth && (!p.hasHistory || p.monthlyAvgSale === 0)) {
-                    newProducts.push(p);
-                }
-                // Produtos com histórico e vendidos este mês são 'Crescimento' ou 'Queda'.
-                else if (p.soldThisMonth && p.hasHistory) {
-                    if (p.currentMonthSalesQty >= p.monthlyAvgSale) {
-                        growth.push(p);
-                    } else { // A média mensal (monthlyAvgSale) é implicitamente > 0 aqui
-                        decline.push(p);
-                    }
-                }
-                // Produtos com histórico mas NÃO vendidos este mês são 'Perdidos'.
-                else if (!p.soldThisMonth && p.hasHistory) {
-                    lostProducts.push(p);
-                }
-            });
+                 if (p.soldThisMonth && p.hasHistory) {
+                    if (p.currentMonthSalesQty >= p.monthlyAvgSale) {
+                        growth.push(p);
+                    } else if (p.currentMonthSalesQty < p.monthlyAvgSale && p.monthlyAvgSale > 0) {
+                        decline.push(p);
+                    }
+                 } else if (p.soldThisMonth && !p.hasHistory) {
+                    newProducts.push(p);
+                 } else if (!p.soldThisMonth && p.hasHistory) {
+                    lostProducts.push(p);
+                 }
+            });
 
             const renderProductTable = (bodyElement, data, showVariation = true) => {
                 bodyElement.innerHTML = data.map(p => {
@@ -4487,17 +4448,15 @@
                             <td class="px-2 py-1.5 text-xs">(${p.code}) ${p.descricao}</td>
                             <td class="px-2 py-1.5 text-xs text-right">${p.currentMonthSalesQty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
                             <td class="px-2 py-1.5 text-xs text-right">${p.monthlyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                            ${showVariation ? `<td class="px-2 py-1.5 text-xs text-right font-bold ${colorClass} variation-value">${variationText}</td>` : ''}
+                            ${showVariation ? `<td class="px-2 py-1.5 text-xs text-right font-bold ${colorClass}">${variationText}</td>` : ''}
                             <td class="px-2 py-1.5 text-xs text-right">${p.stock.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
                         </tr>
                     `;
                 }).join('');
             };
 
-            const getVariation = p => p.monthlyAvgSale > 0 ? ((p.currentMonthSalesQty - p.monthlyAvgSale) / p.monthlyAvgSale) * 100 : (p.currentMonthSalesQty > 0 ? Infinity : 0);
-
-            growth.sort((a, b) => getVariation(b) - getVariation(a));
-            decline.sort((a, b) => getVariation(a) - getVariation(b));
+            growth.sort((a,b) => (b.currentMonthSalesQty - b.monthlyAvgSale) - (a.currentMonthSalesQty - a.monthlyAvgSale));
+            decline.sort((a,b) => (a.currentMonthSalesQty - a.monthlyAvgSale) - (b.currentMonthSalesQty - b.monthlyAvgSale));
             newProducts.sort((a,b) => b.currentMonthSalesQty - a.currentMonthSalesQty);
             lostProducts.sort((a,b) => b.monthlyAvgSale - a.monthlyAvgSale);
 
@@ -4782,13 +4741,13 @@
             innovationsBonusCoverageCountKpiPrevious.textContent = `${bonusCoveredCountPrevious.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
 
 
-            tableData.sort((a, b) => b.variation - a.variation);
+            tableData.sort((a, b) => b.coverageCurrent - a.coverageCurrent);
 
             innovationsTableBody.innerHTML = tableData.map(item => {
                 let variationContent;
                 if (isFinite(item.variation)) {
                     const colorClass = item.variation >= 0 ? 'text-green-400' : 'text-red-400';
-                    variationContent = `<span class="${colorClass} variation-value">${item.variation.toFixed(1)}%</span>`;
+                    variationContent = `<span class="${colorClass}">${item.variation.toFixed(1)}%</span>`;
                 } else if (item.coverageCurrent > 0) {
                     variationContent = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/30 text-purple-300">Novo</span>`;
                 } else {
@@ -5152,7 +5111,7 @@
                 let variationContent;
                 if (isFinite(item.variation)) {
                     const colorClass = item.variation >= 0 ? 'text-green-400' : 'text-red-400';
-                    variationContent = `<span class="${colorClass} variation-value">${item.variation.toFixed(1)}%</span>`;
+                    variationContent = `<span class="${colorClass}">${item.variation.toFixed(1)}%</span>`;
                 } else if (item.coverageCurrent > 0) {
                     variationContent = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/30 text-purple-300">Novo</span>`;
                 } else {
@@ -5523,8 +5482,10 @@
         function updateSideNavActiveState(targetViewId) {
             mainNav.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
 
-            // CORREÇÃO: A lógica especial não é mais necessária. O targetViewId é direto.
-            const activeButton = mainNav.querySelector(`.nav-btn[data-view="${targetViewId}"]`);
+            // Lógica especial para 'table-view', que deve ativar o 'main-dashboard'
+            const navTargetId = targetViewId === 'table-view' ? 'main-dashboard' : targetViewId;
+
+            const activeButton = mainNav.querySelector(`.nav-btn[data-view="${navTargetId}"]`);
             if (activeButton) {
                 activeButton.classList.add('active');
             }
@@ -5535,7 +5496,7 @@
                 {
                     title: 'Análises Principais',
                     buttons: [
-                        { id: 'nav-main-dashboard', text: 'Dashboard Principal', viewId: 'dashboard-view', default: true },
+                        { id: 'nav-main-dashboard', text: 'Dashboard Principal', viewId: 'main-dashboard', default: true },
                         { id: 'nav-orders-view', text: 'Pedidos Detalhados', viewId: 'orders-view' }
                     ]
                 },
@@ -5578,16 +5539,30 @@
                 const newTheme = themeToggle.checked ? 'dark' : 'light';
                 document.documentElement.setAttribute('data-theme', newTheme);
                 localStorage.setItem('theme', newTheme);
-                
-                // Re-render all charts to apply new theme colors
-                Object.values(charts).forEach(chart => chart.destroy());
+
+                // Destrói todos os gráficos para forçar a releitura das cores do tema
+                Object.values(charts).forEach(chart => {
+                    if (chart && typeof chart.destroy === 'function') {
+                        chart.destroy();
+                    }
+                });
                 charts = {};
-                
-                updateAllVisuals();
-                updateCityView();
-                updateWeeklyView();
-                updateComparisonView();
-                updateInnovationsMonthView();
+
+                // CORREÇÃO: Usa um setTimeout para garantir que o navegador aplicou as
+                // novas variáveis de CSS do tema antes de tentar redesenhar os gráficos.
+                // Isso evita uma condição de corrida que deixava os gráficos em branco.
+                setTimeout(() => {
+                    // Otimização: Apenas atualiza a view que está realmente visível
+                    if (!mainDashboard.classList.contains('hidden')) updateAllVisuals();
+                    if (!cityView.classList.contains('hidden')) updateCityView();
+                    if (!weeklyView.classList.contains('hidden')) updateWeeklyView();
+                    if (!comparisonView.classList.contains('hidden')) updateComparisonView();
+                    if (!stockView.classList.contains('hidden')) updateStockView();
+                    if (!innovationsView.classList.contains('hidden')) updateInnovationsView();
+                    if (!innovationsMonthView.classList.contains('hidden')) updateInnovationsMonthView();
+                    if (!coverageView.classList.contains('hidden')) updateCoverageView();
+                    // A nova ordersView não tem gráficos, então não precisa ser chamada aqui.
+                }, 50); // 50ms é um delay seguro
             });
         }
 
@@ -5602,22 +5577,31 @@
             const toggleMenu = () => {
                 sideMenu.classList.toggle('open');
                 menuOverlay.classList.toggle('open');
-                menuOverlay.classList.toggle('hidden');
+                menuOverlay.classList.toggle('hidden'); // <-- CORREÇÃO: Adicionado/removido 'hidden'
             };
 
             menuToggleBtn.addEventListener('click', toggleMenu);
             menuOverlay.addEventListener('click', toggleMenu);
 
             // Lógica de Navegação
-            const allViews = [dashboardView, ordersView, comparisonView, stockView, coverageView, innovationsView, weeklyView, cityView, innovationsMonthView];
+            const allViews = [mainDashboard, ordersView, chartView, comparisonView, stockView, coverageView, innovationsView, weeklyView, cityView, innovationsMonthView];
 
             const switchView = (targetViewId) => {
-                const targetView = allViews.find(v => v.id === targetViewId);
-                allViews.forEach(view => view.classList.add('hidden'));
-                if (targetView) {
-                    targetView.classList.remove('hidden');
+                const topLevelViews = [mainDashboard, ordersView, comparisonView, stockView, coverageView, innovationsView, weeklyView, cityView, innovationsMonthView];
+                topLevelViews.forEach(view => view.classList.add('hidden'));
+
+                let viewToShow;
+                if (targetViewId === 'main-dashboard') {
+                    viewToShow = mainDashboard;
+                    mainDashboard.classList.remove('hidden');
+                    chartView.classList.remove('hidden');
+                } else {
+                    viewToShow = topLevelViews.find(v => v.id === targetViewId);
+                    if (viewToShow) {
+                        viewToShow.classList.remove('hidden');
+                    }
                 }
-                return targetView;
+                return viewToShow;
             };
 
             mainNav.addEventListener('click', e => {
@@ -5632,28 +5616,27 @@
                         return;
                     }
 
-                    updateSideNavActiveState(targetViewId);
+                    mainNav.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+
                     const view = switchView(targetViewId);
 
                     if (view) {
                         switch(view.id) {
-                            case 'dashboard-view':
-                                updateDashboardViewVisuals();
+                            case 'main-dashboard':
+                                updateAllVisuals();
                                 break;
                             case 'orders-view':
-                                updateOrdersViewVisuals();
+                                populateSupervisors('orders-supervisor-filter', allSalesData);
+                                populateMainSupplierFilter('orders-fornecedor-filter', [...allSalesData, ...allHistoryData]);
+                                updateSellerFilter(ordersSupervisorFilter.value, ordersVendedorFilterDropdown, ordersVendedorFilterText, selectedOrdersSellers, allSalesData);
+                                updateTipoVendaFilter(ordersTipoVendaFilterDropdown, ordersTipoVendaFilterText, selectedOrdersTiposVenda, allSalesData);
+                                updateRedeFilter(ordersRedeFilterDropdown, ordersComRedeBtnText, selectedOrdersRedes, allClientsData);
+                                updateOrdersView();
                                 break;
-                            case 'comparison-view':
-                                updateAllComparisonFilters();
-                                updateComparisonView();
-                                break;
-                            case 'stock-view':
-                                handleStockFilterChange();
-                                break;
-                            case 'coverage-view':
-                                updateCoverageFilters();
-                                updateCoverageView();
-                                break;
+                            case 'comparison-view': updateAllComparisonFilters(); updateComparisonView(); break;
+                            case 'stock-view': handleStockFilterChange(); break;
+                            case 'coverage-view': updateCoverageFilters(); updateCoverageView(); break;
                             case 'innovations-view':
                                 populateSupervisors('innovations-supervisor-filter', allSalesData);
                                 updateSellerFilter('', innovationsVendedorFilterDropdown, innovationsVendedorFilterText, [], allSalesData);
@@ -5661,14 +5644,8 @@
                                 updateInnovationsFilters();
                                 updateInnovationsView();
                                 break;
-                            case 'weekly-view':
-                                populateWeeklyFilters();
-                                updateWeeklyView();
-                                break;
-                            case 'city-view':
-                                populateCityFilters();
-                                updateCityView();
-                                break;
+                            case 'weekly-view': populateWeeklyFilters(); updateWeeklyView(); break;
+                            case 'city-view': populateCityFilters(); updateCityView(); break;
                         }
                     }
 
@@ -5677,63 +5654,133 @@
             });
 
             // Botões de "Voltar"
-            const backToDashboard = () => { switchView('dashboard-view'); updateDashboardViewVisuals(); updateSideNavActiveState('dashboard-view'); };
-            backToMainFromComparisonBtn.addEventListener('click', backToDashboard);
-            backToMainFromStockBtn.addEventListener('click', backToDashboard);
-            backToMainFromCoverageBtn.addEventListener('click', backToDashboard);
-            backToMainFromInnovationsBtn.addEventListener('click', backToDashboard);
-            backToMainFromWeeklyBtn.addEventListener('click', backToDashboard);
-            backToMainFromCityBtn.addEventListener('click', backToDashboard);
+            backToMainFromComparisonBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
+            backToMainFromStockBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
+            backToMainFromCoverageBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
+            backToMainFromInnovationsBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
+            backToMainFromWeeklyBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
+            backToMainFromCityBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
 
-            // --- Event Listeners para #DASHBOARD-VIEW ---
-            supervisorFilter.addEventListener('change', () => { selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); updateDashboardViewVisuals(); });
-            fornecedorFilter.addEventListener('change', () => { updateDashboardViewVisuals(); });
+            // --- Event Listeners do Dashboard Principal ---
+            supervisorFilter.addEventListener('change', () => { selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); updateAllVisuals(); });
+            fornecedorFilter.addEventListener('change', () => { updateAllVisuals(); });
             vendedorFilterBtn.addEventListener('click', () => vendedorFilterDropdown.classList.toggle('hidden'));
-            vendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedSellers.push(value); else selectedSellers = selectedSellers.filter(s => s !== value); selectedSellers = updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); updateDashboardViewVisuals(); } });
+            vendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedSellers.push(value); else selectedSellers = selectedSellers.filter(s => s !== value); selectedSellers = updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); updateAllVisuals(); } });
+
             tipoVendaFilterBtn.addEventListener('click', () => tipoVendaFilterDropdown.classList.toggle('hidden'));
-            tipoVendaFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedTiposVenda.push(value); else selectedTiposVenda = selectedTiposVenda.filter(s => s !== value); selectedTiposVenda = updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData); updateDashboardViewVisuals(); } });
-            posicaoFilter.addEventListener('change', () => { updateDashboardViewVisuals(); });
+            tipoVendaFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedTiposVenda.push(value);
+                    else selectedTiposVenda = selectedTiposVenda.filter(s => s !== value);
+                    selectedTiposVenda = updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
+                    updateAllVisuals();
+                }
+            });
+
+            posicaoFilter.addEventListener('change', () => { updateAllVisuals(); });
             codcliFilter.addEventListener('input', (e) => e.target.value = e.target.value.replace(/[^0-9]/g, ''));
-            codcliFilter.addEventListener('change', () => { updateDashboardViewVisuals(); });
+            codcliFilter.addEventListener('change', () => { updateAllVisuals(); });
             clearFiltersBtn.addEventListener('click', resetMainFilters);
-            mainComRedeBtn.addEventListener('click', () => mainRedeFilterDropdown.classList.toggle('hidden'));
-            mainRedeGroupContainer.addEventListener('click', (e) => { if(e.target.closest('button')) { const button = e.target.closest('button'); mainRedeGroupFilter = button.dataset.group; mainRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active')); button.classList.add('active'); if (mainRedeGroupFilter !== 'com_rede') { mainRedeFilterDropdown.classList.add('hidden'); selectedMainRedes = []; } updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData); updateDashboardViewVisuals(); } });
-            mainRedeFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedMainRedes.push(value); else selectedMainRedes = selectedMainRedes.filter(r => r !== value); selectedMainRedes = updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData); updateDashboardViewVisuals(); } });
-            fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentFornecedor === fornecedor) { currentFornecedor = ''; btn.classList.remove('active'); } else { currentFornecedor = fornecedor; fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } populateSupervisors('supervisor-filter', allSalesData); selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); updateDashboardViewVisuals(); }); });
 
-            // --- Event Listeners para #ORDERS-VIEW ---
-            const ordersSupervisorFilter = document.getElementById('orders-supervisor-filter');
-            const ordersVendedorFilterBtn = document.getElementById('orders-vendedor-filter-btn');
-            const ordersVendedorFilterDropdown = document.getElementById('orders-vendedor-filter-dropdown');
-            const ordersTipoVendaFilterBtn = document.getElementById('orders-tipo-venda-filter-btn');
-            const ordersTipoVendaFilterDropdown = document.getElementById('orders-tipo-venda-filter-dropdown');
-            const ordersFornecedorFilter = document.getElementById('orders-fornecedor-filter');
-            const ordersCodcliFilter = document.getElementById('orders-codcli-filter');
-            const ordersPosicaoFilter = document.getElementById('orders-posicao-filter');
-            const ordersClearFiltersBtn = document.getElementById('orders-clear-filters-btn');
-            const ordersRedeGroupContainer = document.getElementById('orders-rede-group-container');
-            const ordersComRedeBtn = document.getElementById('orders-com-rede-btn');
-            const ordersRedeFilterDropdown = document.getElementById('orders-rede-filter-dropdown');
-            const ordersFornecedorToggleContainer = document.getElementById('orders-fornecedor-toggle-container');
-
-            ordersSupervisorFilter.addEventListener('change', () => { selectedOrdersSellers = []; updateSellerFilter(ordersSupervisorFilter.value, ordersVendedorFilterDropdown, document.getElementById('orders-vendedor-filter-text'), selectedOrdersSellers, allSalesData); mainTableState.currentPage = 1; updateOrdersViewVisuals(); });
-            ordersFornecedorFilter.addEventListener('change', () => { mainTableState.currentPage = 1; updateOrdersViewVisuals(); });
-            ordersVendedorFilterBtn.addEventListener('click', () => ordersVendedorFilterDropdown.classList.toggle('hidden'));
-            ordersVendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedOrdersSellers.push(value); else selectedOrdersSellers = selectedOrdersSellers.filter(s => s !== value); selectedOrdersSellers = updateSellerFilter(ordersSupervisorFilter.value, ordersVendedorFilterDropdown, document.getElementById('orders-vendedor-filter-text'), selectedOrdersSellers, allSalesData); mainTableState.currentPage = 1; updateOrdersViewVisuals(); } });
-            ordersTipoVendaFilterBtn.addEventListener('click', () => ordersTipoVendaFilterDropdown.classList.toggle('hidden'));
-            ordersTipoVendaFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedOrdersTiposVenda.push(value); else selectedOrdersTiposVenda = selectedOrdersTiposVenda.filter(s => s !== value); selectedOrdersTiposVenda = updateTipoVendaFilter(ordersTipoVendaFilterDropdown, document.getElementById('orders-tipo-venda-filter-text'), selectedOrdersTiposVenda, allSalesData); mainTableState.currentPage = 1; updateOrdersViewVisuals(); } });
-            ordersPosicaoFilter.addEventListener('change', () => { mainTableState.currentPage = 1; updateOrdersViewVisuals(); });
+            // --- Event Listeners da View de Pedidos ---
+            ordersSupervisorFilter.addEventListener('change', () => { selectedOrdersSellers = []; updateSellerFilter(ordersSupervisorFilter.value, ordersVendedorFilterDropdown, ordersVendedorFilterText, selectedOrdersSellers, allSalesData); ordersTableState.currentPage = 1; updateOrdersView(); });
+            ordersPosicaoFilter.addEventListener('change', () => { ordersTableState.currentPage = 1; updateOrdersView(); });
             ordersCodcliFilter.addEventListener('input', (e) => e.target.value = e.target.value.replace(/[^0-9]/g, ''));
-            ordersCodcliFilter.addEventListener('change', () => { mainTableState.currentPage = 1; updateOrdersViewVisuals(); });
-            ordersClearFiltersBtn.addEventListener('click', resetOrdersFilters);
-            ordersComRedeBtn.addEventListener('click', () => ordersRedeFilterDropdown.classList.toggle('hidden'));
-            ordersRedeGroupContainer.addEventListener('click', (e) => { if(e.target.closest('button')) { const button = e.target.closest('button'); ordersRedeGroupFilter = button.dataset.group; ordersRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active')); button.classList.add('active'); if (ordersRedeGroupFilter !== 'com_rede') { ordersRedeFilterDropdown.classList.add('hidden'); selectedOrdersRedes = []; } updateRedeFilter(ordersRedeFilterDropdown, document.getElementById('orders-com-rede-btn-text'), selectedOrdersRedes, allClientsData); mainTableState.currentPage = 1; updateOrdersViewVisuals(); } });
-            ordersRedeFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedOrdersRedes.push(value); else selectedOrdersRedes = selectedOrdersRedes.filter(r => r !== value); selectedOrdersRedes = updateRedeFilter(ordersRedeFilterDropdown, document.getElementById('orders-com-rede-btn-text'), selectedOrdersRedes, allClientsData); mainTableState.currentPage = 1; updateOrdersViewVisuals(); } });
-            ordersFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentOrdersFornecedor === fornecedor) { currentOrdersFornecedor = ''; btn.classList.remove('active'); } else { currentOrdersFornecedor = fornecedor; ordersFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } populateSupervisors('orders-supervisor-filter', allSalesData); selectedOrdersSellers = []; updateSellerFilter(ordersSupervisorFilter.value, ordersVendedorFilterDropdown, document.getElementById('orders-vendedor-filter-text'), selectedOrdersSellers, allSalesData); mainTableState.currentPage = 1; updateOrdersViewVisuals(); }); });
+            ordersCodcliFilter.addEventListener('change', () => { ordersTableState.currentPage = 1; updateOrdersView(); });
+            ordersFornecedorFilter.addEventListener('change', () => { ordersTableState.currentPage = 1; updateOrdersView(); });
+            clearOrdersFiltersBtn.addEventListener('click', resetOrdersFilters);
 
-            // --- Paginação (compartilhada, pois só há uma tabela) ---
-            prevPageBtn.addEventListener('click', () => { if (mainTableState.currentPage > 1) { mainTableState.currentPage--; renderTable(mainTableState.filteredData); } });
-            nextPageBtn.addEventListener('click', () => { if (mainTableState.currentPage < mainTableState.totalPages) { mainTableState.currentPage++; renderTable(mainTableState.filteredData); } });
+            ordersVendedorFilterBtn.addEventListener('click', () => ordersVendedorFilterDropdown.classList.toggle('hidden'));
+            ordersVendedorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedOrdersSellers.push(value);
+                    else selectedOrdersSellers = selectedOrdersSellers.filter(s => s !== value);
+                    updateSellerFilter(ordersSupervisorFilter.value, ordersVendedorFilterDropdown, ordersVendedorFilterText, selectedOrdersSellers, allSalesData);
+                    ordersTableState.currentPage = 1;
+                    updateOrdersView();
+                }
+            });
+
+            ordersTipoVendaFilterBtn.addEventListener('click', () => ordersTipoVendaFilterDropdown.classList.toggle('hidden'));
+            ordersTipoVendaFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedOrdersTiposVenda.push(value);
+                    else selectedOrdersTiposVenda = selectedOrdersTiposVenda.filter(s => s !== value);
+                    updateTipoVendaFilter(ordersTipoVendaFilterDropdown, ordersTipoVendaFilterText, selectedOrdersTiposVenda, allSalesData);
+                    ordersTableState.currentPage = 1;
+                    updateOrdersView();
+                }
+            });
+
+            ordersPrevPageBtn.addEventListener('click', () => {
+                if (ordersTableState.currentPage > 1) {
+                    ordersTableState.currentPage--;
+                    renderOrdersTable(ordersTableState.filteredData);
+                }
+            });
+            ordersNextPageBtn.addEventListener('click', () => {
+                if (ordersTableState.currentPage < ordersTableState.totalPages) {
+                    ordersTableState.currentPage++;
+                    renderOrdersTable(ordersTableState.filteredData);
+                }
+            });
+
+            // --- Event Listeners Comuns / Outros ---
+            mainComRedeBtn.addEventListener('click', () => mainRedeFilterDropdown.classList.toggle('hidden'));
+            mainRedeGroupContainer.addEventListener('click', (e) => {
+                if(e.target.closest('button')) {
+                    const button = e.target.closest('button');
+                    mainRedeGroupFilter = button.dataset.group;
+                    mainRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                    button.classList.add('active');
+                    if (mainRedeGroupFilter !== 'com_rede') {
+                        mainRedeFilterDropdown.classList.add('hidden');
+                        selectedMainRedes = [];
+                    }
+                    updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
+                    updateAllVisuals();
+                }
+            });
+            mainRedeFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedMainRedes.push(value);
+                    else selectedMainRedes = selectedMainRedes.filter(r => r !== value);
+                    selectedMainRedes = updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
+                    updateAllVisuals();
+                }
+            });
+
+            ordersComRedeBtn.addEventListener('click', () => ordersRedeFilterDropdown.classList.toggle('hidden'));
+            ordersRedeGroupContainer.addEventListener('click', (e) => {
+                if(e.target.closest('button')) {
+                    const button = e.target.closest('button');
+                    ordersRedeGroupFilter = button.dataset.group;
+                    ordersRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                    button.classList.add('active');
+                    if (ordersRedeGroupFilter !== 'com_rede') {
+                        ordersRedeFilterDropdown.classList.add('hidden');
+                        selectedOrdersRedes = [];
+                    }
+                    updateRedeFilter(ordersRedeFilterDropdown, ordersComRedeBtnText, selectedOrdersRedes, allClientsData);
+                    ordersTableState.currentPage = 1;
+                    updateOrdersView();
+                }
+            });
+            ordersRedeFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedOrdersRedes.push(value);
+                    else selectedOrdersRedes = selectedOrdersRedes.filter(r => r !== value);
+                    selectedOrdersRedes = updateRedeFilter(ordersRedeFilterDropdown, ordersComRedeBtnText, selectedOrdersRedes, allClientsData);
+                    ordersTableState.currentPage = 1;
+                    updateOrdersView();
+                }
+            });
+
 
             citySupervisorFilter.addEventListener('change', () => { selectedCitySellers = []; selectedCitySellers = updateSellerFilter(citySupervisorFilter.value, cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData); validateCityFilter(); updateCityView(); });
             cityVendedorFilterBtn.addEventListener('click', () => cityVendedorFilterDropdown.classList.toggle('hidden'));
@@ -5802,7 +5849,7 @@
                 else if (!stockCityFilter.contains(e.target)) stockCitySuggestions.classList.add('hidden');
             });
 
-            fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentFornecedor === fornecedor) { currentFornecedor = ''; btn.classList.remove('active'); } else { currentFornecedor = fornecedor; fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } populateSupervisors('supervisor-filter', allSalesData); selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); updateDashboardViewVisuals(); }); });
+            fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentFornecedor === fornecedor) { currentFornecedor = ''; btn.classList.remove('active'); } else { currentFornecedor = fornecedor; fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } populateSupervisors('supervisor-filter', allSalesData); selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); mainTableState.currentPage = 1; updateAllVisuals(); }); });
             weeklyFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentWeeklyFornecedor === fornecedor) { currentWeeklyFornecedor = ''; btn.classList.remove('active'); } else { currentWeeklyFornecedor = fornecedor; weeklyFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } updateWeeklyView(); }); });
             weeklySupervisorFilter.addEventListener('change', updateWeeklyView);
             clearWeeklyFiltersBtn.addEventListener('click', resetWeeklyFilters);
@@ -6028,8 +6075,8 @@
             document.getElementById('export-inactive-pdf-btn').addEventListener('click', () => exportClientsPDF(inactiveClientsForExport, 'Relatório de Clientes Sem Vendas no Mês', 'clientes_sem_vendas', false));
             modalCloseBtn.addEventListener('click', () => modal.classList.add('hidden'));
             clientModalCloseBtn.addEventListener('click', () => clientModal.classList.add('hidden'));
-            faturamentoBtn.addEventListener('click', () => { currentProductMetric = 'faturamento'; faturamentoBtn.classList.add('active'); pesoBtn.classList.remove('active'); updateDashboardViewVisuals(); });
-            pesoBtn.addEventListener('click', () => { currentProductMetric = 'peso'; pesoBtn.classList.add('active'); faturamentoBtn.classList.remove('active'); updateDashboardViewVisuals(); });
+            faturamentoBtn.addEventListener('click', () => { currentProductMetric = 'faturamento'; faturamentoBtn.classList.add('active'); pesoBtn.classList.remove('active'); updateAllVisuals(); });
+            pesoBtn.addEventListener('click', () => { currentProductMetric = 'peso'; pesoBtn.classList.add('active'); faturamentoBtn.classList.remove('active'); updateAllVisuals(); });
 
             const debouncedUpdateInnovations = debounce(() => {
                 updateInnovationsFilters();
@@ -6402,44 +6449,25 @@
         setupEventListeners();
 
 
-        // CORREÇÃO: Lógica de visibilidade aprimorada para as novas visualizações.
+        // SOLUÇÃO FINAL: Atualização leve para corrigir a renderização do gráfico ao retornar à aba.
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                if (!dashboardView.classList.contains('hidden')) {
-                    console.log("Visibilidade alterada: Atualizando Dashboard Principal.");
-                    updateDashboardViewVisuals();
-                } else if (!ordersView.classList.contains('hidden')) {
-                    console.log("Visibilidade alterada: Atualizando Pedidos Detalhados.");
-                    updateOrdersViewVisuals();
-                } else if (!comparisonView.classList.contains('hidden')) {
-                    console.log("Visibilidade alterada: Atualizando Comparativo.");
-                    updateComparisonView();
-                } else if (!weeklyView.classList.contains('hidden')) {
-                    console.log("Visibilidade alterada: Atualizando Acompanhamento Semanal.");
-                    updateWeeklyView();
-                } else if (!cityView.classList.contains('hidden')) {
-                    console.log("Visibilidade alterada: Atualizando Análise por Cidade.");
-                    updateCityView();
-                } else if (!stockView.classList.contains('hidden')) {
-                    console.log("Visibilidade alterada: Atualizando Análise de Estoque.");
-                    updateStockView();
-                } else if (!innovationsView.classList.contains('hidden')) {
-                    console.log("Visibilidade alterada: Atualizando Análise de Inovações.");
-                    updateInnovationsView();
-                } else if (!innovationsMonthView.classList.contains('hidden')) {
-                    console.log("Visibilidade alterada: Atualizando Inovações Mês.");
-                    updateInnovationsMonthView();
-                } else if (!coverageView.classList.contains('hidden')) {
-                     console.log("Visibilidade alterada: Atualizando Cobertura de Estoque.");
-                     updateCoverageView();
-                }
+                // Simplesmente chama 'update' em todos os gráficos existentes.
+                // Isso força o Chart.js a se redesenhar no canvas visível, corrigindo
+                // problemas de renderização sem recarregar dados ou alterar o estado da página.
+                Object.values(charts).forEach(chart => {
+                    if (chart && typeof chart.update === 'function') {
+                        chart.update();
+                    }
+                });
             }
         });
         
-        // Chamadas iniciais para popular a tela
-        updateDashboardViewVisuals();
-        updateOrdersViewVisuals(); // Chama para popular os filtros da outra tela
-        renderTable(aggregatedOrders); // Renderiza a tabela de pedidos
+        // Assegura que os dados históricos estão prontos antes da primeira renderização
+        // calculateHistoricalBests(); // <-- REMOVIDA DAQUI
+
+        updateAllVisuals();
+        renderTable(aggregatedOrders);
     </script>
 
     <!-- NOVO SCRIPT DO PORTEIRO -->
@@ -6537,7 +6565,7 @@
         const telaLogin = document.getElementById('tela-login');
         const telaLoading = document.getElementById('tela-loading');
         const telaPendente = document.getElementById('tela-pendente');
-        const dashboardView = document.getElementById('dashboard-view'); // CORREÇÃO: Referência ao novo elemento
+        const mainDashboard = document.getElementById('main-dashboard');
         const loader = document.getElementById('loader');
 
         // Botões
@@ -6568,20 +6596,15 @@
             if (error) console.error('Erro no login:', error);
         });
 
-        const handleLogout = async () => {
-            const { error } = await supabaseClient.auth.signOut();
-            if (error) {
-                console.error('Erro no logout, continuando com limpeza manual:', error);
-            }
-            // Limpa o token de sessão manualmente como fallback e para garantir.
+        const handleLogout = () => {
+            // Limpa o token de sessão do Supabase do localStorage
+            // Isso é mais eficaz do que apenas chamar signOut() para forçar uma reavaliação
             Object.keys(localStorage).forEach(key => {
-                if (key.startsWith('sb-dhozwhfmrwiumwpcqabi-auth-token')) {
+                if (key.startsWith('sb-dhozwhfmrwiumwpcqabi-auth-token')) { // Chave específica do token
                     localStorage.removeItem(key);
                 }
             });
-            // Limpa o cache de status
-            localStorage.removeItem('userStatus');
-            // Força uma navegação limpa para a URL base.
+            // Força uma navegação limpa para a URL base, que é mais confiável que location.reload()
             const cleanUrl = window.location.origin + window.location.pathname;
             window.location.href = cleanUrl;
         };
@@ -6598,7 +6621,7 @@
         let isLogicScriptRunning = false; // Flag para prevenir execução dupla
         supabaseClient.auth.onAuthStateChange(async (event, session) => {
             // Esconde o dashboard principal por padrão em qualquer mudança de estado
-            if (dashboardView) dashboardView.classList.add('hidden');
+            if (mainDashboard) mainDashboard.classList.add('hidden');
 
             // Se o usuário deslogou, mostra a tela de login.
             if (event === 'SIGNED_OUT') {
@@ -6658,9 +6681,6 @@
                         }
 
                         if (profile && profile.status === 'aprovado') {
-                            if (isLogicScriptRunning) return;
-                            isLogicScriptRunning = true;
-
                             localStorage.setItem('userStatus', 'aprovado'); // Salva no cache
                             dashboardInitialized = true; // Marca como inicializado
                             showScreen(null); // Esconde as telas de gatekeeper
