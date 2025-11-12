@@ -33,8 +33,8 @@
             --bg-button-hover: #DEE2E6;
             --bg-button-active: #FD7E14;
             --bg-tooltip: #212529;
-            --text-primary: #212529;
-            --text-secondary: #868E96;
+            --text-primary: #111315;
+            --text-secondary: #495057;
             --text-on-active-button: #ffffff;
             --text-on-dark-bg: #ffffff;
             --text-menu: #343A40;
@@ -64,8 +64,8 @@
             --bg-button-hover: #5A6069;
             --bg-button-active: #FFD369;
             --bg-tooltip: #222831;
-            --text-primary: #EEEEEE;                 /* Branco suave */
-            --text-secondary: #ADB5BD;
+            --text-primary: #F8F9FA;                 /* Branco suave */
+            --text-secondary: #CED4DA;
             --text-on-active-button: #222831;        /* Texto escuro no botão ativo */
             --text-on-dark-bg: #EEEEEE;
             --text-menu: #EEEEEE;
@@ -5424,19 +5424,20 @@
 
                 let viewToShow;
 
-                // Lógica para o dashboard principal e suas sub-visualizações (gráfico/tabela)
-                if (targetViewId === 'main-dashboard' || targetViewId === 'table-view') {
+                if (targetViewId === 'main-dashboard') {
+                    // Mostra o contêiner principal
+                    mainDashboard.classList.remove('hidden');
+                    // Garante que a sub-view correta está visível
+                    chartView.classList.remove('hidden');
+                    tableView.classList.add('hidden');
                     viewToShow = mainDashboard;
-                    mainDashboard.classList.remove('hidden'); // Garante que o contêiner principal esteja visível
-
-                    // Alterna entre a visualização de gráfico e tabela
-                    if (targetViewId === 'main-dashboard') {
-                        chartView.classList.remove('hidden');
-                        tableView.classList.add('hidden');
-                    } else { // targetViewId === 'table-view'
-                        chartView.classList.add('hidden');
-                        tableView.classList.remove('hidden');
-                    }
+                } else if (targetViewId === 'table-view') {
+                    // Mostra o contêiner principal
+                    mainDashboard.classList.remove('hidden');
+                    // Garante que a sub-view correta está visível
+                    chartView.classList.add('hidden');
+                    tableView.classList.remove('hidden');
+                    viewToShow = mainDashboard;
                 } else {
                     // Para todas as outras visualizações de nível superior, encontra e mostra a correta.
                     viewToShow = topLevelViews.find(v => v.id === targetViewId);
