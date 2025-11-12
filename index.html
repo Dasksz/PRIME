@@ -6239,43 +6239,16 @@
         setupEventListeners();
 
 
-        // CORREÇÃO: Lógica de visibilidade aprimorada para redesenhar a view ativa.
+        // SOLUÇÃO FINAL: Corrige a renderização do dashboard principal ao voltar à aba.
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                // Verifica qual view principal está ativa e chama sua respectiva função de atualização.
-                // Isso garante que não apenas os gráficos, mas toda a interface (tabelas, KPIs)
-                // seja redesenhada corretamente após a aba se tornar visível novamente.
-                if (!mainDashboard.classList.contains('hidden')) {
-                    console.log("Visibilidade alterada: Atualizando Dashboard Principal.");
+            
+            // Se a aba ficar visível E se o dashboard principal for o que está ativo
+            if (document.visibilityState === 'visible' && !mainDashboard.classList.contains('hidden')) {
+                
+                // Força a atualização de *toda* a view principal (KPIs, Gráficos E Tabela).
+                // Isto resolve o bug tanto para o 'chartView' como para o 'tableView'.
+                if (typeof updateAllVisuals === 'function') {
                     updateAllVisuals();
-                } else if (!comparisonView.classList.contains('hidden')) {
-                    console.log("Visibilidade alterada: Atualizando Comparativo.");
-                    updateComparisonView();
-                } else if (!weeklyView.classList.contains('hidden')) {
-                    console.log("Visibilidade alterada: Atualizando Acompanhamento Semanal.");
-                    updateWeeklyView();
-                } else if (!cityView.classList.contains('hidden')) {
-                    console.log("Visibilidade alterada: Atualizando Análise por Cidade.");
-                    updateCityView();
-                } else if (!stockView.classList.contains('hidden')) {
-                    console.log("Visibilidade alterada: Atualizando Análise de Estoque.");
-                    updateStockView();
-                } else if (!innovationsView.classList.contains('hidden')) {
-                    console.log("Visibilidade alterada: Atualizando Análise de Inovações.");
-                    updateInnovationsView();
-                } else if (!innovationsMonthView.classList.contains('hidden')) {
-                    console.log("Visibilidade alterada: Atualizando Inovações Mês.");
-                    updateInnovationsMonthView();
-                } else if (!coverageView.classList.contains('hidden')) {
-                     console.log("Visibilidade alterada: Atualizando Cobertura de Estoque.");
-                     updateCoverageView();
-                } else {
-                    // Fallback para apenas atualizar os gráficos se nenhuma view principal for encontrada
-                    Object.values(charts).forEach(chart => {
-                        if (chart && typeof chart.update === 'function') {
-                            chart.update();
-                        }
-                    });
                 }
             }
         });
