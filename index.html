@@ -6239,16 +6239,53 @@
         setupEventListeners();
 
 
-        // SOLUÇÃO FINAL: Corrige a renderização do dashboard principal ao voltar à aba.
+        // CORREÇÃO DEFINITIVA: Lógica de visibilidade que recarrega a view ativa por completo.
         document.addEventListener('visibilitychange', () => {
-            
-            // Se a aba ficar visível E se o dashboard principal for o que está ativo
-            if (document.visibilityState === 'visible' && !mainDashboard.classList.contains('hidden')) {
+            if (document.visibilityState === 'visible') {
                 
-                // Força a atualização de *toda* a view principal (KPIs, Gráficos E Tabela).
-                // Isto resolve o bug tanto para o 'chartView' como para o 'tableView'.
-                if (typeof updateAllVisuals === 'function') {
-                    updateAllVisuals();
+                // Esta lógica imita o clique no menu de navegação.
+                // Ela descobre qual é a página ativa e chama as *mesmas funções*
+                // que o menu chamaria, recarregando os filtros E a vista.
+                
+                try {
+                    if (!mainDashboard.classList.contains('hidden')) {
+                        // Se estamos no Dashboard Principal (gráficos ou tabela)
+                        updateAllVisuals();
+                    
+                    } else if (!comparisonView.classList.contains('hidden')) {
+                        // Se estamos no Comparativo
+                        updateAllComparisonFilters(); // <-- Esta linha é crucial
+                        updateComparisonView();
+                    
+                    } else if (!stockView.classList.contains('hidden')) {
+                        // Se estamos no Estoque
+                        handleStockFilterChange(); // <-- Esta é a função "mãe" correta
+                    
+                    } else if (!coverageView.classList.contains('hidden')) {
+                        // Se estamos na Cobertura
+                        updateCoverageFilters(); // <-- Recarrega filtros
+                        updateCoverageView();
+
+                    } else if (!innovationsView.classList.contains('hidden')) {
+                        // Se estamos em Inovações
+                        updateInnovationsFilters(); // <-- Recarrega filtros
+                        updateInnovationsView();
+
+                    } else if (!innovationsMonthView.classList.contains('hidden')) {
+                        // Se estamos em Inovações Mês
+                        updateInnovationsMonthView(); // (Esta não parece precisar de filtros)
+
+                    } else if (!weeklyView.classList.contains('hidden')) {
+                        // Se estamos no Semanal
+                        updateWeeklyView(); // (Esta também parece recarregar-se bem)
+
+                    } else if (!cityView.classList.contains('hidden')) {
+                        // Se estamos em Cidades
+                        populateCityFilters(); // <-- Recarrega filtros
+                        updateCityView();
+                    }
+                } catch (e) {
+                    console.error("Erro ao tentar redesenhar a view após mudança de visibilidade:", e);
                 }
             }
         });
