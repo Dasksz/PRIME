@@ -6228,31 +6228,18 @@
         initializeTheme();
         setupEventListeners();
 
-        // CORREÇÃO: Força a re-renderização da view ativa ao mudar a visibilidade da aba
+
+        // SOLUÇÃO FINAL: Atualização leve para corrigir a renderização do gráfico ao retornar à aba.
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                // Destroi todos os gráficos para forçar uma recriação completa com os dados corretos
-                Object.values(charts).forEach(chart => chart.destroy());
-                charts = {}; // Limpa o objeto de gráficos
-
-                // Identifica a view ativa e chama a função de atualização correspondente
-                if (!mainDashboard.classList.contains('hidden')) {
-                    updateAllVisuals();
-                } else if (!comparisonView.classList.contains('hidden')) {
-                    updateComparisonView();
-                } else if (!stockView.classList.contains('hidden')) {
-                    updateStockView();
-                } else if (!coverageView.classList.contains('hidden')) {
-                    updateCoverageView();
-                } else if (!innovationsView.classList.contains('hidden')) {
-                    updateInnovationsView();
-                } else if (!weeklyView.classList.contains('hidden')) {
-                    updateWeeklyView();
-                } else if (!cityView.classList.contains('hidden')) {
-                    updateCityView();
-                } else if (!innovationsMonthView.classList.contains('hidden')) {
-                    updateInnovationsMonthView();
-                }
+                // Simplesmente chama 'update' em todos os gráficos existentes.
+                // Isso força o Chart.js a se redesenhar no canvas visível, corrigindo
+                // problemas de renderização sem recarregar dados ou alterar o estado da página.
+                Object.values(charts).forEach(chart => {
+                    if (chart && typeof chart.update === 'function') {
+                        chart.update();
+                    }
+                });
             }
         });
         
@@ -6411,6 +6398,7 @@
         });
 
         // Ouve por mudanças no estado de autenticação (login/logout)
+        let isLogicScriptRunning = false; // Flag para prevenir execução dupla
         supabaseClient.auth.onAuthStateChange(async (event, session) => {
             // Esconde o dashboard principal por padrão em qualquer mudança de estado
             if (mainDashboard) mainDashboard.classList.add('hidden');
@@ -6429,6 +6417,9 @@
 
                 // Lógica de Cache
                 if (localStorage.getItem('userStatus') === 'aprovado' && !dashboardInitialized) {
+                    if (isLogicScriptRunning) return; // Previne re-execução
+                    isLogicScriptRunning = true;
+
                     console.log('Status "aprovado" encontrado no cache. Carregando dashboard...');
                     isInitializing = true;
                     dashboardInitialized = true;
