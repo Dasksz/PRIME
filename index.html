@@ -2445,9 +2445,10 @@
             const secondaryTextColor = getCSSVar('--text-secondary');
             const gridColor = getCSSVar('--border-primary');
             
+            // CORREÇÃO: Paleta de cores restaurada para tons mais vivos e saturados
             const professionalPalette = [
-                '#84a98c', '#a5a58d', '#a5a58d', '#b7b7a4', '#cad2c5', // Tons suaves de verde e cinza
-                '#ffb4a2', '#ffcdb2', '#e5989b', '#b5838d', '#6d6875'  // Tons suaves de rosa e pêssego
+                '#5E35B1', '#1E88E5', '#00897B', '#43A047', '#FDD835', '#FB8C00', '#E53935', '#D81B60',
+                '#8E24AA', '#039BE5', '#00ACC1', '#7CB342', '#FFB300', '#F4511E', '#C62828', '#AD1457'
             ];
 
             let finalDatasets;
@@ -6449,17 +6450,32 @@
         setupEventListeners();
 
 
-        // SOLUÇÃO FINAL: Atualização leve para corrigir a renderização do gráfico ao retornar à aba.
+        // CORREÇÃO FINAL: Corrigir o bug de renderização do gráfico ao retornar para a aba.
+        // A solução agora destrói e recria os gráficos, espelhando a lógica de mudança de tema,
+        // que provou ser robusta para resolver problemas de renderização do Chart.js.
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                // Simplesmente chama 'update' em todos os gráficos existentes.
-                // Isso força o Chart.js a se redesenhar no canvas visível, corrigindo
-                // problemas de renderização sem recarregar dados ou alterar o estado da página.
+                // Destrói todas as instâncias de gráficos existentes.
                 Object.values(charts).forEach(chart => {
-                    if (chart && typeof chart.update === 'function') {
-                        chart.update();
+                    if (chart && typeof chart.destroy === 'function') {
+                        chart.destroy();
                     }
                 });
+                charts = {}; // Limpa o objeto de gráficos.
+
+                // Usa um pequeno timeout para garantir que o navegador tenha processado a mudança de visibilidade.
+                setTimeout(() => {
+                    // Otimização: Apenas atualiza a view que está realmente visível.
+                    if (!mainDashboard.classList.contains('hidden')) updateAllVisuals();
+                    if (!cityView.classList.contains('hidden')) updateCityView();
+                    if (!weeklyView.classList.contains('hidden')) updateWeeklyView();
+                    if (!comparisonView.classList.contains('hidden')) updateComparisonView();
+                    if (!stockView.classList.contains('hidden')) updateStockView();
+                    if (!innovationsView.classList.contains('hidden')) updateInnovationsView();
+                    if (!innovationsMonthView.classList.contains('hidden')) updateInnovationsMonthView();
+                    if (!coverageView.classList.contains('hidden')) updateCoverageView();
+                    // A view de pedidos ('orders-view') não tem gráficos, então não precisa ser chamada.
+                }, 50);
             }
         });
         
