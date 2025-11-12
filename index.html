@@ -2461,8 +2461,7 @@
             const gridColor = getCSSVar('--border-primary');
             
             const professionalPalette = [
-                '#84a98c', '#a5a58d', '#a5a58d', '#b7b7a4', '#cad2c5', // Tons suaves de verde e cinza
-                '#ffb4a2', '#ffcdb2', '#e5989b', '#b5838d', '#6d6875'  // Tons suaves de rosa e pêssego
+                '#3b82f6', '#14b8a6', '#ec4899', '#f97316', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444'
             ];
 
             let finalDatasets;
@@ -3297,7 +3296,7 @@
             
             const weekLabels = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
             const weekNumbers = Object.keys(salesByWeekAndDay).sort((a,b) => a - b);
-            const professionalPalette = ['#14b8a6', '#6366f1', '#ec4899', '#f97316', '#8b5cf6'];
+            const professionalPalette = ['#3b82f6', '#14b8a6', '#ec4899', '#f97316', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444'];
             const currentMonthDatasets = weekNumbers.map((weekNum, index) => ({ 
                 label: `Semana ${weekNum}`, 
                 data: weekLabels.map(day => salesByWeekAndDay[weekNum][day] || 0), 
@@ -4205,7 +4204,7 @@
             }
 
             const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-            const professionalPalette = ['#a855f7', '#6366f1', '#ec4899', '#f97316', '#8b5cf6', '#06b6d4', '#f59e0b'];
+            const professionalPalette = ['#3b82f6', '#14b8a6', '#ec4899', '#f97316', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444'];
             const dailyBreakdownDatasets = dayNames.map((dayName, dayIndex) => {
                 return {
                     label: dayName,
@@ -4390,9 +4389,19 @@
 
 
             let sortedAnalysis = [...productAnalysis.values()].sort((a, b) => {
-                 const trendA = isFinite(a.trendDays) ? a.trendDays : -1;
-                 const trendB = isFinite(b.trendDays) ? b.trendDays : -1;
-                return trendB - trendA;
+                const isAFinite = isFinite(a.trendDays);
+                const isBFinite = isFinite(b.trendDays);
+
+                if (isAFinite && isBFinite) {
+                    return b.trendDays - a.trendDays; // Ambos são números, ordena decrescente
+                }
+                if (isAFinite && !isBFinite) {
+                    return -1; // A é número, B é Infinito, A vem primeiro
+                }
+                if (!isAFinite && isBFinite) {
+                    return 1; // A é Infinito, B é número, B vem primeiro
+                }
+                return 0; // Ambos são Infinitos, mantém a ordem
             });
 
 
@@ -4443,18 +4452,23 @@
             const lostProducts = [];
 
             productAnalysis.forEach(p => {
-                 if (p.soldThisMonth && p.hasHistory) {
-                    if (p.currentMonthSalesQty >= p.monthlyAvgSale) {
-                        growth.push(p);
-                    } else if (p.currentMonthSalesQty < p.monthlyAvgSale && p.monthlyAvgSale > 0) { 
-                        decline.push(p);
-                    }
-                 } else if (p.soldThisMonth && !p.hasHistory) { 
-                    newProducts.push(p);
-                 } else if (!p.soldThisMonth && p.hasHistory) { 
-                    lostProducts.push(p);
-                 }
-            });
+                // CORREÇÃO: Produtos vendidos este mês, mas sem histórico de vendas (ou com média 0), são 'Novos'.
+                if (p.soldThisMonth && (!p.hasHistory || p.monthlyAvgSale === 0)) {
+                    newProducts.push(p);
+                }
+                // Produtos com histórico e vendidos este mês são 'Crescimento' ou 'Queda'.
+                else if (p.soldThisMonth && p.hasHistory) {
+                    if (p.currentMonthSalesQty >= p.monthlyAvgSale) {
+                        growth.push(p);
+                    } else { // A média mensal (monthlyAvgSale) é implicitamente > 0 aqui
+                        decline.push(p);
+                    }
+                }
+                // Produtos com histórico mas NÃO vendidos este mês são 'Perdidos'.
+                else if (!p.soldThisMonth && p.hasHistory) {
+                    lostProducts.push(p);
+                }
+            });
 
             const renderProductTable = (bodyElement, data, showVariation = true) => {
                 bodyElement.innerHTML = data.map(p => {
@@ -4483,7 +4497,7 @@
             const getVariation = p => p.monthlyAvgSale > 0 ? ((p.currentMonthSalesQty - p.monthlyAvgSale) / p.monthlyAvgSale) * 100 : (p.currentMonthSalesQty > 0 ? Infinity : 0);
 
             growth.sort((a, b) => getVariation(b) - getVariation(a));
-            decline.sort((a, b) => getVariation(b) - getVariation(a));
+            decline.sort((a, b) => getVariation(a) - getVariation(b));
             newProducts.sort((a,b) => b.currentMonthSalesQty - a.currentMonthSalesQty);
             lostProducts.sort((a,b) => b.monthlyAvgSale - a.monthlyAvgSale);
 
