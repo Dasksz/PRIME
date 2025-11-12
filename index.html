@@ -1247,7 +1247,14 @@
                 
                 const scriptLogicContent = document.getElementById('report-logic-script').textContent;
                 const logicScript = document.createElement('script');
+                logicScript.id = 'dynamic-logic-script'; // Atribui um ID para controle
                 logicScript.textContent = scriptLogicContent;
+
+                // Garante que o script antigo seja removido antes de adicionar o novo
+                const existingScript = document.getElementById('dynamic-logic-script');
+                if (existingScript) {
+                    existingScript.remove();
+                }
                 
                 // CORREÇÃO: Torna o dashboard visível ANTES de executar o script de lógica
                 mainDashboard.classList.remove('hidden');
