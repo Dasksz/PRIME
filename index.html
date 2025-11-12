@@ -406,13 +406,16 @@
         <p id="loader-text" class="text-slate-300 mt-4">Carregando dados do Supabase...</p>
     </div>
 
-    <!-- 6. ADICIONADO: Todo o HTML do seu dashboard escuro original -->
-    <div id="main-dashboard" class="hidden"> <!-- Começa escondido -->
+    <!-- 6. INÍCIO DA REFATORAÇÃO: Dashboard Principal e Pedidos Detalhados agora são independentes -->
+
+    <!-- Dashboard Principal (Gráficos) -->
+    <div id="dashboard-view" class="hidden"> <!-- Começa escondido -->
         <div class="container mx-auto p-4 sm:p-6 lg:p-8">
             <header class="mb-8 p-6 header-gradient rounded-b-lg shadow-lg">
                 <div class="flex flex-col sm:flex-row justify-between items-start gap-4">
                     <div class="text-center sm:text-left">
                         <h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span style="color: var(--header-span-text);">PRIME</span> DISTRIBUIÇÃO</h1>
+                        <p class="text-lg text-white -mt-1">Dashboard Principal</p>
                         <p id="generation-date" class="text-white mt-1">Dados atualizados em: ...</p>
                     </div>
                 </div>
@@ -468,7 +471,7 @@
                     <div class="md:col-start-6"><button id="clear-filters-btn" class="w-full font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button></div>
                 </div>
             </div>
-            <main id="app-container">
+            <main>
                 <div id="chartView" class="">
                     <div class="mb-6 p-4 rounded-xl border border-primary shadow-sm bg-content">
                         <div class="flex justify-between items-center mb-4">
@@ -497,7 +500,75 @@
                         <div id="salesByProductBarChartContainer" class="relative h-80"></div>
                     </div>
                 </div>
-                <div id="tableView" class="hidden">
+            </main>
+        </div>
+    </div>
+
+    <!-- Pedidos Detalhados (Tabela) -->
+    <div id="orders-view" class="hidden"> <!-- Começa escondido -->
+        <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+            <header class="mb-8 p-6 header-gradient rounded-b-lg shadow-lg">
+                <div class="flex flex-col sm:flex-row justify-between items-start gap-4">
+                    <div class="text-center sm:text-left">
+                        <h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span style="color: var(--header-span-text);">PRIME</span> DISTRIBUIÇÃO</h1>
+                        <p class="text-lg text-white -mt-1">Pedidos Detalhados</p>
+                        <p id="orders-generation-date" class="text-white mt-1">Dados atualizados em: ...</p>
+                    </div>
+                </div>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="kpi-card" style="--kpi-border-color: #6366f1;">
+                    <h3>Volume Tons</h3>
+                    <p id="orders-total-peso">0,0</p>
+                </div>
+                <div class="kpi-card" style="--kpi-border-color: #14b8a6;">
+                    <h3>Faturamento R$</h3>
+                    <p id="orders-total-vendas">R$ 0,00</p>
+                </div>
+                <div class="kpi-card" style="--kpi-border-color: #22c55e;">
+                    <h3>SKU/PDV</h3>
+                    <p id="orders-kpi-sku-pdv">0,0</p>
+                </div>
+                <div class="kpi-card" style="--kpi-border-color: #8b5cf6;">
+                    <h3>Cobertura PDVs</h3>
+                    <p id="orders-kpi-positivacao">0,0%</p>
+                    <p id="orders-kpi-positivacao-percent" class="kpi-subtext">0 PDVs</p>
+                </div>
+            </div>
+
+            <div class="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div id="orders-fornecedor-toggle-container" class="w-full sm:w-auto rounded-lg p-1 flex justify-center sm:justify-start gap-2">
+                    <button data-fornecedor="PEPSICO" class="fornecedor-btn font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">PEPSICO</button>
+                    <button data-fornecedor="MULTIMARCAS" class="fornecedor-btn font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">MULTIMARCAS</button>
+                </div>
+            </div>
+
+            <div id="orders-filters" class="mb-8 p-4 bg-content rounded-xl shadow-sm border border-primary">
+                <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+                    <div id="orders-rede-filter-wrapper" class="relative">
+                        <label class="block mb-2 text-sm font-medium text-secondary">Rede</label>
+                        <div id="orders-rede-group-container" class="inline-flex rounded-md shadow-sm" role="group">
+                            <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium border rounded-l-lg">Todos</button>
+                            <button type="button" data-group="com_rede" id="orders-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium border-t border-b flex items-center gap-2">
+                                <span id="orders-com-rede-btn-text">Com Rede</span>
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                            <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium border rounded-r-lg">Sem Rede</button>
+                        </div>
+                        <div id="orders-rede-filter-dropdown" class="hidden absolute z-20 w-56 mt-1 top-full left-0 bg-modal-content border border-primary rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left"></div>
+                    </div>
+                    <div><label class="block mb-2 text-sm font-medium text-secondary">Supervisor</label><select id="orders-supervisor-filter" class="text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
+                    <div class="relative"><label class="block mb-2 text-sm font-medium text-secondary">Vendedor</label><button id="orders-vendedor-filter-btn" class="w-full border text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="orders-vendedor-filter-text">Todos Vendedores</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></button><div id="orders-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-modal-content border border-primary rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div></div>
+                    <div class="relative"><label class="block mb-2 text-sm font-medium text-secondary">Tipo Venda</label><button id="orders-tipo-venda-filter-btn" class="w-full border text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="orders-tipo-venda-filter-text">Todos os Tipos</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="orders-tipo-venda-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-modal-content border border-primary rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div></div>
+                    <div><label class="block mb-2 text-sm font-medium text-secondary">Fornecedor</label><select id="orders-fornecedor-filter" class="text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
+                    <div><label class="block mb-2 text-sm font-medium text-secondary">Cód. Cliente</label><input type="text" id="orders-codcli-filter" placeholder="Digite o código..." class="text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"></div>
+                    <div><label class="block mb-2 text-sm font-medium text-secondary">Posição</label><select id="orders-posicao-filter" class="text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todas</option><option value="L">Liberado</option><option value="M">Montado</option><option value="F">Faturado</option></select></div>
+                    <div class="md:col-start-6"><button id="orders-clear-filters-btn" class="w-full font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button></div>
+                </div>
+            </div>
+            <main>
+                <div id="tableView">
                     <div class="overflow-x-auto bg-content rounded-xl border border-primary shadow-sm" style="max-height: 60vh;">
                         <table class="min-w-full text-sm text-left">
                             <thead class="text-xs uppercase sticky-header">
@@ -515,6 +586,7 @@
             </main>
         </div>
     </div>
+    <!-- FIM DA REFATORAÇÃO -->
     
     <!-- Ecrã de Cidades -->
     <div id="city-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
@@ -1651,7 +1723,8 @@
 
         Chart.register(ChartDataLabels);
 
-        const mainDashboard = document.getElementById('main-dashboard');
+        const dashboardView = document.getElementById('dashboard-view');
+        const ordersView = document.getElementById('orders-view');
         const cityView = document.getElementById('city-view');
         const weeklyView = document.getElementById('weekly-view');
         const comparisonView = document.getElementById('comparison-view');
@@ -1671,12 +1744,8 @@
         const kpiPositivacaoPercentEl = document.getElementById('kpi-positivacao-percent');
 
 
-        const viewChartBtn = document.getElementById('viewChartBtn');
-        const viewTableBtn = document.getElementById('viewTableBtn');
-        const viewComparisonBtn = document.getElementById('viewComparisonBtn');
-        const viewStockBtn = document.getElementById('viewStockBtn');
-        const chartView = document.getElementById('chartView');
-        const tableView = document.getElementById('tableView');
+        const chartView = document.getElementById('chartView'); // Continua existindo dentro de #dashboard-view
+        const tableView = document.getElementById('tableView'); // Continua existindo dentro de #orders-view
         const faturamentoBtn = document.getElementById('faturamentoBtn');
         const pesoBtn = document.getElementById('pesoBtn');
 
@@ -1904,6 +1973,7 @@
         let charts = {};
         let currentProductMetric = 'faturamento';
         let currentFornecedor = '';
+        let currentOrdersFornecedor = '';
         let currentWeeklyFornecedor = '';
         let currentComparisonFornecedor = '';
         let currentStockFornecedor = '';
@@ -1912,10 +1982,12 @@
         let activeClientsForExport = [];
         let inactiveClientsForExport = [];
         let selectedSellers = [];
+        let selectedOrdersSellers = [];
         let selectedCitySellers = [];
         let selectedComparisonSellers = [];
         let selectedStockSellers = [];
         let selectedTiposVenda = [];
+        let selectedOrdersTiposVenda = [];
         let selectedComparisonSuppliers = [];
         let selectedComparisonProducts = [];
         let selectedStockSuppliers = [];
@@ -1925,11 +1997,13 @@
         let stockTrendFilter = 'all';
 
         let selectedMainRedes = [];
+        let selectedOrdersRedes = [];
         let selectedCityRedes = [];
         let selectedComparisonRedes = [];
         let selectedStockRedes = [];
 
         let mainRedeGroupFilter = '';
+        let ordersRedeGroupFilter = '';
         let cityRedeGroupFilter = '';
         let comparisonRedeGroupFilter = '';
         let stockRedeGroupFilter = '';
@@ -2445,6 +2519,76 @@
             createChart('salesByProductBarChart', 'bar', labels, values);
         }
 
+        function updateOrdersViewVisuals() {
+            console.log("Debug: updateOrdersViewVisuals chamada.");
+            const supervisor = document.getElementById('orders-supervisor-filter').value;
+            const posicao = document.getElementById('orders-posicao-filter').value;
+            const codcli = document.getElementById('orders-codcli-filter').value.trim();
+            const selectedFornecedor = document.getElementById('orders-fornecedor-filter').value;
+
+            let clientBaseForCoverage = allClientsData.filter(c => {
+                const rca1 = String(c.rca1 || '').trim();
+                const isAmericanas = (c.razaosocial || '').toUpperCase().includes('AMERICANAS');
+                return (isAmericanas || rca1 !== '53');
+            });
+
+            if (ordersRedeGroupFilter === 'com_rede') {
+                clientBaseForCoverage = clientBaseForCoverage.filter(c => c.ramo && c.ramo !== 'N/A');
+                if (selectedOrdersRedes.length > 0) {
+                    clientBaseForCoverage = clientBaseForCoverage.filter(c => selectedOrdersRedes.includes(c.ramo));
+                }
+            } else if (ordersRedeGroupFilter === 'sem_rede') {
+                clientBaseForCoverage = clientBaseForCoverage.filter(c => !c.ramo || c.ramo === 'N/A');
+            }
+            const clientCodesInRede = new Set(clientBaseForCoverage.map(c => c['codigo_cliente']));
+
+            const getFilteredData = (sourceData, filterFn) => sourceData.filter(filterFn);
+
+            const filterPredicate = item => {
+                let matches = true;
+                if (ordersRedeGroupFilter) {
+                    matches = matches && clientCodesInRede.has(item.codcli);
+                }
+                if (codcli) {
+                    matches = matches && item.codcli === codcli;
+                } else {
+                    if (supervisor) {
+                        matches = matches && item.superv === supervisor;
+                    }
+                    if (selectedOrdersSellers.length > 0) {
+                        matches = matches && selectedOrdersSellers.includes(item.nome);
+                    }
+                }
+                if (selectedOrdersTiposVenda.length > 0) {
+                    matches = matches && selectedOrdersTiposVenda.includes(item.tipovenda);
+                }
+                if (currentOrdersFornecedor) {
+                    matches = matches && (item.fornecedores_list ? item.fornecedores_list.includes(currentOrdersFornecedor) : item.observacaofor === currentOrdersFornecedor);
+                }
+                if (selectedFornecedor) {
+                     matches = matches && (item.codfors_list ? item.codfors_list.includes(selectedFornecedor) : item.codfor == selectedFornecedor);
+                }
+                if (posicao) {
+                    matches = matches && item.posicao === posicao;
+                }
+                return matches;
+            };
+
+            const filteredSalesData = getFilteredData(allSalesData, filterPredicate);
+            const filteredTableData = getFilteredData(aggregatedOrders, filterPredicate);
+
+            const summary = calculateSummaryFromData(filteredSalesData, true, clientBaseForCoverage);
+
+            document.getElementById('orders-total-vendas').textContent = summary.totalFaturamento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            document.getElementById('orders-total-peso').textContent = `${(summary.totalPeso / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
+            document.getElementById('orders-kpi-sku-pdv').textContent = summary.skuPdv.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+            document.getElementById('orders-kpi-positivacao').textContent = `${summary.positivacaoPercent.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+            document.getElementById('orders-kpi-positivacao-percent').textContent = `${summary.positivacaoCount.toLocaleString('pt-BR')} PDVs`;
+            document.getElementById('orders-generation-date').textContent = `Dados atualizados em: ${new Date().toLocaleString('pt-BR')}`;
+
+            renderTable(filteredTableData);
+        }
+
         function renderTable(data) {
             const tableBody = document.getElementById('report-table-body');
             if (!tableBody) return;
@@ -2572,8 +2716,8 @@
             });
         }
 
-        function updateAllVisuals() {
-            console.log("Debug: updateAllVisuals chamada.");
+        function updateDashboardViewVisuals() {
+            console.log("Debug: updateDashboardViewVisuals chamada.");
             const supervisor = supervisorFilter.value;
             const posicao = posicaoFilter.value;
             const codcli = codcliFilter.value.trim();
@@ -2768,7 +2912,30 @@
             populateSupervisors('supervisor-filter', allSalesData);
             selectedSellers = updateSellerFilter('', vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
             selectedTiposVenda = updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
-            updateAllVisuals();
+            updateDashboardViewVisuals();
+        }
+
+        function resetOrdersFilters() {
+            document.getElementById('orders-supervisor-filter').value = '';
+            document.getElementById('orders-fornecedor-filter').value = '';
+            document.getElementById('orders-posicao-filter').value = '';
+            document.getElementById('orders-codcli-filter').value = '';
+            currentOrdersFornecedor = '';
+            selectedOrdersSellers = [];
+            selectedOrdersTiposVenda = [];
+            ordersRedeGroupFilter = '';
+            selectedOrdersRedes = [];
+            mainTableState.currentPage = 1;
+
+            document.getElementById('orders-rede-group-container').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            document.getElementById('orders-rede-group-container').querySelector('button[data-group=""]').classList.add('active');
+            updateRedeFilter(document.getElementById('orders-rede-filter-dropdown'), document.getElementById('orders-com-rede-btn-text'), selectedOrdersRedes, allClientsData);
+
+            document.querySelectorAll('#orders-fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
+            populateSupervisors('orders-supervisor-filter', allSalesData);
+            updateSellerFilter('', document.getElementById('orders-vendedor-filter-dropdown'), document.getElementById('orders-vendedor-filter-text'), selectedOrdersSellers, allSalesData);
+            updateTipoVendaFilter(document.getElementById('orders-tipo-venda-filter-dropdown'), document.getElementById('orders-tipo-venda-filter-text'), selectedOrdersTiposVenda, allSalesData);
+            updateOrdersViewVisuals();
         }
 
         function resetCityFilters() {
@@ -5423,66 +5590,43 @@
             const toggleMenu = () => {
                 sideMenu.classList.toggle('open');
                 menuOverlay.classList.toggle('open');
-                menuOverlay.classList.toggle('hidden'); // <-- CORREÇÃO: Adicionado/removido 'hidden'
+                menuOverlay.classList.toggle('hidden');
             };
 
             menuToggleBtn.addEventListener('click', toggleMenu);
             menuOverlay.addEventListener('click', toggleMenu);
 
             // Lógica de Navegação
-            const allViews = [mainDashboard, tableView, chartView, comparisonView, stockView, coverageView, innovationsView, weeklyView, cityView, innovationsMonthView];
+            const allViews = [dashboardView, ordersView, comparisonView, stockView, coverageView, innovationsView, weeklyView, cityView, innovationsMonthView];
 
             const switchView = (targetViewId) => {
-                // Define os contêineres de visualização de nível superior.
-                const topLevelViews = [mainDashboard, comparisonView, stockView, coverageView, innovationsView, weeklyView, cityView, innovationsMonthView];
-
-                // Determina o contêiner de nível superior alvo.
-                // Para 'main-dashboard' e 'table-view', o contêiner é 'mainDashboard'.
-                const targetTopLevelView = (targetViewId === 'main-dashboard' || targetViewId === 'table-view')
-                    ? mainDashboard
-                    : topLevelViews.find(v => v.id === targetViewId);
-
-                // Esconde todas as visualizações de nível superior (esta é a "regra do comparativo").
-                topLevelViews.forEach(view => view.classList.add('hidden'));
-
-                // Se um contêiner alvo foi encontrado, mostra-o.
-                if (targetTopLevelView) {
-                    targetTopLevelView.classList.remove('hidden');
+                const targetView = allViews.find(v => v.id === targetViewId);
+                allViews.forEach(view => view.classList.add('hidden'));
+                if (targetView) {
+                    targetView.classList.remove('hidden');
                 }
-
-                // Lida com as sub-visualizações do painel principal.
-                if (targetTopLevelView && targetTopLevelView.id === 'main-dashboard') {
-                    chartView.classList.toggle('hidden', targetViewId !== 'main-dashboard');
-                    tableView.classList.toggle('hidden', targetViewId !== 'table-view');
-                }
-
-                return targetTopLevelView;
+                return targetView;
             };
 
             mainNav.addEventListener('click', e => {
                 if (e.target.matches('.nav-btn')) {
                     const targetViewId = e.target.dataset.view;
                     
-                    // ADIÇÃO: Lógica para abrir o modal do admin
                     if (targetViewId === 'admin-uploader-modal') {
                         document.getElementById('admin-uploader-modal').classList.remove('hidden');
-                        // Não alterna a view principal, apenas mostra o modal
                         mainNav.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
                         e.target.classList.add('active');
-                        toggleMenu(); // Fecha o menu após abrir o modal
-                        return; // Interrompe a execução para não tratar como uma troca de view
+                        toggleMenu();
+                        return;
                     }
 
-                    // Atualiza botão ativo
-                    mainNav.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-                    e.target.classList.add('active');
-
+                    updateSideNavActiveState(targetViewId);
                     const view = switchView(targetViewId);
 
-                    // Executa funções de atualização específicas da view
                     if (view) {
                         switch(view.id) {
-                            case 'main-dashboard': updateAllVisuals(); break;
+                            case 'dashboard-view': updateDashboardViewVisuals(); break;
+                            case 'orders-view': updateOrdersViewVisuals(); break;
                             case 'comparison-view': updateAllComparisonFilters(); updateComparisonView(); break;
                             case 'stock-view': handleStockFilterChange(); break;
                             case 'coverage-view': updateCoverageFilters(); updateCoverageView(); break;
@@ -5498,79 +5642,68 @@
                         }
                     }
                     
-                    toggleMenu(); // Fecha o menu após a navegação
+                    toggleMenu();
                 }
             });
 
             // Botões de "Voltar"
-            backToMainFromComparisonBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
-            backToMainFromStockBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
-            backToMainFromCoverageBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
-            backToMainFromInnovationsBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
-            backToMainFromWeeklyBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
-            backToMainFromCityBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
+            const backToDashboard = () => { switchView('dashboard-view'); updateDashboardViewVisuals(); updateSideNavActiveState('dashboard-view'); };
+            backToMainFromComparisonBtn.addEventListener('click', backToDashboard);
+            backToMainFromStockBtn.addEventListener('click', backToDashboard);
+            backToMainFromCoverageBtn.addEventListener('click', backToDashboard);
+            backToMainFromInnovationsBtn.addEventListener('click', backToDashboard);
+            backToMainFromWeeklyBtn.addEventListener('click', backToDashboard);
+            backToMainFromCityBtn.addEventListener('click', backToDashboard);
 
-            supervisorFilter.addEventListener('change', () => { selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); mainTableState.currentPage = 1; updateAllVisuals(); });
-            fornecedorFilter.addEventListener('change', () => { mainTableState.currentPage = 1; updateAllVisuals(); });
+            // --- Event Listeners para #DASHBOARD-VIEW ---
+            supervisorFilter.addEventListener('change', () => { selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); updateDashboardViewVisuals(); });
+            fornecedorFilter.addEventListener('change', () => { updateDashboardViewVisuals(); });
             vendedorFilterBtn.addEventListener('click', () => vendedorFilterDropdown.classList.toggle('hidden'));
-            vendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedSellers.push(value); else selectedSellers = selectedSellers.filter(s => s !== value); selectedSellers = updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); mainTableState.currentPage = 1; updateAllVisuals(); } });
-            
+            vendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedSellers.push(value); else selectedSellers = selectedSellers.filter(s => s !== value); selectedSellers = updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); updateDashboardViewVisuals(); } });
             tipoVendaFilterBtn.addEventListener('click', () => tipoVendaFilterDropdown.classList.toggle('hidden'));
-            tipoVendaFilterDropdown.addEventListener('change', (e) => { 
-                if (e.target.type === 'checkbox') { 
-                    const { value, checked } = e.target; 
-                    if (checked) selectedTiposVenda.push(value); 
-                    else selectedTiposVenda = selectedTiposVenda.filter(s => s !== value); 
-                    selectedTiposVenda = updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData); 
-                    mainTableState.currentPage = 1; 
-                    updateAllVisuals(); 
-                } 
-            });
-
-            posicaoFilter.addEventListener('change', () => { mainTableState.currentPage = 1; updateAllVisuals(); });
+            tipoVendaFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedTiposVenda.push(value); else selectedTiposVenda = selectedTiposVenda.filter(s => s !== value); selectedTiposVenda = updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData); updateDashboardViewVisuals(); } });
+            posicaoFilter.addEventListener('change', () => { updateDashboardViewVisuals(); });
             codcliFilter.addEventListener('input', (e) => e.target.value = e.target.value.replace(/[^0-9]/g, ''));
-            codcliFilter.addEventListener('change', () => { mainTableState.currentPage = 1; updateAllVisuals(); });
+            codcliFilter.addEventListener('change', () => { updateDashboardViewVisuals(); });
             clearFiltersBtn.addEventListener('click', resetMainFilters);
-            
-            prevPageBtn.addEventListener('click', () => {
-                if (mainTableState.currentPage > 1) {
-                    mainTableState.currentPage--;
-                    renderTable(mainTableState.filteredData);
-                }
-            });
-            nextPageBtn.addEventListener('click', () => {
-                if (mainTableState.currentPage < mainTableState.totalPages) {
-                    mainTableState.currentPage++;
-                    renderTable(mainTableState.filteredData);
-                }
-            });
-
             mainComRedeBtn.addEventListener('click', () => mainRedeFilterDropdown.classList.toggle('hidden'));
-            mainRedeGroupContainer.addEventListener('click', (e) => {
-                if(e.target.closest('button')) {
-                    const button = e.target.closest('button');
-                    mainRedeGroupFilter = button.dataset.group;
-                    mainRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    button.classList.add('active');
-                    if (mainRedeGroupFilter !== 'com_rede') {
-                        mainRedeFilterDropdown.classList.add('hidden');
-                        selectedMainRedes = [];
-                    }
-                    updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
-                    mainTableState.currentPage = 1;
-                    updateAllVisuals();
-                }
-            });
-            mainRedeFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedMainRedes.push(value);
-                    else selectedMainRedes = selectedMainRedes.filter(r => r !== value);
-                    selectedMainRedes = updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
-                    mainTableState.currentPage = 1;
-                    updateAllVisuals();
-                }
-            });
+            mainRedeGroupContainer.addEventListener('click', (e) => { if(e.target.closest('button')) { const button = e.target.closest('button'); mainRedeGroupFilter = button.dataset.group; mainRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active')); button.classList.add('active'); if (mainRedeGroupFilter !== 'com_rede') { mainRedeFilterDropdown.classList.add('hidden'); selectedMainRedes = []; } updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData); updateDashboardViewVisuals(); } });
+            mainRedeFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedMainRedes.push(value); else selectedMainRedes = selectedMainRedes.filter(r => r !== value); selectedMainRedes = updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData); updateDashboardViewVisuals(); } });
+            fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentFornecedor === fornecedor) { currentFornecedor = ''; btn.classList.remove('active'); } else { currentFornecedor = fornecedor; fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } populateSupervisors('supervisor-filter', allSalesData); selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); updateDashboardViewVisuals(); }); });
+
+            // --- Event Listeners para #ORDERS-VIEW ---
+            const ordersSupervisorFilter = document.getElementById('orders-supervisor-filter');
+            const ordersVendedorFilterBtn = document.getElementById('orders-vendedor-filter-btn');
+            const ordersVendedorFilterDropdown = document.getElementById('orders-vendedor-filter-dropdown');
+            const ordersTipoVendaFilterBtn = document.getElementById('orders-tipo-venda-filter-btn');
+            const ordersTipoVendaFilterDropdown = document.getElementById('orders-tipo-venda-filter-dropdown');
+            const ordersFornecedorFilter = document.getElementById('orders-fornecedor-filter');
+            const ordersCodcliFilter = document.getElementById('orders-codcli-filter');
+            const ordersPosicaoFilter = document.getElementById('orders-posicao-filter');
+            const ordersClearFiltersBtn = document.getElementById('orders-clear-filters-btn');
+            const ordersRedeGroupContainer = document.getElementById('orders-rede-group-container');
+            const ordersComRedeBtn = document.getElementById('orders-com-rede-btn');
+            const ordersRedeFilterDropdown = document.getElementById('orders-rede-filter-dropdown');
+            const ordersFornecedorToggleContainer = document.getElementById('orders-fornecedor-toggle-container');
+
+            ordersSupervisorFilter.addEventListener('change', () => { selectedOrdersSellers = []; updateSellerFilter(ordersSupervisorFilter.value, ordersVendedorFilterDropdown, document.getElementById('orders-vendedor-filter-text'), selectedOrdersSellers, allSalesData); mainTableState.currentPage = 1; updateOrdersViewVisuals(); });
+            ordersFornecedorFilter.addEventListener('change', () => { mainTableState.currentPage = 1; updateOrdersViewVisuals(); });
+            ordersVendedorFilterBtn.addEventListener('click', () => ordersVendedorFilterDropdown.classList.toggle('hidden'));
+            ordersVendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedOrdersSellers.push(value); else selectedOrdersSellers = selectedOrdersSellers.filter(s => s !== value); selectedOrdersSellers = updateSellerFilter(ordersSupervisorFilter.value, ordersVendedorFilterDropdown, document.getElementById('orders-vendedor-filter-text'), selectedOrdersSellers, allSalesData); mainTableState.currentPage = 1; updateOrdersViewVisuals(); } });
+            ordersTipoVendaFilterBtn.addEventListener('click', () => ordersTipoVendaFilterDropdown.classList.toggle('hidden'));
+            ordersTipoVendaFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedOrdersTiposVenda.push(value); else selectedOrdersTiposVenda = selectedOrdersTiposVenda.filter(s => s !== value); selectedOrdersTiposVenda = updateTipoVendaFilter(ordersTipoVendaFilterDropdown, document.getElementById('orders-tipo-venda-filter-text'), selectedOrdersTiposVenda, allSalesData); mainTableState.currentPage = 1; updateOrdersViewVisuals(); } });
+            ordersPosicaoFilter.addEventListener('change', () => { mainTableState.currentPage = 1; updateOrdersViewVisuals(); });
+            ordersCodcliFilter.addEventListener('input', (e) => e.target.value = e.target.value.replace(/[^0-9]/g, ''));
+            ordersCodcliFilter.addEventListener('change', () => { mainTableState.currentPage = 1; updateOrdersViewVisuals(); });
+            ordersClearFiltersBtn.addEventListener('click', resetOrdersFilters);
+            ordersComRedeBtn.addEventListener('click', () => ordersRedeFilterDropdown.classList.toggle('hidden'));
+            ordersRedeGroupContainer.addEventListener('click', (e) => { if(e.target.closest('button')) { const button = e.target.closest('button'); ordersRedeGroupFilter = button.dataset.group; ordersRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active')); button.classList.add('active'); if (ordersRedeGroupFilter !== 'com_rede') { ordersRedeFilterDropdown.classList.add('hidden'); selectedOrdersRedes = []; } updateRedeFilter(ordersRedeFilterDropdown, document.getElementById('orders-com-rede-btn-text'), selectedOrdersRedes, allClientsData); mainTableState.currentPage = 1; updateOrdersViewVisuals(); } });
+            ordersRedeFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedOrdersRedes.push(value); else selectedOrdersRedes = selectedOrdersRedes.filter(r => r !== value); selectedOrdersRedes = updateRedeFilter(ordersRedeFilterDropdown, document.getElementById('orders-com-rede-btn-text'), selectedOrdersRedes, allClientsData); mainTableState.currentPage = 1; updateOrdersViewVisuals(); } });
+            ordersFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentOrdersFornecedor === fornecedor) { currentOrdersFornecedor = ''; btn.classList.remove('active'); } else { currentOrdersFornecedor = fornecedor; ordersFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } populateSupervisors('orders-supervisor-filter', allSalesData); selectedOrdersSellers = []; updateSellerFilter(ordersSupervisorFilter.value, ordersVendedorFilterDropdown, document.getElementById('orders-vendedor-filter-text'), selectedOrdersSellers, allSalesData); mainTableState.currentPage = 1; updateOrdersViewVisuals(); }); });
+
+            // --- Paginação (compartilhada, pois só há uma tabela) ---
+            prevPageBtn.addEventListener('click', () => { if (mainTableState.currentPage > 1) { mainTableState.currentPage--; renderTable(mainTableState.filteredData); } });
+            nextPageBtn.addEventListener('click', () => { if (mainTableState.currentPage < mainTableState.totalPages) { mainTableState.currentPage++; renderTable(mainTableState.filteredData); } });
 
             citySupervisorFilter.addEventListener('change', () => { selectedCitySellers = []; selectedCitySellers = updateSellerFilter(citySupervisorFilter.value, cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData); validateCityFilter(); updateCityView(); });
             cityVendedorFilterBtn.addEventListener('click', () => cityVendedorFilterDropdown.classList.toggle('hidden'));
@@ -5639,7 +5772,7 @@
                 else if (!stockCityFilter.contains(e.target)) stockCitySuggestions.classList.add('hidden');
             });
 
-            fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentFornecedor === fornecedor) { currentFornecedor = ''; btn.classList.remove('active'); } else { currentFornecedor = fornecedor; fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } populateSupervisors('supervisor-filter', allSalesData); selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); mainTableState.currentPage = 1; updateAllVisuals(); }); });
+            fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentFornecedor === fornecedor) { currentFornecedor = ''; btn.classList.remove('active'); } else { currentFornecedor = fornecedor; fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } populateSupervisors('supervisor-filter', allSalesData); selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); updateDashboardViewVisuals(); }); });
             weeklyFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentWeeklyFornecedor === fornecedor) { currentWeeklyFornecedor = ''; btn.classList.remove('active'); } else { currentWeeklyFornecedor = fornecedor; weeklyFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } updateWeeklyView(); }); });
             weeklySupervisorFilter.addEventListener('change', updateWeeklyView);
             clearWeeklyFiltersBtn.addEventListener('click', resetWeeklyFilters);
@@ -5865,8 +5998,8 @@
             document.getElementById('export-inactive-pdf-btn').addEventListener('click', () => exportClientsPDF(inactiveClientsForExport, 'Relatório de Clientes Sem Vendas no Mês', 'clientes_sem_vendas', false));
             modalCloseBtn.addEventListener('click', () => modal.classList.add('hidden'));
             clientModalCloseBtn.addEventListener('click', () => clientModal.classList.add('hidden'));
-            faturamentoBtn.addEventListener('click', () => { currentProductMetric = 'faturamento'; faturamentoBtn.classList.add('active'); pesoBtn.classList.remove('active'); updateAllVisuals(); });
-            pesoBtn.addEventListener('click', () => { currentProductMetric = 'peso'; pesoBtn.classList.add('active'); faturamentoBtn.classList.remove('active'); updateAllVisuals(); });
+            faturamentoBtn.addEventListener('click', () => { currentProductMetric = 'faturamento'; faturamentoBtn.classList.add('active'); pesoBtn.classList.remove('active'); updateDashboardViewVisuals(); });
+            pesoBtn.addEventListener('click', () => { currentProductMetric = 'peso'; pesoBtn.classList.add('active'); faturamentoBtn.classList.remove('active'); updateDashboardViewVisuals(); });
 
             const debouncedUpdateInnovations = debounce(() => {
                 updateInnovationsFilters();
@@ -6239,15 +6372,15 @@
         setupEventListeners();
 
 
-        // CORREÇÃO: Lógica de visibilidade aprimorada para redesenhar a view ativa.
+        // CORREÇÃO: Lógica de visibilidade aprimorada para as novas visualizações.
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                // Verifica qual view principal está ativa e chama sua respectiva função de atualização.
-                // Isso garante que não apenas os gráficos, mas toda a interface (tabelas, KPIs)
-                // seja redesenhada corretamente após a aba se tornar visível novamente.
-                if (!mainDashboard.classList.contains('hidden')) {
+                if (!dashboardView.classList.contains('hidden')) {
                     console.log("Visibilidade alterada: Atualizando Dashboard Principal.");
-                    updateAllVisuals();
+                    updateDashboardViewVisuals();
+                } else if (!ordersView.classList.contains('hidden')) {
+                    console.log("Visibilidade alterada: Atualizando Pedidos Detalhados.");
+                    updateOrdersViewVisuals();
                 } else if (!comparisonView.classList.contains('hidden')) {
                     console.log("Visibilidade alterada: Atualizando Comparativo.");
                     updateComparisonView();
@@ -6269,22 +6402,14 @@
                 } else if (!coverageView.classList.contains('hidden')) {
                      console.log("Visibilidade alterada: Atualizando Cobertura de Estoque.");
                      updateCoverageView();
-                } else {
-                    // Fallback para apenas atualizar os gráficos se nenhuma view principal for encontrada
-                    Object.values(charts).forEach(chart => {
-                        if (chart && typeof chart.update === 'function') {
-                            chart.update();
-                        }
-                    });
                 }
             }
         });
         
-        // Assegura que os dados históricos estão prontos antes da primeira renderização
-        // calculateHistoricalBests(); // <-- REMOVIDA DAQUI
-        
-        updateAllVisuals();
-        renderTable(aggregatedOrders);
+        // Chamadas iniciais para popular a tela
+        updateDashboardViewVisuals();
+        updateOrdersViewVisuals(); // Chama para popular os filtros da outra tela
+        renderTable(aggregatedOrders); // Renderiza a tabela de pedidos
     </script>
 
     <!-- NOVO SCRIPT DO PORTEIRO -->
