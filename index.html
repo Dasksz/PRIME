@@ -6462,17 +6462,67 @@
                         }
                     } catch (e) {
                         console.error('Falha na inicialização da sessão, tentando recuperação automática:', e);
-                        // Lógica de proteção contra loop infinito
-                        if (sessionStorage.getItem('reloadAttempted')) {
-                            // Se a tentativa de recarregamento já aconteceu e falhou, execute o reset completo.
-                            console.error('A segunda tentativa de recarregamento falhou. Executando reset completo para evitar loop.');
-                            sessionStorage.removeItem('reloadAttempted'); // Limpa a flag
-                            handleLogout(); // Função de reset robusta
-                        } else {
-                            // Marca a primeira tentativa e recarrega a página.
-                            sessionStorage.setItem('reloadAttempted', 'true');
-                            window.location.reload();
-                        }
+                        console.error('Falha na inicialização da sessão, iniciando mecanismo de nova tentativa:', e);
+
+                        let attempt = 0;
+                        const maxAttempts = 3;
+                        const retryDelay = 1000; // 1 segundo
+
+                        const retryFetch = async () => {
+                            while (attempt < maxAttempts) {
+                                attempt++;
+                                console.log(`Tentativa ${attempt} de ${maxAttempts} para buscar o perfil...`);
+                                try {
+                                    // A lógica de busca do perfil original
+                                    const { data: profile, error } = await supabaseClient
+                                        .from('profiles')
+                                        .select('status')
+                                        .eq('id', session.user.id)
+                                        .single();
+
+                                    if (error && error.code !== 'PGRST116') {
+                                        throw error; // Lança para o catch de dentro do loop
+                                    }
+
+                                    if (profile && profile.status === 'aprovado') {
+                                        dashboardInitialized = true;
+                                        showScreen(null);
+                                        loader.classList.remove('hidden');
+                                        await carregarDadosDoSupabase(supabaseClient);
+                                        sessionStorage.removeItem('reloadAttempted'); // Reseta a proteção contra loop em caso de sucesso
+                                        return; // Sucesso, sai da função
+                                    } else if (profile && profile.status === 'pendente') {
+                                        showScreen('tela-pendente');
+                                        isInitializing = false;
+                                        startProfilesRealtimeListener(supabaseClient, session.user.id, () => {
+                                            if (!dashboardInitialized) {
+                                                dashboardInitialized = true;
+                                                showScreen(null);
+                                                loader.classList.remove('hidden');
+                                                carregarDadosDoSupabase(supabaseClient);
+                                            }
+                                        });
+                                        return; // Status pendente, sai da função
+                                    } else {
+                                        // Perfil não encontrado, continua para a próxima tentativa
+                                        console.warn(`Tentativa ${attempt}: Perfil não encontrado ou status inválido.`);
+                                    }
+
+                                } catch (loopError) {
+                                    console.error(`Erro na tentativa ${attempt}:`, loopError);
+                                }
+                                // Espera antes da próxima tentativa
+                                if (attempt < maxAttempts) {
+                                    await new Promise(resolve => setTimeout(resolve, retryDelay));
+                                }
+                            }
+
+                            // Se o loop terminar sem sucesso
+                            console.error('Todas as tentativas de buscar o perfil falharam. Executando logout.');
+                            handleLogout();
+                        };
+
+                        retryFetch();
                     }
                 }
             }
