@@ -1151,7 +1151,7 @@
         async function carregarDadosDoSupabase(supabaseClient) { // MODIFICADO: Recebe o cliente
             const loader = document.getElementById('loader');
             const loaderText = document.getElementById('loader-text');
-            const mainDashboard = document.getElementById('main-dashboard');
+            const dashboardView = document.getElementById('dashboard-view'); // CORREÇÃO: Alvo agora é a nova view
             
             try {
                 // A verificação de URL/Chave e a criação do cliente foram movidas para o script do porteiro
@@ -1335,7 +1335,7 @@
                 }
                 
                 // CORREÇÃO: Torna o dashboard visível ANTES de executar o script de lógica
-                mainDashboard.classList.remove('hidden');
+                dashboardView.classList.remove('hidden');
                 
                 document.body.appendChild(logicScript);
 
@@ -5509,10 +5509,8 @@
         function updateSideNavActiveState(targetViewId) {
             mainNav.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
 
-            // Lógica especial para 'table-view', que deve ativar o 'main-dashboard'
-            const navTargetId = targetViewId === 'table-view' ? 'main-dashboard' : targetViewId;
-
-            const activeButton = mainNav.querySelector(`.nav-btn[data-view="${navTargetId}"]`);
+            // CORREÇÃO: A lógica especial não é mais necessária. O targetViewId é direto.
+            const activeButton = mainNav.querySelector(`.nav-btn[data-view="${targetViewId}"]`);
             if (activeButton) {
                 activeButton.classList.add('active');
             }
@@ -5523,8 +5521,8 @@
                 {
                     title: 'Análises Principais',
                     buttons: [
-                        { id: 'nav-main-dashboard', text: 'Dashboard Principal', viewId: 'main-dashboard', default: true },
-                        { id: 'nav-orders-view', text: 'Pedidos Detalhados', viewId: 'table-view' }
+                        { id: 'nav-main-dashboard', text: 'Dashboard Principal', viewId: 'dashboard-view', default: true },
+                        { id: 'nav-orders-view', text: 'Pedidos Detalhados', viewId: 'orders-view' }
                     ]
                 },
                 {
@@ -5611,7 +5609,7 @@
             mainNav.addEventListener('click', e => {
                 if (e.target.matches('.nav-btn')) {
                     const targetViewId = e.target.dataset.view;
-                    
+
                     if (targetViewId === 'admin-uploader-modal') {
                         document.getElementById('admin-uploader-modal').classList.remove('hidden');
                         mainNav.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
@@ -5625,11 +5623,23 @@
 
                     if (view) {
                         switch(view.id) {
-                            case 'dashboard-view': updateDashboardViewVisuals(); break;
-                            case 'orders-view': updateOrdersViewVisuals(); break;
-                            case 'comparison-view': updateAllComparisonFilters(); updateComparisonView(); break;
-                            case 'stock-view': handleStockFilterChange(); break;
-                            case 'coverage-view': updateCoverageFilters(); updateCoverageView(); break;
+                            case 'dashboard-view':
+                                updateDashboardViewVisuals();
+                                break;
+                            case 'orders-view':
+                                updateOrdersViewVisuals();
+                                break;
+                            case 'comparison-view':
+                                updateAllComparisonFilters();
+                                updateComparisonView();
+                                break;
+                            case 'stock-view':
+                                handleStockFilterChange();
+                                break;
+                            case 'coverage-view':
+                                updateCoverageFilters();
+                                updateCoverageView();
+                                break;
                             case 'innovations-view':
                                 populateSupervisors('innovations-supervisor-filter', allSalesData);
                                 updateSellerFilter('', innovationsVendedorFilterDropdown, innovationsVendedorFilterText, [], allSalesData);
@@ -5637,11 +5647,17 @@
                                 updateInnovationsFilters();
                                 updateInnovationsView();
                                 break;
-                            case 'weekly-view': populateWeeklyFilters(); updateWeeklyView(); break;
-                            case 'city-view': populateCityFilters(); updateCityView(); break;
+                            case 'weekly-view':
+                                populateWeeklyFilters();
+                                updateWeeklyView();
+                                break;
+                            case 'city-view':
+                                populateCityFilters();
+                                updateCityView();
+                                break;
                         }
                     }
-                    
+
                     toggleMenu();
                 }
             });
@@ -6507,7 +6523,7 @@
         const telaLogin = document.getElementById('tela-login');
         const telaLoading = document.getElementById('tela-loading');
         const telaPendente = document.getElementById('tela-pendente');
-        const mainDashboard = document.getElementById('main-dashboard');
+        const dashboardView = document.getElementById('dashboard-view'); // CORREÇÃO: Referência ao novo elemento
         const loader = document.getElementById('loader');
 
         // Botões
@@ -6538,15 +6554,20 @@
             if (error) console.error('Erro no login:', error);
         });
 
-        const handleLogout = () => {
-            // Limpa o token de sessão do Supabase do localStorage
-            // Isso é mais eficaz do que apenas chamar signOut() para forçar uma reavaliação
+        const handleLogout = async () => {
+            const { error } = await supabaseClient.auth.signOut();
+            if (error) {
+                console.error('Erro no logout, continuando com limpeza manual:', error);
+            }
+            // Limpa o token de sessão manualmente como fallback e para garantir.
             Object.keys(localStorage).forEach(key => {
-                if (key.startsWith('sb-dhozwhfmrwiumwpcqabi-auth-token')) { // Chave específica do token
+                if (key.startsWith('sb-dhozwhfmrwiumwpcqabi-auth-token')) {
                     localStorage.removeItem(key);
                 }
             });
-            // Força uma navegação limpa para a URL base, que é mais confiável que location.reload()
+            // Limpa o cache de status
+            localStorage.removeItem('userStatus');
+            // Força uma navegação limpa para a URL base.
             const cleanUrl = window.location.origin + window.location.pathname;
             window.location.href = cleanUrl;
         };
@@ -6563,7 +6584,7 @@
         let isLogicScriptRunning = false; // Flag para prevenir execução dupla
         supabaseClient.auth.onAuthStateChange(async (event, session) => {
             // Esconde o dashboard principal por padrão em qualquer mudança de estado
-            if (mainDashboard) mainDashboard.classList.add('hidden');
+            if (dashboardView) dashboardView.classList.add('hidden');
 
             // Se o usuário deslogou, mostra a tela de login.
             if (event === 'SIGNED_OUT') {
