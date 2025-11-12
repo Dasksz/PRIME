@@ -377,8 +377,14 @@
         <nav id="main-nav" class="flex-grow space-y-4">
              <!-- As seções e botões de navegação serão inseridos aqui -->
         </nav>
+        <!-- Logout Button -->
+        <div class="mt-auto pt-4 border-t border-menu-section">
+            <button class="logout nav-btn w-full text-left">
+                Sair / Deslogar
+            </button>
+        </div>
         <!-- Theme Switcher -->
-        <div class="theme-switcher mt-auto">
+        <div class="theme-switcher">
             <span class="text-sm font-medium" style="color: var(--text-menu-section);">Tema</span>
             <label class="switch">
                 <input type="checkbox" id="theme-toggle-checkbox">
@@ -6215,23 +6221,30 @@
         initializeTheme();
         setupEventListeners();
 
-        // CORREÇÃO: Força a re-renderização dos gráficos e tabelas ao mudar a visibilidade da aba
+        // CORREÇÃO: Força a re-renderização da view ativa ao mudar a visibilidade da aba
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                // Atualiza os gráficos existentes
-                Object.values(charts).forEach(chart => {
-                    if (chart && typeof chart.update === 'function') {
-                        chart.update();
-                    }
-                });
+                // Destroi todos os gráficos para forçar uma recriação completa com os dados corretos
+                Object.values(charts).forEach(chart => chart.destroy());
+                charts = {}; // Limpa o objeto de gráficos
 
-                // Força o redesenho do DOM para corrigir tabelas e layout
-                const mainContent = document.getElementById('app-container');
-                if (mainContent) {
-                    mainContent.style.opacity = '0.999';
-                    setTimeout(() => {
-                        mainContent.style.opacity = '1';
-                    }, 0);
+                // Identifica a view ativa e chama a função de atualização correspondente
+                if (!mainDashboard.classList.contains('hidden')) {
+                    updateAllVisuals();
+                } else if (!comparisonView.classList.contains('hidden')) {
+                    updateComparisonView();
+                } else if (!stockView.classList.contains('hidden')) {
+                    updateStockView();
+                } else if (!coverageView.classList.contains('hidden')) {
+                    updateCoverageView();
+                } else if (!innovationsView.classList.contains('hidden')) {
+                    updateInnovationsView();
+                } else if (!weeklyView.classList.contains('hidden')) {
+                    updateWeeklyView();
+                } else if (!cityView.classList.contains('hidden')) {
+                    updateCityView();
+                } else if (!innovationsMonthView.classList.contains('hidden')) {
+                    updateInnovationsMonthView();
                 }
             }
         });
