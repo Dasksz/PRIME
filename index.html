@@ -6218,21 +6218,15 @@
         // CORREÇÃO: Força a re-renderização dos gráficos e tabelas ao mudar a visibilidade da aba
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                // Atualiza os gráficos existentes
-                Object.values(charts).forEach(chart => {
-                    if (chart && typeof chart.update === 'function') {
-                        chart.update();
-                    }
-                });
-
-                // Força o redesenho do DOM para corrigir tabelas e layout
-                const mainContent = document.getElementById('app-container');
-                if (mainContent) {
-                    mainContent.style.opacity = '0.999';
-                    setTimeout(() => {
-                        mainContent.style.opacity = '1';
-                    }, 0);
-                }
+                // A função resize() força o gráfico a se redimensionar para o tamanho do contêiner.
+                // Isso é crucial para corrigir o problema de renderização quando a aba volta a ficar visível.
+                setTimeout(() => {
+                    Object.values(charts).forEach(chart => {
+                        if (chart && typeof chart.resize === 'function') {
+                            chart.resize();
+                        }
+                    });
+                }, 10); // Um pequeno timeout garante que o DOM esteja pronto para o redimensionamento.
             }
         });
         
