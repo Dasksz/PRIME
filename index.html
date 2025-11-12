@@ -172,6 +172,12 @@
 
         .stock-trend-btn.active { outline: 2px solid var(--bg-button-active); outline-offset: 2px; transform: scale(1.1); }
         
+        /* ADICIONADO: Estilo para destacar os valores de variação */
+        .variation-value {
+            font-weight: bold;
+            font-size: 0.9rem; /* Ligeiramente maior que o texto da tabela (text-xs = 0.75rem) */
+        }
+
         /* CORREÇÃO: Classes de fundo personalizadas que faltavam */
         .bg-content { background-color: var(--bg-content); }
         .bg-input { background-color: var(--bg-input); }
@@ -4078,7 +4084,16 @@
             });
 
             const supervisorTableBody = document.getElementById('supervisorComparisonTableBody');
-            supervisorTableBody.innerHTML = Object.entries(supervisorComparison).map(([sup, data]) => { const variation = data.history > 0 ? ((data.current - data.history) / data.history) * 100 : (data.current > 0 ? 100 : 0); const colorClass = variation > 0 ? 'text-green-400' : variation < 0 ? 'text-red-400' : 'text-slate-400'; return `<tr><td class="px-4 py-2">${sup}</td><td class="px-4 py-2 text-right">${data.history.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right">${data.current.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right ${colorClass}">${variation.toFixed(2)}%</td></tr>`; }).join('');
+            const supervisorDataForSort = Object.entries(supervisorComparison).map(([sup, data]) => {
+                const variation = data.history > 0 ? ((data.current - data.history) / data.history) * 100 : (data.current > 0 ? 100 : 0);
+                return { sup, ...data, variation };
+            });
+            supervisorDataForSort.sort((a, b) => b.variation - a.variation);
+            supervisorTableBody.innerHTML = supervisorDataForSort.map(item => {
+                const { sup, history, current, variation } = item;
+                const colorClass = variation > 0 ? 'text-green-400' : variation < 0 ? 'text-red-400' : 'text-slate-400';
+                return `<tr><td class="px-4 py-2">${sup}</td><td class="px-4 py-2 text-right">${history.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right">${current.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right ${colorClass} variation-value">${variation.toFixed(2)}%</td></tr>`;
+            }).join('');
         }
 
         function updateStockView() {
@@ -4291,15 +4306,17 @@
                             <td class="px-2 py-1.5 text-xs">(${p.code}) ${p.descricao}</td>
                             <td class="px-2 py-1.5 text-xs text-right">${p.currentMonthSalesQty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
                             <td class="px-2 py-1.5 text-xs text-right">${p.monthlyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                            ${showVariation ? `<td class="px-2 py-1.5 text-xs text-right font-bold ${colorClass}">${variationText}</td>` : ''}
+                            ${showVariation ? `<td class="px-2 py-1.5 text-xs text-right font-bold ${colorClass} variation-value">${variationText}</td>` : ''}
                             <td class="px-2 py-1.5 text-xs text-right">${p.stock.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
                         </tr>
                     `;
                 }).join('');
             };
 
-            growth.sort((a,b) => (b.currentMonthSalesQty - b.monthlyAvgSale) - (a.currentMonthSalesQty - a.monthlyAvgSale));
-            decline.sort((a,b) => (a.currentMonthSalesQty - a.monthlyAvgSale) - (b.currentMonthSalesQty - b.monthlyAvgSale));
+            const getVariation = p => p.monthlyAvgSale > 0 ? ((p.currentMonthSalesQty - p.monthlyAvgSale) / p.monthlyAvgSale) * 100 : (p.currentMonthSalesQty > 0 ? Infinity : 0);
+
+            growth.sort((a, b) => getVariation(b) - getVariation(a));
+            decline.sort((a, b) => getVariation(b) - getVariation(a));
             newProducts.sort((a,b) => b.currentMonthSalesQty - a.currentMonthSalesQty);
             lostProducts.sort((a,b) => b.monthlyAvgSale - a.monthlyAvgSale);
 
@@ -4584,13 +4601,13 @@
             innovationsBonusCoverageCountKpiPrevious.textContent = `${bonusCoveredCountPrevious.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
 
 
-            tableData.sort((a, b) => b.coverageCurrent - a.coverageCurrent);
+            tableData.sort((a, b) => b.variation - a.variation);
 
             innovationsTableBody.innerHTML = tableData.map(item => {
                 let variationContent;
                 if (isFinite(item.variation)) {
                     const colorClass = item.variation >= 0 ? 'text-green-400' : 'text-red-400';
-                    variationContent = `<span class="${colorClass}">${item.variation.toFixed(1)}%</span>`;
+                    variationContent = `<span class="${colorClass} variation-value">${item.variation.toFixed(1)}%</span>`;
                 } else if (item.coverageCurrent > 0) {
                     variationContent = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/30 text-purple-300">Novo</span>`;
                 } else {
@@ -4954,7 +4971,7 @@
                 let variationContent;
                 if (isFinite(item.variation)) {
                     const colorClass = item.variation >= 0 ? 'text-green-400' : 'text-red-400';
-                    variationContent = `<span class="${colorClass}">${item.variation.toFixed(1)}%</span>`;
+                    variationContent = `<span class="${colorClass} variation-value">${item.variation.toFixed(1)}%</span>`;
                 } else if (item.coverageCurrent > 0) {
                     variationContent = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/30 text-purple-300">Novo</span>`;
                 } else {
@@ -5418,36 +5435,28 @@
             const switchView = (targetViewId) => {
                 // Define os contêineres de visualização de nível superior.
                 const topLevelViews = [mainDashboard, comparisonView, stockView, coverageView, innovationsView, weeklyView, cityView, innovationsMonthView];
-                
-                // Primeiro, esconde todas as visualizações de nível superior para um estado limpo.
+
+                // Determina o contêiner de nível superior alvo.
+                // Para 'main-dashboard' e 'table-view', o contêiner é 'mainDashboard'.
+                const targetTopLevelView = (targetViewId === 'main-dashboard' || targetViewId === 'table-view')
+                    ? mainDashboard
+                    : topLevelViews.find(v => v.id === targetViewId);
+
+                // Esconde todas as visualizações de nível superior (esta é a "regra do comparativo").
                 topLevelViews.forEach(view => view.classList.add('hidden'));
 
-                let viewToShow;
-
-                if (targetViewId === 'main-dashboard') {
-                    // Mostra o contêiner principal
-                    mainDashboard.classList.remove('hidden');
-                    // Garante que a sub-view correta está visível
-                    chartView.classList.remove('hidden');
-                    tableView.classList.add('hidden');
-                    viewToShow = mainDashboard;
-                } else if (targetViewId === 'table-view') {
-                    // Mostra o contêiner principal
-                    mainDashboard.classList.remove('hidden');
-                    // Garante que a sub-view correta está visível
-                    chartView.classList.add('hidden');
-                    tableView.classList.remove('hidden');
-                    viewToShow = mainDashboard;
-                } else {
-                    // Para todas as outras visualizações de nível superior, encontra e mostra a correta.
-                    viewToShow = topLevelViews.find(v => v.id === targetViewId);
-                    if (viewToShow) {
-                        viewToShow.classList.remove('hidden');
-                    }
+                // Se um contêiner alvo foi encontrado, mostra-o.
+                if (targetTopLevelView) {
+                    targetTopLevelView.classList.remove('hidden');
                 }
 
-                // Retorna a referência do elemento principal da visualização para a lógica de atualização de dados.
-                return viewToShow;
+                // Lida com as sub-visualizações do painel principal.
+                if (targetTopLevelView && targetTopLevelView.id === 'main-dashboard') {
+                    chartView.classList.toggle('hidden', targetViewId !== 'main-dashboard');
+                    tableView.classList.toggle('hidden', targetViewId !== 'table-view');
+                }
+
+                return targetTopLevelView;
             };
 
             mainNav.addEventListener('click', e => {
@@ -6230,17 +6239,44 @@
         setupEventListeners();
 
 
-        // SOLUÇÃO FINAL: Atualização leve para corrigir a renderização do gráfico ao retornar à aba.
+        // CORREÇÃO: Lógica de visibilidade aprimorada para redesenhar a view ativa.
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                // Simplesmente chama 'update' em todos os gráficos existentes.
-                // Isso força o Chart.js a se redesenhar no canvas visível, corrigindo
-                // problemas de renderização sem recarregar dados ou alterar o estado da página.
-                Object.values(charts).forEach(chart => {
-                    if (chart && typeof chart.update === 'function') {
-                        chart.update();
-                    }
-                });
+                // Verifica qual view principal está ativa e chama sua respectiva função de atualização.
+                // Isso garante que não apenas os gráficos, mas toda a interface (tabelas, KPIs)
+                // seja redesenhada corretamente após a aba se tornar visível novamente.
+                if (!mainDashboard.classList.contains('hidden')) {
+                    console.log("Visibilidade alterada: Atualizando Dashboard Principal.");
+                    updateAllVisuals();
+                } else if (!comparisonView.classList.contains('hidden')) {
+                    console.log("Visibilidade alterada: Atualizando Comparativo.");
+                    updateComparisonView();
+                } else if (!weeklyView.classList.contains('hidden')) {
+                    console.log("Visibilidade alterada: Atualizando Acompanhamento Semanal.");
+                    updateWeeklyView();
+                } else if (!cityView.classList.contains('hidden')) {
+                    console.log("Visibilidade alterada: Atualizando Análise por Cidade.");
+                    updateCityView();
+                } else if (!stockView.classList.contains('hidden')) {
+                    console.log("Visibilidade alterada: Atualizando Análise de Estoque.");
+                    updateStockView();
+                } else if (!innovationsView.classList.contains('hidden')) {
+                    console.log("Visibilidade alterada: Atualizando Análise de Inovações.");
+                    updateInnovationsView();
+                } else if (!innovationsMonthView.classList.contains('hidden')) {
+                    console.log("Visibilidade alterada: Atualizando Inovações Mês.");
+                    updateInnovationsMonthView();
+                } else if (!coverageView.classList.contains('hidden')) {
+                     console.log("Visibilidade alterada: Atualizando Cobertura de Estoque.");
+                     updateCoverageView();
+                } else {
+                    // Fallback para apenas atualizar os gráficos se nenhuma view principal for encontrada
+                    Object.values(charts).forEach(chart => {
+                        if (chart && typeof chart.update === 'function') {
+                            chart.update();
+                        }
+                    });
+                }
             }
         });
         
