@@ -6498,6 +6498,9 @@
                         }
 
                         if (profile && profile.status === 'aprovado') {
+                            if (isLogicScriptRunning) return;
+                            isLogicScriptRunning = true;
+
                             localStorage.setItem('userStatus', 'aprovado'); // Salva no cache
                             dashboardInitialized = true; // Marca como inicializado
                             showScreen(null); // Esconde as telas de gatekeeper
