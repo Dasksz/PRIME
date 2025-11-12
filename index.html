@@ -6239,53 +6239,43 @@
         setupEventListeners();
 
 
-        // CORREÇÃO DEFINITIVA: Lógica de visibilidade que recarrega a view ativa por completo.
+        // CORREÇÃO: Lógica de visibilidade aprimorada para redesenhar a view ativa.
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                
-                // Esta lógica imita o clique no menu de navegação.
-                // Ela descobre qual é a página ativa e chama as *mesmas funções*
-                // que o menu chamaria, recarregando os filtros E a vista.
-                
-                try {
-                    if (!mainDashboard.classList.contains('hidden')) {
-                        // Se estamos no Dashboard Principal (gráficos ou tabela)
-                        updateAllVisuals();
-                    
-                    } else if (!comparisonView.classList.contains('hidden')) {
-                        // Se estamos no Comparativo
-                        updateAllComparisonFilters(); // <-- Esta linha é crucial
-                        updateComparisonView();
-                    
-                    } else if (!stockView.classList.contains('hidden')) {
-                        // Se estamos no Estoque
-                        handleStockFilterChange(); // <-- Esta é a função "mãe" correta
-                    
-                    } else if (!coverageView.classList.contains('hidden')) {
-                        // Se estamos na Cobertura
-                        updateCoverageFilters(); // <-- Recarrega filtros
-                        updateCoverageView();
-
-                    } else if (!innovationsView.classList.contains('hidden')) {
-                        // Se estamos em Inovações
-                        updateInnovationsFilters(); // <-- Recarrega filtros
-                        updateInnovationsView();
-
-                    } else if (!innovationsMonthView.classList.contains('hidden')) {
-                        // Se estamos em Inovações Mês
-                        updateInnovationsMonthView(); // (Esta não parece precisar de filtros)
-
-                    } else if (!weeklyView.classList.contains('hidden')) {
-                        // Se estamos no Semanal
-                        updateWeeklyView(); // (Esta também parece recarregar-se bem)
-
-                    } else if (!cityView.classList.contains('hidden')) {
-                        // Se estamos em Cidades
-                        populateCityFilters(); // <-- Recarrega filtros
-                        updateCityView();
-                    }
-                } catch (e) {
-                    console.error("Erro ao tentar redesenhar a view após mudança de visibilidade:", e);
+                // Verifica qual view principal está ativa e chama sua respectiva função de atualização.
+                // Isso garante que não apenas os gráficos, mas toda a interface (tabelas, KPIs)
+                // seja redesenhada corretamente após a aba se tornar visível novamente.
+                if (!mainDashboard.classList.contains('hidden')) {
+                    console.log("Visibilidade alterada: Atualizando Dashboard Principal.");
+                    updateAllVisuals();
+                } else if (!comparisonView.classList.contains('hidden')) {
+                    console.log("Visibilidade alterada: Atualizando Comparativo.");
+                    updateComparisonView();
+                } else if (!weeklyView.classList.contains('hidden')) {
+                    console.log("Visibilidade alterada: Atualizando Acompanhamento Semanal.");
+                    updateWeeklyView();
+                } else if (!cityView.classList.contains('hidden')) {
+                    console.log("Visibilidade alterada: Atualizando Análise por Cidade.");
+                    updateCityView();
+                } else if (!stockView.classList.contains('hidden')) {
+                    console.log("Visibilidade alterada: Atualizando Análise de Estoque.");
+                    updateStockView();
+                } else if (!innovationsView.classList.contains('hidden')) {
+                    console.log("Visibilidade alterada: Atualizando Análise de Inovações.");
+                    updateInnovationsView();
+                } else if (!innovationsMonthView.classList.contains('hidden')) {
+                    console.log("Visibilidade alterada: Atualizando Inovações Mês.");
+                    updateInnovationsMonthView();
+                } else if (!coverageView.classList.contains('hidden')) {
+                     console.log("Visibilidade alterada: Atualizando Cobertura de Estoque.");
+                     updateCoverageView();
+                } else {
+                    // Fallback para apenas atualizar os gráficos se nenhuma view principal for encontrada
+                    Object.values(charts).forEach(chart => {
+                        if (chart && typeof chart.update === 'function') {
+                            chart.update();
+                        }
+                    });
                 }
             }
         });
@@ -6508,6 +6498,9 @@
                         }
 
                         if (profile && profile.status === 'aprovado') {
+                            if (isLogicScriptRunning) return;
+                            isLogicScriptRunning = true;
+
                             localStorage.setItem('userStatus', 'aprovado'); // Salva no cache
                             dashboardInitialized = true; // Marca como inicializado
                             showScreen(null); // Esconde as telas de gatekeeper
