@@ -1,18 +1,14 @@
 -- =================================================================
--- SCRIPT SQL UNIFICADO V2.2 - PRIME (CORREÇÃO)
+-- SCRIPT SQL UNIFICADO V2.3 - PRIME (CORREÇÃO)
 -- OBJETIVO: Corrigir o erro 42601 (syntax error at or near "UNION")
---           na função 'get_stock_analysis_data' movendo os filtros
---           para dentro das sub-queries.
+--           na função 'get_stock_analysis_data', especificando
+--           os tipos de dados das colunas NULL (ex: NULL::date).
 -- =================================================================
-
 -- ETAPA 1: POLÍTICAS DE SEGURANÇA (RLS) - (Inalterado)
 -- 1.1: Função Auxiliar de Segurança
-CREATE OR REPLACE FUNCTION public.is_caller_approved () 
-RETURNS boolean 
-LANGUAGE sql 
-STABLE
-SECURITY DEFINER
-SET search_path = public AS $$
+create or replace function public.is_caller_approved () RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+set
+  search_path = public as $$
   SELECT EXISTS (
     SELECT 1 FROM profiles 
     WHERE id = (SELECT auth.uid()) AND status = 'aprovado'
@@ -20,7 +16,7 @@ SET search_path = public AS $$
 $$;
 
 -- 1.2: Políticas RLS para Tabelas de Dados
-DO $$
+do $$
 DECLARE
     tbl_name TEXT;
 BEGIN
@@ -46,90 +42,146 @@ BEGIN
 END $$;
 
 -- 1.3: Políticas RLS para Perfis (Profiles)
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Perfis: Usuários autenticados podem ver o próprio perfil" ON public.profiles;
-DROP POLICY IF EXISTS "Perfis: Usuários autenticados podem criar o próprio perfil" ON public.profiles;
-DROP POLICY IF EXISTS "Perfis: Usuários autenticados podem atualizar o próprio perfil" ON public.profiles;
+alter table public.profiles ENABLE row LEVEL SECURITY;
 
-CREATE POLICY "Perfis: Usuários autenticados podem ver o próprio perfil" ON public.profiles
-FOR SELECT USING ( (SELECT auth.uid()) = id );
-CREATE POLICY "Perfis: Usuários autenticados podem criar o próprio perfil" ON public.profiles
-FOR INSERT WITH CHECK ( (SELECT auth.uid()) = id );
-CREATE POLICY "Perfis: Usuários autenticados podem atualizar o próprio perfil" ON public.profiles
-FOR UPDATE USING ( (SELECT auth.uid()) = id ) WITH CHECK ( (SELECT auth.uid()) = id );
+drop policy IF exists "Perfis: Usuários autenticados podem ver o próprio perfil" on public.profiles;
+
+drop policy IF exists "Perfis: Usuários autenticados podem criar o próprio perfil" on public.profiles;
+
+drop policy IF exists "Perfis: Usuários autenticados podem atualizar o próprio perfil" on public.profiles;
+
+create policy "Perfis: Usuários autenticados podem ver o próprio perfil" on public.profiles for
+select
+  using (
+    (
+      select
+        auth.uid ()
+    ) = id
+  );
+
+create policy "Perfis: Usuários autenticados podem criar o próprio perfil" on public.profiles for INSERT
+with
+  check (
+    (
+      select
+        auth.uid ()
+    ) = id
+  );
+
+create policy "Perfis: Usuários autenticados podem atualizar o próprio perfil" on public.profiles
+for update
+  using (
+    (
+      select
+        auth.uid ()
+    ) = id
+  )
+with
+  check (
+    (
+      select
+        auth.uid ()
+    ) = id
+  );
 
 -- =================================================================
 -- ETAPA 2: ÍNDICES (INDEXES) - (Inalterado)
 -- =================================================================
-
 -- 2.1: Índices para data_detailed
-CREATE INDEX IF NOT EXISTS idx_detailed_dtped ON public.data_detailed (dtped);
-CREATE INDEX IF NOT EXISTS idx_detailed_superv ON public.data_detailed (superv);
-CREATE INDEX IF NOT EXISTS idx_detailed_codusur ON public.data_detailed (codusur);
-CREATE INDEX IF NOT EXISTS idx_detailed_nome ON public.data_detailed (nome);
-CREATE INDEX IF NOT EXISTS idx_detailed_codcli ON public.data_detailed (codcli);
-CREATE INDEX IF NOT EXISTS idx_detailed_cidade ON public.data_detailed (cidade);
-CREATE INDEX IF NOT EXISTS idx_detailed_observacaofor ON public.data_detailed (observacaofor);
-CREATE INDEX IF NOT EXISTS idx_detailed_codfor ON public.data_detailed (codfor);
-CREATE INDEX IF NOT EXISTS idx_detailed_produto ON public.data_detailed (produto);
-CREATE INDEX IF NOT EXISTS idx_detailed_posicao ON public.data_detailed (posicao);
-CREATE INDEX IF NOT EXISTS idx_detailed_tipovenda ON public.data_detailed (tipovenda);
-CREATE INDEX IF NOT EXISTS idx_detailed_filial ON public.data_detailed (filial);
+create index IF not exists idx_detailed_dtped on public.data_detailed (dtped);
+
+create index IF not exists idx_detailed_superv on public.data_detailed (superv);
+
+create index IF not exists idx_detailed_codusur on public.data_detailed (codusur);
+
+create index IF not exists idx_detailed_nome on public.data_detailed (nome);
+
+create index IF not exists idx_detailed_codcli on public.data_detailed (codcli);
+
+create index IF not exists idx_detailed_cidade on public.data_detailed (cidade);
+
+create index IF not exists idx_detailed_observacaofor on public.data_detailed (observacaofor);
+
+create index IF not exists idx_detailed_codfor on public.data_detailed (codfor);
+
+create index IF not exists idx_detailed_produto on public.data_detailed (produto);
+
+create index IF not exists idx_detailed_posicao on public.data_detailed (posicao);
+
+create index IF not exists idx_detailed_tipovenda on public.data_detailed (tipovenda);
+
+create index IF not exists idx_detailed_filial on public.data_detailed (filial);
 
 -- 2.2: Índices para data_history
-CREATE INDEX IF NOT EXISTS idx_history_dtped ON public.data_history (dtped);
-CREATE INDEX IF NOT EXISTS idx_history_superv ON public.data_history (superv);
-CREATE INDEX IF NOT EXISTS idx_history_codusur ON public.data_history (codusur);
-CREATE INDEX IF NOT EXISTS idx_history_nome ON public.data_history (nome);
-CREATE INDEX IF NOT EXISTS idx_history_codcli ON public.data_history (codcli);
-CREATE INDEX IF NOT EXISTS idx_history_cidade ON public.data_history (cidade);
-CREATE INDEX IF NOT EXISTS idx_history_observacaofor ON public.data_history (observacaofor);
-CREATE INDEX IF NOT EXISTS idx_history_codfor ON public.data_history (codfor);
-CREATE INDEX IF NOT EXISTS idx_history_produto ON public.data_history (produto);
-CREATE INDEX IF NOT EXISTS idx_history_filial ON public.data_history (filial);
+create index IF not exists idx_history_dtped on public.data_history (dtped);
+
+create index IF not exists idx_history_superv on public.data_history (superv);
+
+create index IF not exists idx_history_codusur on public.data_history (codusur);
+
+create index IF not exists idx_history_nome on public.data_history (nome);
+
+create index IF not exists idx_history_codcli on public.data_history (codcli);
+
+create index IF not exists idx_history_cidade on public.data_history (cidade);
+
+create index IF not exists idx_history_observacaofor on public.data_history (observacaofor);
+
+create index IF not exists idx_history_codfor on public.data_history (codfor);
+
+create index IF not exists idx_history_produto on public.data_history (produto);
+
+create index IF not exists idx_history_filial on public.data_history (filial);
 
 -- 2.3: Índices para data_clients
-CREATE INDEX IF NOT EXISTS idx_clients_ramo ON public.data_clients (ramo);
-CREATE INDEX IF NOT EXISTS idx_clients_rca1 ON public.data_clients (rca1);
-CREATE INDEX IF NOT EXISTS idx_clients_cidade ON public.data_clients (cidade);
-CREATE INDEX IF NOT EXISTS idx_clients_codigo_cliente ON public.data_clients (codigo_cliente);
+create index IF not exists idx_clients_ramo on public.data_clients (ramo);
+
+create index IF not exists idx_clients_rca1 on public.data_clients (rca1);
+
+create index IF not exists idx_clients_cidade on public.data_clients (cidade);
+
+create index IF not exists idx_clients_codigo_cliente on public.data_clients (codigo_cliente);
 
 -- 2.4: Índices para data_orders
-CREATE INDEX IF NOT EXISTS idx_orders_dtped ON public.data_orders (dtped);
-CREATE INDEX IF NOT EXISTS idx_orders_superv ON public.data_orders (superv);
-CREATE INDEX IF NOT EXISTS idx_orders_nome ON public.data_orders (nome);
-CREATE INDEX IF NOT EXISTS idx_orders_codcli ON public.data_orders (codcli);
-CREATE INDEX IF NOT EXISTS idx_orders_posicao ON public.data_orders (posicao);
-CREATE INDEX IF NOT EXISTS idx_orders_codfors_list ON public.data_orders USING GIN (codfors_list);
-CREATE INDEX IF NOT EXISTS idx_orders_fornecedores_list ON public.data_orders USING GIN (fornecedores_list);
+create index IF not exists idx_orders_dtped on public.data_orders (dtped);
+
+create index IF not exists idx_orders_superv on public.data_orders (superv);
+
+create index IF not exists idx_orders_nome on public.data_orders (nome);
+
+create index IF not exists idx_orders_codcli on public.data_orders (codcli);
+
+create index IF not exists idx_orders_posicao on public.data_orders (posicao);
+
+create index IF not exists idx_orders_codfors_list on public.data_orders using GIN (codfors_list);
+
+create index IF not exists idx_orders_fornecedores_list on public.data_orders using GIN (fornecedores_list);
 
 -- 2.5: Índices para data_product_details
-CREATE INDEX IF NOT EXISTS idx_product_details_code ON public.data_product_details (code);
-CREATE INDEX IF NOT EXISTS idx_product_details_codfor ON public.data_product_details (codfor);
+create index IF not exists idx_product_details_code on public.data_product_details (code);
+
+create index IF not exists idx_product_details_codfor on public.data_product_details (codfor);
 
 -- 2.6: Índice para data_stock
-CREATE INDEX IF NOT EXISTS idx_stock_product_code ON public.data_stock (product_code);
-CREATE INDEX IF NOT EXISTS idx_stock_filial ON public.data_stock (filial);
+create index IF not exists idx_stock_product_code on public.data_stock (product_code);
+
+create index IF not exists idx_stock_filial on public.data_stock (filial);
 
 -- =================================================================
 -- ETAPA 3: FUNÇÕES DE CÁLCULO (RPC) - (Função 3.9 Corrigida)
 -- =================================================================
-
 -- 3.0: Função Auxiliar de Filtro de Cliente (BASE) - (Inalterado)
-CREATE OR REPLACE FUNCTION get_filtered_client_base(
-    p_supervisor TEXT DEFAULT NULL,
-    p_vendedor_nomes TEXT[] DEFAULT NULL,
-    p_rede_group TEXT DEFAULT NULL,
-    p_redes TEXT[] DEFAULT NULL,
-    p_cidade TEXT DEFAULT NULL,
-    p_codcli TEXT DEFAULT NULL,
-    p_filial TEXT DEFAULT NULL
-)
-RETURNS TABLE(codigo_cliente TEXT)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
+create or replace function get_filtered_client_base (
+  p_supervisor TEXT default null,
+  p_vendedor_nomes text[] default null,
+  p_rede_group TEXT default null,
+  p_redes text[] default null,
+  p_cidade TEXT default null,
+  p_codcli TEXT default null,
+  p_filial TEXT default null
+) RETURNS table (codigo_cliente TEXT) LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
 BEGIN
     IF NOT public.is_caller_approved() THEN
         RAISE EXCEPTION 'Acesso não autorizado';
@@ -170,32 +222,28 @@ BEGIN
 END;
 $$;
 
-
 -- 3.1: KPIs Principais (Inalterado)
-CREATE OR REPLACE FUNCTION get_main_kpis(
-    p_pasta TEXT DEFAULT NULL,
-    p_supervisor TEXT DEFAULT NULL,
-    p_vendedor_nomes TEXT[] DEFAULT NULL,
-    p_codcli TEXT DEFAULT NULL,
-    p_posicao TEXT DEFAULT NULL,
-    p_codfor TEXT DEFAULT NULL,
-    p_tipos_venda TEXT[] DEFAULT NULL,
-    p_rede_group TEXT DEFAULT NULL,
-    p_redes TEXT[] DEFAULT NULL,
-    p_cidade TEXT DEFAULT NULL,
-    p_filial TEXT DEFAULT 'ambas'
-)
-RETURNS TABLE(
-    total_faturamento NUMERIC,
-    total_peso NUMERIC,
-    total_skus BIGINT,
-    total_pdvs_positivados BIGINT,
-    base_clientes_filtro BIGINT
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
+create or replace function get_main_kpis (
+  p_pasta TEXT default null,
+  p_supervisor TEXT default null,
+  p_vendedor_nomes text[] default null,
+  p_codcli TEXT default null,
+  p_posicao TEXT default null,
+  p_codfor TEXT default null,
+  p_tipos_venda text[] default null,
+  p_rede_group TEXT default null,
+  p_redes text[] default null,
+  p_cidade TEXT default null,
+  p_filial TEXT default 'ambas'
+) RETURNS table (
+  total_faturamento NUMERIC,
+  total_peso NUMERIC,
+  total_skus BIGINT,
+  total_pdvs_positivados BIGINT,
+  base_clientes_filtro BIGINT
+) LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
 DECLARE
     v_base_clientes_count BIGINT;
 BEGIN
@@ -237,25 +285,22 @@ END;
 $$;
 
 -- 3.2: Gráficos de Barras (Inalterado)
-CREATE OR REPLACE FUNCTION get_sales_by_group(
-    p_group_by TEXT,
-    p_pasta TEXT DEFAULT NULL,
-    p_supervisor TEXT DEFAULT NULL,
-    p_vendedor_nomes TEXT[] DEFAULT NULL,
-    p_codcli TEXT DEFAULT NULL,
-    p_posicao TEXT DEFAULT NULL,
-    p_codfor TEXT DEFAULT NULL,
-    p_tipos_venda TEXT[] DEFAULT NULL,
-    p_rede_group TEXT DEFAULT NULL,
-    p_redes TEXT[] DEFAULT NULL,
-    p_cidade TEXT DEFAULT NULL,
-    p_filial TEXT DEFAULT 'ambas'
-)
-RETURNS TABLE(group_name TEXT, total_faturamento NUMERIC)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
+create or replace function get_sales_by_group (
+  p_group_by TEXT,
+  p_pasta TEXT default null,
+  p_supervisor TEXT default null,
+  p_vendedor_nomes text[] default null,
+  p_codcli TEXT default null,
+  p_posicao TEXT default null,
+  p_codfor TEXT default null,
+  p_tipos_venda text[] default null,
+  p_rede_group TEXT default null,
+  p_redes text[] default null,
+  p_cidade TEXT default null,
+  p_filial TEXT default 'ambas'
+) RETURNS table (group_name TEXT, total_faturamento NUMERIC) LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
 BEGIN
     IF NOT public.is_caller_approved() THEN
         RAISE EXCEPTION 'Acesso não autorizado';
@@ -296,25 +341,26 @@ END;
 $$;
 
 -- 3.3: Top Produtos (Inalterado)
-CREATE OR REPLACE FUNCTION get_top_products(
-    p_metric TEXT,
-    p_pasta TEXT DEFAULT NULL,
-    p_supervisor TEXT DEFAULT NULL,
-    p_vendedor_nomes TEXT[] DEFAULT NULL,
-    p_codcli TEXT DEFAULT NULL,
-    p_posicao TEXT DEFAULT NULL,
-    p_codfor TEXT DEFAULT NULL,
-    p_tipos_venda TEXT[] DEFAULT NULL,
-    p_rede_group TEXT DEFAULT NULL,
-    p_redes TEXT[] DEFAULT NULL,
-    p_cidade TEXT DEFAULT NULL,
-    p_filial TEXT DEFAULT 'ambas'
-)
-RETURNS TABLE(codigo_produto TEXT, descricao_produto TEXT, valor_metrica NUMERIC)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
+create or replace function get_top_products (
+  p_metric TEXT,
+  p_pasta TEXT default null,
+  p_supervisor TEXT default null,
+  p_vendedor_nomes text[] default null,
+  p_codcli TEXT default null,
+  p_posicao TEXT default null,
+  p_codfor TEXT default null,
+  p_tipos_venda text[] default null,
+  p_rede_group TEXT default null,
+  p_redes text[] default null,
+  p_cidade TEXT default null,
+  p_filial TEXT default 'ambas'
+) RETURNS table (
+  codigo_produto TEXT,
+  descricao_produto TEXT,
+  valor_metrica NUMERIC
+) LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
 BEGIN
     IF NOT public.is_caller_approved() THEN
         RAISE EXCEPTION 'Acesso não autorizado';
@@ -356,26 +402,23 @@ END;
 $$;
 
 -- 3.4: Tabela de Pedidos Paginada (Inalterado)
-CREATE OR REPLACE FUNCTION get_paginated_orders(
-    p_page_number INT,
-    p_page_size INT,
-    p_pasta TEXT DEFAULT NULL,
-    p_supervisor TEXT DEFAULT NULL,
-    p_vendedor_nomes TEXT[] DEFAULT NULL,
-    p_codcli TEXT DEFAULT NULL,
-    p_posicao TEXT DEFAULT NULL,
-    p_codfor TEXT DEFAULT NULL,
-    p_tipos_venda TEXT[] DEFAULT NULL,
-    p_rede_group TEXT DEFAULT NULL,
-    p_redes TEXT[] DEFAULT NULL,
-    p_cidade TEXT DEFAULT NULL,
-    p_filial TEXT DEFAULT 'ambas'
-)
-RETURNS SETOF data_orders
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
+create or replace function get_paginated_orders (
+  p_page_number INT,
+  p_page_size INT,
+  p_pasta TEXT default null,
+  p_supervisor TEXT default null,
+  p_vendedor_nomes text[] default null,
+  p_codcli TEXT default null,
+  p_posicao TEXT default null,
+  p_codfor TEXT default null,
+  p_tipos_venda text[] default null,
+  p_rede_group TEXT default null,
+  p_redes text[] default null,
+  p_cidade TEXT default null,
+  p_filial TEXT default 'ambas'
+) RETURNS SETOF data_orders LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
 BEGIN
     IF NOT public.is_caller_approved() THEN
         RAISE EXCEPTION 'Acesso não autorizado';
@@ -406,24 +449,21 @@ END;
 $$;
 
 -- 3.5: Contagem de Pedidos (Inalterado)
-CREATE OR REPLACE FUNCTION get_orders_count(
-    p_pasta TEXT DEFAULT NULL,
-    p_supervisor TEXT DEFAULT NULL,
-    p_vendedor_nomes TEXT[] DEFAULT NULL,
-    p_codcli TEXT DEFAULT NULL,
-    p_posicao TEXT DEFAULT NULL,
-    p_codfor TEXT DEFAULT NULL,
-    p_tipos_venda TEXT[] DEFAULT NULL,
-    p_rede_group TEXT DEFAULT NULL,
-    p_redes TEXT[] DEFAULT NULL,
-    p_cidade TEXT DEFAULT NULL,
-    p_filial TEXT DEFAULT 'ambas'
-)
-RETURNS BIGINT
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
+create or replace function get_orders_count (
+  p_pasta TEXT default null,
+  p_supervisor TEXT default null,
+  p_vendedor_nomes text[] default null,
+  p_codcli TEXT default null,
+  p_posicao TEXT default null,
+  p_codfor TEXT default null,
+  p_tipos_venda text[] default null,
+  p_rede_group TEXT default null,
+  p_redes text[] default null,
+  p_cidade TEXT default null,
+  p_filial TEXT default 'ambas'
+) RETURNS BIGINT LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
 DECLARE
     total_count BIGINT;
 BEGIN
@@ -454,30 +494,27 @@ END;
 $$;
 
 -- 3.6: Funções para o Ecrã 'city-view' (Inalterado)
-CREATE OR REPLACE FUNCTION get_city_analysis(
-    p_supervisor TEXT DEFAULT NULL,
-    p_vendedor_nomes TEXT[] DEFAULT NULL,
-    p_rede_group TEXT DEFAULT NULL,
-    p_redes TEXT[] DEFAULT NULL,
-    p_cidade TEXT DEFAULT NULL,
-    p_codcli TEXT DEFAULT NULL
-)
-RETURNS TABLE(
-    tipo_analise TEXT,
-    group_name TEXT,
-    total_faturamento NUMERIC,
-    codigo_cliente TEXT,
-    fantasia TEXT,
-    cidade TEXT,
-    bairro TEXT,
-    ultimacompra DATE,
-    rca1 TEXT,
-    status_cliente TEXT
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
+create or replace function get_city_analysis (
+  p_supervisor TEXT default null,
+  p_vendedor_nomes text[] default null,
+  p_rede_group TEXT default null,
+  p_redes text[] default null,
+  p_cidade TEXT default null,
+  p_codcli TEXT default null
+) RETURNS table (
+  tipo_analise TEXT,
+  group_name TEXT,
+  total_faturamento NUMERIC,
+  codigo_cliente TEXT,
+  fantasia TEXT,
+  cidade TEXT,
+  bairro TEXT,
+  ultimacompra DATE,
+  rca1 TEXT,
+  status_cliente TEXT
+) LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
 DECLARE
     v_current_month DATE := date_trunc('month', NOW());
 BEGIN
@@ -540,20 +577,17 @@ END;
 $$;
 
 -- 3.7: Funções para o Ecrã 'weekly-view' (Inalterado)
-CREATE OR REPLACE FUNCTION get_weekly_sales_and_rankings(
-    p_pasta TEXT DEFAULT NULL,
-    p_supervisores TEXT[] DEFAULT NULL
-)
-RETURNS TABLE(
-    tipo_dado TEXT,
-    group_name TEXT,
-    week_num INT,
-    total_valor NUMERIC
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
+create or replace function get_weekly_sales_and_rankings (
+  p_pasta TEXT default null,
+  p_supervisores text[] default null
+) RETURNS table (
+  tipo_dado TEXT,
+  group_name TEXT,
+  week_num INT,
+  total_valor NUMERIC
+) LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
 DECLARE
     v_current_month DATE := date_trunc('month', NOW());
 BEGIN
@@ -635,26 +669,30 @@ END;
 $$;
 
 -- 3.8: Funções para o Ecrã 'comparison-view' (Inalterado)
-CREATE OR REPLACE FUNCTION get_comparison_data(
-    p_pasta TEXT DEFAULT NULL,
-    p_supervisor TEXT DEFAULT NULL,
-    p_vendedor_nomes TEXT[] DEFAULT NULL,
-    p_codcli TEXT DEFAULT NULL,
-    p_fornecedores TEXT[] DEFAULT NULL,
-    p_produtos TEXT[] DEFAULT NULL,
-    p_rede_group TEXT DEFAULT NULL,
-    p_redes TEXT[] DEFAULT NULL,
-    p_cidade TEXT DEFAULT NULL,
-    p_filial TEXT DEFAULT 'ambas'
-)
-RETURNS TABLE(
-    origem TEXT, superv TEXT, dtped DATE, vlvenda NUMERIC,
-    totpesoliq NUMERIC, codcli TEXT, produto TEXT, descricao TEXT, codfor TEXT
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
+create or replace function get_comparison_data (
+  p_pasta TEXT default null,
+  p_supervisor TEXT default null,
+  p_vendedor_nomes text[] default null,
+  p_codcli TEXT default null,
+  p_fornecedores text[] default null,
+  p_produtos text[] default null,
+  p_rede_group TEXT default null,
+  p_redes text[] default null,
+  p_cidade TEXT default null,
+  p_filial TEXT default 'ambas'
+) RETURNS table (
+  origem TEXT,
+  superv TEXT,
+  dtped DATE,
+  vlvenda NUMERIC,
+  totpesoliq NUMERIC,
+  codcli TEXT,
+  produto TEXT,
+  descricao TEXT,
+  codfor TEXT
+) LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
 BEGIN
     IF NOT public.is_caller_approved() THEN
         RAISE EXCEPTION 'Acesso não autorizado';
@@ -701,25 +739,29 @@ END;
 $$;
 
 -- 3.9: Função para o Ecrã 'stock-view' - (*** ESTA É A FUNÇÃO CORRIGIDA ***)
-CREATE OR REPLACE FUNCTION get_stock_analysis_data(
-    p_pasta TEXT DEFAULT NULL,
-    p_supervisor TEXT DEFAULT NULL,
-    p_vendedor_nomes TEXT[] DEFAULT NULL,
-    p_fornecedores TEXT[] DEFAULT NULL,
-    p_produtos TEXT[] DEFAULT NULL,
-    p_rede_group TEXT DEFAULT NULL,
-    p_redes TEXT[] DEFAULT NULL,
-    p_cidade TEXT DEFAULT NULL,
-    p_filial TEXT DEFAULT 'ambas'
-)
-RETURNS TABLE(
-    origem TEXT, produto TEXT, dtped DATE, qtvenda_embalagem_master NUMERIC,
-    stock_qty NUMERIC, descricao TEXT, fornecedor TEXT, codfor TEXT, dtcadastro DATE
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
+create or replace function get_stock_analysis_data (
+  p_pasta TEXT default null,
+  p_supervisor TEXT default null,
+  p_vendedor_nomes text[] default null,
+  p_fornecedores text[] default null,
+  p_produtos text[] default null,
+  p_rede_group TEXT default null,
+  p_redes text[] default null,
+  p_cidade TEXT default null,
+  p_filial TEXT default 'ambas'
+) RETURNS table (
+  origem TEXT,
+  produto TEXT,
+  dtped DATE,
+  qtvenda_embalagem_master NUMERIC,
+  stock_qty NUMERIC,
+  descricao TEXT,
+  fornecedor TEXT,
+  codfor TEXT,
+  dtcadastro DATE
+) LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
 BEGIN
     IF NOT public.is_caller_approved() THEN
         RAISE EXCEPTION 'Acesso não autorizado';
@@ -767,10 +809,17 @@ BEGIN
 
     UNION ALL
 
-    -- 2. Bloco de Estoque
+    -- 2. Bloco de Estoque (CORRIGIDO com tipos de dados)
     SELECT
-        'stock' AS origem, s.product_code, NULL, NULL,
-        s.stock_qty, NULL, NULL, NULL, NULL
+        'stock' AS origem,
+        s.product_code,
+        NULL::date,
+        NULL::numeric,
+        s.stock_qty,
+        NULL::text,
+        NULL::text,
+        NULL::text,
+        NULL::date
     FROM public.data_stock AS s
     WHERE
         s.product_code IN (SELECT produto FROM ProductBase)
@@ -778,10 +827,17 @@ BEGIN
     
     UNION ALL
 
-    -- 3. Bloco de Detalhes do Produto
+    -- 3. Bloco de Detalhes do Produto (CORRIGIDO com tipos de dados)
     SELECT
-        'product' AS origem, p.code, NULL, NULL, NULL,
-        p.descricao, p.fornecedor, p.codfor, p.dtcadastro::date
+        'product' AS origem,
+        p.code,
+        NULL::date,
+        NULL::numeric,
+        NULL::numeric,
+        p.descricao,
+        p.fornecedor,
+        p.codfor,
+        p.dtcadastro::date
     FROM public.data_product_details AS p
     WHERE
         p.code IN (SELECT produto FROM ProductBase)
@@ -789,27 +845,26 @@ BEGIN
 END;
 $$;
 
-
 -- 3.10: Função para os Ecrãs 'innovations'/'coverage' (Inalterado)
-CREATE OR REPLACE FUNCTION get_coverage_analysis(
-    p_product_codes TEXT[],
-    p_include_bonus BOOLEAN,
-    p_supervisor TEXT DEFAULT NULL,
-    p_vendedor_nomes TEXT[] DEFAULT NULL,
-    p_fornecedores TEXT[] DEFAULT NULL,
-    p_rede_group TEXT DEFAULT NULL,
-    p_redes TEXT[] DEFAULT NULL,
-    p_cidade TEXT DEFAULT NULL,
-    p_filial TEXT DEFAULT 'ambas'
-)
-RETURNS TABLE(
-    produto TEXT, stock_qty NUMERIC, current_pdvs BIGINT,
-    previous_pdvs BIGINT, total_active_clients BIGINT
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
+create or replace function get_coverage_analysis (
+  p_product_codes text[],
+  p_include_bonus BOOLEAN,
+  p_supervisor TEXT default null,
+  p_vendedor_nomes text[] default null,
+  p_fornecedores text[] default null,
+  p_rede_group TEXT default null,
+  p_redes text[] default null,
+  p_cidade TEXT default null,
+  p_filial TEXT default 'ambas'
+) RETURNS table (
+  produto TEXT,
+  stock_qty NUMERIC,
+  current_pdvs BIGINT,
+  previous_pdvs BIGINT,
+  total_active_clients BIGINT
+) LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
 DECLARE
     v_base_clientes_count BIGINT;
     v_current_month DATE := date_trunc('month', NOW());
@@ -873,45 +928,49 @@ BEGIN
 END;
 $$;
 
-
 -- 3.11: Funções para popular os FILTROS (Dropdowns) - (Inalterado)
-
-CREATE OR REPLACE FUNCTION get_distinct_supervisors()
-RETURNS TABLE(superv TEXT) LANGUAGE SQL SECURITY DEFINER SET search_path = public AS $$
+create or replace function get_distinct_supervisors () RETURNS table (superv TEXT) LANGUAGE SQL SECURITY DEFINER
+set
+  search_path = public as $$
     SELECT DISTINCT superv FROM public.data_detailed WHERE superv IS NOT NULL
     UNION SELECT DISTINCT superv FROM public.data_history WHERE superv IS NOT NULL ORDER BY 1;
 $$;
 
-CREATE OR REPLACE FUNCTION get_distinct_vendedores(p_supervisor TEXT DEFAULT NULL)
-RETURNS TABLE(nome TEXT) LANGUAGE SQL SECURITY DEFINER SET search_path = public AS $$
+create or replace function get_distinct_vendedores (p_supervisor TEXT default null) RETURNS table (nome TEXT) LANGUAGE SQL SECURITY DEFINER
+set
+  search_path = public as $$
     SELECT DISTINCT nome FROM public.data_detailed 
     WHERE nome IS NOT NULL AND (p_supervisor IS NULL OR superv = p_supervisor)
     UNION SELECT DISTINCT nome FROM public.data_history 
     WHERE nome IS NOT NULL AND (p_supervisor IS NULL OR superv = p_supervisor) ORDER BY 1;
 $$;
 
-CREATE OR REPLACE FUNCTION get_distinct_fornecedores()
-RETURNS TABLE(codfor TEXT, fornecedor TEXT) LANGUAGE SQL SECURITY DEFINER SET search_path = public AS $$
+create or replace function get_distinct_fornecedores () RETURNS table (codfor TEXT, fornecedor TEXT) LANGUAGE SQL SECURITY DEFINER
+set
+  search_path = public as $$
     SELECT DISTINCT codfor, fornecedor FROM public.data_detailed 
     WHERE codfor IS NOT NULL AND fornecedor IS NOT NULL
     UNION SELECT DISTINCT codfor, fornecedor FROM public.data_history 
     WHERE codfor IS NOT NULL AND fornecedor IS NOT NULL ORDER BY 2;
 $$;
 
-CREATE OR REPLACE FUNCTION get_distinct_tipos_venda()
-RETURNS TABLE(tipovenda TEXT) LANGUAGE SQL SECURITY DEFINER SET search_path = public AS $$
+create or replace function get_distinct_tipos_venda () RETURNS table (tipovenda TEXT) LANGUAGE SQL SECURITY DEFINER
+set
+  search_path = public as $$
     SELECT DISTINCT tipovenda FROM public.data_detailed 
     WHERE tipovenda IS NOT NULL
     UNION SELECT DISTINCT tipovenda FROM public.data_history 
     WHERE tipovenda IS NOT NULL ORDER BY 1;
 $$;
 
-CREATE OR REPLACE FUNCTION get_distinct_redes()
-RETURNS TABLE(ramo TEXT) LANGUAGE SQL SECURITY DEFINER SET search_path = public AS $$
+create or replace function get_distinct_redes () RETURNS table (ramo TEXT) LANGUAGE SQL SECURITY DEFINER
+set
+  search_path = public as $$
     SELECT DISTINCT ramo FROM public.data_clients 
     WHERE ramo IS NOT NULL AND ramo != 'N/A'
     ORDER BY 1;
 $$;
 
 -- ETAPA FINAL: Forçar o Supabase a recarregar o esquema
-NOTIFY pgrst, 'reload schema';
+notify pgrst,
+'reload schema';
