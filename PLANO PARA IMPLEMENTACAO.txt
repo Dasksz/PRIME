@@ -1,0 +1,253 @@
+Plano de Implementação: Ligando o Frontend às Funções RPC
+
+Objetivo: Refatorar os ficheiros js/auth.js e js/dashboard.js para parar de processar dados no navegador e, em vez disso, chamar as funções RPC (ex: get_main_kpis) do script supabase_otimizado_v2.4.sql.
+
+Pré-requisitos:
+
+O script supabase_otimizado_v2.4.sql foi executado com sucesso no Supabase.
+
+A estrutura de ficheiros (index.html, uploader.html, js/config.js, js/auth.js, js/dashboard.js) está implementada.
+
+O index.html carrega config.js, depois auth.js, e por fim dashboard.js.
+
+Fase 1: Verificação e Limpeza (em js/dashboard.js)
+
+Objetivo: Garantir que nenhuma lógica de processamento de dados antiga permanece.
+
+Garanta que js/dashboard.js não contém as variáveis globais de dados brutos (ex: allSalesData, allHistoryData, aggregatedOrders, stockData05, etc.).
+
+Garanta que js/dashboard.js não contém as funções de processamento pesado antigas, como initializeOptimizedDataStructures, calculateSummaryFromData, e getFilteredData (a função que filtrava os arrays gigantes). Estas serão substituídas por chamadas RPC.
+
+Fase 2: A Fundação (em js/auth.js e js/dashboard.js)
+
+Objetivo: Estabelecer a ligação entre a autenticação e o carregamento inicial do dashboard.
+
+Em js/auth.js (O "Porteiro"):
+
+Implemente a lógica de onAuthStateChange para gerir tela-login, tela-loading, e tela-pendente.
+
+Ponto de Conexão (Handshake): O passo mais importante. Quando o onAuthStateChange confirmar que o utilizador está logado e o seu perfil é 'aprovado', ele deve chamar a função initializeNewDashboard (que está em dashboard.js) e passar-lhe o supabaseClient.
+
+// Exemplo de código dentro do onAuthStateChange em auth.js
+if (profile && profile.status === 'aprovado') {
+    // ... (esconder telas de login, mostrar loader) ...
+
+    // *** A CONEXÃO ***
+    if (typeof initializeNewDashboard === 'function') {
+        await initializeNewDashboard(supabaseClient); 
+    } else {
+        console.error("ERRO: initializeNewDashboard() não encontrada em dashboard.js");
+    }
+}
+
+
+Em js/dashboard.js (O "Cérebro"):
+
+Crie Variáveis Globais: No topo do ficheiro, defina as variáveis globais que irão guardar os dados de estado e os dados dos filtros (ex: let supabase;, let g_allClientsData = [];, let g_supervisors = [];, etc.).
+
+Implemente initializeNewDashboard(client): Esta função async é o novo ponto de partida do dashboard.
+
+Guarde o cliente: supabase = client;
+
+Crie uma função cacheDOMElements() para encontrar todos os getElementById uma vez e guardá-los num objeto (ex: elements.totalVendasEl = ...).
+
+Chame em Paralelo (Promise.all) as RPCs de inicialização e as tabelas pequenas:
+
+supabase.from('data_clients').select('*') (Guarde em g_allClientsData)
+
+supabase.from('data_product_details').select(...) (Guarde em g_productDetails)
+
+supabase.from('data_innovations').select(...) (Guarde em g_innovationsCategories)
+
+supabase.rpc('get_distinct_supervisors') (Guarde em g_supervisors)
+
+supabase.rpc('get_distinct_fornecedores') (Guarde em g_fornecedores)
+
+supabase.rpc('get_distinct_tipos_venda') (Guarde em g_tiposVenda)
+
+supabase.rpc('get_distinct_redes') (Guarde em g_redes)
+
+supabase.from('data_metadata').select(...) (Para lastSaleDate)
+
+Popule os Filtros: Crie uma função populateAllFilterDropdowns() que usa as variáveis globais (ex: g_supervisors) para preencher todos os <select> em todos os ecrãs.
+
+Calcule Dados Históricos: Crie uma função async calculateHistoricalAndWorkingDays() que chame supabase.from('data_history').select('superv, dtped, vlvenda') para popular a variável historicalBests (necessária para o Ecrã Semanal) e sortedWorkingDays (para o Ecrã de Stock).
+
+Carregue o Ecrã Inicial: Chame await updateAllDashboardVisuals();.
+
+Ligue os Eventos: Chame setupEventListeners(); no final.
+
+Fase 3: A Reconstrução (em js/dashboard.js)
+
+Objetivo: Refatorar as funções de atualização de cada ecrã para usar as RPCs.
+
+Crie a Função Auxiliar getFiltersForRPC(viewId):
+
+Esta função é o "cérebro" da UI. Ela deve ler o viewId (dashboard-view, orders-view, etc.).
+
+Com base no viewId, ela deve ler os valores dos elementos de filtro corretos (ex: elements.supervisorFilter.value, window.currentFornecedor, window.selectedSellers).
+
+Ela deve devolver um objeto JSON que corresponde exatamente aos nomes dos parâmetros das suas funções RPC (ex: { p_supervisor: '...', p_pasta: '...', p_vendedor_nomes: [...] }).
+
+Refatore updateAllDashboardVisuals() (Ecrã Principal):
+
+Transforme-a numa função async.
+
+Remova toda a lógica de calculateSummaryFromData e getFilteredData.
+
+Implemente a nova lógica:
+
+const filters = getFiltersForRPC('dashboard-view');
+
+Chame as RPCs necessárias em paralelo:
+
+const [kpiPromise, salesPersonPromise, categoryPromise, topProductsPromise, trendPromise] = [
+    supabase.rpc('get_main_kpis', filters),
+    supabase.rpc('get_sales_by_group', { ...filters, p_group_by: filters.p_supervisor ? 'vendedor' : 'supervisor' }),
+    supabase.rpc('get_sales_by_group', { ...filters, p_group_by: 'categoria' }),
+    supabase.rpc('get_top_products', { ...filters, p_metric: currentProductMetric }),
+    supabase.rpc('get_comparison_data', filters) // Para o gráfico de tendência
+];
+
+
+Aguarde (await kpiPromise) e use os data retornados (ex: kpiData[0].total_faturamento) para preencher os KPIs.
+
+Aguarde (await salesPersonPromise) e use os data para popular os gráficos (createChart(...)).
+
+Aguarde trendPromise e passe os resultados currentSales e historySales para a sua função updateTrendChart (que ainda fará a média do histórico).
+
+Refatore updateOrdersViewVisuals() (Ecrã de Pedidos):
+
+Transforme-a numa função async.
+
+Implemente a nova lógica:
+
+const filters = getFiltersForRPC('orders-view');
+
+Chame as RPCs de KPIs e Contagem em paralelo:
+
+const kpiPromise = supabase.rpc('get_main_kpis', filters);
+const countPromise = supabase.rpc('get_orders_count', filters);
+
+
+Chame a RPC de paginãção:
+
+const tablePromise = supabase.rpc('get_paginated_orders', {
+    ...filters,
+    p_page_number: ordersTableState.currentPage,
+    p_page_size: ordersTableState.itemsPerPage
+});
+
+
+Aguarde as promessas e use os resultados para popular os KPIs (elements.ordersTotalVendasEl.textContent = ...) e a tabela (renderOrdersTable(ordersData)).
+
+Atualize ordersTableState.totalPages com base no totalCount retornado.
+
+Fase 4: Ecrãs Restantes (em js/dashboard.js)
+
+Objetivo: Aplicar o mesmo padrão da Fase 3 a todos os outros ecrãs.
+
+Para updateCityView():
+
+Chame getFiltersForRPC('city-view').
+
+Chame await supabase.rpc('get_city_analysis', filters).
+
+A RPC devolve uma lista. Filtre-a em duas: const chartData = data.filter(d => d.tipo_analise === 'chart'); e const clientList = data.filter(d => d.tipo_analise === 'client_list');.
+
+Use chartData para o gráfico de Top 10 e clientList para popular o gráfico de status e as duas tabelas de clientes.
+
+Para updateWeeklyView():
+
+Chame getFiltersForRPC('weekly-view').
+
+Chame await supabase.rpc('get_weekly_sales_and_rankings', { p_pasta: ..., p_supervisores: ... }).
+
+A RPC devolve 4 tipos de dados. Separe-os: const vendas = data.filter(d => d.tipo_dado === 'venda_semanal');, const positivacao = data.filter(d => d.tipo_dado === 'rank_positivacao');, etc.
+
+Use estes 4 arrays para popular os 4 gráficos. A lógica de historicalBests (calculada na Fase 2) ainda é usada aqui.
+
+Para updateComparisonView():
+
+Chame getFiltersForRPC('comparison-view').
+
+Chame await supabase.rpc('get_comparison_data', filters).
+
+Separe os dados: const currentSales = data.filter(d => d.origem === 'current'); e const historySales = data.filter(d => d.origem === 'history');.
+
+Importante: As suas funções JS originais (como monthlyKpiAverage, calculateAverageMixComDevolucao) ainda serão usadas, mas agora elas vão operar sobre os arrays currentSales e historySales (que são pequenos e pré-filtrados), em vez de sobre os arrays gigantes allSalesData.
+
+Para updateStockView():
+
+Chame getFiltersForRPC('stock-view').
+
+Chame await supabase.rpc('get_stock_analysis_data', filters).
+
+Separe os 3 blocos de dados:
+
+const salesData = data.filter(d => d.origem === 'sale');
+
+const stockMap = new Map(data.filter(d => d.origem === 'stock').map(s => [s.produto, s.stock_qty]));
+
+const productDetailsMap = new Map(data.filter(d => d.origem === 'product').map(p => [p.produto, p]));
+
+Use estes 3 conjuntos de dados para alimentar a sua lógica de cálculo de tendência de stock (que agora será muito rápida).
+
+Para updateInnovationsView() e updateCoverageView():
+
+Obtenha a lista de p_product_codes dos filtros da UI (ex: selectedInnovationsProducts).
+
+Chame getFiltersForRPC('innovations-view').
+
+Chame await supabase.rpc('get_coverage_analysis', { ...filters, p_product_codes: ..., p_include_bonus: ... }).
+
+A RPC devolve os dados quase prontos. O JS só precisa de calcular a percentagem final (current_pdvs / total_active_clients * 100) e preencher a tabela.
+
+Fase 5: Refatoração dos EventListeners (em js/dashboard.js)
+
+Objetivo: Garantir que todos os cliques em filtros chamem as novas funções async.
+
+Refatore setupEventListeners():
+
+Qualquer addEventListener que mude os dados (ex: supervisorFilter.addEventListener('change', ...)) deve tornar-se async e usar await.
+
+Exemplo (Filtro de Supervisor):
+
+elements.supervisorFilter.addEventListener('change', async () => { 
+    const supervisor = elements.supervisorFilter.value || null;
+    // Atualiza o dropdown de vendedores dinamicamente
+    const { data } = await supabase.rpc('get_distinct_vendedores', { p_supervisor: supervisor });
+    g_vendedores = (data || []).map(v => v.nome);
+    selectedSellers = updateSellerFilter(supervisor, elements.vendedorFilterDropdown, elements.vendedorFilterText, [], g_vendedores);
+
+    // Recarrega todos os visuais do ecrã
+    await updateAllDashboardVisuals(); 
+});
+
+
+Exemplo (Paginação):
+
+elements.ordersPrevPageBtn.addEventListener('click', async () => { 
+    if (ordersTableState.currentPage > 1) { 
+        ordersTableState.currentPage--; 
+        await updateOrdersViewVisuals(); // Chama a nova função async
+    } 
+});
+
+
+Exemplo (Mudança de Ecrã no Menu):
+
+mainNav.addEventListener('click', async (e) => {
+    // ... (lógica do menu) ...
+
+    // Chama a função de atualização ASYNC correta
+    switch(targetViewId) {
+        case 'dashboard-view':
+            await updateAllDashboardVisuals();
+            break;
+        case 'orders-view':
+            await updateOrdersViewVisuals();
+            break;
+        // ... etc para todos os ecrãs
+    }
+});
