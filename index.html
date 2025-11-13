@@ -401,7 +401,7 @@
     </div>
 
     <!-- 6. ADICIONADO: Todo o HTML do seu dashboard escuro original -->
-    <div id="main-dashboard" class="hidden"> <!-- Começa escondido -->
+    <div id="dashboard-view" class="hidden"> <!-- Começa escondido -->
         <div class="container mx-auto p-4 sm:p-6 lg:p-8">
             <header class="mb-8 p-6 header-gradient rounded-b-lg shadow-lg">
                 <div class="flex flex-col sm:flex-row justify-between items-start gap-4">
@@ -462,37 +462,34 @@
                     <div class="md:col-start-6"><button id="clear-filters-btn" class="w-full font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button></div>
                 </div>
             </div>
-            <main id="app-container">
-                <div id="chartView" class="">
-                    <div class="mb-6 p-4 rounded-xl border border-primary shadow-sm bg-content">
-                        <div class="flex justify-between items-center mb-4">
-                            <div class="w-1/3">
-                                <label class="block mb-2 text-sm font-medium text-secondary">Feriados do Mês</label>
-                                <button id="main-holiday-picker-btn" class="w-full border text-sm rounded-lg p-2.5 text-left focus:outline-none focus:ring-2 focus:ring-teal-500">Selecionar Feriados</button>
-                            </div>
-                            <div class="w-1/3 text-center">
-                                <h2 class="text-lg font-semibold">Tendência de Faturamento</h2>
-                            </div>
-                            <div class="w-1/3"></div>
-                        </div>
-                        <div id="trendChartContainer" class="relative h-80"></div>
+
+            <!-- A estrutura aninhada de main/chartView foi removida para consistência -->
+            <div class="mb-6 p-4 rounded-xl border border-primary shadow-sm bg-content">
+                <div class="flex justify-between items-center mb-4">
+                    <div class="w-1/3">
+                        <label class="block mb-2 text-sm font-medium text-secondary">Feriados do Mês</label>
+                        <button id="main-holiday-picker-btn" class="w-full border text-sm rounded-lg p-2.5 text-left focus:outline-none focus:ring-2 focus:ring-teal-500">Selecionar Feriados</button>
                     </div>
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div class="p-4 rounded-xl border border-primary shadow-sm bg-content"><h2 id="sales-by-person-title" class="text-lg font-semibold mb-4 text-center">Vendas por Supervisor</h2><div id="salesByPersonChartContainer" class="relative h-80"></div></div>
-                        <div class="p-4 rounded-xl border border-primary shadow-sm bg-content"><h2 id="faturamentoPorFornecedorTitle" class="text-lg font-semibold mb-4 text-center">Faturamento por Categoria</h2><div id="faturamentoPorFornecedorChartContainer" class="relative h-80"></div></div>
+                    <div class="w-1/3 text-center">
+                        <h2 class="text-lg font-semibold">Tendência de Faturamento</h2>
                     </div>
-                    <div class="mt-6 p-4 rounded-xl border border-primary shadow-sm bg-content">
-                        <div class="flex justify-between items-center mb-4"><h2 class="text-lg font-semibold">Vendas por Produto</h2>
-                            <div class="rounded-lg p-1 flex">
-                                <button id="faturamentoBtn" class="metric-btn active px-3 py-1 text-sm rounded-md">Faturamento</button>
-                                <button id="pesoBtn" class="metric-btn px-3 py-1 text-sm rounded-md">Peso Kg</button>
-                            </div>
-                        </div>
-                        <div id="salesByProductBarChartContainer" class="relative h-80"></div>
+                    <div class="w-1/3"></div>
+                </div>
+                <div id="trendChartContainer" class="relative h-80"></div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="p-4 rounded-xl border border-primary shadow-sm bg-content"><h2 id="sales-by-person-title" class="text-lg font-semibold mb-4 text-center">Vendas por Supervisor</h2><div id="salesByPersonChartContainer" class="relative h-80"></div></div>
+                <div class="p-4 rounded-xl border border-primary shadow-sm bg-content"><h2 id="faturamentoPorFornecedorTitle" class="text-lg font-semibold mb-4 text-center">Faturamento por Categoria</h2><div id="faturamentoPorFornecedorChartContainer" class="relative h-80"></div></div>
+            </div>
+            <div class="mt-6 p-4 rounded-xl border border-primary shadow-sm bg-content">
+                <div class="flex justify-between items-center mb-4"><h2 class="text-lg font-semibold">Vendas por Produto</h2>
+                    <div class="rounded-lg p-1 flex">
+                        <button id="faturamentoBtn" class="metric-btn active px-3 py-1 text-sm rounded-md">Faturamento</button>
+                        <button id="pesoBtn" class="metric-btn px-3 py-1 text-sm rounded-md">Peso Kg</button>
                     </div>
                 </div>
-                <!-- A tableView foi movida para sua própria div de view de nível superior -->
-            </main>
+                <div id="salesByProductBarChartContainer" class="relative h-80"></div>
+            </div>
         </div>
     </div>
 
@@ -1112,7 +1109,7 @@
         async function carregarDadosDoSupabase(supabaseClient) { // MODIFICADO: Recebe o cliente
             const loader = document.getElementById('loader');
             const loaderText = document.getElementById('loader-text');
-            const mainDashboard = document.getElementById('main-dashboard');
+            const dashboardView = document.getElementById('dashboard-view'); // CORREÇÃO: ID atualizado
             
             try {
                 // A verificação de URL/Chave e a criação do cliente foram movidas para o script do porteiro
@@ -1296,7 +1293,7 @@
                 }
                 
                 // CORREÇÃO: Torna o dashboard visível ANTES de executar o script de lógica
-                mainDashboard.classList.remove('hidden');
+                dashboardView.classList.remove('hidden'); // CORREÇÃO: ID atualizado
                 
                 document.body.appendChild(logicScript);
 
@@ -1684,8 +1681,8 @@
 
         Chart.register(ChartDataLabels);
 
-        const mainDashboard = document.getElementById('main-dashboard');
-        const ordersView = document.getElementById('orders-view'); // ADICIONADO: Nova view de Pedidos
+        const dashboardView = document.getElementById('dashboard-view'); // CORREÇÃO: ID atualizado
+        const ordersView = document.getElementById('orders-view');
         const cityView = document.getElementById('city-view');
         const weeklyView = document.getElementById('weekly-view');
         const comparisonView = document.getElementById('comparison-view');
@@ -1709,7 +1706,6 @@
         const viewTableBtn = document.getElementById('viewTableBtn');
         const viewComparisonBtn = document.getElementById('viewComparisonBtn');
         const viewStockBtn = document.getElementById('viewStockBtn');
-        const chartView = document.getElementById('chartView');
 
         // A tableView foi movida para sua própria div de view de nível superior
         // const tableView = document.getElementById('tableView');
@@ -2445,10 +2441,10 @@
             const secondaryTextColor = getCSSVar('--text-secondary');
             const gridColor = getCSSVar('--border-primary');
             
-            // CORREÇÃO: Paleta de cores restaurada para tons mais vivos e saturados
+            // CORREÇÃO: Paleta de cores ajustada para tons mais profissionais e menos saturados.
             const professionalPalette = [
-                '#5E35B1', '#1E88E5', '#00897B', '#43A047', '#FDD835', '#FB8C00', '#E53935', '#D81B60',
-                '#8E24AA', '#039BE5', '#00ACC1', '#7CB342', '#FFB300', '#F4511E', '#C62828', '#AD1457'
+                '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4',
+                '#ea7ccc', '#2f4f4f', '#daa520', '#6b8e23', '#cd5c5c', '#4682b4', '#8a2be2', '#ff6347'
             ];
 
             let finalDatasets;
@@ -2733,7 +2729,7 @@
             }
             */
 
-            if (!chartView.classList.contains('hidden')) {
+            if (!dashboardView.classList.contains('hidden')) { // CORREÇÃO: Usa a nova view principal
                 updateTrendChart(filteredSalesData, filteredHistoryData);
                 const totalForPercentage = supervisor ? Object.values(summary.vendasPorVendedor).reduce((a, b) => a + b, 0) : Object.values(summary.vendasPorSupervisor).reduce((a, b) => a + b, 0);
                 const personChartTooltipOptions = { plugins: { tooltip: { callbacks: { label: function(context) { let label = context.dataset.label || ''; if (label) label += ': '; const value = context.parsed.y; if (value !== null) { label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); if (totalForPercentage > 0) { const percentage = ((value / totalForPercentage) * 100).toFixed(2); label += ` (${percentage}%)`; } } return label; } } } } };
@@ -5483,10 +5479,8 @@
         function updateSideNavActiveState(targetViewId) {
             mainNav.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
 
-            // Lógica especial para 'table-view', que deve ativar o 'main-dashboard'
-            const navTargetId = targetViewId === 'table-view' ? 'main-dashboard' : targetViewId;
-
-            const activeButton = mainNav.querySelector(`.nav-btn[data-view="${navTargetId}"]`);
+            // CORREÇÃO: A lógica especial para 'table-view' não é mais necessária.
+            const activeButton = mainNav.querySelector(`.nav-btn[data-view="${targetViewId}"]`);
             if (activeButton) {
                 activeButton.classList.add('active');
             }
@@ -5497,7 +5491,8 @@
                 {
                     title: 'Análises Principais',
                     buttons: [
-                        { id: 'nav-main-dashboard', text: 'Dashboard Principal', viewId: 'main-dashboard', default: true },
+                        // CORREÇÃO: O viewId agora aponta para 'dashboard-view'.
+                        { id: 'nav-main-dashboard', text: 'Dashboard Principal', viewId: 'dashboard-view', default: true },
                         { id: 'nav-orders-view', text: 'Pedidos Detalhados', viewId: 'orders-view' }
                     ]
                 },
@@ -5578,29 +5573,34 @@
             const toggleMenu = () => {
                 sideMenu.classList.toggle('open');
                 menuOverlay.classList.toggle('open');
-                menuOverlay.classList.toggle('hidden'); // <-- CORREÇÃO: Adicionado/removido 'hidden'
+                menuOverlay.classList.toggle('hidden');
             };
 
             menuToggleBtn.addEventListener('click', toggleMenu);
             menuOverlay.addEventListener('click', toggleMenu);
 
             // Lógica de Navegação
-            const allViews = [mainDashboard, ordersView, chartView, comparisonView, stockView, coverageView, innovationsView, weeklyView, cityView, innovationsMonthView];
-
             const switchView = (targetViewId) => {
-                const topLevelViews = [mainDashboard, ordersView, comparisonView, stockView, coverageView, innovationsView, weeklyView, cityView, innovationsMonthView];
-                topLevelViews.forEach(view => view.classList.add('hidden'));
+                // CORREÇÃO: A lista agora contém apenas os contêineres de visualização de nível superior.
+                const topLevelViews = [
+                    document.getElementById('dashboard-view'),
+                    document.getElementById('orders-view'),
+                    document.getElementById('comparison-view'),
+                    document.getElementById('stock-view'),
+                    document.getElementById('coverage-view'),
+                    document.getElementById('innovations-view'),
+                    document.getElementById('weekly-view'),
+                    document.getElementById('city-view'),
+                    document.getElementById('innovations-month-view')
+                ];
 
-                let viewToShow;
-                if (targetViewId === 'main-dashboard') {
-                    viewToShow = mainDashboard;
-                    mainDashboard.classList.remove('hidden');
-                    chartView.classList.remove('hidden');
-                } else {
-                    viewToShow = topLevelViews.find(v => v.id === targetViewId);
-                    if (viewToShow) {
-                        viewToShow.classList.remove('hidden');
-                    }
+                topLevelViews.forEach(view => {
+                    if (view) view.classList.add('hidden');
+                });
+
+                const viewToShow = document.getElementById(targetViewId);
+                if (viewToShow) {
+                    viewToShow.classList.remove('hidden');
                 }
                 return viewToShow;
             };
@@ -5623,8 +5623,9 @@
                     const view = switchView(targetViewId);
 
                     if (view) {
+                        // CORREÇÃO: O switch agora usa a nova nomenclatura e lógica simplificada.
                         switch(view.id) {
-                            case 'main-dashboard':
+                            case 'dashboard-view': // ID alterado
                                 updateAllVisuals();
                                 break;
                             case 'orders-view':
@@ -5654,13 +5655,19 @@
                 }
             });
 
-            // Botões de "Voltar"
-            backToMainFromComparisonBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
-            backToMainFromStockBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
-            backToMainFromCoverageBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
-            backToMainFromInnovationsBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
-            backToMainFromWeeklyBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
-            backToMainFromCityBtn.addEventListener('click', () => { switchView('main-dashboard'); updateAllVisuals(); updateSideNavActiveState('main-dashboard'); });
+            // CORREÇÃO: Botões de "Voltar" agora apontam para 'dashboard-view'.
+            const backToMain = () => {
+                switchView('dashboard-view');
+                updateAllVisuals();
+                updateSideNavActiveState('dashboard-view');
+            };
+
+            backToMainFromComparisonBtn.addEventListener('click', backToMain);
+            backToMainFromStockBtn.addEventListener('click', backToMain);
+            backToMainFromCoverageBtn.addEventListener('click', backToMain);
+            backToMainFromInnovationsBtn.addEventListener('click', backToMain);
+            backToMainFromWeeklyBtn.addEventListener('click', backToMain);
+            backToMainFromCityBtn.addEventListener('click', backToMain);
 
             // --- Event Listeners do Dashboard Principal ---
             supervisorFilter.addEventListener('change', () => { selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); updateAllVisuals(); });
@@ -6466,7 +6473,8 @@
                 // Usa um pequeno timeout para garantir que o navegador tenha processado a mudança de visibilidade.
                 setTimeout(() => {
                     // Otimização: Apenas atualiza a view que está realmente visível.
-                    if (!mainDashboard.classList.contains('hidden')) updateAllVisuals();
+                    // CORREÇÃO: Atualiza a verificação para usar 'dashboardView'.
+                    if (!dashboardView.classList.contains('hidden')) updateAllVisuals();
                     if (!cityView.classList.contains('hidden')) updateCityView();
                     if (!weeklyView.classList.contains('hidden')) updateWeeklyView();
                     if (!comparisonView.classList.contains('hidden')) updateComparisonView();
@@ -6581,7 +6589,7 @@
         const telaLogin = document.getElementById('tela-login');
         const telaLoading = document.getElementById('tela-loading');
         const telaPendente = document.getElementById('tela-pendente');
-        const mainDashboard = document.getElementById('main-dashboard');
+        const dashboardView = document.getElementById('dashboard-view'); // CORREÇÃO: ID atualizado
         const loader = document.getElementById('loader');
 
         // Botões
@@ -6637,7 +6645,7 @@
         let isLogicScriptRunning = false; // Flag para prevenir execução dupla
         supabaseClient.auth.onAuthStateChange(async (event, session) => {
             // Esconde o dashboard principal por padrão em qualquer mudança de estado
-            if (mainDashboard) mainDashboard.classList.add('hidden');
+            if (dashboardView) dashboardView.classList.add('hidden'); // CORREÇÃO: ID atualizado
 
             // Se o usuário deslogou, mostra a tela de login.
             if (event === 'SIGNED_OUT') {
