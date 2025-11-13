@@ -538,7 +538,7 @@ BEGIN
         GROUP BY codcli, cidade, bairro
     )
     -- 1. Dados para os Gráficos
-    SELECT
+    (SELECT
         'chart' AS tipo_analise,
         CASE
             WHEN p_cidade IS NOT NULL THEN s.bairro
@@ -549,7 +549,7 @@ BEGIN
     FROM SalesThisMonth AS s
     GROUP BY group_name
     ORDER BY total_faturamento DESC
-    LIMIT 10
+    LIMIT 10)
 
     UNION ALL
 
@@ -620,7 +620,7 @@ BEGIN
     UNION ALL
 
     -- 2. Ranking de Positivação
-    SELECT
+    (SELECT
         'rank_positivacao' AS tipo_dado,
         nome AS group_name,
         NULL::int,
@@ -628,12 +628,12 @@ BEGIN
     FROM VendasFiltradas
     GROUP BY nome
     ORDER BY total_valor DESC
-    LIMIT 10
+    LIMIT 10)
 
     UNION ALL
 
     -- 3. Ranking Top Sellers
-    SELECT
+    (SELECT
         'rank_topsellers' AS tipo_dado,
         nome AS group_name,
         NULL::int,
@@ -641,12 +641,12 @@ BEGIN
     FROM VendasFiltradas
     GROUP BY nome
     ORDER BY total_valor DESC
-    LIMIT 10
+    LIMIT 10)
 
     UNION ALL
 
     -- 4. Ranking de Mix
-    SELECT
+    (SELECT
         'rank_mix' AS tipo_dado,
         nome,
         NULL::int,
@@ -664,7 +664,7 @@ BEGIN
     ) AS MixPorCliente
     GROUP BY nome
     ORDER BY total_valor DESC
-    LIMIT 10;
+    LIMIT 10);
 END;
 $$;
 
