@@ -1964,6 +1964,7 @@
         let inactiveClientsForExport = [];
         let selectedSellers = [];
         let selectedOrdersSellers = []; // ADICIONADO: Vendedores para a view de Pedidos
+        let selectedOrdersRedes = [];
         let selectedCitySellers = [];
         let selectedComparisonSellers = [];
         let selectedStockSellers = [];
@@ -2650,21 +2651,16 @@
             const codcli = codcliFilter.value.trim();
             const selectedFornecedor = fornecedorFilter.value;
 
-            let clientBaseForCoverage = allClientsData.filter(c => {
-                const rca1 = String(c.rca1 || '').trim();
-                const isAmericanas = (c.razaosocial || '').toUpperCase().includes('AMERICANAS');
-                return (isAmericanas || rca1 !== '53');
-            });
-
+            let clientBaseForPositivacao = allClientsData;
             if (mainRedeGroupFilter === 'com_rede') {
-                clientBaseForCoverage = clientBaseForCoverage.filter(c => c.ramo && c.ramo !== 'N/A');
+                clientBaseForPositivacao = clientBaseForPositivacao.filter(c => c.ramo && c.ramo !== 'N/A');
                 if (selectedMainRedes.length > 0) {
-                    clientBaseForCoverage = clientBaseForCoverage.filter(c => selectedMainRedes.includes(c.ramo));
+                    clientBaseForPositivacao = clientBaseForPositivacao.filter(c => selectedMainRedes.includes(c.ramo));
                 }
             } else if (mainRedeGroupFilter === 'sem_rede') {
-                clientBaseForCoverage = clientBaseForCoverage.filter(c => !c.ramo || c.ramo === 'N/A');
+                clientBaseForPositivacao = clientBaseForPositivacao.filter(c => !c.ramo || c.ramo === 'N/A');
             }
-            const clientCodesInRede = new Set(clientBaseForCoverage.map(c => c['codigo_cliente']));
+            const clientCodesInRede = new Set(clientBaseForPositivacao.map(c => c['codigo_cliente']));
 
             const getFilteredData = (sourceData) => {
                 return sourceData.filter(item => {
@@ -2714,7 +2710,7 @@
             
             const isFiltered = !!supervisor || selectedSellers.length > 0 || !!codcli || !!currentFornecedor || !!mainRedeGroupFilter || !!selectedFornecedor || !!posicao || selectedTiposVenda.length > 0;
 
-            const summary = calculateSummaryFromData(filteredSalesData, isFiltered, clientBaseForCoverage);
+            const summary = calculateSummaryFromData(filteredSalesData, isFiltered, clientBaseForPositivacao);
 
             totalVendasEl.textContent = summary.totalFaturamento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             totalPesoEl.textContent = `${(summary.totalPeso / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
