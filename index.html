@@ -1106,14 +1106,7 @@
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRob3p3aGZtcndpdW13cGNxYWJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyNjMzNjAsImV4cCI6MjA3NzgzOTM2MH0.syWqcBCbfH5Ey5AB4NGrsF2-ZuBw4W3NZAPIAZb6Bq4';
         
         // 8. MODIFICADO: Nova função para carregar dados das 8 tabelas
-        let isLogicScriptRunning = false; // ADICIONADO: Guarda de execução
         async function carregarDadosDoSupabase(supabaseClient) { // MODIFICADO: Recebe o cliente
-            if (isLogicScriptRunning) {
-                console.warn("Tentativa de executar carregarDadosDoSupabase novamente enquanto já está em execução.");
-                return;
-            }
-            isLogicScriptRunning = true; // Define a trava
-
             const loader = document.getElementById('loader');
             const loaderText = document.getElementById('loader-text');
             const dashboardView = document.getElementById('dashboard-view'); // CORREÇÃO: ID atualizado
@@ -6649,6 +6642,7 @@
         });
 
         // Ouve por mudanças no estado de autenticação (login/logout)
+        let isLogicScriptRunning = false; // Flag para prevenir execução dupla
         supabaseClient.auth.onAuthStateChange(async (event, session) => {
             // Esconde o dashboard principal por padrão em qualquer mudança de estado
             if (dashboardView) dashboardView.classList.add('hidden'); // CORREÇÃO: ID atualizado
