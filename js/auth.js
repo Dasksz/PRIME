@@ -35,9 +35,10 @@ function initAuth() {
 
     // --- Authentication Logic ---
     const handleLogin = async () => {
+        const cleanUrl = window.location.origin + window.location.pathname;
         const { error } = await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
-            options: { redirectTo: window.location.href }
+            options: { redirectTo: cleanUrl }
         });
         if (error) console.error('Erro no login:', error);
     };
