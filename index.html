@@ -11,8 +11,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
-    <!-- 2. ADICIONADO: Biblioteca do Supabase -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- 3. ADICIONADO: Biblioteca para ler arquivos Excel (XLSX) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1098,13 +1096,16 @@
         </div>
     </div>
 
-    <script src="js/api.js"></script>
-    <script src="js/utils.js"></script>
-    <script src="js/theme.js"></script>
-    <script src="js/ui.js"></script>
-    <script src="js/main.js"></script>
-    <script src="js/auth.js"></script>
-    <script src="js/uploader.js"></script>
-    <script src="js/app.js"></script>
+    <!-- Carrega a biblioteca do Supabase primeiro -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script defer src="js/api.js"></script>
+    <script defer src="js/utils.js"></script>
+    <script defer src="js/theme.js"></script>
+    <script defer src="js/ui.js"></script>
+    <script defer src="js/main.js"></script>
+    <script defer src="js/auth.js"></script>
+    <script defer src="js/uploader.js"></script>
+    <script defer src="js/app.js"></script>
 </body>
 </html>
