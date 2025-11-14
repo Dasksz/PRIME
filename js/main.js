@@ -227,14 +227,28 @@ async function updateDashboardView() {
     ui.updateLoaderText('Atualizando dashboard...');
 
     try {
-        const filters = getAppliedFilters('main');
-        const groupBy = filters.p_supervisor ? 'vendedor' : 'supervisor';
+        const allFilters = getAppliedFilters('main');
+        const groupBy = allFilters.p_supervisor ? 'vendedor' : 'supervisor';
+
+        const rpcParams = {
+            p_pasta: allFilters.p_pasta,
+            p_supervisor: allFilters.p_supervisor,
+            p_vendedor_nomes: allFilters.p_vendedor_nomes,
+            p_codcli: allFilters.p_codcli,
+            p_posicao: allFilters.p_posicao,
+            p_codfor: allFilters.p_codfor,
+            p_tipos_venda: allFilters.p_tipos_venda,
+            p_rede_group: allFilters.p_rede_group,
+            p_redes: allFilters.p_redes,
+            p_cidade: allFilters.p_cidade,
+            p_filial: allFilters.p_filial
+        };
 
         const [kpiData, salesByPersonData, salesByCategoryData, topProductsData] = await Promise.all([
-            api.getMainKpis(supabase, filters),
-            api.getSalesByGroup(supabase, { ...filters, p_group_by: groupBy }),
-            api.getSalesByGroup(supabase, { ...filters, p_group_by: 'categoria' }),
-            api.getTopProducts(supabase, { ...filters, p_metric: 'faturamento' })
+            api.getMainKpis(supabase, rpcParams),
+            api.getSalesByGroup(supabase, { ...rpcParams, p_group_by: groupBy }),
+            api.getSalesByGroup(supabase, { ...rpcParams, p_group_by: 'categoria' }),
+            api.getTopProducts(supabase, { ...rpcParams, p_metric: 'faturamento' })
         ]);
 
         // --- 1. Update KPIs ---
@@ -362,13 +376,27 @@ async function updateOrdersView() {
     ui.toggleAppLoader(true);
     ui.updateLoaderText('Carregando pedidos...');
     try {
-        const filters = getAppliedFilters('orders');
+        const allFilters = getAppliedFilters('orders');
 
-        const countResult = await api.getOrdersCount(supabase, filters);
-        ordersTableState.totalItems = countResult.count || 0;
+        const rpcParams = {
+            p_pasta: allFilters.p_pasta,
+            p_supervisor: allFilters.p_supervisor,
+            p_vendedor_nomes: allFilters.p_vendedor_nomes,
+            p_codcli: allFilters.p_codcli,
+            p_posicao: allFilters.p_posicao,
+            p_codfor: allFilters.p_codfor,
+            p_tipos_venda: allFilters.p_tipos_venda,
+            p_rede_group: allFilters.p_rede_group,
+            p_redes: allFilters.p_redes,
+            p_cidade: allFilters.p_cidade,
+            p_filial: allFilters.p_filial
+        };
+
+        const countResult = await api.getOrdersCount(supabase, rpcParams);
+        ordersTableState.totalItems = countResult || 0;
 
         const ordersData = await api.getPaginatedOrders(supabase, {
-            ...filters,
+            ...rpcParams,
             p_page_number: ordersTableState.currentPage,
             p_page_size: ordersTableState.itemsPerPage
         });
@@ -391,8 +419,18 @@ async function updateCityView() {
     ui.toggleAppLoader(true);
     ui.updateLoaderText('Analisando cidades...');
     try {
-        const filters = getAppliedFilters('city');
-        const analysisData = await api.getCityAnalysis(supabase, filters);
+        const allFilters = getAppliedFilters('city');
+
+        const rpcParams = {
+            p_supervisor: allFilters.p_supervisor,
+            p_vendedor_nomes: allFilters.p_vendedor_nomes,
+            p_rede_group: allFilters.p_rede_group,
+            p_redes: allFilters.p_redes,
+            p_cidade: allFilters.p_cidade,
+            p_codcli: allFilters.p_codcli
+        };
+
+        const analysisData = await api.getCityAnalysis(supabase, rpcParams);
 
         if (!analysisData) throw new Error("A API não retornou dados.");
 
@@ -481,13 +519,15 @@ async function updateWeeklyView() {
     ui.toggleAppLoader(true);
     ui.updateLoaderText('Carregando análise semanal...');
     try {
-        const filters = getAppliedFilters('weekly');
-        // The RPC function expects p_supervisores as an array
-        if (filters.p_supervisor) {
-            filters.p_supervisores = [filters.p_supervisor];
-            delete filters.p_supervisor;
-        }
-        const rankingData = await api.getWeeklySalesAndRankings(supabase, filters);
+        const allFilters = getAppliedFilters('weekly');
+
+        const rpcParams = {
+            p_pasta: allFilters.p_pasta,
+            // The RPC function expects p_supervisores as an array
+            p_supervisores: allFilters.p_supervisor ? [allFilters.p_supervisor] : null
+        };
+
+        const rankingData = await api.getWeeklySalesAndRankings(supabase, rpcParams);
 
         if (!rankingData) throw new Error("A API não retornou dados.");
 
@@ -558,8 +598,22 @@ async function updateComparisonView() {
     ui.toggleAppLoader(true);
     ui.updateLoaderText('Carregando dados comparativos...');
     try {
-        const filters = getAppliedFilters('comparison');
-        const comparisonData = await api.getComparisonData(supabase, filters);
+        const allFilters = getAppliedFilters('comparison');
+
+        const rpcParams = {
+            p_pasta: allFilters.p_pasta,
+            p_supervisor: allFilters.p_supervisor,
+            p_vendedor_nomes: allFilters.p_vendedor_nomes,
+            p_codcli: allFilters.p_codcli,
+            p_fornecedores: allFilters.p_fornecedores,
+            p_produtos: allFilters.p_produtos,
+            p_rede_group: allFilters.p_rede_group,
+            p_redes: allFilters.p_redes,
+            p_cidade: allFilters.p_cidade,
+            p_filial: allFilters.p_filial
+        };
+
+        const comparisonData = await api.getComparisonData(supabase, rpcParams);
 
         if (!comparisonData) throw new Error("A API não retornou dados.");
 
@@ -586,8 +640,21 @@ async function updateStockView() {
     ui.toggleAppLoader(true);
     ui.updateLoaderText('Carregando análise de estoque...');
     try {
-        const filters = getAppliedFilters('stock');
-        const stockData = await api.getStockAnalysisData(supabase, filters);
+        const allFilters = getAppliedFilters('stock');
+
+        const rpcParams = {
+            p_pasta: allFilters.p_pasta,
+            p_supervisor: allFilters.p_supervisor,
+            p_vendedor_nomes: allFilters.p_vendedor_nomes,
+            p_fornecedores: allFilters.p_fornecedores,
+            p_produtos: allFilters.p_produtos,
+            p_rede_group: allFilters.p_rede_group,
+            p_redes: allFilters.p_redes,
+            p_cidade: allFilters.p_cidade,
+            p_filial: allFilters.p_filial
+        };
+
+        const stockData = await api.getStockAnalysisData(supabase, rpcParams);
         console.log('Stock Data:', stockData);
         // Placeholder for rendering logic
     } catch (error) {
@@ -605,17 +672,25 @@ async function updateInnovationsView() {
     ui.toggleAppLoader(true);
     ui.updateLoaderText('Carregando análise de inovações...');
     try {
-        const filters = getAppliedFilters('innovations');
-        // The RPC expects p_product_codes, which is aliased as p_produtos in our helper
-        filters.p_product_codes = filters.p_produtos || [];
-        delete filters.p_produtos;
+        const allFilters = getAppliedFilters('innovations');
 
         // Add the include_bonus checkbox value
         const includeBonus = document.getElementById('innovations-include-bonus');
-        filters.p_include_bonus = includeBonus ? includeBonus.checked : true;
 
-        if (filters.p_product_codes.length > 0) {
-            const coverageData = await api.getCoverageAnalysis(supabase, filters);
+        const rpcParams = {
+            p_supervisor: allFilters.p_supervisor,
+            p_vendedor_nomes: allFilters.p_vendedor_nomes,
+            p_fornecedores: allFilters.p_fornecedores,
+            p_rede_group: allFilters.p_rede_group,
+            p_redes: allFilters.p_redes,
+            p_cidade: allFilters.p_cidade,
+            p_filial: allFilters.p_filial,
+            p_product_codes: allFilters.p_produtos || [],
+            p_include_bonus: includeBonus ? includeBonus.checked : true
+        };
+
+        if (rpcParams.p_product_codes.length > 0) {
+            const coverageData = await api.getCoverageAnalysis(supabase, rpcParams);
             console.log('Coverage Data:', coverageData);
             // Placeholder for rendering logic
         } else {
