@@ -56,48 +56,67 @@ async function initializeNewDashboard(supabaseClient) {
     ui.updateLoaderText('Carregando dados iniciais...');
 
     try {
-        // CORREÇÃO: Usa Promise.allSettled para garantir que todas as promessas terminem.
-        const results = await Promise.allSettled([
-            supabase.from('data_clients').select('*'),
-            supabase.from('data_product_details').select('code,descricao,codfor,fornecedor,dtcadastro'),
-            supabase.from('data_innovations').select('code,description,category'),
-            api.getDistinctSupervisors(supabase),
-            api.getDistinctFornecedores(supabase),
-            api.getDistinctTiposVenda(supabase),
-            api.getDistinctRedes(supabase),
-            supabase.from('data_metadata').select('key,value').eq('key', 'last_sale_date').single()
-        ]);
-
-        // Função auxiliar para processar os resultados
-        const processResult = (result, index, description) => {
-            if (result.status === 'fulfilled') {
-                // Para chamadas de API que retornam um array diretamente (ex: RPCs)
-                if (Array.isArray(result.value)) {
-                    return result.value;
+        // Função auxiliar para executar uma consulta e retornar dados ou um padrão em caso de erro
+        const fetchData = async (promise, defaultValue = []) => {
+            try {
+                const { data, error } = await promise;
+                if (error) {
+                    // Log o erro mas não impede o progresso
+                    console.warn(`Erro não fatal na busca de dados: ${error.message}`);
+                    return defaultValue;
                 }
-                // Para chamadas do Supabase que retornam { data, error }
-                if (result.value && result.value.error) {
-                    console.warn(`Aviso: A consulta para ${description} (item ${index}) retornou um erro do Supabase:`, result.value.error.message);
-                    return result.value.data || null; // Retorna dados mesmo com erro, se houver
-                }
-                return result.value.data || (result.value.single ? null : []);
-            } else {
-                console.warn(`Aviso: A consulta para ${description} (item ${index}) falhou.`, result.reason.message);
-                return (description === 'metadados') ? null : []; // Retorna array vazio para falhas, ou null para 'single'
+                return data;
+            } catch (error) {
+                console.warn(`Exceção não fatal na busca de dados: ${error.message}`);
+                return defaultValue;
             }
         };
 
-        // Processa cada resultado individualmente
-        g_allClientsData = processResult(results[0], 0, 'clientes');
-        g_productDetails = processResult(results[1], 1, 'detalhes de produtos');
-        g_innovationsCategories = processResult(results[2], 2, 'inovações');
-        g_supervisors = processResult(results[3], 3, 'supervisores');
-        g_fornecedores = processResult(results[4], 4, 'fornecedores');
-        g_tiposVenda = processResult(results[5], 5, 'tipos de venda');
-        g_redes = processResult(results[6], 6, 'redes');
-        const metadataResult = processResult(results[7], 7, 'metadados');
+        const fetchRpc = async (promise, defaultValue = []) => {
+             try {
+                const result = await promise;
+                // RPCs podem não seguir o padrão {data, error}, então verificamos o resultado diretamente
+                if (!result) { // ou uma verificação mais específica se a API retornar um objeto de erro
+                    console.warn(`Erro não fatal na chamada RPC.`);
+                    return defaultValue;
+                }
+                return result;
+            } catch (error) {
+                console.warn(`Exceção não fatal na chamada RPC: ${error.message}`);
+                return defaultValue;
+            }
+        };
 
-        g_lastSaleDate = metadataResult ? metadataResult.value : new Date().toISOString().split('T')[0];
+        // Usa a função auxiliar para cada busca de dados
+        const [
+            clientsData,
+            productDetailsData,
+            innovationsData,
+            supervisorsData,
+            fornecedoresData,
+            tiposVendaData,
+            redesData,
+            metadata
+        ] = await Promise.all([
+            fetchData(supabase.from('data_clients').select('*')),
+            fetchData(supabase.from('data_product_details').select('code,descricao,codfor,fornecedor,dtcadastro')),
+            fetchData(supabase.from('data_innovations').select('code,description,category')), // Esta irá falhar graciosamente
+            fetchRpc(api.getDistinctSupervisors(supabase)),
+            fetchRpc(api.getDistinctFornecedores(supabase)),
+            fetchRpc(api.getDistinctTiposVenda(supabase)),
+            fetchRpc(api.getDistinctRedes(supabase)),
+            fetchData(supabase.from('data_metadata').select('key,value').eq('key', 'last_sale_date').single(), null)
+        ]);
+
+        // Atribui os dados às variáveis globais
+        g_allClientsData = clientsData;
+        g_productDetails = productDetailsData;
+        g_innovationsCategories = innovationsData;
+        g_supervisors = supervisorsData;
+        g_fornecedores = fornecedoresData;
+        g_tiposVenda = tiposVendaData;
+        g_redes = redesData;
+        g_lastSaleDate = metadata ? metadata.value : new Date().toISOString().split('T')[0];
 
         if (elements['generation-date']) {
             elements['generation-date'].textContent = `Dados atualizados em: ${new Date(g_lastSaleDate).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}`;
