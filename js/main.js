@@ -230,7 +230,9 @@ async function updateDashboardView() {
         const allFilters = getAppliedFilters('main');
         const groupBy = allFilters.p_supervisor ? 'vendedor' : 'supervisor';
 
-        const rpcParams = {
+        // 1. Parâmetros ESPECÍFICOS para get_main_kpis e get_sales_by_group
+        //    (Estes não aceitam p_fornecedores ou p_produtos)
+        const mainParams = {
             p_pasta: allFilters.p_pasta,
             p_supervisor: allFilters.p_supervisor,
             p_vendedor_nomes: allFilters.p_vendedor_nomes,
@@ -244,11 +246,18 @@ async function updateDashboardView() {
             p_filial: allFilters.p_filial
         };
 
+        // 2. Parâmetros ESPECÍFICOS para get_top_products
+        //    (Este aceita os mesmos que o main, mas NÃO p_fornecedores/p_produtos)
+        const topProductsParams = {
+            ...mainParams, // Reutiliza os 11 parâmetros
+            p_metric: 'faturamento' // Adiciona o p_metric
+        };
+
         const [kpiData, salesByPersonData, salesByCategoryData, topProductsData] = await Promise.all([
-            api.getMainKpis(supabase, rpcParams),
-            api.getSalesByGroup(supabase, { ...rpcParams, p_group_by: groupBy }),
-            api.getSalesByGroup(supabase, { ...rpcParams, p_group_by: 'categoria' }),
-            api.getTopProducts(supabase, { ...rpcParams, p_metric: 'faturamento' })
+            api.getMainKpis(supabase, mainParams), // <-- CORRIGIDO
+            api.getSalesByGroup(supabase, { ...mainParams, p_group_by: groupBy }), // <-- CORRIGIDO
+            api.getSalesByGroup(supabase, { ...mainParams, p_group_by: 'categoria' }), // <-- CORRIGIDO
+            api.getTopProducts(supabase, topProductsParams) // <-- CORRIGIDO
         ]);
 
         // --- 1. Update KPIs ---
