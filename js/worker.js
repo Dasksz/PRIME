@@ -71,7 +71,7 @@ async function readAndProcessFiles(files) {
 
     // This is a simplified version of the original complex processing logic.
     // It maps and cleans the data as required.
-    const detailedColumns = 'pedido,dtped,dtsaida,codcli,cliente,cidade,bairro,codusur,nome,superv,codfor,fornecedor,codprod,produto,qt,vlunit,vlvenda,totpesoliq,posicao,tipovenda,vlbonific,desconto,observacaofor,qtvenda_embalagem_master,filial,descricao'.split(',');
+    const detailedColumns = 'pedido,dtped,dtsaida,codcli,cidade,bairro,codusur,nome,superv,codfor,fornecedor,codprod,produto,qt,vlunit,vlvenda,totpesoliq,posicao,tipovenda,vlbonific,desconto,observacaofor,qtvenda_embalagem_master,filial,descricao'.split(',');
     const historyColumns = 'dtped,codusur,nome,superv,codcli,cidade,codfor,fornecedor,codprod,produto,qtvenda,vlvenda,totpesoliq,qtvenda_embalagem_master,filial,observacaofor'.split(',');
 
     const processData = (data, columns) => data.map(row => {
