@@ -671,7 +671,6 @@ BEGIN
 END;
 $$;
 
--- 3.8: Funções para o Ecrã 'comparison-view' (Inalterado)
 -- 3.8: Funções para o Ecrã 'comparison-view' (CORRIGIDO)
 create or replace function get_comparison_data (
   p_pasta TEXT default null,
@@ -980,3 +979,11 @@ $$;
 -- ETAPA FINAL: Forçar o Supabase a recarregar o esquema
 notify pgrst,
 'reload schema';
+
+-- =================================================================
+-- SCRIPT V13.1-B (APENAS O ÍNDICE)
+-- OBJETIVO: Criar o índice de performance.
+-- =================================================================
+
+create index concurrently IF NOT exists
+  profiles_id_idx on public.profiles (id);
