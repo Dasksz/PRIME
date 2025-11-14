@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Painel de Vendas - Diagnose</title>
+    <!-- CSS and Libraries from index.html -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root, html[data-theme="light"] { --bg-main: #F1F3F5; --bg-content: #FFFFFF; /* ... other vars */ }
+        html[data-theme="dark"] { /* ... dark theme vars */ }
+        body { font-family: 'Inter', sans-serif; }
+        .hidden { display: none !important; }
+        #loader { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: #fff; display: flex; align-items: center; justify-content: center; z-index: 9999; }
+        #loader-spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <!-- Copied structure from index.html -->
+    <div id="loader"><div id="loader-spinner"></div></div>
+    <div id="dashboard-view" class="hidden">
+        <p id="generation-date"></p><p id="total-peso"></p><p id="total-vendas"></p><p id="kpi-sku-pdv"></p><p id="kpi-positivacao"></p><p id="kpi-positivacao-percent"></p>
+        <div id="salesByPersonChartContainer"></div><div id="faturamentoPorFornecedorChartContainer"></div><div id="salesByProductBarChartContainer"></div><div id="trendChartContainer"></div>
+        <select id="supervisor-filter"></select><div id="vendedor-filter-dropdown"></div><span id="vendedor-filter-text"></span><div id="fornecedor-toggle-container"></div><nav id="main-nav"></nav>
+    </div>
+    <div id="orders-view" class="hidden">
+        <div id="orders-table-body"></div>
+        <div id="orders-pagination-controls" class="hidden"><span id="orders-page-info-text"></span><button id="orders-prev-page-btn"></button><button id="orders-next-page-btn"></button></div>
+    </div>
+    <div id="main-filters">
+        <select id="main-supervisor-filter"></select>
+    </div>
+    <div id="orders-filters">
+         <select id="orders-supervisor-filter"></select>
+    </div>
+    <!-- Add other view containers if needed for scripts to not fail -->
+    <div id="city-view" class="hidden"></div>
+    <div id="weekly-view" class="hidden"></div>
+    <div id="comparison-view" class="hidden"></div>
+    <div id="stock-view" class="hidden"></div>
+    <div id="innovations-view" class="hidden"></div>
+    <div id="coverage-view" class="hidden"></div>
+    <div id="menu-toggle-btn"></div>
+    <div id="menu-overlay"></div>
+    <div id="side-menu"></div>
+
+    <!-- Scripts loaded in the correct order -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/theme.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+    <!-- We skip auth.js and app.js to take manual control -->
+
+    <script>
+        // This script runs after all other scripts are loaded
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('DOM content loaded. Starting diagnosis script...');
+
+            // 1. Initialize a real Supabase client
+            const supabaseUrl = 'https://dhozwhfmrwiumwpcqabi.supabase.co';
+            const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRob3pod2hmbXJ3aXVtd3BjcWFiaSIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzE3Njg2OTg2LCJleHAiOjIwMzMyNjI5ODZ9.5-a-pY8-28fCo-2p3n5nId0JHshqi24NnHiOq-zCOcE';
+            const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+            // 2. Simulate the post-authentication flow
+            try {
+                // We need to call initializeNewDashboard to fetch filter data etc.
+                await initializeNewDashboard(supabaseClient);
+
+                // Show the target view and hide the main dashboard
+                document.getElementById('dashboard-view').classList.add('hidden');
+                document.getElementById('orders-view').classList.remove('hidden');
+
+                // Now, call the specific function we want to diagnose
+                await updateOrdersView();
+
+            } catch (e) {
+                console.error("DIAGNOSIS SCRIPT FAILED:", e);
+            }
+        });
+    </script>
+</body>
+</html>

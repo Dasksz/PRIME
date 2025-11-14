@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Harness</title>
+    <!-- Include all necessary scripts from index.html -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/theme.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/uploader.js"></script>
+    <script src="js/app.js"></script>
+</head>
+<body>
+    <!-- Minimal body, just to have the elements the scripts might expect -->
+    <div id="loader" class="hidden"></div>
+    <div id="dashboard-view" class="hidden">
+        <p id="generation-date"></p>
+        <p id="total-peso"></p>
+        <p id="total-vendas"></p>
+        <p id="kpi-sku-pdv"></p>
+        <p id="kpi-positivacao"></p>
+        <p id="kpi-positivacao-percent"></p>
+        <div id="salesByPersonChartContainer"></div>
+        <div id="faturamentoPorFornecedorChartContainer"></div>
+        <div id="salesByProductBarChartContainer"></div>
+        <div id="trendChartContainer"></div>
+        <select id="supervisor-filter"></select>
+        <div id="vendedor-filter-dropdown"></div>
+        <span id="vendedor-filter-text"></span>
+        <div id="fornecedor-toggle-container"></div>
+        <nav id="main-nav"></nav>
+    </div>
+    <div id="orders-view">
+        <div id="orders-table-body"></div>
+        <div id="orders-pagination-controls">
+            <span id="orders-page-info-text"></span>
+            <button id="orders-prev-page-btn"></button>
+            <button id="orders-next-page-btn"></button>
+        </div>
+    </div>
+    <div id="city-view"></div>
+    <div id="weekly-view"></div>
+    <div id="comparison-view"></div>
+    <div id="stock-view"></div>
+    <div id="innovations-view"></div>
+    <div id="coverage-view"></div>
+    <div id="menu-toggle-btn"></div>
+    <div id="menu-overlay"></div>
+    <div id="side-menu"></div>
+
+
+    <script>
+      // Self-invoking async function to run the test logic
+      (async () => {
+        const supabaseUrl = 'https://dhozwhfmrwiumwpcqabi.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRob3pod2hmbXJ3aXVtd3BjcWFiaSIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzE3Njg2OTg2LCJleHAiOjIwMzMyNjI5ODZ9.5-a-pY8-28fCo-2p3n5nId0JHshqi24NnHiOq-zCOcE';
+        const mockSupabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+         mockSupabase.auth.getSession = async () => ({
+            data: { session: { user: { id: 'mock-user-id' } } },
+            error: null
+        });
+
+        // Override the original updateOrdersView to add detailed logging
+        const originalUpdateOrdersView = window.updateOrdersView;
+        window.updateOrdersView = async function() {
+            console.log("--- Starting Instrumented updateOrdersView ---");
+            ui.toggleAppLoader(true);
+            ui.updateLoaderText('Carregando pedidos...');
+            try {
+                const allFilters = getAppliedFilters('orders');
+                console.log("Applied Filters:", JSON.stringify(allFilters, null, 2));
+
+                const rpcParams = {
+                    p_pasta: allFilters.p_pasta,
+                    p_supervisor: allFilters.p_supervisor,
+                    // ... (rest of params are null by default)
+                };
+                console.log("RPC Params for Count:", JSON.stringify(rpcParams, null, 2));
+
+                // --- LOGGING POINT 1: COUNT ---
+                const countResult = await api.getOrdersCount(supabase, rpcParams);
+                console.log("<<<<< DEBUG: api.getOrdersCount result >>>>>");
+                console.log(JSON.stringify(countResult, null, 2));
+
+                ordersTableState.totalItems = countResult && countResult[0] ? countResult[0].total_count : 0;
+                console.log("Total items set to:", ordersTableState.totalItems);
+
+                const paginationParams = {
+                    ...rpcParams,
+                    p_page_number: ordersTableState.currentPage,
+                    p_page_size: ordersTableState.itemsPerPage
+                };
+                console.log("RPC Params for Paginated Data:", JSON.stringify(paginationParams, null, 2));
+
+                // --- LOGGING POINT 2: DATA ---
+                const ordersData = await api.getPaginatedOrders(supabase, paginationParams);
+                console.log("<<<<< DEBUG: api.getPaginatedOrders result (first 5 items) >>>>>");
+                if (ordersData) {
+                    console.log(JSON.stringify(ordersData.slice(0, 5), null, 2));
+                    // Specifically check the 'dtfat' of the first record if it exists
+                    if(ordersData[0]) {
+                        console.log("Value of 'dtfat' for the first order:", ordersData[0].dtfat);
+                    }
+                } else {
+                    console.log("api.getPaginatedOrders returned null or undefined.");
+                }
+
+
+                console.log("--- Calling original renderOrdersTable ---");
+                renderOrdersTable(ordersData);
+
+            } catch (error) {
+                console.error("Error during instrumented updateOrdersView:", error);
+                document.getElementById('orders-table-body').innerHTML = '<tr><td colspan="9" class="text-center py-8 text-red-500">Erro ao carregar dados.</td></tr>';
+            } finally {
+                ui.toggleAppLoader(false);
+                 console.log("--- Finished Instrumented updateOrdersView ---");
+            }
+        }
+
+
+        try {
+          console.log('Test harness: Calling initializeNewDashboard...');
+          // We need to initialize first to populate global filter data
+          await initializeNewDashboard(mockSupabase);
+          console.log('Test harness: initializeNewDashboard finished.');
+
+          console.log('Test harness: Calling instrumented updateOrdersView...');
+          await window.updateOrdersView(); // Call our new instrumented function
+          console.log('Test harness: instrumented updateOrdersView finished.');
+
+        } catch (error) {
+          console.error('Test harness: Error during targeted test:', error);
+        }
+      })();
+    </script>
+</body>
+</html>
