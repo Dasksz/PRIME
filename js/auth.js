@@ -2,7 +2,7 @@
 
 function initAuth() {
     const SUPABASE_URL = 'https://dhozwhfmrwiumwpcqabi.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRob3p3aGZtcndpdW13cGNxYWJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyNjMzNjAsImV4cCI6MjA3NzgzOTM2MH0.syWqcBCbfH5Ey5AB4NGrsF2-ZuBw4W3NZAPIAZb6Bq4';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRob3pod2hmbXJ3aXVtd3BjcWFiaSIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzE3Njg2OTg2LCJleHAiOjIwMzMyNjI5ODZ9.5-a-pY8-28fCo-2p3n5nId0JHshqi24NnHiOq-zCOcE';
 
     // CORREÇÃO: Acessa createClient diretamente do objeto global supabase
     // A variável global é 'window.supabase', e não apenas 'supabase'.
