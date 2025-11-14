@@ -1053,9 +1053,18 @@
                     <label for="supabase-url" class="block text-sm font-medium mb-2">URL do Projeto Supabase</label>
                     <input type="text" id="supabase-url" placeholder="https://[seu-id].supabase.co" class="w-full text-sm p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-input border-primary text-primary" value="https://dhozwhfmrwiumwpcqabi.supabase.co">
                 </div>
-                <div>
+                <div class="relative">
                     <label for="supabase-key" class="block text-sm font-medium mb-2">Chave Secreta (service_role) 🤫</label>
-                    <input type="password" id="supabase-key" placeholder="Cole sua chave secreta aqui..." class="w-full text-sm p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-input border-primary text-primary">
+                    <input type="password" id="supabase-key" placeholder="Cole sua chave secreta aqui..." class="w-full text-sm p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-input border-primary text-primary pr-10">
+                    <button type="button" id="toggle-supabase-key" class="absolute inset-y-0 right-0 top-7 flex items-center px-3 text-gray-500 hover:text-gray-700">
+                        <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        <svg id="eye-off-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 1.274-4.057 5.064-7 9.542-7 .847 0 1.673.126 2.463.362m3.69-3.69a14.92 14.92 0 015.385 5.325c-1.274 4.057-5.064 7-9.542 7a10.024 10.024 0 01-3.32-.518m-3.69-3.69A14.92 14.92 0 002.458 12c1.274-4.057 5.064-7 9.542-7 .847 0 1.673.126 2.463.362m0 0l-1.04 1.04m-3.628 3.628L12 13.5m0 0a3 3 0 100-6 3 3 0 000 6z" />
+                        </svg>
+                    </button>
                     <p class="text-xs mt-1">Esta chave NUNCA é salva. Você deve digitá-la toda vez que for usar.</p>
                 </div>
             </div>
