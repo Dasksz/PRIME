@@ -1,7 +1,7 @@
 -- =================================================================
--- SCRIPT SQL UNIFICADO V2.6 - PRIME (CORREÇÃO COM DROP FUNCTION)
--- OBJETIVO: Incluir comandos DROP FUNCTION para permitir a alteração
---           da assinatura das funções, corrigindo o erro 42P13.
+-- SCRIPT SQL UNIFICADO V2.7 - PRIME (CORREÇÃO DE SEGURANÇA E RLS)
+-- OBJETIVO: Adicionar a função de verificação `is_caller_approved` e
+--           as políticas de RLS para corrigir o erro 401 (Não Autorizado).
 -- =================================================================
 
 -- ETAPA 1: APAGAR FUNÇÕES ANTIGAS (DROP)
@@ -11,12 +11,70 @@ DROP FUNCTION IF EXISTS get_main_kpis(text,text,text[],text,text,text,text[],tex
 DROP FUNCTION IF EXISTS get_top_products(text,text,text,text[],text,text,text,text[],text,text[],text,text);
 DROP FUNCTION IF EXISTS get_orders_count(text,text,text[],text,text,text,text[],text,text[],text,text);
 
+-- =================================================================
+-- ETAPA 2: FUNÇÕES E POLÍTICAS DE SEGURANÇA (RLS)
+-- =================================================================
+
+-- 2.1: Função de Verificação de Acesso
+-- Esta função verifica se o usuário que está fazendo a chamada tem o status 'aprovado'.
+create or replace function public.is_caller_approved()
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Retorna true se o usuário autenticado (auth.uid()) existir na tabela de perfis
+  -- e tiver o status 'aprovado'.
+  return exists (
+    select 1
+    from public.profiles
+    where id = auth.uid() and status = 'aprovado'
+  );
+end;
+$$;
+
+-- 2.2: Habilitação do Row Level Security (RLS)
+-- Ativa a aplicação de políticas de segurança para cada tabela.
+alter table public.data_clients enable row level security;
+alter table public.data_detailed enable row level security;
+alter table public.data_history enable row level security;
+alter table public.data_metadata enable row level security;
+alter table public.data_orders enable row level security;
+alter table public.data_product_details enable row level security;
+alter table public.profiles enable row level security;
+
+-- 2.3: Remoção de Políticas Antigas (para evitar duplicatas)
+DROP POLICY IF EXISTS "Permitir acesso de leitura para usuários aprovados" ON public.data_clients;
+DROP POLICY IF EXISTS "Permitir acesso de leitura para usuários aprovados" ON public.data_detailed;
+DROP POLICY IF EXISTS "Permitir acesso de leitura para usuários aprovados" ON public.data_history;
+DROP POLICY IF EXISTS "Permitir acesso de leitura para usuários aprovados" ON public.data_metadata;
+DROP POLICY IF EXISTS "Permitir acesso de leitura para usuários aprovados" ON public.data_orders;
+DROP POLICY IF EXISTS "Permitir acesso de leitura para usuários aprovados" ON public.data_product_details;
+DROP POLICY IF EXISTS "Permitir que usuários leiam seu próprio perfil" ON public.profiles;
+DROP POLICY IF EXISTS "Permitir que usuários aprovados leiam todos os perfis" ON public.profiles;
+
+-- 2.4: Criação das Políticas de Acesso (Policies)
+-- Define as regras: apenas usuários aprovados podem ler (SELECT) os dados.
+CREATE POLICY "Permitir acesso de leitura para usuários aprovados" ON public.data_clients FOR SELECT USING (public.is_caller_approved());
+CREATE POLICY "Permitir acesso de leitura para usuários aprovados" ON public.data_detailed FOR SELECT USING (public.is_caller_approved());
+CREATE POLICY "Permitir acesso de leitura para usuários aprovados" ON public.data_history FOR SELECT USING (public.is_caller_approved());
+CREATE POLICY "Permitir acesso de leitura para usuários aprovados" ON public.data_metadata FOR SELECT USING (public.is_caller_approved());
+CREATE POLICY "Permitir acesso de leitura para usuários aprovados" ON public.data_orders FOR SELECT USING (public.is_caller_approved());
+CREATE POLICY "Permitir acesso de leitura para usuários aprovados" ON public.data_product_details FOR SELECT USING (public.is_caller_approved());
+
+-- Políticas para a tabela de perfis:
+-- 1. Um usuário sempre pode ler seu próprio perfil.
+-- 2. Um usuário aprovado pode ler o perfil de outros (útil para admin).
+CREATE POLICY "Permitir que usuários leiam seu próprio perfil" ON public.profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Permitir que usuários aprovados leiam todos os perfis" ON public.profiles FOR SELECT USING (public.is_caller_approved());
+
 
 -- =================================================================
--- ETAPA 2: FUNÇÕES DE CÁLCULO (RPC) - (Funções Corrigidas)
+-- ETAPA 3: FUNÇÕES DE CÁLCULO (RPC) - (Funções Corrigidas)
 -- =================================================================
 
--- 2.0: Função Auxiliar de Filtro de Cliente (BASE) - (Inalterado)
+-- 3.0: Função Auxiliar de Filtro de Cliente (BASE) - (Inalterado)
 create or replace function get_filtered_client_base (
   p_supervisor TEXT default null,
   p_vendedor_nomes text[] default null,
@@ -69,7 +127,7 @@ END;
 $$;
 
 
--- 2.1: KPIs Principais (CORRIGIDO)
+-- 3.1: KPIs Principais (CORRIGIDO)
 create or replace function get_main_kpis (
   p_pasta TEXT default null,
   p_supervisor TEXT default null,
@@ -132,7 +190,7 @@ END;
 $$;
 
 
--- 2.2: Top Produtos (CORRIGIDO)
+-- 3.2: Top Produtos (CORRIGIDO)
 create or replace function get_top_products (
   p_metric TEXT,
   p_pasta TEXT default null,
@@ -196,7 +254,7 @@ END;
 $$;
 
 
--- 2.3: Contagem de Pedidos (CORRIGIDO)
+-- 3.3: Contagem de Pedidos (CORRIGIDO)
 create or replace function get_orders_count (
   p_pasta TEXT default null,
   p_supervisor TEXT default null,
