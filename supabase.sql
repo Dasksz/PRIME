@@ -236,11 +236,11 @@ BEGIN
         )
     )
     SELECT
-        COALESCE(SUM(v.vlvenda), 0::numeric) AS total_faturamento,
-        COALESCE(SUM(v.totpesoliq), 0::numeric) AS total_peso,
-        COUNT(DISTINCT v.produto) AS total_skus,
-        COUNT(DISTINCT v.codcli) AS total_pdvs_positivados,
-        v_base_clientes_count AS base_clientes_filtro
+        COALESCE(SUM(v.vlvenda), 0)::numeric AS total_faturamento,
+        COALESCE(SUM(v.totpesoliq), 0)::numeric AS total_peso,
+        COUNT(DISTINCT v.produto)::bigint AS total_skus,
+        COUNT(DISTINCT v.codcli)::bigint AS total_pdvs_positivados,
+        v_base_clientes_count::bigint AS base_clientes_filtro
     FROM VendasFiltradas AS v
     WHERE v.vlvenda > 0 OR v.vlbonific > 0;
 END;
@@ -339,9 +339,9 @@ BEGIN
             CASE
                 WHEN p_metric = 'faturamento' THEN v.vlvenda
                 WHEN p_metric = 'peso' THEN v.totpesoliq
-                ELSE 0::numeric
+                ELSE 0
             END
-        ), 0::numeric) AS valor_metrica
+        ), 0)::numeric AS valor_metrica
     FROM
         public.data_detailed AS v
     JOIN
