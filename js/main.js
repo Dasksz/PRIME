@@ -56,45 +56,48 @@ async function initializeNewDashboard(supabaseClient) {
     ui.updateLoaderText('Carregando dados iniciais...');
 
     try {
-        // CORREÇÃO: Envolve cada promessa em um manipulador de erro para evitar que Promise.all falhe completamente.
-        const results = await Promise.all([
-            supabase.from('data_clients').select('*').catch(err => ({ data: [], error: { message: `Falha ao carregar clientes: ${err.message}` } })),
-            supabase.from('data_product_details').select('code,descricao,codfor,fornecedor,dtcadastro').catch(err => ({ data: [], error: { message: `Falha ao carregar detalhes de produtos: ${err.message}` } })),
-            supabase.from('data_innovations').select('code,description,category').catch(err => ({ data: [], error: { message: `Falha ao carregar inovações: ${err.message}` } })),
-            api.getDistinctSupervisors(supabase).catch(err => { console.warn(`Falha ao carregar supervisores: ${err.message}`); return []; }),
-            api.getDistinctFornecedores(supabase).catch(err => { console.warn(`Falha ao carregar fornecedores: ${err.message}`); return []; }),
-            api.getDistinctTiposVenda(supabase).catch(err => { console.warn(`Falha ao carregar tipos de venda: ${err.message}`); return []; }),
-            api.getDistinctRedes(supabase).catch(err => { console.warn(`Falha ao carregar redes: ${err.message}`); return []; }),
-            supabase.from('data_metadata').select('key,value').eq('key', 'last_sale_date').single().catch(err => ({ data: null, error: { message: `Falha ao carregar metadados: ${err.message}` } }))
+        // CORREÇÃO: Usa Promise.allSettled para garantir que todas as promessas terminem.
+        const results = await Promise.allSettled([
+            supabase.from('data_clients').select('*'),
+            supabase.from('data_product_details').select('code,descricao,codfor,fornecedor,dtcadastro'),
+            supabase.from('data_innovations').select('code,description,category'),
+            api.getDistinctSupervisors(supabase),
+            api.getDistinctFornecedores(supabase),
+            api.getDistinctTiposVenda(supabase),
+            api.getDistinctRedes(supabase),
+            supabase.from('data_metadata').select('key,value').eq('key', 'last_sale_date').single()
         ]);
 
-        // Loga avisos para quaisquer falhas, mas não interrompe a execução
-        results.forEach((result, index) => {
-            if (result && result.error) {
-                console.warn(`Aviso: A consulta de dados para o item ${index} falhou.`, result.error.message);
+        // Função auxiliar para processar os resultados
+        const processResult = (result, index, description) => {
+            if (result.status === 'fulfilled') {
+                // Para chamadas de API que retornam um array diretamente (ex: RPCs)
+                if (Array.isArray(result.value)) {
+                    return result.value;
+                }
+                // Para chamadas do Supabase que retornam { data, error }
+                if (result.value && result.value.error) {
+                    console.warn(`Aviso: A consulta para ${description} (item ${index}) retornou um erro do Supabase:`, result.value.error.message);
+                    return result.value.data || null; // Retorna dados mesmo com erro, se houver
+                }
+                return result.value.data || (result.value.single ? null : []);
+            } else {
+                console.warn(`Aviso: A consulta para ${description} (item ${index}) falhou.`, result.reason.message);
+                return (description === 'metadados') ? null : []; // Retorna array vazio para falhas, ou null para 'single'
             }
-        });
+        };
 
-        const [
-            clientsData,
-            productDetailsData,
-            innovationsData,
-            supervisorsData,
-            fornecedoresData,
-            tiposVendaData,
-            redesData,
-            metadata
-        ] = results;
+        // Processa cada resultado individualmente
+        g_allClientsData = processResult(results[0], 0, 'clientes');
+        g_productDetails = processResult(results[1], 1, 'detalhes de produtos');
+        g_innovationsCategories = processResult(results[2], 2, 'inovações');
+        g_supervisors = processResult(results[3], 3, 'supervisores');
+        g_fornecedores = processResult(results[4], 4, 'fornecedores');
+        g_tiposVenda = processResult(results[5], 5, 'tipos de venda');
+        g_redes = processResult(results[6], 6, 'redes');
+        const metadataResult = processResult(results[7], 7, 'metadados');
 
-        // Assign fetched data to global variables (o fallback `|| []` lida com dados ausentes)
-        g_allClientsData = clientsData.data || [];
-        g_productDetails = productDetailsData.data || [];
-        g_innovationsCategories = innovationsData.data || [];
-        g_supervisors = supervisorsData || [];
-        g_fornecedores = fornecedoresData || [];
-        g_tiposVenda = tiposVendaData || [];
-        g_redes = redesData || [];
-        g_lastSaleDate = metadata.data ? metadata.data.value : new Date().toISOString().split('T')[0];
+        g_lastSaleDate = metadataResult ? metadataResult.value : new Date().toISOString().split('T')[0];
 
         if (elements['generation-date']) {
             elements['generation-date'].textContent = `Dados atualizados em: ${new Date(g_lastSaleDate).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}`;
