@@ -1,16 +1,22 @@
 -- =================================================================
--- SCRIPT SQL UNIFICADO V2.5 - PRIME (CORREÇÃO FINAL RPC)
--- OBJETIVO: Corrigir erros de "structure of query does not match"
---           garantindo que todos os CASTs em funções de agregação
---           correspondam exatamente aos tipos de retorno da tabela.
+-- SCRIPT SQL UNIFICADO V2.6 - PRIME (CORREÇÃO COM DROP FUNCTION)
+-- OBJETIVO: Incluir comandos DROP FUNCTION para permitir a alteração
+--           da assinatura das funções, corrigindo o erro 42P13.
 -- =================================================================
--- ETAPA 1: POLÍTICAS DE SEGURANÇA (RLS) - (Inalterado)
--- ... (código inalterado omitido para brevidade) ...
+
+-- ETAPA 1: APAGAR FUNÇÕES ANTIGAS (DROP)
+-- Adicionado para permitir a alteração do tipo de retorno (RETURNS TABLE).
+
+DROP FUNCTION IF EXISTS get_main_kpis(text,text,text[],text,text,text,text[],text,text[],text,text);
+DROP FUNCTION IF EXISTS get_top_products(text,text,text,text[],text,text,text,text[],text,text[],text,text);
+DROP FUNCTION IF EXISTS get_orders_count(text,text,text[],text,text,text,text[],text,text[],text,text);
+
 
 -- =================================================================
--- ETAPA 3: FUNÇÕES DE CÁLCULO (RPC) - (Funções Corrigidas)
+-- ETAPA 2: FUNÇÕES DE CÁLCULO (RPC) - (Funções Corrigidas)
 -- =================================================================
--- 3.0: Função Auxiliar de Filtro de Cliente (BASE) - (Inalterado)
+
+-- 2.0: Função Auxiliar de Filtro de Cliente (BASE) - (Inalterado)
 create or replace function get_filtered_client_base (
   p_supervisor TEXT default null,
   p_vendedor_nomes text[] default null,
@@ -63,7 +69,7 @@ END;
 $$;
 
 
--- 3.1: KPIs Principais (CORRIGIDO)
+-- 2.1: KPIs Principais (CORRIGIDO)
 create or replace function get_main_kpis (
   p_pasta TEXT default null,
   p_supervisor TEXT default null,
@@ -115,7 +121,6 @@ BEGIN
         ))
     )
     SELECT
-        -- CORREÇÃO: Adiciona CAST explícito para corresponder aos tipos de retorno
         COALESCE(SUM(v.vlvenda), 0)::numeric AS total_faturamento,
         COALESCE(SUM(v.totpesoliq), 0)::numeric AS total_peso,
         COALESCE(COUNT(DISTINCT v.produto), 0)::bigint AS total_skus,
@@ -127,10 +132,7 @@ END;
 $$;
 
 
--- 3.2: Gráficos de Barras (Inalterado)
--- ... (código inalterado omitido) ...
-
--- 3.3: Top Produtos (CORRIGIDO)
+-- 2.2: Top Produtos (CORRIGIDO)
 create or replace function get_top_products (
   p_metric TEXT,
   p_pasta TEXT default null,
@@ -163,7 +165,6 @@ BEGIN
     SELECT
         v.produto::text AS codigo_produto,
         pd.descricao AS descricao_produto,
-        -- CORREÇÃO: Garante que a agregação complexa retorne NUMERIC
         SUM(
             CASE
                 WHEN p_metric = 'faturamento' THEN v.vlvenda
@@ -194,10 +195,8 @@ BEGIN
 END;
 $$;
 
--- 3.4: Tabela de Pedidos Paginada (Inalterado)
--- ... (código inalterado omitido) ...
 
--- 3.5: Contagem de Pedidos (CORRIGIDO)
+-- 2.3: Contagem de Pedidos (CORRIGIDO)
 create or replace function get_orders_count (
   p_pasta TEXT default null,
   p_supervisor TEXT default null,
@@ -222,7 +221,7 @@ BEGIN
     WITH ClientBase AS (
         SELECT * FROM get_filtered_client_base(p_supervisor, p_vendedor_nomes, p_rede_group, p_redes, p_cidade, p_codcli, p_filial)
     )
-    SELECT COUNT(*)::bigint -- CORREÇÃO: Adiciona CAST para garantir o tipo
+    SELECT COUNT(*)::bigint
     FROM public.data_orders AS o
     WHERE
         (p_pasta IS NULL OR (o.fornecedores_list::text[] @> ARRAY[p_pasta]))
@@ -240,5 +239,4 @@ $$;
 
 
 -- ETAPA FINAL: Forçar o Supabase a recarregar o esquema
-notify pgrst,
-'reload schema';
+NOTIFY pgrst, 'reload schema';
