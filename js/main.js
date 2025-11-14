@@ -402,7 +402,7 @@ async function updateOrdersView() {
         };
 
         const countResult = await api.getOrdersCount(supabase, rpcParams);
-        ordersTableState.totalItems = countResult || 0;
+        ordersTableState.totalItems = countResult && countResult[0] ? countResult[0].total_count : 0;
 
         const ordersData = await api.getPaginatedOrders(supabase, {
             ...rpcParams,
