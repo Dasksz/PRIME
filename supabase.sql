@@ -341,6 +341,7 @@ END;
 $$;
 
 -- 3.3: Top Produtos (Inalterado)
+-- 3.3: Top Produtos (CORRIGIDO)
 create or replace function get_top_products (
   p_metric TEXT,
   p_pasta TEXT default null,
@@ -372,7 +373,7 @@ BEGIN
     )
     SELECT
         v.produto AS codigo_produto,
-        v.descricao AS descricao_produto,
+        pd.descricao AS descricao_produto,
         COALESCE(SUM(
             CASE
                 WHEN p_metric = 'faturamento' THEN v.vlvenda
@@ -382,6 +383,8 @@ BEGIN
         ), 0) AS valor_metrica
     FROM
         public.data_detailed AS v
+    JOIN
+        public.data_product_details AS pd ON v.produto = pd.code
     WHERE
         (p_pasta IS NULL OR v.observacaofor = p_pasta)
     AND (p_supervisor IS NULL OR v.superv = p_supervisor)
@@ -394,7 +397,7 @@ BEGIN
     AND (p_filial = 'ambas' OR p_filial IS NULL OR v.filial = p_filial)
     AND (p_rede_group IS NULL AND p_supervisor IS NULL AND p_vendedor_nomes IS NULL AND p_cidade IS NULL AND p_codcli IS NULL) OR v.codcli IN (SELECT codigo_cliente FROM ClientBase)
     GROUP BY
-        v.produto, v.descricao
+        v.produto, pd.descricao
     ORDER BY
         valor_metrica DESC
     LIMIT 10;
@@ -669,6 +672,7 @@ END;
 $$;
 
 -- 3.8: Funções para o Ecrã 'comparison-view' (Inalterado)
+-- 3.8: Funções para o Ecrã 'comparison-view' (CORRIGIDO)
 create or replace function get_comparison_data (
   p_pasta TEXT default null,
   p_supervisor TEXT default null,
@@ -705,8 +709,9 @@ BEGIN
     -- 1. Vendas Atuais (Mês Atual)
     SELECT
         'current' AS origem, v.superv, v.dtped::date, v.vlvenda,
-        v.totpesoliq, v.codcli, v.produto, v.descricao, v.codfor
+        v.totpesoliq, v.codcli, v.produto, pd.descricao, v.codfor
     FROM public.data_detailed AS v
+    JOIN public.data_product_details AS pd ON v.produto = pd.code
     WHERE
         (p_pasta IS NULL OR v.observacaofor = p_pasta)
     AND (p_supervisor IS NULL OR v.superv = p_supervisor)
@@ -723,8 +728,9 @@ BEGIN
     -- 2. Vendas Históricas
     SELECT
         'history' AS origem, h.superv, h.dtped::date, h.vlvenda,
-        h.totpesoliq, h.codcli, h.produto, h.descricao, h.codfor
+        h.totpesoliq, h.codcli, h.produto, pd.descricao, h.codfor
     FROM public.data_history AS h
+    JOIN public.data_product_details AS pd ON h.produto = pd.code
     WHERE
         (p_pasta IS NULL OR h.observacaofor = p_pasta)
     AND (p_supervisor IS NULL OR h.superv = p_supervisor)
