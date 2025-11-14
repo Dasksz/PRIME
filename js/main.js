@@ -56,7 +56,25 @@ async function initializeNewDashboard(supabaseClient) {
     ui.updateLoaderText('Carregando dados iniciais...');
 
     try {
-        // Fetch all initial data in parallel for faster loading
+        // CORREÇÃO: Envolve cada promessa em um manipulador de erro para evitar que Promise.all falhe completamente.
+        const results = await Promise.all([
+            supabase.from('data_clients').select('*').catch(err => ({ data: [], error: { message: `Falha ao carregar clientes: ${err.message}` } })),
+            supabase.from('data_product_details').select('code,descricao,codfor,fornecedor,dtcadastro').catch(err => ({ data: [], error: { message: `Falha ao carregar detalhes de produtos: ${err.message}` } })),
+            supabase.from('data_innovations').select('code,description,category').catch(err => ({ data: [], error: { message: `Falha ao carregar inovações: ${err.message}` } })),
+            api.getDistinctSupervisors(supabase).catch(err => { console.warn(`Falha ao carregar supervisores: ${err.message}`); return []; }),
+            api.getDistinctFornecedores(supabase).catch(err => { console.warn(`Falha ao carregar fornecedores: ${err.message}`); return []; }),
+            api.getDistinctTiposVenda(supabase).catch(err => { console.warn(`Falha ao carregar tipos de venda: ${err.message}`); return []; }),
+            api.getDistinctRedes(supabase).catch(err => { console.warn(`Falha ao carregar redes: ${err.message}`); return []; }),
+            supabase.from('data_metadata').select('key,value').eq('key', 'last_sale_date').single().catch(err => ({ data: null, error: { message: `Falha ao carregar metadados: ${err.message}` } }))
+        ]);
+
+        // Loga avisos para quaisquer falhas, mas não interrompe a execução
+        results.forEach((result, index) => {
+            if (result && result.error) {
+                console.warn(`Aviso: A consulta de dados para o item ${index} falhou.`, result.error.message);
+            }
+        });
+
         const [
             clientsData,
             productDetailsData,
@@ -66,18 +84,9 @@ async function initializeNewDashboard(supabaseClient) {
             tiposVendaData,
             redesData,
             metadata
-        ] = await Promise.all([
-            supabase.from('data_clients').select('*'),
-            supabase.from('data_product_details').select('code,descricao,codfor,fornecedor,dtcadastro'),
-            supabase.from('data_innovations').select('code,description,category'),
-            api.getDistinctSupervisors(supabase),
-            api.getDistinctFornecedores(supabase),
-            api.getDistinctTiposVenda(supabase),
-            api.getDistinctRedes(supabase),
-            supabase.from('data_metadata').select('key,value').eq('key', 'last_sale_date').single()
-        ]);
+        ] = results;
 
-        // Assign fetched data to global variables
+        // Assign fetched data to global variables (o fallback `|| []` lida com dados ausentes)
         g_allClientsData = clientsData.data || [];
         g_productDetails = productDetailsData.data || [];
         g_innovationsCategories = innovationsData.data || [];
