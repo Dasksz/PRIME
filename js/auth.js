@@ -44,12 +44,13 @@ function initAuth() {
 
     const handleLogout = () => {
         supabaseClient.auth.signOut();
-        localStorage.removeItem('userStatus');
+        // Remove todas as chaves do localStorage que correspondem ao padrão do Supabase v2
         Object.keys(localStorage).forEach(key => {
-            if (key.startsWith('sb-')) {
+            if (key.startsWith('sb-') || key.startsWith('supabase.')) {
                 localStorage.removeItem(key);
             }
         });
+        localStorage.removeItem('userStatus'); // Remove o status do usuário em cache
         const cleanUrl = window.location.origin + window.location.pathname;
         window.location.href = cleanUrl;
     };
