@@ -30,6 +30,26 @@ function setupUploader() {
         if (e.target === modal) closeModal();
     });
 
+    // --- Toggle Password Visibility ---
+    const toggleBtn = document.getElementById('toggle-supabase-key');
+    const supabaseKeyInput = document.getElementById('supabase-key');
+    const eyeIcon = document.getElementById('eye-icon');
+    const eyeOffIcon = document.getElementById('eye-off-icon');
+
+    if (toggleBtn && supabaseKeyInput && eyeIcon && eyeOffIcon) {
+        toggleBtn.addEventListener('click', () => {
+            if (supabaseKeyInput.type === 'password') {
+                supabaseKeyInput.type = 'text';
+                eyeIcon.classList.add('hidden');
+                eyeOffIcon.classList.remove('hidden');
+            } else {
+                supabaseKeyInput.type = 'password';
+                eyeIcon.classList.remove('hidden');
+                eyeOffIcon.classList.add('hidden');
+            }
+        });
+    }
+
     // --- Worker Initialization ---
     if (window.Worker) {
         uploaderWorker = new Worker('js/worker.js');
