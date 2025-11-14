@@ -18,6 +18,71 @@ let g_lastSaleDate = null;
 const elements = {};
 
 /**
+ * Collects all active filter values from the UI for a specific view.
+ * @param {string} viewPrefix - The prefix for the view's filter elements (e.g., 'main', 'orders').
+ * @returns {object} An object containing the filter parameters for the API calls.
+ */
+function getAppliedFilters(viewPrefix) {
+    const filters = {};
+
+    // Helper to get value from a simple element (select, input)
+    const getElementValue = (id) => {
+        const element = document.getElementById(id);
+        return element ? (element.value.trim() || null) : null;
+    };
+
+    // Helper to get value from a button group (like 'Todos', 'Com Rede', 'Sem Rede')
+    const getActiveButtonValue = (containerId) => {
+        const container = document.getElementById(containerId);
+        if (!container) return null;
+        const activeButton = container.querySelector('.active');
+        return activeButton ? (activeButton.dataset.group || activeButton.dataset.fornecedor || null) : null;
+    };
+
+    // Helper for our custom multi-select dropdowns
+    const getMultiSelectValues = (dropdownId) => {
+        const dropdown = document.getElementById(dropdownId);
+        if (!dropdown) return null;
+        const selectedItems = dropdown.querySelectorAll('input[type="checkbox"]:checked');
+        if (selectedItems.length === 0) return null;
+        return Array.from(selectedItems).map(item => item.value);
+    };
+
+    // --- Map UI elements to API parameters using the prefix ---
+    filters.p_supervisor = getElementValue(`${viewPrefix}-supervisor-filter`);
+    filters.p_codcli = getElementValue(`${viewPrefix}-codcli-filter`);
+    filters.p_posicao = getElementValue(`${viewPrefix}-posicao-filter`);
+    filters.p_codfor = getElementValue(`${viewPrefix}-fornecedor-filter`);
+    filters.p_cidade = getElementValue(`${viewPrefix}-city-filter`) || getElementValue(`${viewPrefix}-name-filter`);
+    filters.p_filial = getElementValue(`${viewPrefix}-filial-filter`) || 'ambas';
+
+    // Button groups
+    filters.p_pasta = getActiveButtonValue(`${viewPrefix}-fornecedor-toggle-container`) || getActiveButtonValue('fornecedor-toggle-container');
+    filters.p_rede_group = getActiveButtonValue(`${viewPrefix}-rede-group-container`);
+
+    // Multi-select dropdowns
+    filters.p_vendedor_nomes = getMultiSelectValues(`${viewPrefix}-vendedor-filter-dropdown`);
+    filters.p_tipos_venda = getMultiSelectValues(`${viewPrefix}-tipo-venda-filter-dropdown`);
+    filters.p_redes = getMultiSelectValues(`${viewPrefix}-rede-filter-dropdown`);
+    filters.p_fornecedores = getMultiSelectValues(`${viewPrefix}-supplier-filter-dropdown`);
+    filters.p_produtos = getMultiSelectValues(`${viewPrefix}-product-list`);
+
+    // --- Clean up and set defaults ---
+    Object.keys(filters).forEach(key => {
+        const value = filters[key];
+        if (value === '' || (Array.isArray(value) && value.length === 0)) {
+            filters[key] = null;
+        }
+    });
+
+    if (!filters.p_tipos_venda) {
+        filters.p_tipos_venda = ['1', '9'];
+    }
+
+    return filters;
+}
+
+/**
  * Caches frequently accessed DOM elements to improve performance.
  */
 function cacheDOMElements() {
@@ -162,7 +227,7 @@ async function updateDashboardView() {
     ui.updateLoaderText('Atualizando dashboard...');
 
     try {
-        const filters = getFiltersForRPC('dashboard-view');
+        const filters = getAppliedFilters('main');
         const groupBy = filters.p_supervisor ? 'vendedor' : 'supervisor';
 
         const [kpiData, salesByPersonData, salesByCategoryData, topProductsData] = await Promise.all([
@@ -297,7 +362,7 @@ async function updateOrdersView() {
     ui.toggleAppLoader(true);
     ui.updateLoaderText('Carregando pedidos...');
     try {
-        const filters = getFiltersForRPC('orders-view');
+        const filters = getAppliedFilters('orders');
 
         const countResult = await api.getOrdersCount(supabase, filters);
         ordersTableState.totalItems = countResult.count || 0;
@@ -326,7 +391,7 @@ async function updateCityView() {
     ui.toggleAppLoader(true);
     ui.updateLoaderText('Analisando cidades...');
     try {
-        const filters = getFiltersForRPC('city-view');
+        const filters = getAppliedFilters('city');
         const analysisData = await api.getCityAnalysis(supabase, filters);
 
         if (!analysisData) throw new Error("A API não retornou dados.");
@@ -416,12 +481,13 @@ async function updateWeeklyView() {
     ui.toggleAppLoader(true);
     ui.updateLoaderText('Carregando análise semanal...');
     try {
-        // For this view, filters are simplified in this implementation
-        const filters = getFiltersForRPC('weekly-view');
-        const rankingData = await api.getWeeklySalesAndRankings(supabase, {
-            p_pasta: filters.p_pasta,
-            p_supervisores: filters.p_supervisor ? [filters.p_supervisor] : null
-        });
+        const filters = getAppliedFilters('weekly');
+        // The RPC function expects p_supervisores as an array
+        if (filters.p_supervisor) {
+            filters.p_supervisores = [filters.p_supervisor];
+            delete filters.p_supervisor;
+        }
+        const rankingData = await api.getWeeklySalesAndRankings(supabase, filters);
 
         if (!rankingData) throw new Error("A API não retornou dados.");
 
@@ -492,7 +558,7 @@ async function updateComparisonView() {
     ui.toggleAppLoader(true);
     ui.updateLoaderText('Carregando dados comparativos...');
     try {
-        const filters = getFiltersForRPC('comparison-view');
+        const filters = getAppliedFilters('comparison');
         const comparisonData = await api.getComparisonData(supabase, filters);
 
         if (!comparisonData) throw new Error("A API não retornou dados.");
@@ -520,7 +586,7 @@ async function updateStockView() {
     ui.toggleAppLoader(true);
     ui.updateLoaderText('Carregando análise de estoque...');
     try {
-        const filters = getFiltersForRPC('stock-view');
+        const filters = getAppliedFilters('stock');
         const stockData = await api.getStockAnalysisData(supabase, filters);
         console.log('Stock Data:', stockData);
         // Placeholder for rendering logic
@@ -539,10 +605,14 @@ async function updateInnovationsView() {
     ui.toggleAppLoader(true);
     ui.updateLoaderText('Carregando análise de inovações...');
     try {
-        const filters = getFiltersForRPC('innovations-view');
-        // This view requires product codes, which would come from a multi-select dropdown
-        // For now, we'll use a placeholder
-        filters.p_product_codes = []; // Needs real implementation
+        const filters = getAppliedFilters('innovations');
+        // The RPC expects p_product_codes, which is aliased as p_produtos in our helper
+        filters.p_product_codes = filters.p_produtos || [];
+        delete filters.p_produtos;
+
+        // Add the include_bonus checkbox value
+        const includeBonus = document.getElementById('innovations-include-bonus');
+        filters.p_include_bonus = includeBonus ? includeBonus.checked : true;
 
         if (filters.p_product_codes.length > 0) {
             const coverageData = await api.getCoverageAnalysis(supabase, filters);
@@ -560,48 +630,6 @@ async function updateInnovationsView() {
         ui.toggleAppLoader(false);
     }
 }
-
-
-/**
- * Collects the current state of filters for a specific view.
- * @param {string} viewId - The ID of the view (e.g., 'dashboard-view').
- * @returns {object} An object containing parameters formatted for RPC calls.
- */
-function getFiltersForRPC(viewId) {
-    const filters = {};
-
-    // Global filters (apply to most views)
-    const supervisorEl = document.getElementById(`${viewId.split('-')[0]}-supervisor-filter`);
-    if (supervisorEl) filters.p_supervisor = supervisorEl.value || null;
-
-    // This is a simplified example. In a real scenario, you'd get selected sellers,
-    // redes, etc., from your custom dropdown components.
-    filters.p_vendedor_nomes = null; // Placeholder
-    filters.p_rede_group = null; // Placeholder
-    filters.p_redes = null; // Placeholder
-
-    // View-specific filters
-    if (viewId === 'dashboard-view') {
-        const codcliEl = document.getElementById('codcli-filter');
-        if (codcliEl) filters.p_codcli = codcliEl.value || null;
-
-        const posicaoEl = document.getElementById('posicao-filter');
-        if (posicaoEl) filters.p_posicao = posicaoEl.value || null;
-
-        // This would read from the Pepsico/Multimarcas toggle
-        filters.p_pasta = document.querySelector('#fornecedor-toggle-container .fornecedor-btn.active')?.dataset.fornecedor || null;
-    }
-
-    // Add other view-specific filter logic here...
-    // if (viewId === 'orders-view') { ... }
-
-    // Default filters that might apply to many RPCs
-    filters.p_tipos_venda = ['1', '9']; // Default to always include these types
-    filters.p_filial = 'ambas'; // Default value
-
-    return filters;
-}
-
 
 /**
  * Sets up all global event listeners for the application.
