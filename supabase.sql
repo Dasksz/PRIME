@@ -1,8 +1,7 @@
 -- =================================================================
--- SCRIPT SQL UNIFICADO V2.3 - PRIME (CORREÇÃO)
--- OBJETIVO: Corrigir o erro 42601 (syntax error at or near "UNION")
---           na função 'get_stock_analysis_data', especificando
---           os tipos de dados das colunas NULL (ex: NULL::date).
+-- SCRIPT SQL UNIFICADO V2.4 - PRIME (CORREÇÃO GERAL)
+-- OBJETIVO: Corrigir erros de tipo de dados nas funções RPC e
+--           adicionar índice de performance para a tabela de perfis.
 -- =================================================================
 -- ETAPA 1: POLÍTICAS DE SEGURANÇA (RLS) - (Inalterado)
 -- 1.1: Função Auxiliar de Segurança
@@ -10,7 +9,7 @@ create or replace function public.is_caller_approved () RETURNS boolean LANGUAGE
 set
   search_path = public as $$
   SELECT EXISTS (
-    SELECT 1 FROM profiles 
+    SELECT 1 FROM profiles
     WHERE id = (SELECT auth.uid()) AND status = 'aprovado'
   );
 $$;
@@ -20,17 +19,17 @@ do $$
 DECLARE
     tbl_name TEXT;
 BEGIN
-    FOR tbl_name IN 
-        SELECT table_name 
-        FROM information_schema.tables 
+    FOR tbl_name IN
+        SELECT table_name
+        FROM information_schema.tables
         WHERE table_schema = 'public' AND table_name LIKE 'data_%'
     LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', tbl_name);
-        
+
         EXECUTE format('
             DROP POLICY IF EXISTS "Permitir acesso total para service_role ou aprovados" ON public.%I;
             CREATE POLICY "Permitir acesso total para service_role ou aprovados" ON public.%I
-            FOR ALL 
+            FOR ALL
             USING (
               ((SELECT auth.role()) = ''service_role'') OR (public.is_caller_approved())
             )
@@ -43,132 +42,95 @@ END $$;
 
 -- 1.3: Políticas RLS para Perfis (Profiles)
 alter table public.profiles ENABLE row LEVEL SECURITY;
-
 drop policy IF exists "Perfis: Usuários autenticados podem ver o próprio perfil" on public.profiles;
-
 drop policy IF exists "Perfis: Usuários autenticados podem criar o próprio perfil" on public.profiles;
-
 drop policy IF exists "Perfis: Usuários autenticados podem atualizar o próprio perfil" on public.profiles;
-
 create policy "Perfis: Usuários autenticados podem ver o próprio perfil" on public.profiles for
 select
-  using (
-    (
-      select
-        auth.uid ()
-    ) = id
+  using ( (
+    select
+      auth.uid ()
+  ) = id
   );
-
 create policy "Perfis: Usuários autenticados podem criar o próprio perfil" on public.profiles for INSERT
 with
-  check (
-    (
-      select
-        auth.uid ()
-    ) = id
+  check ( (
+    select
+      auth.uid ()
+  ) = id
   );
-
 create policy "Perfis: Usuários autenticados podem atualizar o próprio perfil" on public.profiles
 for update
-  using (
-    (
-      select
-        auth.uid ()
-    ) = id
+  using ( (
+    select
+      auth.uid ()
+  ) = id
   )
 with
-  check (
-    (
-      select
-        auth.uid ()
-    ) = id
+  check ( (
+    select
+      auth.uid ()
+  ) = id
   );
 
 -- =================================================================
--- ETAPA 2: ÍNDICES (INDEXES) - (Inalterado)
+-- ETAPA 2: ÍNDICES (INDEXES) - (Índice de Perfis Adicionado)
 -- =================================================================
 -- 2.1: Índices para data_detailed
 create index IF not exists idx_detailed_dtped on public.data_detailed (dtped);
-
 create index IF not exists idx_detailed_superv on public.data_detailed (superv);
-
 create index IF not exists idx_detailed_codusur on public.data_detailed (codusur);
-
 create index IF not exists idx_detailed_nome on public.data_detailed (nome);
-
 create index IF not exists idx_detailed_codcli on public.data_detailed (codcli);
-
 create index IF not exists idx_detailed_cidade on public.data_detailed (cidade);
-
 create index IF not exists idx_detailed_observacaofor on public.data_detailed (observacaofor);
-
 create index IF not exists idx_detailed_codfor on public.data_detailed (codfor);
-
 create index IF not exists idx_detailed_produto on public.data_detailed (produto);
-
 create index IF not exists idx_detailed_posicao on public.data_detailed (posicao);
-
 create index IF not exists idx_detailed_tipovenda on public.data_detailed (tipovenda);
-
 create index IF not exists idx_detailed_filial on public.data_detailed (filial);
 
 -- 2.2: Índices para data_history
 create index IF not exists idx_history_dtped on public.data_history (dtped);
-
 create index IF not exists idx_history_superv on public.data_history (superv);
-
 create index IF not exists idx_history_codusur on public.data_history (codusur);
-
 create index IF not exists idx_history_nome on public.data_history (nome);
-
 create index IF not exists idx_history_codcli on public.data_history (codcli);
-
 create index IF not exists idx_history_cidade on public.data_history (cidade);
-
 create index IF not exists idx_history_observacaofor on public.data_history (observacaofor);
-
 create index IF not exists idx_history_codfor on public.data_history (codfor);
-
 create index IF not exists idx_history_produto on public.data_history (produto);
-
 create index IF not exists idx_history_filial on public.data_history (filial);
 
 -- 2.3: Índices para data_clients
 create index IF not exists idx_clients_ramo on public.data_clients (ramo);
-
 create index IF not exists idx_clients_rca1 on public.data_clients (rca1);
-
 create index IF not exists idx_clients_cidade on public.data_clients (cidade);
-
 create index IF not exists idx_clients_codigo_cliente on public.data_clients (codigo_cliente);
 
 -- 2.4: Índices para data_orders
 create index IF not exists idx_orders_dtped on public.data_orders (dtped);
-
 create index IF not exists idx_orders_superv on public.data_orders (superv);
-
 create index IF not exists idx_orders_nome on public.data_orders (nome);
-
 create index IF not exists idx_orders_codcli on public.data_orders (codcli);
-
 create index IF not exists idx_orders_posicao on public.data_orders (posicao);
-
 create index IF not exists idx_orders_codfors_list on public.data_orders using GIN (codfors_list);
-
 create index IF not exists idx_orders_fornecedores_list on public.data_orders using GIN (fornecedores_list);
 
 -- 2.5: Índices para data_product_details
 create index IF not exists idx_product_details_code on public.data_product_details (code);
-
 create index IF not exists idx_product_details_codfor on public.data_product_details (codfor);
 
 -- 2.6: Índice para data_stock
 create index IF not exists idx_stock_product_code on public.data_stock (product_code);
-
 create index IF not exists idx_stock_filial on public.data_stock (filial);
 
+-- 2.7: Índice para profiles (NOVO)
+create index IF not exists profiles_id_idx on public.profiles (id);
+
+
 -- =================================================================
--- ETAPA 3: FUNÇÕES DE CÁLCULO (RPC) - (Função 3.9 Corrigida)
+-- ETAPA 3: FUNÇÕES DE CÁLCULO (RPC) - (Funções Corrigidas)
 -- =================================================================
 -- 3.0: Função Auxiliar de Filtro de Cliente (BASE) - (Inalterado)
 create or replace function get_filtered_client_base (
@@ -203,7 +165,7 @@ BEGIN
     WHERE
         (p_rede_group IS NULL OR
          (p_rede_group = 'sem_rede' AND (c.ramo IS NULL OR c.ramo = 'N/A')) OR
-         (p_rede_group = 'com_rede' AND (c.ramo IS NOT NULL AND c.ramo != 'N/A') AND 
+         (p_rede_group = 'com_rede' AND (c.ramo IS NOT NULL AND c.ramo != 'N/A') AND
             (p_redes IS NULL OR c.ramo = ANY(p_redes)))
         )
     AND (p_supervisor IS NULL OR c.rca1 IN (
@@ -222,7 +184,7 @@ BEGIN
 END;
 $$;
 
--- 3.1: KPIs Principais (Inalterado)
+-- 3.1: KPIs Principais (CORRIGIDO)
 create or replace function get_main_kpis (
   p_pasta TEXT default null,
   p_supervisor TEXT default null,
@@ -274,8 +236,8 @@ BEGIN
         )
     )
     SELECT
-        COALESCE(SUM(v.vlvenda), 0) AS total_faturamento,
-        COALESCE(SUM(v.totpesoliq), 0) AS total_peso,
+        COALESCE(SUM(v.vlvenda), 0::numeric) AS total_faturamento,
+        COALESCE(SUM(v.totpesoliq), 0::numeric) AS total_peso,
         COUNT(DISTINCT v.produto) AS total_skus,
         COUNT(DISTINCT v.codcli) AS total_pdvs_positivados,
         v_base_clientes_count AS base_clientes_filtro
@@ -340,7 +302,6 @@ BEGIN
 END;
 $$;
 
--- 3.3: Top Produtos (Inalterado)
 -- 3.3: Top Produtos (CORRIGIDO)
 create or replace function get_top_products (
   p_metric TEXT,
@@ -372,7 +333,7 @@ BEGIN
         SELECT * FROM get_filtered_client_base(p_supervisor, p_vendedor_nomes, p_rede_group, p_redes, p_cidade, p_codcli, p_filial)
     )
     SELECT
-        v.produto AS codigo_produto,
+        v.produto::text AS codigo_produto,
         pd.descricao AS descricao_produto,
         COALESCE(SUM(
             CASE
@@ -491,7 +452,7 @@ BEGIN
     AND (p_cidade IS NULL OR o.cidade = p_cidade)
     AND (p_filial = 'ambas' OR p_filial IS NULL OR o.filial = p_filial)
     AND (p_rede_group IS NULL AND p_supervisor IS NULL AND p_vendedor_nomes IS NULL AND p_cidade IS NULL AND p_codcli IS NULL) OR o.codcli IN (SELECT codigo_cliente FROM ClientBase);
-    
+
     RETURN total_count;
 END;
 $$;
@@ -574,7 +535,7 @@ BEGIN
         END AS status_cliente
     FROM ClientBase AS c
     LEFT JOIN SalesThisMonth AS s ON c.codigo_cliente = s.codcli
-    WHERE 
+    WHERE
       c.bloqueio != 'S' AND c.rca1 != '53';
 END;
 $$;
@@ -602,7 +563,7 @@ BEGIN
     WITH VendasFiltradas AS (
         SELECT
             vlvenda, superv, nome, codcli, produto, codfor,
-            EXTRACT(ISODOW FROM dtped) AS dia_semana, 
+            EXTRACT(ISODOW FROM dtped) AS dia_semana,
             (date_part('day', dtped - date_trunc('month', dtped)) / 7 + 1)::int AS semana_mes
         FROM public.data_detailed
         WHERE dtped >= v_current_month
@@ -743,7 +704,7 @@ BEGIN
 END;
 $$;
 
--- 3.9: Função para o Ecrã 'stock-view' - (*** ESTA É A FUNÇÃO CORRIGIDA ***)
+-- 3.9: Função para o Ecrã 'stock-view' - (Inalterado)
 create or replace function get_stock_analysis_data (
   p_pasta TEXT default null,
   p_supervisor TEXT default null,
@@ -783,7 +744,7 @@ BEGIN
         UNION
         SELECT DISTINCT product_code FROM public.data_stock WHERE (p_produtos IS NULL OR product_code = ANY(p_produtos))
     )
-    -- 1. Bloco de Vendas (CORRIGIDO: Filtros movidos para dentro do UNION)
+    -- 1. Bloco de Vendas
     SELECT
         'sale' AS origem,
         v.produto,
@@ -793,18 +754,18 @@ BEGIN
     FROM (
         SELECT produto, dtped, qtvenda_embalagem_master, codcli, codfor, filial, observacaofor
         FROM public.data_detailed
-        WHERE 
+        WHERE
             produto IN (SELECT produto FROM ProductBase)
         AND (p_pasta IS NULL OR observacaofor = p_pasta)
         AND codcli IN (SELECT codigo_cliente FROM ClientBase)
         AND (p_fornecedores IS NULL OR codfor = ANY(p_fornecedores))
         AND (p_filial = 'ambas' OR p_filial IS NULL OR filial = p_filial)
-        
+
         UNION ALL
-        
+
         SELECT produto, dtped, qtvenda_embalagem_master, codcli, codfor, filial, observacaofor
         FROM public.data_history
-        WHERE 
+        WHERE
             produto IN (SELECT produto FROM ProductBase)
         AND (p_pasta IS NULL OR observacaofor = p_pasta)
         AND codcli IN (SELECT codigo_cliente FROM ClientBase)
@@ -814,7 +775,7 @@ BEGIN
 
     UNION ALL
 
-    -- 2. Bloco de Estoque (CORRIGIDO com tipos de dados)
+    -- 2. Bloco de Estoque
     SELECT
         'stock' AS origem,
         s.product_code,
@@ -829,10 +790,10 @@ BEGIN
     WHERE
         s.product_code IN (SELECT produto FROM ProductBase)
     AND (p_filial = 'ambas' OR p_filial IS NULL OR s.filial = p_filial)
-    
+
     UNION ALL
 
-    -- 3. Bloco de Detalhes do Produto (CORRIGIDO com tipos de dados)
+    -- 3. Bloco de Detalhes do Produto
     SELECT
         'product' AS origem,
         p.code,
@@ -929,7 +890,7 @@ BEGIN
         SELECT produto, COUNT(DISTINCT codcli) AS pdvs
         FROM PreviousSales GROUP BY produto
     ) AS prev ON p.produto = prev.produto;
-    
+
 END;
 $$;
 
@@ -944,34 +905,34 @@ $$;
 create or replace function get_distinct_vendedores (p_supervisor TEXT default null) RETURNS table (nome TEXT) LANGUAGE SQL SECURITY DEFINER
 set
   search_path = public as $$
-    SELECT DISTINCT nome FROM public.data_detailed 
+    SELECT DISTINCT nome FROM public.data_detailed
     WHERE nome IS NOT NULL AND (p_supervisor IS NULL OR superv = p_supervisor)
-    UNION SELECT DISTINCT nome FROM public.data_history 
+    UNION SELECT DISTINCT nome FROM public.data_history
     WHERE nome IS NOT NULL AND (p_supervisor IS NULL OR superv = p_supervisor) ORDER BY 1;
 $$;
 
 create or replace function get_distinct_fornecedores () RETURNS table (codfor TEXT, fornecedor TEXT) LANGUAGE SQL SECURITY DEFINER
 set
   search_path = public as $$
-    SELECT DISTINCT codfor, fornecedor FROM public.data_detailed 
+    SELECT DISTINCT codfor, fornecedor FROM public.data_detailed
     WHERE codfor IS NOT NULL AND fornecedor IS NOT NULL
-    UNION SELECT DISTINCT codfor, fornecedor FROM public.data_history 
+    UNION SELECT DISTINCT codfor, fornecedor FROM public.data_history
     WHERE codfor IS NOT NULL AND fornecedor IS NOT NULL ORDER BY 2;
 $$;
 
 create or replace function get_distinct_tipos_venda () RETURNS table (tipovenda TEXT) LANGUAGE SQL SECURITY DEFINER
 set
   search_path = public as $$
-    SELECT DISTINCT tipovenda FROM public.data_detailed 
+    SELECT DISTINCT tipovenda FROM public.data_detailed
     WHERE tipovenda IS NOT NULL
-    UNION SELECT DISTINCT tipovenda FROM public.data_history 
+    UNION SELECT DISTINCT tipovenda FROM public.data_history
     WHERE tipovenda IS NOT NULL ORDER BY 1;
 $$;
 
 create or replace function get_distinct_redes () RETURNS table (ramo TEXT) LANGUAGE SQL SECURITY DEFINER
 set
   search_path = public as $$
-    SELECT DISTINCT ramo FROM public.data_clients 
+    SELECT DISTINCT ramo FROM public.data_clients
     WHERE ramo IS NOT NULL AND ramo != 'N/A'
     ORDER BY 1;
 $$;
