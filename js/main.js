@@ -69,7 +69,7 @@ async function initializeNewDashboard(supabaseClient) {
         ] = await Promise.all([
             supabase.from('data_clients').select('*'),
             supabase.from('data_product_details').select('code,descricao,codfor,fornecedor,dtcadastro'),
-            supabase.from('data_innovations').select('code,description,category'),
+            supabase.from('data_innovations').select('codigo, produto, inovacoes'),
             api.getDistinctSupervisors(supabase),
             api.getDistinctFornecedores(supabase),
             api.getDistinctTiposVenda(supabase),
