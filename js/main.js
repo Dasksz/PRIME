@@ -12,7 +12,6 @@ let g_tiposVenda = [];
 let g_redes = [];
 let g_allClientsData = [];
 let g_productDetails = [];
-let g_innovationsCategories = [];
 let g_lastSaleDate = null;
 
 // --- DOM Element Cache ---
@@ -91,7 +90,6 @@ async function initializeNewDashboard(supabaseClient) {
         const [
             clientsData,
             productDetailsData,
-            innovationsData,
             supervisorsData,
             fornecedoresData,
             tiposVendaData,
@@ -100,7 +98,6 @@ async function initializeNewDashboard(supabaseClient) {
         ] = await Promise.all([
             fetchData(supabase.from('data_clients').select('*')),
             fetchData(supabase.from('data_product_details').select('code,descricao,codfor,fornecedor,dtcadastro')),
-            fetchData(supabase.from('data_innovations').select('code,description,category')), // Esta irá falhar graciosamente
             fetchRpc(api.getDistinctSupervisors(supabase)),
             fetchRpc(api.getDistinctFornecedores(supabase)),
             fetchRpc(api.getDistinctTiposVenda(supabase)),
@@ -111,7 +108,6 @@ async function initializeNewDashboard(supabaseClient) {
         // Atribui os dados às variáveis globais
         g_allClientsData = clientsData;
         g_productDetails = productDetailsData;
-        g_innovationsCategories = innovationsData;
         g_supervisors = supervisorsData;
         g_fornecedores = fornecedoresData;
         g_tiposVenda = tiposVendaData;
