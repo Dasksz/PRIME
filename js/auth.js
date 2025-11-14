@@ -1,30 +1,194 @@
-document.addEventListener('DOMContentLoaded', () => {
+// js/auth.js
+
+function initAuth() {
+    const SUPABASE_URL = 'https://dhozwhfmrwiumwpcqabi.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRob3p3aGZtcndpdW13cGNxYWJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyNjMzNjAsImV4cCI6MjA3NzgzOTM2MH0.syWqcBCbfH5Ey5AB4NGrsF2-ZuBw4W3NZAPIAZb6Bq4';
+
     const { createClient } = supabase;
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    supabaseClient.auth.onAuthStateChange(async (event, session) => {
-        const telaLogin = document.getElementById('tela-login');
-        const loader = document.getElementById('loader');
+    // --- DOM Elements ---
+    const telaLogin = document.getElementById('tela-login');
+    const telaLoading = document.getElementById('tela-loading');
+    const telaPendente = document.getElementById('tela-pendente');
+    const loginButton = document.getElementById('login-button');
 
-        if (session) {
-            const { data: profile } = await supabaseClient
+    // --- State Variables ---
+    let dashboardInitialized = false;
+    let isHandlingAuth = false;
+    let profilesListener = null;
+    let pollingInterval = null;
+
+    // --- UI Functions ---
+    const showScreen = (screenId) => {
+        // Hide all screens first, then show the target one
+        [telaLogin, telaLoading, telaPendente].forEach(el => el?.classList.add('hidden'));
+        if (screenId) {
+            const screen = document.getElementById(screenId);
+            screen?.classList.remove('hidden');
+        }
+    };
+
+    // --- Authentication Logic ---
+    const handleLogin = async () => {
+        const { error } = await supabaseClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: window.location.href }
+        });
+        if (error) console.error('Erro no login:', error);
+    };
+
+    const handleLogout = () => {
+        supabaseClient.auth.signOut();
+        localStorage.removeItem('userStatus');
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('sb-')) {
+                localStorage.removeItem(key);
+            }
+        });
+        const cleanUrl = window.location.origin + window.location.pathname;
+        window.location.href = cleanUrl;
+    };
+
+    // --- Realtime & Polling for Pending Status ---
+    const stopProfilesListener = () => {
+        if (profilesListener) {
+            supabaseClient.removeChannel(profilesListener);
+            profilesListener = null;
+        }
+        if (pollingInterval) {
+            clearInterval(pollingInterval);
+            pollingInterval = null;
+        }
+    };
+
+    const startPendingStatusPolling = (userId, onApproval) => {
+        if (pollingInterval) clearInterval(pollingInterval);
+        pollingInterval = setInterval(async () => {
+            const { data: profile, error } = await supabaseClient
                 .from('profiles')
                 .select('status')
-                .eq('id', session.user.id)
+                .eq('id', userId)
                 .single();
-
             if (profile && profile.status === 'aprovado') {
-                telaLogin.classList.add('hidden');
-                loader.classList.remove('hidden');
+                stopProfilesListener();
+                onApproval();
+            }
+        }, 30000);
+    };
 
-                // A função já está disponível globalmente por causa do index.html
-                await initializeNewDashboard(supabaseClient);
+    const startProfilesRealtimeListener = (userId, onApproval) => {
+        stopProfilesListener();
+        profilesListener = supabaseClient
+            .channel(`profiles:id=eq.${userId}`)
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'profiles',
+                filter: `id=eq.${userId}`
+            }, (payload) => {
+                if (payload.new?.status === 'aprovado') {
+                    stopProfilesListener();
+                    onApproval();
+                }
+            })
+            .subscribe((status, err) => {
+                if (status === 'SUBSCRIBED' && pollingInterval) {
+                    clearInterval(pollingInterval);
+                    pollingInterval = null;
+                }
+                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || err) {
+                    startPendingStatusPolling(userId, onApproval);
+                }
+            });
+    };
 
-            } else {
-                // Lógica para status pendente ou não encontrado
+    // --- Main Auth Flow ---
+    supabaseClient.auth.onAuthStateChange(async (event, session) => {
+        if (isHandlingAuth) return;
+        isHandlingAuth = true;
+
+        if (event === 'SIGNED_OUT') {
+            localStorage.removeItem('userStatus');
+            dashboardInitialized = false;
+            stopProfilesListener();
+            showScreen('tela-login');
+            isHandlingAuth = false;
+            return;
+        }
+
+        if (session) {
+            const cachedStatus = localStorage.getItem('userStatus');
+            if (cachedStatus === 'aprovado' && !dashboardInitialized) {
+                dashboardInitialized = true;
+                showScreen(null); // Hide all auth screens
+                if (typeof initializeNewDashboard === 'function') {
+                    await initializeNewDashboard(supabaseClient);
+                } else {
+                    console.error("Erro: initializeNewDashboard() não encontrada.");
+                }
+                isHandlingAuth = false;
+                return;
+            }
+
+            if (!dashboardInitialized) {
+                showScreen('tela-loading');
+                let attempt = 0;
+                while (attempt < 3) {
+                    try {
+                        const { data: profile, error } = await supabaseClient
+                            .from('profiles')
+                            .select('status')
+                            .eq('id', session.user.id)
+                            .single();
+
+                        if (error && error.code !== 'PGRST116') throw error;
+
+                        if (profile?.status === 'aprovado') {
+                            localStorage.setItem('userStatus', 'aprovado');
+                            dashboardInitialized = true;
+                            showScreen(null); // Hide all auth screens
+                            if (typeof initializeNewDashboard === 'function') {
+                                await initializeNewDashboard(supabaseClient);
+                            }
+                            isHandlingAuth = false;
+                            return;
+                        }
+
+                        if (profile?.status === 'pendente') {
+                            localStorage.setItem('userStatus', 'pendente');
+                            showScreen('tela-pendente');
+                            startProfilesRealtimeListener(session.user.id, () => {
+                                if (!dashboardInitialized) {
+                                    localStorage.setItem('userStatus', 'aprovado');
+                                    window.location.reload(true);
+                                }
+                            });
+                            isHandlingAuth = false;
+                            return;
+                        }
+                    } catch (e) {
+                        console.error(`Tentativa ${attempt + 1} falhou:`, e.message);
+                    }
+                    attempt++;
+                    if (attempt < 3) await new Promise(res => setTimeout(res, 1000));
+                }
+                console.error("Não foi possível obter o perfil do usuário após 3 tentativas. Deslogando.");
+                handleLogout();
+
             }
         } else {
-            telaLogin.classList.remove('hidden');
+            // No session, ensure login screen is visible
+            showScreen('tela-login');
+        }
+        isHandlingAuth = false;
+    });
+
+    // --- Event Listeners ---
+    loginButton?.addEventListener('click', handleLogin);
+    document.body.addEventListener('click', (event) => {
+        if (event.target.matches('button.logout')) {
+            handleLogout();
         }
     });
-});
+}
