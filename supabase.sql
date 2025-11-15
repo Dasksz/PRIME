@@ -487,9 +487,9 @@ BEGIN
         RAISE EXCEPTION 'Acesso não autorizado';
     END IF;
     RETURN QUERY
-        SELECT superv FROM data_detailed WHERE superv IS NOT NULL
+        SELECT d.superv FROM data_detailed d WHERE d.superv IS NOT NULL
         UNION
-        SELECT superv FROM data_history WHERE superv IS NOT NULL
+        SELECT h.superv FROM data_history h WHERE h.superv IS NOT NULL
         ORDER BY 1;
 END;
 $$;
@@ -534,9 +534,9 @@ BEGIN
         RAISE EXCEPTION 'Acesso não autorizado';
     END IF;
     RETURN QUERY
-        SELECT tipovenda FROM data_detailed WHERE tipovenda IS NOT NULL
+        SELECT d.tipovenda FROM data_detailed d WHERE d.tipovenda IS NOT NULL
         UNION
-        SELECT tipovenda FROM data_history WHERE tipovenda IS NOT NULL
+        SELECT h.tipovenda FROM data_history h WHERE h.tipovenda IS NOT NULL
         ORDER BY 1;
 END;
 $$;
