@@ -1,15 +1,29 @@
 -- =================================================================
--- SCRIPT SQL UNIFICADO V2.7 - PRIME (CORREÇÃO DE SEGURANÇA E RLS)
--- OBJETIVO: Adicionar a função de verificação `is_caller_approved` e
---           as políticas de RLS para corrigir o erro 401 (Não Autorizado).
+-- SCRIPT SQL UNIFICADO V2.8 - PRIME (CORREÇÃO DE SCRIPT RE-EXECUTÁVEL)
+-- OBJETIVO: Adicionar comandos `DROP FUNCTION` para todas as funções
+--           para permitir que o script seja executado múltiplas vezes
+--           sem causar erros de alteração de tipo de retorno.
 -- =================================================================
 
 -- ETAPA 1: APAGAR FUNÇÕES ANTIGAS (DROP)
--- Adicionado para permitir a alteração do tipo de retorno (RETURNS TABLE).
-
+-- Esta seção garante que as versões antigas das funções sejam removidas antes de criar as novas.
+DROP FUNCTION IF EXISTS public.is_caller_approved();
+DROP FUNCTION IF EXISTS get_filtered_client_base(text, text[], text, text[], text, text, text);
 DROP FUNCTION IF EXISTS get_main_kpis(text,text,text[],text,text,text,text[],text,text[],text,text);
 DROP FUNCTION IF EXISTS get_top_products(text,text,text,text[],text,text,text,text[],text,text[],text,text);
 DROP FUNCTION IF EXISTS get_orders_count(text,text,text[],text,text,text,text[],text,text[],text,text);
+DROP FUNCTION IF EXISTS get_city_analysis(text,text[],text,text[],text,text);
+DROP FUNCTION IF EXISTS public.get_weekly_sales_and_rankings(text,text[]);
+DROP FUNCTION IF EXISTS public.get_distinct_supervisors();
+DROP FUNCTION IF EXISTS public.get_distinct_vendedores(text);
+DROP FUNCTION IF EXISTS public.get_distinct_fornecedores();
+DROP FUNCTION IF EXISTS public.get_distinct_tipos_venda();
+DROP FUNCTION IF EXISTS public.get_distinct_redes();
+DROP FUNCTION IF EXISTS public.get_paginated_orders(integer,integer,text,text,text[],text,text,text,text[],text,text[],text,text);
+DROP FUNCTION IF EXISTS public.get_comparison_data(text,text,text[],text[],text[],text,text[],text,text);
+DROP FUNCTION IF EXISTS public.get_stock_analysis_data(text,text,text[],text[],text[],text,text);
+DROP FUNCTION IF EXISTS public.get_coverage_analysis(text,text[],text[],text,text,text[],boolean);
+
 
 -- =================================================================
 -- ETAPA 2: FUNÇÕES E POLÍTICAS DE SEGURANÇA (RLS)
@@ -758,3 +772,6 @@ GRANT EXECUTE ON FUNCTION public.get_weekly_sales_and_rankings(text,text[]) TO a
 GRANT EXECUTE ON FUNCTION public.get_comparison_data(text,text,text[],text[],text[],text,text[],text,text) TO anon;
 GRANT EXECUTE ON FUNCTION public.get_stock_analysis_data(text,text,text[],text[],text[],text,text) TO anon;
 GRANT EXECUTE ON FUNCTION public.get_coverage_analysis(text,text[],text[],text,text,text[],boolean) TO anon;
+
+-- ETAPA FINAL: Forçar o Supabase a recarregar o esquema
+NOTIFY pgrst, 'reload schema';
