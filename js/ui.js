@@ -71,6 +71,53 @@ const ui = {
         });
     },
 
+    /**
+     * Populates a custom multi-select dropdown with checkboxes.
+     * @param {string} containerId - The ID of the div that will contain the checkbox items.
+     * @param {Array<object>} data - The array of data objects.
+     * @param {string} valueField - The property name for the checkbox value.
+     * @param {string} textField - The property name for the checkbox label text.
+     */
+    populateMultiSelectDropdown(containerId, data, valueField, textField) {
+        const container = document.getElementById(containerId);
+        if (!container) {
+            console.warn(`Multi-select container #${containerId} not found.`);
+            return;
+        }
+        container.innerHTML = ''; // Limpa antes de popular
+
+        // Adiciona a opção "Selecionar Todos"
+        const selectAllContainer = document.createElement('div');
+        selectAllContainer.className = 'p-2 border-b border-gray-200';
+        selectAllContainer.innerHTML = `
+            <label class="flex items-center space-x-2 cursor-pointer">
+                <input type="checkbox" class="form-checkbox h-4 w-4 text-teal-600 rounded select-all-checkbox">
+                <span class="text-sm font-medium">Selecionar Todos</span>
+            </label>`;
+        container.appendChild(selectAllContainer);
+
+        const listContainer = document.createElement('div');
+        listContainer.className = 'max-h-60 overflow-y-auto';
+
+        data.forEach(item => {
+            const itemElement = document.createElement('div');
+            itemElement.className = 'p-2 hover:bg-gray-100';
+            itemElement.innerHTML = `
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <input type="checkbox" class="form-checkbox h-4 w-4 text-teal-600 rounded item-checkbox" value="${item[valueField]}">
+                    <span class="text-sm">${item[textField]}</span>
+                </label>`;
+            listContainer.appendChild(itemElement);
+        });
+        container.appendChild(listContainer);
+
+        // Adiciona o botão Limpar
+        const clearButtonContainer = document.createElement('div');
+        clearButtonContainer.className = 'p-2 border-t border-gray-200 text-right';
+        clearButtonContainer.innerHTML = '<button class="text-sm text-teal-600 hover:underline clear-multiselect-btn">Limpar</button>';
+        container.appendChild(clearButtonContainer);
+    },
+
     // --- Chart Management ---
 
     /**
