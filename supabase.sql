@@ -1,50 +1,12 @@
 -- =================================================================
--- SCRIPT SQL UNIFICADO V2.7 - PRIME (CORREÇÃO DE SEGURANÇA E RLS)
--- OBJETIVO: Adicionar a função de verificação `is_caller_approved` e
---           as políticas de RLS para corrigir o erro 401 (Não Autorizado).
+-- SCRIPT SQL UNIFICADO V2.9 - PRIME (CORREÇÃO DE DEPENDÊNCIA DE RLS)
+-- OBJETIVO: Reordenar os comandos DROP para remover as políticas de RLS
+--           antes de remover as funções das quais elas dependem,
+--           resolvendo o erro de dependência.
 -- =================================================================
 
--- ETAPA 1: APAGAR FUNÇÕES ANTIGAS (DROP)
--- Adicionado para permitir a alteração do tipo de retorno (RETURNS TABLE).
-
-DROP FUNCTION IF EXISTS get_main_kpis(text,text,text[],text,text,text,text[],text,text[],text,text);
-DROP FUNCTION IF EXISTS get_top_products(text,text,text,text[],text,text,text,text[],text,text[],text,text);
-DROP FUNCTION IF EXISTS get_orders_count(text,text,text[],text,text,text,text[],text,text[],text,text);
-
--- =================================================================
--- ETAPA 2: FUNÇÕES E POLÍTICAS DE SEGURANÇA (RLS)
--- =================================================================
-
--- 2.1: Função de Verificação de Acesso
--- Esta função verifica se o usuário que está fazendo a chamada tem o status 'aprovado'.
-create or replace function public.is_caller_approved()
-returns boolean
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  -- Retorna true se o usuário autenticado (auth.uid()) existir na tabela de perfis
-  -- e tiver o status 'aprovado'.
-  return exists (
-    select 1
-    from public.profiles
-    where id = auth.uid() and status = 'aprovado'
-  );
-end;
-$$;
-
--- 2.2: Habilitação do Row Level Security (RLS)
--- Ativa a aplicação de políticas de segurança para cada tabela.
-alter table public.data_clients enable row level security;
-alter table public.data_detailed enable row level security;
-alter table public.data_history enable row level security;
-alter table public.data_metadata enable row level security;
-alter table public.data_orders enable row level security;
-alter table public.data_product_details enable row level security;
-alter table public.profiles enable row level security;
-
--- 2.3: Remoção de Políticas Antigas (para evitar duplicatas)
+-- ETAPA 1: REMOÇÃO DE POLÍTICAS DE ACESSO (RLS)
+-- Removemos TODAS as políticas primeiro para quebrar as dependências com as funções.
 DROP POLICY IF EXISTS "Permitir acesso de leitura para usuários aprovados" ON public.data_clients;
 DROP POLICY IF EXISTS "Permitir acesso de leitura para usuários aprovados" ON public.data_detailed;
 DROP POLICY IF EXISTS "Permitir acesso de leitura para usuários aprovados" ON public.data_history;
@@ -53,28 +15,87 @@ DROP POLICY IF EXISTS "Permitir acesso de leitura para usuários aprovados" ON p
 DROP POLICY IF EXISTS "Permitir acesso de leitura para usuários aprovados" ON public.data_product_details;
 DROP POLICY IF EXISTS "Permitir que usuários leiam seu próprio perfil" ON public.profiles;
 DROP POLICY IF EXISTS "Permitir que usuários aprovados leiam todos os perfis" ON public.profiles;
+-- Políticas adicionais encontradas no log de erro do usuário para maior robustez
+DROP POLICY IF EXISTS "Permitir acesso total para service_role ou aprovados" ON public.data_active_products;
+DROP POLICY IF EXISTS "Permitir acesso total para service_role ou aprovados" ON public.data_clients;
+DROP POLICY IF EXISTS "Permitir acesso total para service_role ou aprovados" ON public.data_detailed;
+DROP POLICY IF EXISTS "Permitir acesso total para service_role ou aprovados" ON public.data_history;
+DROP POLICY IF EXISTS "Permitir acesso total para service_role ou aprovados" ON public.data_innovations;
+DROP POLICY IF EXISTS "Permitir acesso total para service_role ou aprovados" ON public.data_metadata;
+DROP POLICY IF EXISTS "Permitir acesso total para service_role ou aprovados" ON public.data_orders;
+DROP POLICY IF EXISTS "Permitir acesso total para service_role ou aprovados" ON public.data_product_details;
+DROP POLICY IF EXISTS "Permitir acesso total para service_role ou aprovados" ON public.data_stock;
 
--- 2.4: Criação das Políticas de Acesso (Policies)
--- Define as regras: apenas usuários aprovados podem ler (SELECT) os dados.
+
+-- ETAPA 2: APAGAR FUNÇÕES ANTIGAS (DROP)
+-- Agora que as políticas foram removidas, as funções podem ser removidas sem erros.
+DROP FUNCTION IF EXISTS public.is_caller_approved();
+DROP FUNCTION IF EXISTS get_filtered_client_base(text, text[], text, text[], text, text, text);
+DROP FUNCTION IF EXISTS get_main_kpis(text,text,text[],text,text,text,text[],text,text[],text,text);
+DROP FUNCTION IF EXISTS get_top_products(text,text,text,text[],text,text,text,text[],text,text[],text,text);
+DROP FUNCTION IF EXISTS get_orders_count(text,text,text[],text,text,text,text[],text,text[],text,text);
+DROP FUNCTION IF EXISTS get_city_analysis(text,text[],text,text[],text,text);
+DROP FUNCTION IF EXISTS public.get_weekly_sales_and_rankings(text,text[]);
+DROP FUNCTION IF EXISTS public.get_distinct_supervisors();
+DROP FUNCTION IF EXISTS public.get_distinct_vendedores(text);
+DROP FUNCTION IF EXISTS public.get_distinct_fornecedores();
+DROP FUNCTION IF EXISTS public.get_distinct_tipos_venda();
+DROP FUNCTION IF EXISTS public.get_distinct_redes();
+DROP FUNCTION IF EXISTS public.get_paginated_orders(integer,integer,text,text,text[],text,text,text,text[],text,text[],text,text);
+DROP FUNCTION IF EXISTS public.get_comparison_data(text,text,text[],text[],text[],text,text[],text,text);
+DROP FUNCTION IF EXISTS public.get_stock_analysis_data(text,text,text[],text[],text[],text,text);
+DROP FUNCTION IF EXISTS public.get_coverage_analysis(text,text[],text[],text,text,text[],boolean);
+
+
+-- =================================================================
+-- ETAPA 3: RECRIAÇÃO DAS FUNÇÕES DE SEGURANÇA E POLÍTICAS DE RLS
+-- =================================================================
+
+-- 3.1: Função de Verificação de Acesso
+create or replace function public.is_caller_approved()
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return exists (
+    select 1
+    from public.profiles
+    where id = auth.uid() and status = 'aprovado'
+  );
+end;
+$$;
+
+-- 3.2: Habilitação do Row Level Security (RLS)
+-- (É seguro re-habilitar RLS mesmo que já esteja ativo)
+alter table public.data_clients enable row level security;
+alter table public.data_detailed enable row level security;
+alter table public.data_history enable row level security;
+alter table public.data_metadata enable row level security;
+alter table public.data_orders enable row level security;
+alter table public.data_product_details enable row level security;
+alter table public.profiles enable row level security;
+-- Habilitação para tabelas extras mencionadas no erro
+alter table public.data_active_products enable row level security;
+alter table public.data_innovations enable row level security;
+alter table public.data_stock enable row level security;
+
+-- 3.3: Recriação das Políticas de Acesso (Policies)
 CREATE POLICY "Permitir acesso de leitura para usuários aprovados" ON public.data_clients FOR SELECT USING (public.is_caller_approved());
 CREATE POLICY "Permitir acesso de leitura para usuários aprovados" ON public.data_detailed FOR SELECT USING (public.is_caller_approved());
 CREATE POLICY "Permitir acesso de leitura para usuários aprovados" ON public.data_history FOR SELECT USING (public.is_caller_approved());
 CREATE POLICY "Permitir acesso de leitura para usuários aprovados" ON public.data_metadata FOR SELECT USING (public.is_caller_approved());
 CREATE POLICY "Permitir acesso de leitura para usuários aprovados" ON public.data_orders FOR SELECT USING (public.is_caller_approved());
 CREATE POLICY "Permitir acesso de leitura para usuários aprovados" ON public.data_product_details FOR SELECT USING (public.is_caller_approved());
-
--- Políticas para a tabela de perfis:
--- 1. Um usuário sempre pode ler seu próprio perfil.
--- 2. Um usuário aprovado pode ler o perfil de outros (útil para admin).
 CREATE POLICY "Permitir que usuários leiam seu próprio perfil" ON public.profiles FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Permitir que usuários aprovados leiam todos os perfis" ON public.profiles FOR SELECT USING (public.is_caller_approved());
 
 
 -- =================================================================
--- ETAPA 3: FUNÇÕES DE CÁLCULO (RPC) - (Funções Corrigidas)
+-- ETAPA 4: RECRIAÇÃO DAS FUNÇÕES DE CÁLCULO (RPC)
 -- =================================================================
 
--- 3.0: Função Auxiliar de Filtro de Cliente (BASE) - (Inalterado)
 create or replace function get_filtered_client_base (
   p_supervisor TEXT default null,
   p_vendedor_nomes text[] default null,
@@ -84,13 +105,11 @@ create or replace function get_filtered_client_base (
   p_codcli TEXT default null,
   p_filial TEXT default null
 ) RETURNS table (codigo_cliente TEXT) LANGUAGE plpgsql SECURITY DEFINER
-set
-  search_path = public as $$
+set search_path = public as $$
 BEGIN
     IF NOT public.is_caller_approved() THEN
         RAISE EXCEPTION 'Acesso não autorizado';
     END IF;
-
     RETURN QUERY
     WITH ClientLastBranch AS (
         SELECT DISTINCT ON (codcli) codcli, filial
@@ -126,8 +145,6 @@ BEGIN
 END;
 $$;
 
-
--- 3.1: KPIs Principais (CORRIGIDO)
 create or replace function get_main_kpis (
   p_pasta TEXT default null,
   p_supervisor TEXT default null,
@@ -147,8 +164,7 @@ create or replace function get_main_kpis (
   total_pdvs_positivados BIGINT,
   base_clientes_filtro BIGINT
 ) LANGUAGE plpgsql SECURITY DEFINER
-set
-  search_path = public as $$
+set search_path = public as $$
 DECLARE
     v_base_clientes_count BIGINT;
 BEGIN
@@ -189,8 +205,6 @@ BEGIN
 END;
 $$;
 
-
--- 3.2: Top Produtos (CORRIGIDO)
 create or replace function get_top_products (
   p_metric TEXT,
   p_pasta TEXT default null,
@@ -209,8 +223,7 @@ create or replace function get_top_products (
   descricao_produto TEXT,
   valor_metrica NUMERIC
 ) LANGUAGE plpgsql SECURITY DEFINER
-set
-  search_path = public as $$
+set search_path = public as $$
 BEGIN
     IF NOT public.is_caller_approved() THEN
         RAISE EXCEPTION 'Acesso não autorizado';
@@ -253,8 +266,6 @@ BEGIN
 END;
 $$;
 
-
--- 3.3: Contagem de Pedidos (CORRIGIDO)
 create or replace function get_orders_count (
   p_pasta TEXT default null,
   p_supervisor TEXT default null,
@@ -268,8 +279,7 @@ create or replace function get_orders_count (
   p_cidade TEXT default null,
   p_filial TEXT default 'ambas'
 ) RETURNS TABLE(total_count BIGINT) LANGUAGE plpgsql SECURITY DEFINER
-set
-  search_path = public as $$
+set search_path = public as $$
 BEGIN
     IF NOT public.is_caller_approved() THEN
         RAISE EXCEPTION 'Acesso não autorizado';
@@ -295,8 +305,6 @@ BEGIN
 END;
 $$;
 
-
--- 3.4: Análise de Cidade (NOVA FUNÇÃO)
 create or replace function get_city_analysis(
     p_supervisor text DEFAULT NULL,
     p_vendedor_nomes text[] DEFAULT NULL,
@@ -338,7 +346,7 @@ BEGIN
         GROUP BY codcli
     )
     -- Gráfico: Top 10 Clientes na Cidade/Filtro
-    SELECT
+    (SELECT
         'chart'::text AS tipo_analise,
         c.fantasia::text AS group_name,
         COALESCE(s.faturamento, 0)::numeric AS total_faturamento,
@@ -347,7 +355,7 @@ BEGIN
     LEFT JOIN SalesData s ON c.codigo_cliente = s.codcli
     WHERE c.codigo_cliente IN (SELECT codigo_cliente FROM ClientBase)
     ORDER BY total_faturamento DESC
-    LIMIT 10
+    LIMIT 10)
 
     UNION ALL
 
@@ -373,8 +381,6 @@ BEGIN
 END;
 $$;
 
-
--- 3.5: Análise Semanal (NOVA FUNÇÃO)
 CREATE OR REPLACE FUNCTION public.get_weekly_sales_and_rankings(
     p_pasta text DEFAULT NULL,
     p_supervisores text[] DEFAULT NULL
@@ -395,12 +401,11 @@ BEGIN
 
     RETURN QUERY
     -- 1. Vendas da semana atual por dia
-    WITH VendasDaSemana AS (
+    (WITH VendasDaSemana AS (
         SELECT
             v.nome,
             v.superv,
             v.vlvenda,
-            -- Garante que o dia da semana seja calculado em UTC
             to_char(v.dtped AT TIME ZONE 'UTC', 'Day') AS dia_semana_nome,
             extract(isodow from v.dtped AT TIME ZONE 'UTC') AS dia_semana_num
         FROM public.data_detailed v
@@ -416,15 +421,15 @@ BEGIN
         trim(s.dia_semana_nome)::text
     FROM VendasDaSemana s
     GROUP BY s.superv, s.dia_semana_nome, s.dia_semana_num
-    ORDER BY s.dia_semana_num
+    ORDER BY s.dia_semana_num)
 
     UNION ALL
 
     -- 2. Ranking de Positivação
-    SELECT
+    (SELECT
         'rank_positivacao'::text,
         v.superv::text,
-        COUNT(DISTINCT v.codcli)::numeric,
+        COUNT(DISTINCT v.codcli)::numeric AS total_valor,
         NULL::text
     FROM public.data_detailed v
     WHERE
@@ -433,15 +438,15 @@ BEGIN
     AND (p_supervisores IS NULL OR v.superv = ANY(p_supervisores))
     GROUP BY v.superv
     ORDER BY total_valor DESC
-    LIMIT 5
+    LIMIT 5)
 
     UNION ALL
 
     -- 3. Ranking Top Sellers (Faturamento)
-    SELECT
+    (SELECT
         'rank_topsellers'::text,
         v.nome::text,
-        SUM(v.vlvenda)::numeric,
+        SUM(v.vlvenda)::numeric AS total_valor,
         NULL::text
     FROM public.data_detailed v
     WHERE
@@ -450,15 +455,15 @@ BEGIN
     AND (p_supervisores IS NULL OR v.superv = ANY(p_supervisores))
     GROUP BY v.nome
     ORDER BY total_valor DESC
-    LIMIT 10
+    LIMIT 10)
 
     UNION ALL
 
     -- 4. Ranking de Mix de Produto
-    SELECT
+    (SELECT
         'rank_mix'::text,
         v.superv::text,
-        (COUNT(DISTINCT v.produto)::decimal / COUNT(DISTINCT v.codcli))::numeric,
+        (COUNT(DISTINCT v.produto)::decimal / COUNT(DISTINCT v.codcli))::numeric AS total_valor,
         NULL::text
     FROM public.data_detailed v
     WHERE
@@ -466,16 +471,11 @@ BEGIN
     AND (p_pasta IS NULL OR v.observacaofor = p_pasta)
     AND (p_supervisores IS NULL OR v.superv = ANY(p_supervisores))
     GROUP BY v.superv
-    HAVING COUNT(DISTINCT v.codcli) > 0 -- Evita divisão por zero
+    HAVING COUNT(DISTINCT v.codcli) > 0
     ORDER BY total_valor DESC
-    LIMIT 5;
+    LIMIT 5);
 END;
 $$;
-
--- ETAPA FINAL: Forçar o Supabase a recarregar o esquema
-NOTIFY pgrst, 'reload schema';
-
--- Funções para popular filtros (Dropdowns)
 
 CREATE OR REPLACE FUNCTION public.get_distinct_supervisors()
 RETURNS TABLE(superv text)
@@ -486,11 +486,11 @@ BEGIN
     IF NOT public.is_caller_approved() THEN
         RAISE EXCEPTION 'Acesso não autorizado';
     END IF;
-    RETURN QUERY SELECT DISTINCT s.superv FROM (
+    RETURN QUERY
         SELECT superv FROM data_detailed WHERE superv IS NOT NULL
         UNION
         SELECT superv FROM data_history WHERE superv IS NOT NULL
-    ) AS s ORDER BY s.superv;
+        ORDER BY 1;
 END;
 $$;
 
@@ -503,11 +503,11 @@ BEGIN
     IF NOT public.is_caller_approved() THEN
         RAISE EXCEPTION 'Acesso não autorizado';
     END IF;
-    RETURN QUERY SELECT DISTINCT s.nome FROM (
-        SELECT nome FROM data_detailed WHERE nome IS NOT NULL AND (p_supervisor IS NULL OR superv = p_supervisor)
+    RETURN QUERY
+        SELECT nome FROM data_detailed WHERE nome IS NOT NULL AND (p_supervisor IS NULL OR data_detailed.superv = p_supervisor)
         UNION
-        SELECT nome FROM data_history WHERE nome IS NOT NULL AND (p_supervisor IS NULL OR superv = p_supervisor)
-    ) AS s ORDER BY s.nome;
+        SELECT nome FROM data_history WHERE nome IS NOT NULL AND (p_supervisor IS NULL OR data_history.superv = p_supervisor)
+        ORDER BY 1;
 END;
 $$;
 
@@ -520,7 +520,7 @@ BEGIN
     IF NOT public.is_caller_approved() THEN
         RAISE EXCEPTION 'Acesso não autorizado';
     END IF;
-    RETURN QUERY SELECT DISTINCT codfor::text, fornecedor::text FROM public.data_product_details WHERE fornecedor IS NOT NULL ORDER BY fornecedor;
+    RETURN QUERY SELECT DISTINCT pd.codfor::text, pd.fornecedor::text FROM public.data_product_details pd WHERE pd.fornecedor IS NOT NULL ORDER BY pd.fornecedor;
 END;
 $$;
 
@@ -533,11 +533,11 @@ BEGIN
     IF NOT public.is_caller_approved() THEN
         RAISE EXCEPTION 'Acesso não autorizado';
     END IF;
-    RETURN QUERY SELECT DISTINCT s.tipovenda FROM (
+    RETURN QUERY
         SELECT tipovenda FROM data_detailed WHERE tipovenda IS NOT NULL
         UNION
         SELECT tipovenda FROM data_history WHERE tipovenda IS NOT NULL
-    ) AS s ORDER BY s.tipovenda;
+        ORDER BY 1;
 END;
 $$;
 
@@ -553,8 +553,6 @@ BEGIN
     RETURN QUERY SELECT DISTINCT ramo AS rede FROM public.data_clients WHERE ramo IS NOT NULL AND ramo <> 'N/A' ORDER BY ramo;
 END;
 $$;
-
--- Funções de dados para as telas
 
 CREATE OR REPLACE FUNCTION public.get_paginated_orders(
     p_page_number integer,
@@ -702,7 +700,6 @@ BEGIN
 END;
 $$;
 
-
 CREATE OR REPLACE FUNCTION public.get_coverage_analysis(
     p_supervisor text DEFAULT NULL,
     p_vendedor_nomes text[] DEFAULT NULL,
@@ -738,10 +735,7 @@ $$;
 
 
 -- =================================================================
--- ETAPA 4: CONCESSÃO DE PERMISSÕES (GRANT)
--- Concede permissão para o role 'anon' (usuários não logados ou com chave anônima)
--- executar as funções RPC. A segurança interna é garantida pela
--- verificação is_caller_approved() dentro de cada função.
+-- ETAPA 5: CONCESSÃO DE PERMISSÕES (GRANT)
 -- =================================================================
 
 GRANT EXECUTE ON FUNCTION public.get_distinct_supervisors() TO anon;
@@ -758,3 +752,6 @@ GRANT EXECUTE ON FUNCTION public.get_weekly_sales_and_rankings(text,text[]) TO a
 GRANT EXECUTE ON FUNCTION public.get_comparison_data(text,text,text[],text[],text[],text,text[],text,text) TO anon;
 GRANT EXECUTE ON FUNCTION public.get_stock_analysis_data(text,text,text[],text[],text[],text,text) TO anon;
 GRANT EXECUTE ON FUNCTION public.get_coverage_analysis(text,text[],text[],text,text,text[],boolean) TO anon;
+
+-- ETAPA FINAL: Forçar o Supabase a recarregar o esquema
+NOTIFY pgrst, 'reload schema';
