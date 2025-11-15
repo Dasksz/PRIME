@@ -10,6 +10,8 @@
 DROP FUNCTION IF EXISTS get_main_kpis(text,text,text[],text,text,text,text[],text,text[],text,text);
 DROP FUNCTION IF EXISTS get_top_products(text,text,text,text[],text,text,text,text[],text,text[],text,text);
 DROP FUNCTION IF EXISTS get_orders_count(text,text,text[],text,text,text,text[],text,text[],text,text);
+DROP FUNCTION IF EXISTS get_city_analysis(text,text[],text,text[],text,text);
+DROP FUNCTION IF EXISTS get_weekly_sales_and_rankings(text,text[]);
 
 -- =================================================================
 -- ETAPA 2: FUNÇÕES E POLÍTICAS DE SEGURANÇA (RLS)
