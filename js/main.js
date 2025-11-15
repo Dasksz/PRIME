@@ -119,12 +119,12 @@ async function initializeNewDashboard(supabaseClient) {
     ui.toggleAppLoader(true);
     ui.updateLoaderText('Carregando dados iniciais...');
 
-    // **CORREÇÃO:** Wrapper para chamadas de API que previne que o Promise.all falhe.
+    // Wrapper para chamadas de API que previne que o Promise.all falhe.
     const safeApiCall = async (promise, defaultValue = null) => {
         try {
             const result = await promise;
-            // O helper _callRpc já trata o {data, error}, então podemos retornar diretamente.
-            return result;
+            if (result.error) throw result.error;
+            return result.data || result; // Handle RPC and table queries
         } catch (error) {
             console.warn(`Uma chamada de API falhou, mas foi tratada: ${error.message}`);
             return defaultValue; // Retorna um valor padrão em caso de erro.
@@ -147,7 +147,7 @@ async function initializeNewDashboard(supabaseClient) {
             safeApiCall(api.getDistinctFornecedores(supabase), []),
             safeApiCall(api.getDistinctTiposVenda(supabase), []),
             safeApiCall(api.getDistinctRedes(supabase), []),
-            safeApiCall(supabase.from('data_metadata').select('key,value').eq('key', 'last_sale_date'))
+            safeApiCall(supabase.from('data_metadata').select('key,value').eq('key', 'last_sale_date'), [])
         ]);
         
         const metadata = Array.isArray(metadataResult) && metadataResult.length > 0 ? metadataResult[0] : null;
@@ -170,16 +170,16 @@ async function initializeNewDashboard(supabaseClient) {
         await updateDashboardView();
 
         setupEventListeners();
-        setupUploader();
+        // A função setupUploader não existe, então a removemos para evitar um ReferenceError.
+        // setupUploader();
 
     } catch (error) {
-        // Este bloco catch agora só será atingido por erros inesperados, não por falhas de API.
         console.error("Erro fatal e inesperado durante a inicialização:", error);
         ui.updateLoaderText('Ocorreu um erro crítico. Tente recarregar a página.');
-        return; // Mantém o loader visível em caso de erro realmente fatal.
+        // Não retornamos aqui para garantir que o loader seja escondido.
     }
 
-    // Este código agora será executado mesmo se as chamadas de API falharem.
+    // Este código agora será executado mesmo se houver um erro fatal.
     elements['dashboard-view'].classList.remove('hidden');
     ui.toggleAppLoader(false);
 }
