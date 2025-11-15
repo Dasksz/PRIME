@@ -159,7 +159,7 @@ async function initializeNewDashboard(supabaseClient) {
             fornecedoresData,
             tiposVendaData,
             redesData,
-            metadata
+            metadataResult
         ] = await Promise.all([
             fetchData(supabase.from('data_clients').select('*')),
             fetchData(supabase.from('data_product_details').select('code,descricao,codfor,fornecedor,dtcadastro')),
@@ -167,7 +167,7 @@ async function initializeNewDashboard(supabaseClient) {
             fetchRpc(api.getDistinctFornecedores(supabase)),
             fetchRpc(api.getDistinctTiposVenda(supabase)),
             fetchRpc(api.getDistinctRedes(supabase)),
-            fetchData(supabase.from('data_metadata').select('key,value').eq('key', 'last_sale_date').single(), null)
+            fetchData(supabase.from('data_metadata').select('key,value').eq('key', 'last_sale_date'))
         ]);
 
         // Atribui os dados às variáveis globais
@@ -177,6 +177,8 @@ async function initializeNewDashboard(supabaseClient) {
         g_fornecedores = fornecedoresData;
         g_tiposVenda = tiposVendaData;
         g_redes = redesData;
+
+        const metadata = Array.isArray(metadataResult) && metadataResult.length > 0 ? metadataResult[0] : null;
         g_lastSaleDate = metadata ? metadata.value : new Date().toISOString().split('T')[0];
 
         if (elements['generation-date']) {
@@ -528,7 +530,7 @@ async function updateWeeklyView() {
     ui.toggleAppLoader(true);
     ui.updateLoaderText('Carregando análise semanal...');
     try {
-        const allFilters = getAppliedFilters('weekly');
+        const allFilters = getAppliedFilters('main');
 
         const rpcParams = {
             p_pasta: allFilters.p_pasta,
