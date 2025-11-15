@@ -296,5 +296,181 @@ END;
 $$;
 
 
+-- 3.4: Análise de Cidade (NOVA FUNÇÃO)
+create or replace function get_city_analysis(
+    p_supervisor text DEFAULT NULL,
+    p_vendedor_nomes text[] DEFAULT NULL,
+    p_rede_group text DEFAULT NULL,
+    p_redes text[] DEFAULT NULL,
+    p_cidade text DEFAULT NULL,
+    p_codcli text DEFAULT NULL
+) 
+RETURNS TABLE (
+    tipo_analise text,
+    group_name text,
+    total_faturamento numeric,
+    status_cliente text,
+    codigo_cliente text,
+    fantasia text,
+    cidade text,
+    bairro text,
+    ultimacompra date,
+    rca1 text
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public AS $$
+BEGIN
+    IF NOT public.is_caller_approved() THEN
+        RAISE EXCEPTION 'Acesso não autorizado';
+    END IF;
+
+    RETURN QUERY
+    WITH ClientBase AS (
+        SELECT * FROM get_filtered_client_base(p_supervisor, p_vendedor_nomes, p_rede_group, p_redes, p_cidade, p_codcli, NULL)
+    ),
+    SalesData AS (
+        SELECT
+            codcli,
+            SUM(vlvenda) AS faturamento
+        FROM public.data_detailed
+        WHERE codcli IN (SELECT codigo_cliente FROM ClientBase)
+        GROUP BY codcli
+    )
+    -- Gráfico: Top 10 Clientes na Cidade/Filtro
+    SELECT
+        'chart'::text AS tipo_analise,
+        c.fantasia::text AS group_name,
+        COALESCE(s.faturamento, 0)::numeric AS total_faturamento,
+        NULL::text, NULL::text, NULL::text, NULL::text, NULL::text, NULL::date, NULL::text
+    FROM public.data_clients c
+    LEFT JOIN SalesData s ON c.codigo_cliente = s.codcli
+    WHERE c.codigo_cliente IN (SELECT codigo_cliente FROM ClientBase)
+    ORDER BY total_faturamento DESC
+    LIMIT 10
+
+    UNION ALL
+
+    -- Lista de Clientes para as Tabelas
+    SELECT
+        'client_list'::text AS tipo_analise,
+        c.fantasia::text AS group_name,
+        COALESCE(s.faturamento, 0)::numeric AS total_faturamento,
+        CASE
+            WHEN c.dtinclusao >= (NOW() - INTERVAL '90 days') THEN 'novo'
+            WHEN c.ultimacompra < (NOW() - INTERVAL '45 days') THEN 'inativo'
+            ELSE 'ativo'
+        END::text AS status_cliente,
+        c.codigo_cliente::text,
+        c.fantasia::text,
+        c.cidade::text,
+        c.bairro::text,
+        c.ultimacompra::date,
+        c.rca1::text
+    FROM public.data_clients c
+    LEFT JOIN SalesData s ON c.codigo_cliente = s.codcli
+    WHERE c.codigo_cliente IN (SELECT codigo_cliente FROM ClientBase);
+END;
+$$;
+
+
+-- 3.5: Análise Semanal (NOVA FUNÇÃO)
+CREATE OR REPLACE FUNCTION public.get_weekly_sales_and_rankings(
+    p_pasta text DEFAULT NULL,
+    p_supervisores text[] DEFAULT NULL
+)
+RETURNS TABLE(
+    tipo_dado text,
+    group_name text,
+    total_valor numeric,
+    dia_semana text
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET SEARCH_PATH = public AS $$
+BEGIN
+    IF NOT public.is_caller_approved() THEN
+        RAISE EXCEPTION 'Acesso não autorizado';
+    END IF;
+
+    RETURN QUERY
+    -- 1. Vendas da semana atual por dia
+    WITH VendasDaSemana AS (
+        SELECT
+            v.nome,
+            v.superv,
+            v.vlvenda,
+            -- Garante que o dia da semana seja calculado em UTC
+            to_char(v.dtped AT TIME ZONE 'UTC', 'Day') AS dia_semana_nome,
+            extract(isodow from v.dtped AT TIME ZONE 'UTC') AS dia_semana_num
+        FROM public.data_detailed v
+        WHERE
+            v.dtped >= date_trunc('week', NOW() AT TIME ZONE 'UTC')
+        AND (p_pasta IS NULL OR v.observacaofor = p_pasta)
+        AND (p_supervisores IS NULL OR v.superv = ANY(p_supervisores))
+    )
+    SELECT
+        'venda_semanal'::text,
+        s.superv::text,
+        SUM(s.vlvenda)::numeric,
+        trim(s.dia_semana_nome)::text
+    FROM VendasDaSemana s
+    GROUP BY s.superv, s.dia_semana_nome, s.dia_semana_num
+    ORDER BY s.dia_semana_num
+
+    UNION ALL
+
+    -- 2. Ranking de Positivação
+    SELECT
+        'rank_positivacao'::text,
+        v.superv::text,
+        COUNT(DISTINCT v.codcli)::numeric,
+        NULL::text
+    FROM public.data_detailed v
+    WHERE
+        v.dtped >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
+    AND (p_pasta IS NULL OR v.observacaofor = p_pasta)
+    AND (p_supervisores IS NULL OR v.superv = ANY(p_supervisores))
+    GROUP BY v.superv
+    ORDER BY total_valor DESC
+    LIMIT 5
+
+    UNION ALL
+
+    -- 3. Ranking Top Sellers (Faturamento)
+    SELECT
+        'rank_topsellers'::text,
+        v.nome::text,
+        SUM(v.vlvenda)::numeric,
+        NULL::text
+    FROM public.data_detailed v
+    WHERE
+        v.dtped >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
+    AND (p_pasta IS NULL OR v.observacaofor = p_pasta)
+    AND (p_supervisores IS NULL OR v.superv = ANY(p_supervisores))
+    GROUP BY v.nome
+    ORDER BY total_valor DESC
+    LIMIT 10
+
+    UNION ALL
+
+    -- 4. Ranking de Mix de Produto
+    SELECT
+        'rank_mix'::text,
+        v.superv::text,
+        (COUNT(DISTINCT v.produto)::decimal / COUNT(DISTINCT v.codcli))::numeric,
+        NULL::text
+    FROM public.data_detailed v
+    WHERE
+        v.dtped >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
+    AND (p_pasta IS NULL OR v.observacaofor = p_pasta)
+    AND (p_supervisores IS NULL OR v.superv = ANY(p_supervisores))
+    GROUP BY v.superv
+    HAVING COUNT(DISTINCT v.codcli) > 0 -- Evita divisão por zero
+    ORDER BY total_valor DESC
+    LIMIT 5;
+END;
+$$;
+
 -- ETAPA FINAL: Forçar o Supabase a recarregar o esquema
 NOTIFY pgrst, 'reload schema';
