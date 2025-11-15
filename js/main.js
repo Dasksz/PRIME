@@ -119,39 +119,19 @@ async function initializeNewDashboard(supabaseClient) {
     ui.toggleAppLoader(true);
     ui.updateLoaderText('Carregando dados iniciais...');
 
+    // **CORREÇÃO:** Wrapper para chamadas de API que previne que o Promise.all falhe.
+    const safeApiCall = async (promise, defaultValue = null) => {
+        try {
+            const result = await promise;
+            // O helper _callRpc já trata o {data, error}, então podemos retornar diretamente.
+            return result;
+        } catch (error) {
+            console.warn(`Uma chamada de API falhou, mas foi tratada: ${error.message}`);
+            return defaultValue; // Retorna um valor padrão em caso de erro.
+        }
+    };
+
     try {
-        // Função auxiliar para executar uma consulta e retornar dados ou um padrão em caso de erro
-        const fetchData = async (promise, defaultValue = []) => {
-            try {
-                const { data, error } = await promise;
-                if (error) {
-                    // Log o erro mas não impede o progresso
-                    console.warn(`Erro não fatal na busca de dados: ${error.message}`);
-                    return defaultValue;
-                }
-                return data;
-            } catch (error) {
-                console.warn(`Exceção não fatal na busca de dados: ${error.message}`);
-                return defaultValue;
-            }
-        };
-
-        const fetchRpc = async (promise, defaultValue = []) => {
-             try {
-                const result = await promise;
-                // RPCs podem não seguir o padrão {data, error}, então verificamos o resultado diretamente
-                if (!result) { // ou uma verificação mais específica se a API retornar um objeto de erro
-                    console.warn(`Erro não fatal na chamada RPC.`);
-                    return defaultValue;
-                }
-                return result;
-            } catch (error) {
-                console.warn(`Exceção não fatal na chamada RPC: ${error.message}`);
-                return defaultValue;
-            }
-        };
-
-        // Usa a função auxiliar para cada busca de dados
         const [
             clientsData,
             productDetailsData,
@@ -159,56 +139,51 @@ async function initializeNewDashboard(supabaseClient) {
             fornecedoresData,
             tiposVendaData,
             redesData,
-            metadataResult 
+            metadataResult
         ] = await Promise.all([
-            fetchData(supabase.from('data_clients').select('*')),
-            fetchData(supabase.from('data_product_details').select('code,descricao,codfor,fornecedor,dtcadastro')),
-            fetchRpc(api.getDistinctSupervisors(supabase)),
-            fetchRpc(api.getDistinctFornecedores(supabase)),
-            fetchRpc(api.getDistinctTiposVenda(supabase)),
-            fetchRpc(api.getDistinctRedes(supabase)),
-            fetchData(supabase.from('data_metadata').select('key,value').eq('key', 'last_sale_date'))
+            safeApiCall(supabase.from('data_clients').select('*'), []),
+            safeApiCall(supabase.from('data_product_details').select('code,descricao,codfor,fornecedor,dtcadastro'), []),
+            safeApiCall(api.getDistinctSupervisors(supabase), []),
+            safeApiCall(api.getDistinctFornecedores(supabase), []),
+            safeApiCall(api.getDistinctTiposVenda(supabase), []),
+            safeApiCall(api.getDistinctRedes(supabase), []),
+            safeApiCall(supabase.from('data_metadata').select('key,value').eq('key', 'last_sale_date'))
         ]);
-
-        // Atribui os dados às variáveis globais
-        g_allClientsData = clientsData;
-        g_productDetails = productDetailsData;
-        g_supervisors = supervisorsData;
-        g_fornecedores = fornecedoresData;
-        g_tiposVenda = tiposVendaData;
-        g_redes = redesData;
         
         const metadata = Array.isArray(metadataResult) && metadataResult.length > 0 ? metadataResult[0] : null;
+
+        g_allClientsData = clientsData || [];
+        g_productDetails = productDetailsData || [];
+        g_supervisors = supervisorsData || [];
+        g_fornecedores = fornecedoresData || [];
+        g_tiposVenda = tiposVendaData || [];
+        g_redes = redesData || [];
         g_lastSaleDate = metadata ? metadata.value : new Date().toISOString().split('T')[0];
 
         if (elements['generation-date']) {
             elements['generation-date'].textContent = `Dados atualizados em: ${new Date(g_lastSaleDate).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}`;
         }
 
-        // Populate UI components
         populateAllFilterDropdowns();
         ui.populateSideMenu(elements['main-nav']);
 
-        // Load the initial view
         await updateDashboardView();
 
-        // Setup event listeners after everything is populated
         setupEventListeners();
-
-        // Initialize the uploader functionality
         setupUploader();
 
     } catch (error) {
-        console.error("Erro fatal durante a inicialização:", error);
-        ui.updateLoaderText('Erro ao carregar dados. Tente recarregar a página.');
-        // Do not hide loader on fatal error
-        return;
+        // Este bloco catch agora só será atingido por erros inesperados, não por falhas de API.
+        console.error("Erro fatal e inesperado durante a inicialização:", error);
+        ui.updateLoaderText('Ocorreu um erro crítico. Tente recarregar a página.');
+        return; // Mantém o loader visível em caso de erro realmente fatal.
     }
 
-    // Always ensure the dashboard view is shown and loader is hidden after initialization attempt
+    // Este código agora será executado mesmo se as chamadas de API falharem.
     elements['dashboard-view'].classList.remove('hidden');
     ui.toggleAppLoader(false);
 }
+
 
 /**
  * Populates all filter dropdowns across all application views.
@@ -232,8 +207,6 @@ async function updateDashboardView() {
         const allFilters = getAppliedFilters('main');
         const groupBy = allFilters.p_supervisor ? 'vendedor' : 'supervisor';
 
-        // 1. Parâmetros ESPECÍFICOS para get_main_kpis e get_sales_by_group
-        //    (Estes não aceitam p_fornecedores ou p_produtos)
         const mainParams = {
             p_pasta: allFilters.p_pasta,
             p_supervisor: allFilters.p_supervisor,
@@ -248,21 +221,30 @@ async function updateDashboardView() {
             p_filial: allFilters.p_filial
         };
 
-        // 2. Parâmetros ESPECÍFICOS para get_top_products
-        //    (Este aceita os mesmos que o main, mas NÃO p_fornecedores/p_produtos)
         const topProductsParams = {
-            ...mainParams, // Reutiliza os 11 parâmetros
-            p_metric: 'faturamento' // Adiciona o p_metric
+            ...mainParams,
+            p_metric: 'faturamento'
+        };
+
+        // **CORREÇÃO:** Aplica o mesmo wrapper de segurança aqui.
+        const safeApiCall = async (promise, defaultValue = null) => {
+            try {
+                return await promise;
+            } catch (error) {
+                console.warn(`Falha na API da dashboard, continuando com dados vazios: ${error.message}`);
+                return defaultValue;
+            }
         };
 
         const [kpiData, salesByPersonData, salesByCategoryData, topProductsData] = await Promise.all([
-            api.getMainKpis(supabase, mainParams), // <-- CORRIGIDO
-            api.getSalesByGroup(supabase, { ...mainParams, p_group_by: groupBy }), // <-- CORRIGIDO
-            api.getSalesByGroup(supabase, { ...mainParams, p_group_by: 'categoria' }), // <-- CORRIGIDO
-            api.getTopProducts(supabase, topProductsParams) // <-- CORRIGIDO
+            safeApiCall(api.getMainKpis(supabase, mainParams), null),
+            safeApiCall(api.getSalesByGroup(supabase, { ...mainParams, p_group_by: groupBy }), []),
+            safeApiCall(api.getSalesByGroup(supabase, { ...mainParams, p_group_by: 'categoria' }), []),
+            safeApiCall(api.getTopProducts(supabase, topProductsParams), [])
         ]);
 
         // --- 1. Update KPIs ---
+        // Adicionada verificação para kpiData para evitar erros se a chamada falhar
         if (kpiData) {
             elements['total-vendas'].textContent = formatCurrency(kpiData.total_faturamento);
             elements['total-peso'].textContent = formatNumber(kpiData.total_peso / 1000, 2) + ' Ton';
@@ -274,7 +256,7 @@ async function updateDashboardView() {
         }
 
         // --- 2. Update Sales by Person Chart ---
-        if (salesByPersonData) {
+        if (salesByPersonData && salesByPersonData.length > 0) {
             ui.createOrUpdateChart('salesByPersonChart', 'salesByPersonChartContainer', {
                 type: 'bar',
                 data: {
@@ -290,7 +272,7 @@ async function updateDashboardView() {
         }
 
         // --- 3. Update Sales by Category Chart ---
-        if (salesByCategoryData) {
+        if (salesByCategoryData && salesByCategoryData.length > 0) {
             ui.createOrUpdateChart('faturamentoPorFornecedorChart', 'faturamentoPorFornecedorChartContainer', {
                 type: 'doughnut',
                 data: {
@@ -305,7 +287,7 @@ async function updateDashboardView() {
         }
 
         // --- 4. Update Top Products Chart ---
-        if (topProductsData) {
+        if (topProductsData && topProductsData.length > 0) {
              ui.createOrUpdateChart('salesByProductBarChart', 'salesByProductBarChartContainer', {
                 type: 'bar',
                 data: {
@@ -322,11 +304,12 @@ async function updateDashboardView() {
 
     } catch (error) {
         console.error("Erro ao atualizar a dashboard:", error);
-        alert("Não foi possível carregar os dados da dashboard.");
+        // Não mostra um alerta para não interromper o usuário, apenas loga o erro.
     } finally {
         ui.toggleAppLoader(false);
     }
 }
+
 
 // --- View-specific State for Orders ---
 const ordersTableState = {
@@ -530,7 +513,7 @@ async function updateWeeklyView() {
     ui.toggleAppLoader(true);
     ui.updateLoaderText('Carregando análise semanal...');
     try {
-        const allFilters = getAppliedFilters('main');
+        const allFilters = getAppliedFilters('weekly');
 
         const rpcParams = {
             p_pasta: allFilters.p_pasta,
