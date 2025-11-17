@@ -4,13 +4,13 @@ CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 
 -- Otimização 1: Índice para filtragem comum na tabela de vendas detalhadas.
 -- Ajuda em consultas que filtram por supervisor, vendedor ou cliente.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_data_detailed_filters ON data_detailed (superv, nome, codcli);
+CREATE INDEX IF NOT EXISTS idx_data_detailed_filters ON data_detailed (superv, nome, codcli);
 
 -- Otimização 2: Índice na data do pedido, crucial para séries temporais e filtros de período.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_data_detailed_dtped ON data_detailed (dtped);
+CREATE INDEX IF NOT EXISTS idx_data_detailed_dtped ON data_detailed (dtped);
 
 -- Otimização 3: Índice na tabela de histórico para as mesmas otimizações.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_data_history_dtped ON data_history (dtped);
+CREATE INDEX IF NOT EXISTS idx_data_history_dtped ON data_history (dtped);
 
 -- Função RPC principal para buscar dados agregados do dashboard.
 -- Esta função substitui a necessidade de baixar as tabelas 'data_detailed' e 'data_history' inteiras para o cliente.
