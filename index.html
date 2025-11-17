@@ -1278,6 +1278,8 @@
       mas agora dentro de um <script type="text/template"> 
     -->
     <script id="report-logic-script" type="text/template">
+        const allSalesData = []; // CORREÇÃO: Define a variável para evitar o ReferenceError
+        const allHistoryData = []; // CORREÇÃO: Define a variável para evitar o ReferenceError
         //const embeddedData = window.embeddedData; // Esta linha será removida pois os dados virão como argumento
         const chartsData = embeddedData.charts || {};
         const aggregatedOrders = embeddedData.byOrder || [];
