@@ -1115,6 +1115,13 @@
             const loader = document.getElementById('loader');
             const loaderText = document.getElementById('loader-text');
             const mainDashboard = document.getElementById('main-dashboard');
+
+            // CORREÇÃO: Mover a declaração das variáveis de KPI para cá
+            const totalVendasEl = document.getElementById('total-vendas');
+            const totalPesoEl = document.getElementById('total-peso');
+            const kpiSkuPdVEl = document.getElementById('kpi-sku-pdv');
+            const kpiPositivacaoEl = document.getElementById('kpi-positivacao');
+            const kpiPositivacaoPercentEl = document.getElementById('kpi-positivacao-percent');
             
             try {
                 // A verificação de URL/Chave e a criação do cliente foram movidas para o script do porteiro
