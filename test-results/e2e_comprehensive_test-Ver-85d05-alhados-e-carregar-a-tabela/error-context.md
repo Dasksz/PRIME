@@ -1,0 +1,107 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - img "Logo da Empresa" [ref=e4]
+    - heading "Acesso Restrito" [level=1] [ref=e5]
+    - paragraph [ref=e6]: Este é um sistema privado. Por favor, faça login para solicitar acesso.
+    - button "Entrar com Google" [ref=e7] [cursor=pointer]:
+      - img [ref=e8]
+      - generic [ref=e13]: Entrar com Google
+  - button [ref=e14] [cursor=pointer]:
+    - img [ref=e15]
+  - generic [ref=e17]:
+    - heading "PRIME" [level=2] [ref=e18]
+    - navigation [ref=e19]:
+      - generic [ref=e20]:
+        - heading "Análises Principais" [level=3] [ref=e21]
+        - button "Dashboard Principal" [ref=e22] [cursor=pointer]
+        - button "Pedidos Detalhados" [ref=e23] [cursor=pointer]
+      - generic [ref=e24]:
+        - heading "Análises Detalhadas" [level=3] [ref=e25]
+        - button "Comparativo Mensal" [ref=e26] [cursor=pointer]
+        - button "Análise de Estoque" [ref=e27] [cursor=pointer]
+        - button "Cobertura de Estoque" [ref=e28] [cursor=pointer]
+        - button "Análise de Inovações" [ref=e29] [cursor=pointer]
+        - button "Inovações Mês" [ref=e30] [cursor=pointer]
+        - button "Acompanhamento Semanal" [ref=e31] [cursor=pointer]
+        - button "Análise por Cidade" [ref=e32] [cursor=pointer]
+      - generic [ref=e33]:
+        - heading "Admin" [level=3] [ref=e34]
+        - button "Uploader de Dados" [ref=e35] [cursor=pointer]
+    - button "Sair / Deslogar" [ref=e37] [cursor=pointer]
+    - generic [ref=e38]:
+      - generic [ref=e39]: Tema
+      - generic [ref=e40]:
+        - checkbox [checked]
+  - generic [ref=e43]:
+    - banner [ref=e44]:
+      - generic [ref=e46]:
+        - heading "PAINEL DE VENDAS - PRIME DISTRIBUIÇÃO" [level=1] [ref=e47]
+        - paragraph [ref=e48]: "Dados atualizados em: 17/11/2025, 17:57:27"
+    - generic [ref=e49]:
+      - generic [ref=e50]:
+        - heading "Volume Tons" [level=3] [ref=e51]
+        - paragraph [ref=e52]: 0,0
+      - generic [ref=e53]:
+        - heading "Faturamento R$" [level=3] [ref=e54]
+        - paragraph [ref=e55]: R$ 0,00
+      - generic [ref=e56]:
+        - heading "SKU/PDV" [level=3] [ref=e57]
+        - paragraph [ref=e58]: 0,0
+      - generic [ref=e59]:
+        - heading "Cobertura PDVs" [level=3] [ref=e60]
+        - paragraph [ref=e61]: 0,0%
+        - paragraph [ref=e62]: 0 PDVs
+    - generic [ref=e64]:
+      - button "PEPSICO" [ref=e65] [cursor=pointer]
+      - button "MULTIMARCAS" [ref=e66] [cursor=pointer]
+    - generic [ref=e68]:
+      - generic [ref=e69]:
+        - generic [ref=e70]: Supervisor
+        - combobox [ref=e71]:
+          - option "Todos" [selected]
+      - generic [ref=e72]:
+        - generic [ref=e73]: Vendedor
+        - button "Todos Vendedores" [ref=e74] [cursor=pointer]:
+          - generic [ref=e75]: Todos Vendedores
+          - img [ref=e76]
+      - generic [ref=e78]:
+        - generic [ref=e79]: Tipo Venda
+        - button "Todos os Tipos" [ref=e80] [cursor=pointer]:
+          - generic [ref=e81]: Todos os Tipos
+          - img [ref=e82]
+      - generic [ref=e84]:
+        - generic [ref=e85]: Fornecedor
+        - combobox [ref=e86]:
+          - option "Todos" [selected]
+      - generic [ref=e87]:
+        - generic [ref=e88]: Cód. Cliente
+        - textbox "Digite o código..." [ref=e89]
+      - generic [ref=e90]:
+        - generic [ref=e91]: Posição
+        - combobox [ref=e92]:
+          - option "Todas" [selected]
+          - option "Liberado"
+          - option "Montado"
+          - option "Faturado"
+      - button "Limpar Filtros" [ref=e94] [cursor=pointer]
+    - main [ref=e95]:
+      - generic [ref=e96]:
+        - generic [ref=e98]:
+          - generic [ref=e99]:
+            - generic [ref=e100]: Feriados do Mês
+            - button "Selecionar Feriados" [ref=e101] [cursor=pointer]
+          - heading "Tendência de Faturamento" [level=2] [ref=e103]
+        - generic [ref=e105]:
+          - generic [ref=e106]:
+            - heading "Vendas por Supervisor" [level=2] [ref=e107]
+            - paragraph [ref=e109]: Sem dados para os filtros aplicados.
+          - heading "Faturamento por Categoria" [level=2] [ref=e111]
+        - generic [ref=e114]:
+          - heading "Vendas por Produto" [level=2] [ref=e115]
+          - generic [ref=e116]:
+            - button "Faturamento" [ref=e117] [cursor=pointer]
+            - button "Peso Kg" [ref=e118] [cursor=pointer]
+```

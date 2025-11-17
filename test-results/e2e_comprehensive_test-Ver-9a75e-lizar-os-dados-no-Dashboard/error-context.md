@@ -1,0 +1,100 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - button [ref=e2] [cursor=pointer]:
+    - img [ref=e3]
+  - generic [ref=e5]:
+    - heading "PRIME" [level=2] [ref=e6]
+    - navigation [ref=e7]:
+      - generic [ref=e8]:
+        - heading "Análises Principais" [level=3] [ref=e9]
+        - button "Dashboard Principal" [ref=e10] [cursor=pointer]
+        - button "Pedidos Detalhados" [ref=e11] [cursor=pointer]
+      - generic [ref=e12]:
+        - heading "Análises Detalhadas" [level=3] [ref=e13]
+        - button "Comparativo Mensal" [ref=e14] [cursor=pointer]
+        - button "Análise de Estoque" [ref=e15] [cursor=pointer]
+        - button "Cobertura de Estoque" [ref=e16] [cursor=pointer]
+        - button "Análise de Inovações" [ref=e17] [cursor=pointer]
+        - button "Inovações Mês" [ref=e18] [cursor=pointer]
+        - button "Acompanhamento Semanal" [ref=e19] [cursor=pointer]
+        - button "Análise por Cidade" [ref=e20] [cursor=pointer]
+      - generic [ref=e21]:
+        - heading "Admin" [level=3] [ref=e22]
+        - button "Uploader de Dados" [ref=e23] [cursor=pointer]
+    - button "Sair / Deslogar" [ref=e25] [cursor=pointer]
+    - generic [ref=e26]:
+      - generic [ref=e27]: Tema
+      - generic [ref=e28]:
+        - checkbox [checked]
+  - generic [ref=e31]:
+    - banner [ref=e32]:
+      - generic [ref=e34]:
+        - heading "PAINEL DE VENDAS - PRIME DISTRIBUIÇÃO" [level=1] [ref=e35]
+        - paragraph [ref=e36]: "Dados atualizados em: 17/11/2025, 17:56:52"
+    - generic [ref=e37]:
+      - generic [ref=e38]:
+        - heading "Volume Tons" [level=3] [ref=e39]
+        - paragraph [ref=e40]: 0,0
+      - generic [ref=e41]:
+        - heading "Faturamento R$" [level=3] [ref=e42]
+        - paragraph [ref=e43]: R$ 0,00
+      - generic [ref=e44]:
+        - heading "SKU/PDV" [level=3] [ref=e45]
+        - paragraph [ref=e46]: 0,0
+      - generic [ref=e47]:
+        - heading "Cobertura PDVs" [level=3] [ref=e48]
+        - paragraph [ref=e49]: 0,0%
+        - paragraph [ref=e50]: 0 PDVs
+    - generic [ref=e52]:
+      - button "PEPSICO" [ref=e53] [cursor=pointer]
+      - button "MULTIMARCAS" [active] [ref=e54] [cursor=pointer]
+    - generic [ref=e56]:
+      - generic [ref=e57]:
+        - generic [ref=e58]: Supervisor
+        - combobox [ref=e59]:
+          - option "Todos" [selected]
+      - generic [ref=e60]:
+        - generic [ref=e61]: Vendedor
+        - button "Todos Vendedores" [ref=e62] [cursor=pointer]:
+          - generic [ref=e63]: Todos Vendedores
+          - img [ref=e64]
+      - generic [ref=e66]:
+        - generic [ref=e67]: Tipo Venda
+        - button "Todos os Tipos" [ref=e68] [cursor=pointer]:
+          - generic [ref=e69]: Todos os Tipos
+          - img [ref=e70]
+      - generic [ref=e72]:
+        - generic [ref=e73]: Fornecedor
+        - combobox [ref=e74]:
+          - option "Todos" [selected]
+      - generic [ref=e75]:
+        - generic [ref=e76]: Cód. Cliente
+        - textbox "Digite o código..." [ref=e77]
+      - generic [ref=e78]:
+        - generic [ref=e79]: Posição
+        - combobox [ref=e80]:
+          - option "Todas" [selected]
+          - option "Liberado"
+          - option "Montado"
+          - option "Faturado"
+      - button "Limpar Filtros" [ref=e82] [cursor=pointer]
+    - main [ref=e83]:
+      - generic [ref=e84]:
+        - generic [ref=e86]:
+          - generic [ref=e87]:
+            - generic [ref=e88]: Feriados do Mês
+            - button "Selecionar Feriados" [ref=e89] [cursor=pointer]
+          - heading "Tendência de Faturamento" [level=2] [ref=e91]
+        - generic [ref=e93]:
+          - generic [ref=e94]:
+            - heading "Vendas por Supervisor" [level=2] [ref=e95]
+            - paragraph [ref=e97]: Sem dados para os filtros aplicados.
+          - heading "Faturamento por Categoria" [level=2] [ref=e99]
+        - generic [ref=e102]:
+          - heading "Vendas por Produto" [level=2] [ref=e103]
+          - generic [ref=e104]:
+            - button "Faturamento" [ref=e105] [cursor=pointer]
+            - button "Peso Kg" [ref=e106] [cursor=pointer]
+```

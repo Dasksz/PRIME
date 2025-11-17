@@ -1,0 +1,95 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - button [ref=e2] [cursor=pointer]:
+    - img [ref=e3]
+  - generic [ref=e5]:
+    - heading "PRIME" [level=2] [ref=e6]
+    - navigation [ref=e7]:
+      - generic [ref=e8]:
+        - heading "Análises Principais" [level=3] [ref=e9]
+        - button "Dashboard Principal" [ref=e10] [cursor=pointer]
+        - button "Pedidos Detalhados" [ref=e11] [cursor=pointer]
+      - generic [ref=e12]:
+        - heading "Análises Detalhadas" [level=3] [ref=e13]
+        - button "Comparativo Mensal" [active] [ref=e14] [cursor=pointer]
+        - button "Análise de Estoque" [ref=e15] [cursor=pointer]
+        - button "Cobertura de Estoque" [ref=e16] [cursor=pointer]
+        - button "Análise de Inovações" [ref=e17] [cursor=pointer]
+        - button "Inovações Mês" [ref=e18] [cursor=pointer]
+        - button "Acompanhamento Semanal" [ref=e19] [cursor=pointer]
+        - button "Análise por Cidade" [ref=e20] [cursor=pointer]
+      - generic [ref=e21]:
+        - heading "Admin" [level=3] [ref=e22]
+        - button "Uploader de Dados" [ref=e23] [cursor=pointer]
+    - button "Sair / Deslogar" [ref=e25] [cursor=pointer]
+    - generic [ref=e26]:
+      - generic [ref=e27]: Tema
+      - generic [ref=e28]:
+        - checkbox [checked]
+  - generic [ref=e30]:
+    - banner [ref=e31]:
+      - generic [ref=e32]:
+        - generic [ref=e33]:
+          - heading "PAINEL DE VENDAS - PRIME DISTRIBUIÇÃO" [level=1] [ref=e34]
+          - paragraph [ref=e35]: Comparativo entre Meses
+        - button "Voltar ao Dashboard" [ref=e36] [cursor=pointer]
+    - generic [ref=e37]:
+      - generic [ref=e38]:
+        - generic [ref=e39]:
+          - generic [ref=e40]: Supervisor
+          - combobox "Supervisor" [ref=e41]:
+            - option "Todos" [selected]
+        - generic [ref=e42]:
+          - generic [ref=e43]: Vendedor
+          - button "Todos Vendedores" [ref=e44] [cursor=pointer]:
+            - generic [ref=e45]: Todos Vendedores
+            - img [ref=e46]
+        - generic [ref=e48]:
+          - generic [ref=e49]: Fornecedor
+          - button "Todos Fornecedores" [ref=e50] [cursor=pointer]:
+            - generic [ref=e51]: Todos Fornecedores
+            - img [ref=e52]
+        - generic [ref=e54]:
+          - generic [ref=e55]: Cidade
+          - textbox "Cidade" [ref=e56]:
+            - /placeholder: Digite a cidade...
+      - generic [ref=e58]:
+        - generic [ref=e59]: Filtrar por Produto
+        - button "Todos os Produtos" [ref=e60] [cursor=pointer]:
+          - generic [ref=e61]: Todos os Produtos
+          - img [ref=e62]
+      - generic [ref=e64]:
+        - generic [ref=e65]:
+          - generic [ref=e66]: Filial
+          - combobox [ref=e67]:
+            - option "Ambas" [selected]
+            - option "Filial 05"
+            - option "Filial 08"
+        - generic [ref=e69]:
+          - generic [ref=e70]: Feriados do Mês
+          - button "Selecionar Feriados" [ref=e71] [cursor=pointer]
+        - button "Calcular Tendência" [ref=e72] [cursor=pointer]
+        - button "Limpar Filtros" [ref=e73] [cursor=pointer]
+    - paragraph [ref=e75]: Falha ao carregar dados.
+    - generic [ref=e76]:
+      - generic [ref=e77]:
+        - generic [ref=e78]:
+          - heading "Comparativo de Faturamento Semanal" [level=2] [ref=e79]
+          - generic [ref=e81]:
+            - button "Semanal" [ref=e82] [cursor=pointer]
+            - button "Mensal" [ref=e83] [cursor=pointer]
+        - paragraph [ref=e85]: "Erro: Could not find the function public.get_comparison_data(p_city_filter, p_filial_filter, p_pasta_filter, p_products_filter, p_rede_group_filter, p_selected_redes, p_sellers_filter, p_supervisor_filter, p_suppliers_filter) in the schema cache"
+      - heading "Faturamento por Dia da Semana" [level=2] [ref=e87]
+      - generic [ref=e89]:
+        - heading "Variação de Faturamento por Supervisor" [level=2] [ref=e90]
+        - table [ref=e92]:
+          - rowgroup [ref=e93]:
+            - row "Supervisor Média Trim. Fat. Mês Atual Variação" [ref=e94]:
+              - cell "Supervisor" [ref=e95]
+              - cell "Média Trim." [ref=e96]
+              - cell "Fat. Mês Atual" [ref=e97]
+              - cell "Variação" [ref=e98]
+          - rowgroup
+```
