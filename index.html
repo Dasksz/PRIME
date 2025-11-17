@@ -2262,15 +2262,22 @@
             const gridColor = getCSSVar('--border-primary');
             
             const professionalPalette = [
-                '#84a98c', '#a5a58d', '#a5a58d', '#b7b7a4', '#cad2c5', // Tons suaves de verde e cinza
-                '#ffb4a2', '#ffcdb2', '#e5989b', '#b5838d', '#6d6875'  // Tons suaves de rosa e pêssego
+                '#6366f1',
+                '#14b8a6',
+                '#f97316',
+                '#ec4899',
+                '#8b5cf6',
+                '#f59e0b',
+                '#ef4444',
+                '#22c55e',
+                '#06b6d4'
             ];
 
             let finalDatasets;
             if (Array.isArray(chartData) && chartData.length > 0 && typeof chartData[0] === 'object' && chartData[0].hasOwnProperty('label')) {
                 finalDatasets = chartData.map((dataset, index) => ({ ...dataset, backgroundColor: dataset.backgroundColor || professionalPalette[index % professionalPalette.length], borderColor: dataset.borderColor || professionalPalette[index % professionalPalette.length] }));
             } else {
-                 finalDatasets = [{ data: chartData || [], backgroundColor: canvasId === 'customerStatusChart' ? ['#84a98c', '#e5989b'] : professionalPalette }];
+                 finalDatasets = [{ data: chartData || [], backgroundColor: canvasId === 'customerStatusChart' ? ['#14b8a6', '#f97316', '#f59e0b'] : professionalPalette }];
             }
             
             let baseOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false, labels: {color: textColor} }, datalabels: { display: false } }, scales: { y: { beginAtZero: true, ticks: { color: secondaryTextColor }, grid: { color: gridColor} }, x: { ticks: { color: secondaryTextColor }, grid: { color: gridColor} } } };
@@ -3038,7 +3045,6 @@
             
             const weekLabels = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
             const weekNumbers = Object.keys(salesByWeekAndDay).sort((a,b) => a - b);
-            const professionalPalette = ['#14b8a6', '#6366f1', '#ec4899', '#f97316', '#8b5cf6'];
             const currentMonthDatasets = weekNumbers.map((weekNum, index) => ({ 
                 label: `Semana ${weekNum}`, 
                 data: weekLabels.map(day => salesByWeekAndDay[weekNum][day] || 0), 
@@ -3946,7 +3952,6 @@
             }
 
             const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-            const professionalPalette = ['#a855f7', '#6366f1', '#ec4899', '#f97316', '#8b5cf6', '#06b6d4', '#f59e0b'];
             const dailyBreakdownDatasets = dayNames.map((dayName, dayIndex) => {
                 return {
                     label: dayName,
@@ -6322,6 +6327,7 @@
 
         const { createClient } = supabase;
         const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        window.supabaseClient = supabaseClient; // Expondo globalmente
 
         // Referências aos elementos da tela
         const telaLogin = document.getElementById('tela-login');
