@@ -1101,168 +1101,71 @@
         </div>
     </div>
 
-    <!-- 7. MODIFICADO: Script agora busca dados das 8 tabelas -->
+    <!-- 7. REESTRUTURADO: Lógica principal do Dashboard -->
     <script>
         // !! AÇÃO NECESSÁRIA !!
         // Cole sua URL e Chave PÚBLICA (anon) aqui
         const SUPABASE_URL = 'https://dhozwhfmrwiumwpcqabi.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRob3p3aGZtcndpdW13cGNxYWJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyNjMzNjAsImV4cCI6MjA3NzgzOTM2MH0.syWqcBCbfH5Ey5AB4NGrsF2-ZuBw4W3NZAPIAZb6Bq4';
-        window.SUPABASE_URL = SUPABASE_URL;
-        window.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
         
-        // 8. MODIFICADO: Nova função para carregar dados das 8 tabelas
-        async function carregarDadosDoSupabase(supabaseClient) { // MODIFICADO: Recebe o cliente
+        let supabaseClient = null;
+        let globalFiltersData = {}; // Armazena os dados dos filtros
+
+        function getSupabaseClient() {
+            if (!supabaseClient) {
+                const { createClient } = supabase;
+                supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            }
+            return supabaseClient;
+        }
+
+        async function initializeDashboard(client) {
             const loader = document.getElementById('loader');
             const loaderText = document.getElementById('loader-text');
             const mainDashboard = document.getElementById('main-dashboard');
-
-            // CORREÇÃO: Mover a declaração das variáveis de KPI para cá
-            const totalVendasEl = document.getElementById('total-vendas');
-            const totalPesoEl = document.getElementById('total-peso');
-            const kpiSkuPdVEl = document.getElementById('kpi-sku-pdv');
-            const kpiPositivacaoEl = document.getElementById('kpi-positivacao');
-            const kpiPositivacaoPercentEl = document.getElementById('kpi-positivacao-percent');
             
             try {
-                // A verificação de URL/Chave e a criação do cliente foram movidas para o script do porteiro
+                loaderText.textContent = 'Buscando dados iniciais...';
 
-                const fetchColumnarData = async (tableName, columns = '*') => {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos de timeout
-
-                    try {
-                        const { data, error } = await supabaseClient
-                            .from(tableName)
-                            .select(columns)
-                            .abortSignal(controller.signal);
-
-                        clearTimeout(timeoutId);
-
-                        if (error) {
-                            console.error(`Erro ao buscar dados da tabela '${tableName}':`, error);
-                            throw new Error(`Falha no fetch da tabela ${tableName}: ${error.message}`);
-                        }
-                        return data || [];
-                    } catch (e) {
-                        clearTimeout(timeoutId);
-                        if (e.name === 'AbortError') {
-                             throw new Error(`Timeout de 15s atingido ao buscar a tabela ${tableName}.`);
-                        }
-                        throw e;
-                    }
-                };
-
-                loaderText.textContent = 'Buscando dados...';
-
-                // OTIMIZAÇÃO: Chamar a nova função RPC para dados iniciais
-                const initialDataPromise = supabaseClient.rpc('get_initial_dashboard_data', {});
-
-                // Mantém o carregamento de dados que ainda são necessários na íntegra em paralelo
-                const [
-                    initialDataResult,
-                    clientsData,
-                    ordersData,
-                    productDetailsData,
-                    activeProductsData,
-                    stockData,
-                    innovationsData
-                ] = await Promise.all([
-                    initialDataPromise,
-                    fetchColumnarData('data_clients'),
-                    fetchColumnarData('data_orders'),
-                    fetchColumnarData('data_product_details'),
-                    fetchColumnarData('data_active_products'),
-                    fetchColumnarData('data_stock'),
-                    fetchColumnarData('data_innovations')
+                const [kpisResult, filtersResult] = await Promise.all([
+                    client.rpc('get_dashboard_kpis'),
+                    client.rpc('get_filter_data')
                 ]);
 
-                if (initialDataResult.error) {
-                    throw new Error(`Falha na chamada RPC 'get_initial_dashboard_data': ${initialDataResult.error.message}`);
-                }
-                const initialData = initialDataResult.data || {};
-
-                // Agora, em vez de calcular os KPIs no frontend, nós os recebemos prontos
-                const kpis = initialData.kpis || {};
-                const totalClientsForPositivacao = kpis.total_clients_for_coverage;
-
-                // Atualiza os elementos da UI com os dados pré-calculados
-                totalVendasEl.textContent = (kpis.total_faturamento || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                totalPesoEl.textContent = ((kpis.total_peso || 0) / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-                const skuPdv = (kpis.positivacao_count > 0) ? (kpis.total_skus / kpis.positivacao_count) : 0;
-                kpiSkuPdVEl.textContent = skuPdv.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-                const positivacaoPercent = (totalClientsForPositivacao > 0) ? ((kpis.positivacao_count / totalClientsForPositivacao) * 100) : 0;
-                kpiPositivacaoEl.textContent = `${positivacaoPercent.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
-                kpiPositivacaoPercentEl.textContent = `${(kpis.positivacao_count || 0).toLocaleString('pt-BR')} PDVs`;
+                if (kpisResult.error) throw new Error(`Falha ao buscar KPIs: ${kpisResult.error.message}`);
+                if (filtersResult.error) throw new Error(`Falha ao buscar filtros: ${filtersResult.error.message}`);
                 
-                const lastUpdate = initialData.last_update;
-                const lastUpdateDate = lastUpdate ? new Date(lastUpdate).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '...';
-                document.getElementById('generation-date').textContent = `Dados atualizados em: ${lastUpdateDate}`;
-                document.getElementById('orders-generation-date').textContent = `Dados atualizados em: ${lastUpdateDate}`;
+                const kpis = kpisResult.data || {};
+                globalFiltersData = filtersResult.data || {};
 
+                // Atualiza os cards de KPI
+                const totalClientsForPositivacao = kpis.total_clients_for_coverage || 0;
+                const positivacaoCount = kpis.positivacao_count || 0;
+                document.getElementById('total-vendas').textContent = (kpis.total_faturamento || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                document.getElementById('total-peso').textContent = ((kpis.total_peso || 0) / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+                const skuPdv = (positivacaoCount > 0) ? ((kpis.total_skus || 0) / positivacaoCount) : 0;
+                document.getElementById('kpi-sku-pdv').textContent = skuPdv.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+                const positivacaoPercent = (totalClientsForPositivacao > 0) ? ((positivacaoCount / totalClientsForPositivacao) * 100) : 0;
+                document.getElementById('kpi-positivacao').textContent = `${positivacaoPercent.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+                document.getElementById('kpi-positivacao-percent').textContent = `${positivacaoCount.toLocaleString('pt-BR')} PDVs`;
 
-                const passedWorkingDaysCurrentMonth = initialData.passed_working_days || 1;
+                // Popula os filtros
+                populateSupervisors('supervisor-filter', globalFiltersData.supervisors);
+                populateSupervisors('orders-supervisor-filter', globalFiltersData.supervisors);
+                // ... (outras populações de filtro virão aqui)
 
-                console.log("DEBUG: clientsData length:", clientsData.length);
-
-                loaderText.textContent = 'Processando dados...';
-
-                const productDetails = (productDetailsData ?? []).reduce((acc, item) => {
-                    acc[item.code] = {
-                        descricao: item.descricao,
-                        fornecedor: item.fornecedor,
-                        codfor: item.codfor,
-                        dtcadastro: item.dtcadastro
-                    };
-                    return acc;
-                }, {});
-
-                const activeProductCodes = (activeProductsData ?? []).map(item => item.code);
-
-                const stockMap05 = {};
-                const stockMap08 = {};
-                (stockData ?? []).forEach(item => {
-                    if (item.filial === '05') stockMap05[item.product_code] = item.stock_qty;
-                    else if (item.filial === '08') stockMap08[item.product_code] = item.stock_qty;
-                });
-
-                const embeddedData = {
-                    detailed: [], // OTIMIZAÇÃO: Não carrega mais os dados detalhados
-                    history: [], // OTIMIZAÇÃO: Não carrega mais o histórico
-                    clients: clientsData ?? [],
-                    byOrder: ordersData ?? [],
-                    innovationsMonth: innovationsData ?? [],
-                    productDetails: productDetails,
-                    activeProductCodes: activeProductCodes,
-                    stockMap05: stockMap05,
-                    stockMap08: stockMap08,
-                    passedWorkingDaysCurrentMonth: passedWorkingDaysCurrentMonth,
-                    filters: initialData.filters || {},
-                    charts: initialData.charts || {}
-                };
-
-                window.embeddedData = embeddedData;
-                
+                // Ativa o script principal
                 const scriptLogicContent = document.getElementById('report-logic-script').textContent;
                 const logicScript = document.createElement('script');
-                logicScript.id = 'dynamic-logic-script'; // Atribui um ID para controle
                 logicScript.textContent = scriptLogicContent;
-
-                // Garante que o script antigo seja removido antes de adicionar o novo
-                const existingScript = document.getElementById('dynamic-logic-script');
-                if (existingScript) {
-                    existingScript.remove();
-                }
-                
-                // CORREÇÃO: Torna o dashboard visível ANTES de executar o script de lógica
-                mainDashboard.classList.remove('hidden');
-                
                 document.body.appendChild(logicScript);
-
-                loader.style.opacity = '0';
-                setTimeout(() => loader.classList.add('hidden'), 300);
+                
+                // Mostra o dashboard e esconde o loader
+                mainDashboard.classList.remove('hidden');
+                loader.classList.add('hidden');
 
             } catch (error) {
-                console.error('Erro ao carregar dados:', error);
+                console.error('Erro ao inicializar dashboard:', error);
                 loaderText.innerHTML = `<span class="text-red-400">Falha ao carregar dados: ${error.message}</span>`;
             }
         }
@@ -1275,14 +1178,12 @@
 
     <!-- 
       9. ADICIONADO: Seu script de lógica original, INALTERADO,
-      mas agora dentro de um <script type="text/template"> 
+      mas agora dentro de um <script> 
     -->
-    <script id="report-logic-script" type="text/template">
-        const allSalesData = []; // CORREÇÃO: Define a variável para evitar o ReferenceError
-        const allHistoryData = []; // CORREÇÃO: Define a variável para evitar o ReferenceError
-        //const embeddedData = window.embeddedData; // Esta linha será removida pois os dados virão como argumento
-        const chartsData = embeddedData.charts || {};
-        const aggregatedOrders = embeddedData.byOrder || [];
+    <script id="report-logic-script">
+        // Os dados agora virão de chamadas RPC específicas, não mais do 'embeddedData'
+        // const chartsData = embeddedData.charts || {};
+        // const aggregatedOrders = embeddedData.byOrder || [];
         const allClientsData = embeddedData.clients || [];
         const stockData05 = new Map(Object.entries(embeddedData.stockMap05 || {}));
         const stockData08 = new Map(Object.entries(embeddedData.stockMap08 || {}));
@@ -2419,104 +2320,92 @@
         }
 
 
-        async function fetchAndRenderDashboard() {
+        async function updateAllVisuals() {
             if (chartView.classList.contains('hidden')) return;
 
-            // Mostra um loader simples nos gráficos enquanto busca os dados
-            showNoDataMessage('trendChart', 'Atualizando dados...');
-            showNoDataMessage('salesByPersonChart', 'Atualizando dados...');
-            showNoDataMessage('faturamentoPorFornecedorChart', 'Atualizando dados...');
-            showNoDataMessage('salesByProductBarChart', 'Atualizando dados...');
-
-            // 1. Coleta os filtros da UI
+            const client = getSupabaseClient();
+            const supervisor = supervisorFilter.value;
+            // Construir o objeto de filtros para a chamada RPC
             const filters = {
-                supervisor_filter: supervisorFilter.value || null,
-                pasta_filter: currentFornecedor || null,
-                sellers_filter: selectedSellers.length > 0 ? selectedSellers : null,
-                fornecedor_filter: fornecedorFilter.value || null,
-                posicao_filter: posicaoFilter.value || null,
-                codcli_filter: codcliFilter.value.trim() || null,
+                p_supervisor: supervisor || null,
+                p_sellers: selectedSellers.length > 0 ? selectedSellers : null,
+                // Adicionar outros filtros aqui conforme necessário
             };
 
             try {
-                // 2. Chama a RPC com os filtros
-                const { data, error } = await supabaseClient.rpc('get_initial_dashboard_data', filters);
+                showNoDataMessage('trendChart', 'Carregando...');
+                showNoDataMessage('salesByPersonChart', 'Carregando...');
+                showNoDataMessage('faturamentoPorFornecedorChart', 'Carregando...');
+                showNoDataMessage('salesByProductBarChart', 'Carregando...');
 
+                const { data: chartsData, error } = await client.rpc('get_main_charts_data', filters);
                 if (error) throw error;
-
-                // 3. Renderiza os KPIs e gráficos com os novos dados
-                const kpis = data.kpis || {};
-                const chartsData = data.charts || {};
                 
-                // Atualiza KPIs
-                totalVendasEl.textContent = (kpis.total_faturamento || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                totalPesoEl.textContent = ((kpis.total_peso || 0) / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-                const skuPdv = (kpis.positivacao_count > 0) ? (kpis.total_skus / kpis.positivacao_count) : 0;
-                kpiSkuPdVEl.textContent = skuPdv.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-                const positivacaoPercent = (kpis.total_clients_for_coverage > 0) ? ((kpis.positivacao_count / kpis.total_clients_for_coverage) * 100) : 0;
-                kpiPositivacaoEl.textContent = `${positivacaoPercent.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
-                kpiPositivacaoPercentEl.textContent = `${(kpis.positivacao_count || 0).toLocaleString('pt-BR')} PDVs`;
-
-                // Renderiza Gráficos
                 const supervisorData = chartsData.sales_by_supervisor || [];
                 const pastaData = chartsData.sales_by_pasta || [];
                 const trendData = chartsData.trend || { avg_revenue: 0, trend_revenue: 0 };
                 const topProductsFat = chartsData.top_10_products_faturamento || [];
                 const topProductsPeso = chartsData.top_10_products_peso || [];
+
+                const trendDataset = [{ 
+                    label: 'Valor', 
+                    data: [trendData.avg_revenue, trendData.trend_revenue], 
+                    fill: true, 
+                    borderColor: 'var(--bg-button-active)', 
+                    backgroundColor: 'rgba(20, 184, 166, 0.1)', 
+                    tension: 0.2, 
+                    pointRadius: 6, 
+                    pointBackgroundColor: 'var(--bg-button-active)', 
+                    pointBorderColor: 'var(--bg-content)', 
+                    pointBorderWidth: 2, 
+                    pointHoverRadius: 8 
+                }];
+                const formatLabelValue = (v) => (v >= 1000000 ? (v / 1000000).toFixed(2) + ' M' : (v / 1000).toFixed(0) + 'k');
                 const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim();
 
-                // 1. Gráfico de Tendência
-                const trendDataset = [{ label: 'Valor', data: [trendData.avg_revenue, trendData.trend_revenue], fill: true, borderColor: 'var(--bg-button-active)', backgroundColor: 'rgba(20, 184, 166, 0.1)', tension: 0.2, pointRadius: 6, pointBackgroundColor: 'var(--bg-button-active)', pointBorderColor: 'var(--bg-content)', pointBorderWidth: 2, pointHoverRadius: 8 }];
                 createChart('trendChart', 'line', ['Média Faturamento Trimestre', 'Tendência Mês Atual'], trendDataset, {
                     layout: { padding: { top: 30 } },
-                    plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'top', offset: 8, color: textColor, font: { size: 12, weight: 'bold' }, formatter: (v) => (v >= 1000000 ? (v / 1000000).toFixed(2) + ' M' : (v / 1000).toFixed(0) + 'k') } },
-                    scales: { y: { ticks: { callback: (value) => (value >= 1000000 ? 'R$ ' + (value / 1000000).toFixed(1) + 'M' : 'R$ ' + (value / 1000) + 'k') } }, x: { grid: { display: false } } }
+                    plugins: {
+                        legend: { display: false },
+                        datalabels: { display: true, anchor: 'end', align: 'top', offset: 8, color: textColor, font: { size: 12, weight: 'bold' }, formatter: formatLabelValue }
+                    },
+                    scales: {
+                        y: { ticks: { callback: (value) => (value >= 1000000 ? 'R$ ' + (value / 1000000).toFixed(1) + 'M' : 'R$ ' + (value / 1000) + 'k') } },
+                        x: { grid: { display: false } }
+                    }
                 });
 
-                // 2. Gráfico de Vendas por Supervisor/Vendedor
-                salesByPersonTitle.textContent = supervisorFilter.value ? 'Vendas por Vendedor' : 'Vendas por Supervisor';
-                 if (supervisorData.length > 0) {
-                    const totalSales = supervisorData.reduce((sum, item) => sum + item.total_faturamento, 0);
-                    const tooltipOptions = { plugins: { tooltip: { callbacks: { label: function(context) { let label = context.dataset.label || ''; if (label) label += ': '; const value = context.parsed.y; if (value !== null) { label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); if (totalSales > 0) { const percentage = ((value / totalSales) * 100).toFixed(2); label += ` (${percentage}%)`; } } return label; } } } } };
-                    createChart('salesByPersonChart', 'bar', supervisorData.map(item => item.superv), supervisorData.map(item => item.total_faturamento), tooltipOptions);
+                salesByPersonTitle.textContent = 'Vendas por Supervisor';
+                if (supervisorData.length > 0) {
+                    createChart('salesByPersonChart', 'bar', supervisorData.map(item => item.superv), supervisorData.map(item => item.total_faturamento));
                 } else {
-                    showNoDataMessage('salesByPersonChart', 'Sem dados para os filtros aplicados.');
+                    showNoDataMessage('salesByPersonChart', 'Sem dados de vendas por supervisor.');
                 }
 
-                // 3. Gráfico de Faturamento por Categoria/Fornecedor
-                document.getElementById('faturamentoPorFornecedorTitle').textContent = fornecedorFilter.value ? 'Faturamento por Fornecedor' : 'Faturamento por Categoria';
+                document.getElementById('faturamentoPorFornecedorTitle').textContent = 'Faturamento por Categoria';
                 if (pastaData.length > 0) {
-                    const sortedPasta = pastaData.sort((a, b) => a.total_faturamento - b.total_faturamento);
-                    const totalPastaSales = sortedPasta.reduce((sum, item) => sum + item.total_faturamento, 0);
-                    const pastaTooltipOptions = { indexAxis: 'y', plugins: { tooltip: { callbacks: { label: function(context) { let label = context.label || ''; if (label) label += ': '; const value = context.parsed.x; if (value !== null) { label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); if (totalPastaSales > 0) { const percentage = ((value / totalPastaSales) * 100).toFixed(2); label += ` (${percentage}%)`; } } return label; } } } } };
-                    createChart('faturamentoPorFornecedorChart', 'bar', sortedPasta.map(item => item.observacaofor), sortedPasta.map(item => item.total_faturamento), pastaTooltipOptions);
+                    createChart('faturamentoPorFornecedorChart', 'bar', pastaData.map(item => item.observacaofor), pastaData.map(item => item.total_faturamento), { indexAxis: 'y' });
                 } else {
-                    showNoDataMessage('faturamentoPorFornecedorChart', 'Sem dados para os filtros aplicados.');
+                    showNoDataMessage('faturamentoPorFornecedorChart', 'Sem dados de faturamento por categoria.');
                 }
-
-                // 4. Gráfico de Top Produtos
+                
                 const metric = currentProductMetric;
-                const dataProdutos = metric === 'faturamento' ? topProductsFat : topProductsPeso;
-                if (dataProdutos.length > 0) {
-                    const labels = dataProdutos.map(p => `(${p.produto}) ${p.descricao}`);
-                    const values = dataProdutos.map(p => p[metric]);
+                const data = metric === 'faturamento' ? topProductsFat : topProductsPeso;
+                if (data.length > 0) {
+                    const labels = data.map(p => `(${p.produto}) ${p.descricao}`);
+                    const values = data.map(p => p[metric]);
                     createChart('salesByProductBarChart', 'bar', labels, values);
                 } else {
-                    showNoDataMessage('salesByProductBarChart', 'Sem dados para os filtros aplicados.');
+                    showNoDataMessage('salesByProductBarChart', 'Sem dados de vendas por produto.');
                 }
 
             } catch (error) {
-                console.error("Erro ao buscar dados filtrados:", error);
-                showNoDataMessage('trendChart', `Erro ao carregar dados: ${error.message}`);
-                showNoDataMessage('salesByPersonChart', 'Falha no carregamento.');
-                showNoDataMessage('faturamentoPorFornecedorChart', 'Falha no carregamento.');
-                showNoDataMessage('salesByProductBarChart', 'Falha no carregamento.');
+                console.error("Erro ao atualizar visuais do dashboard principal:", error);
+                showNoDataMessage('trendChart', `Erro: ${error.message}`);
+                showNoDataMessage('salesByPersonChart', `Erro: ${error.message}`);
+                showNoDataMessage('faturamentoPorFornecedorChart', `Erro: ${error.message}`);
+                showNoDataMessage('salesByProductBarChart', `Erro: ${error.message}`);
             }
-        }
-
-        async function updateAllVisuals() {
-             // A lógica foi movida para fetchAndRenderDashboard
-             await fetchAndRenderDashboard();
         }
 
         function populateSupervisors(filterElementId, supervisors) {
@@ -2542,8 +2431,9 @@
         }
 
         function updateSellerFilter(supervisor, dropdown, filterText, selectedArray, dataSource, allSellers = []) {
-            // A dataSource (allSalesData) agora está vazia. Use sempre allSellers, que vem dos filtros da RPC.
-            const sellersToShow = allSellers || [];
+            const sellersToShow = supervisor 
+                ? [...new Set(dataSource.filter(s => s.superv === supervisor).map(s => s.nome))].sort() 
+                : allSellers;
             selectedArray = selectedArray.filter(seller => sellersToShow.includes(seller));
             dropdown.innerHTML = '';
             sellersToShow.forEach(s => { const isChecked = selectedArray.includes(s); dropdown.innerHTML += `<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${s}" ${isChecked ? 'checked' : ''}><span class="ml-2">${s}</span></label>`; });
@@ -5608,7 +5498,7 @@
                 else if (!stockCityFilter.contains(e.target)) stockCitySuggestions.classList.add('hidden');
             });
 
-            fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentFornecedor === fornecedor) { currentFornecedor = ''; btn.classList.remove('active'); } else { currentFornecedor = fornecedor; fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } updateAllVisuals(); }); });
+            fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentFornecedor === fornecedor) { currentFornecedor = ''; btn.classList.remove('active'); } else { currentFornecedor = fornecedor; fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } populateSupervisors('supervisor-filter', allSalesData); selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); mainTableState.currentPage = 1; updateAllVisuals(); }); });
             weeklyFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentWeeklyFornecedor === fornecedor) { currentWeeklyFornecedor = ''; btn.classList.remove('active'); } else { currentWeeklyFornecedor = fornecedor; weeklyFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } updateWeeklyView(); }); });
             weeklySupervisorFilter.addEventListener('change', updateWeeklyView);
             clearWeeklyFiltersBtn.addEventListener('click', resetWeeklyFilters);
@@ -6407,7 +6297,7 @@
                     dashboardInitialized = true;
                     showScreen(null);
                     loader.classList.remove('hidden');
-                    carregarDadosDoSupabase(supabaseClient);
+                    initializeDashboard(supabaseClient); // MODIFICADO
                     return; // Pula a verificação do banco de dados
                 }
 
@@ -6447,7 +6337,7 @@
                             dashboardInitialized = true; // Marca como inicializado
                             showScreen(null); // Esconde as telas de gatekeeper
                             loader.classList.remove('hidden'); // Mostra o loader principal
-                            await carregarDadosDoSupabase(supabaseClient);
+                            await initializeDashboard(supabaseClient); // MODIFICADO
                             sessionStorage.removeItem('reloadAttempted'); // Reseta a proteção contra loop
                             // isInitializing permanece true para evitar re-execução.
                         } else if (profile && profile.status === 'pendente') {
@@ -6495,7 +6385,7 @@
                                         dashboardInitialized = true;
                                         showScreen(null);
                                         loader.classList.remove('hidden');
-                                        await carregarDadosDoSupabase(supabaseClient);
+                                        await initializeDashboard(supabaseClient); // MODIFICADO
                                         sessionStorage.removeItem('reloadAttempted'); // Reseta a proteção contra loop em caso de sucesso
                                         return; // Sucesso, sai da função
                                     } else if (profile && profile.status === 'pendente') {
