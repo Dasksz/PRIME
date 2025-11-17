@@ -1,0 +1,97 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - img "Logo da Empresa" [ref=e4]
+    - heading "Acesso Restrito" [level=1] [ref=e5]
+    - paragraph [ref=e6]: Este é um sistema privado. Por favor, faça login para solicitar acesso.
+    - button "Entrar com Google" [ref=e7] [cursor=pointer]:
+      - img [ref=e8]
+      - generic [ref=e13]: Entrar com Google
+  - button [ref=e14] [cursor=pointer]:
+    - img [ref=e15]
+  - generic [ref=e17]:
+    - heading "PRIME" [level=2] [ref=e18]
+    - navigation [ref=e19]
+    - button "Sair / Deslogar" [ref=e21] [cursor=pointer]
+    - generic [ref=e22]:
+      - generic [ref=e23]: Tema
+      - generic [ref=e24]:
+        - checkbox
+  - generic [ref=e27]:
+    - banner [ref=e28]:
+      - generic [ref=e30]:
+        - heading "PAINEL DE VENDAS - PRIME DISTRIBUIÇÃO" [level=1] [ref=e31]
+        - paragraph [ref=e32]: "Dados atualizados em: ..."
+    - generic [ref=e33]:
+      - generic [ref=e34]:
+        - heading "Volume Tons" [level=3] [ref=e35]
+        - paragraph [ref=e36]: 0,0
+      - generic [ref=e37]:
+        - heading "Faturamento R$" [level=3] [ref=e38]
+        - paragraph [ref=e39]: R$ 0,00
+      - generic [ref=e40]:
+        - heading "SKU/PDV" [level=3] [ref=e41]
+        - paragraph [ref=e42]: 0,0
+      - generic [ref=e43]:
+        - heading "Cobertura PDVs" [level=3] [ref=e44]
+        - paragraph [ref=e45]: 0,0%
+        - paragraph [ref=e46]: 0 PDVs
+    - generic [ref=e48]:
+      - button "PEPSICO" [ref=e49] [cursor=pointer]
+      - button "MULTIMARCAS" [ref=e50] [cursor=pointer]
+    - generic [ref=e52]:
+      - generic [ref=e53]:
+        - generic [ref=e54]: Rede
+        - group [ref=e55]:
+          - button "Todos" [ref=e56] [cursor=pointer]
+          - button "Com Rede" [ref=e57] [cursor=pointer]:
+            - generic [ref=e58]: Com Rede
+            - img [ref=e59]
+          - button "Sem Rede" [ref=e61] [cursor=pointer]
+      - generic [ref=e62]:
+        - generic [ref=e63]: Supervisor
+        - combobox [ref=e64]:
+          - option "Todos" [selected]
+      - generic [ref=e65]:
+        - generic [ref=e66]: Vendedor
+        - button "Todos Vendedores" [ref=e67] [cursor=pointer]:
+          - generic [ref=e68]: Todos Vendedores
+          - img [ref=e69]
+      - generic [ref=e71]:
+        - generic [ref=e72]: Tipo Venda
+        - button "Todos os Tipos" [ref=e73] [cursor=pointer]:
+          - generic [ref=e74]: Todos os Tipos
+          - img [ref=e75]
+      - generic [ref=e77]:
+        - generic [ref=e78]: Fornecedor
+        - combobox [ref=e79]:
+          - option "Todos" [selected]
+      - generic [ref=e80]:
+        - generic [ref=e81]: Cód. Cliente
+        - textbox "Digite o código..." [ref=e82]
+      - generic [ref=e83]:
+        - generic [ref=e84]: Posição
+        - combobox [ref=e85]:
+          - option "Todas" [selected]
+          - option "Liberado"
+          - option "Montado"
+          - option "Faturado"
+      - button "Limpar Filtros" [ref=e87] [cursor=pointer]
+    - main [ref=e88]:
+      - generic [ref=e89]:
+        - generic [ref=e91]:
+          - generic [ref=e92]:
+            - generic [ref=e93]: Feriados do Mês
+            - button "Selecionar Feriados" [ref=e94] [cursor=pointer]
+          - heading "Tendência de Faturamento" [level=2] [ref=e96]
+        - generic [ref=e98]:
+          - heading "Vendas por Supervisor" [level=2] [ref=e100]
+          - heading "Faturamento por Categoria" [level=2] [ref=e103]
+        - generic [ref=e106]:
+          - heading "Vendas por Produto" [level=2] [ref=e107]
+          - generic [ref=e108]:
+            - button "Faturamento" [ref=e109] [cursor=pointer]
+            - button "Peso Kg" [ref=e110] [cursor=pointer]
+```
