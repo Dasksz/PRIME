@@ -1107,6 +1107,8 @@
         // Cole sua URL e Chave PÚBLICA (anon) aqui
         const SUPABASE_URL = 'https://dhozwhfmrwiumwpcqabi.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRob3p3aGZtcndpdW13cGNxYWJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyNjMzNjAsImV4cCI6MjA3NzgzOTM2MH0.syWqcBCbfH5Ey5AB4NGrsF2-ZuBw4W3NZAPIAZb6Bq4';
+        window.SUPABASE_URL = SUPABASE_URL;
+        window.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
         
         // 8. MODIFICADO: Nova função para carregar dados das 8 tabelas
         async function carregarDadosDoSupabase(supabaseClient) { // MODIFICADO: Recebe o cliente
@@ -1144,102 +1146,55 @@
                 };
 
                 loaderText.textContent = 'Buscando dados...';
-                // CORREÇÃO: Coluna 'qtvenda_embalagem_master' alterada para minúsculas
-                const detailedColumns = 'dtped,codcli,vlvenda,totpesoliq,nome,superv,descricao,produto,fornecedor,codfor,observacaofor,posicao,tipovenda,codusur,filial,bairro,cidade,vlbonific,qtvenda_embalagem_master,pedido,dtsaida,cliente_nome,qtvenda';
-                // CORREÇÃO: Coluna 'qtvenda_embalagem_master' alterada para minúsculas
-                const historyColumns = 'superv,dtped,vlvenda,codcli,filial,nome,codfor,produto,observacaofor,cidade,codusur,tipovenda,qtvenda_embalagem_master,vlbonific,fornecedor,totpesoliq,descricao,qtvenda';
 
-                const fetchHistoryInChunks = async () => {
-                    let allHistory = [];
-                    let offset = 0;
-                    const chunkSize = 25000;
-                    const controller = new AbortController();
-                    const timeoutTotalId = setTimeout(() => controller.abort(), 60000); // Timeout total de 60s
+                // OTIMIZAÇÃO: Chamar a nova função RPC para dados iniciais
+                const initialDataPromise = supabaseClient.rpc('get_initial_dashboard_data', {});
 
-                    try {
-                        while (true) {
-                            const { data, error } = await supabaseClient
-                                .from('data_history')
-                                .select(historyColumns)
-                                .range(offset, offset + chunkSize - 1)
-                                .abortSignal(controller.signal);
-
-                            if (error) {
-                                console.error(`Erro ao buscar chunk de 'data_history':`, error);
-                                throw new Error(`Falha no chunk de histórico: ${error.message}`);
-                            }
-                            if (data) {
-                                allHistory = allHistory.concat(data);
-                            }
-                            if (!data || data.length < chunkSize) {
-                                break;
-                            }
-                            offset += chunkSize;
-                        }
-                        clearTimeout(timeoutTotalId);
-                        return allHistory;
-                    } catch (e) {
-                        clearTimeout(timeoutTotalId);
-                        if (e.name === 'AbortError') {
-                             throw new Error(`Timeout de 60s atingido ao buscar o Histórico de Vendas.`);
-                        }
-                        throw e;
-                    }
-                };
-
-                const fetchDetailedInChunks = async () => {
-                    let allDetailed = [];
-                    let offset = 0;
-                    const chunkSize = 20000;
-                    const controller = new AbortController();
-                    const timeoutTotalId = setTimeout(() => controller.abort(), 60000); // Timeout total de 60s
-
-                    try {
-                        while (true) {
-                            const { data, error } = await supabaseClient
-                                .from('data_detailed')
-                                .select(detailedColumns)
-                                .range(offset, offset + chunkSize - 1)
-                                .abortSignal(controller.signal);
-
-                            if (error) {
-                                console.error(`Erro ao buscar chunk de 'data_detailed':`, error);
-                                throw new Error(`Falha no chunk de detalhamento: ${error.message}`);
-                            }
-                            if (data) {
-                                allDetailed = allDetailed.concat(data);
-                            }
-                            if (!data || data.length < chunkSize) {
-                                break;
-                            }
-                            offset += chunkSize;
-                        }
-                        clearTimeout(timeoutTotalId);
-                        return allDetailed;
-                    } catch (e) {
-                        clearTimeout(timeoutTotalId);
-                         if (e.name === 'AbortError') {
-                             throw new Error(`Timeout de 60s atingido ao buscar o Detalhamento de Vendas.`);
-                        }
-                        throw e;
-                    }
-                };
-
+                // Mantém o carregamento de dados que ainda são necessários na íntegra em paralelo
                 const [
-                    detailedData, historyData, clientsData, ordersData,
-                    productDetailsData, activeProductsData, stockData,
-                    innovationsData, metadata
+                    initialDataResult,
+                    clientsData,
+                    ordersData,
+                    productDetailsData,
+                    activeProductsData,
+                    stockData,
+                    innovationsData
                 ] = await Promise.all([
-                    fetchDetailedInChunks(),
-                    fetchHistoryInChunks(),
+                    initialDataPromise,
                     fetchColumnarData('data_clients'),
                     fetchColumnarData('data_orders'),
                     fetchColumnarData('data_product_details'),
                     fetchColumnarData('data_active_products'),
                     fetchColumnarData('data_stock'),
-                    fetchColumnarData('data_innovations'),
-                    fetchColumnarData('data_metadata')
+                    fetchColumnarData('data_innovations')
                 ]);
+
+                if (initialDataResult.error) {
+                    throw new Error(`Falha na chamada RPC 'get_initial_dashboard_data': ${initialDataResult.error.message}`);
+                }
+                const initialData = initialDataResult.data || {};
+
+                // Agora, em vez de calcular os KPIs no frontend, nós os recebemos prontos
+                const kpis = initialData.kpis || {};
+                const totalClientsForPositivacao = kpis.total_clients_for_coverage;
+
+                // Atualiza os elementos da UI com os dados pré-calculados
+                totalVendasEl.textContent = (kpis.total_faturamento || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                totalPesoEl.textContent = ((kpis.total_peso || 0) / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+                const skuPdv = (kpis.positivacao_count > 0) ? (kpis.total_skus / kpis.positivacao_count) : 0;
+                kpiSkuPdVEl.textContent = skuPdv.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+                const positivacaoPercent = (totalClientsForPositivacao > 0) ? ((kpis.positivacao_count / totalClientsForPositivacao) * 100) : 0;
+                kpiPositivacaoEl.textContent = `${positivacaoPercent.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+                kpiPositivacaoPercentEl.textContent = `${(kpis.positivacao_count || 0).toLocaleString('pt-BR')} PDVs`;
+
+                const lastUpdate = initialData.last_update;
+                const lastUpdateDate = lastUpdate ? new Date(lastUpdate).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '...';
+                document.getElementById('generation-date').textContent = `Dados atualizados em: ${lastUpdateDate}`;
+                document.getElementById('orders-generation-date').textContent = `Dados atualizados em: ${lastUpdateDate}`;
+
+
+                const passedWorkingDaysCurrentMonth = initialData.passed_working_days || 1;
+
                 console.log("DEBUG: clientsData length:", clientsData.length);
 
                 loaderText.textContent = 'Processando dados...';
@@ -1263,12 +1218,9 @@
                     else if (item.filial === '08') stockMap08[item.product_code] = item.stock_qty;
                 });
 
-                const metadataValue = (metadata ?? []).find(m => m.key === 'passedWorkingDaysCurrentMonth')?.value;
-                const passedWorkingDaysCurrentMonth = metadataValue ? parseInt(metadataValue, 10) : 1;
-
                 const embeddedData = {
-                    detailed: detailedData ?? [],
-                    history: historyData ?? [],
+                    detailed: [], // OTIMIZAÇÃO: Não carrega mais os dados detalhados
+                    history: [], // OTIMIZAÇÃO: Não carrega mais o histórico
                     clients: clientsData ?? [],
                     byOrder: ordersData ?? [],
                     innovationsMonth: innovationsData ?? [],
@@ -1276,13 +1228,12 @@
                     activeProductCodes: activeProductCodes,
                     stockMap05: stockMap05,
                     stockMap08: stockMap08,
-                    passedWorkingDaysCurrentMonth: passedWorkingDaysCurrentMonth
+                    passedWorkingDaysCurrentMonth: passedWorkingDaysCurrentMonth,
+                    filters: initialData.filters || {},
+                    charts: initialData.charts || {}
                 };
 
                 window.embeddedData = embeddedData;
-                
-                const generationDate = new Date().toLocaleString('pt-BR');
-                document.getElementById('generation-date').textContent = `Dados atualizados em: ${generationDate}`;
                 
                 const scriptLogicContent = document.getElementById('report-logic-script').textContent;
                 const logicScript = document.createElement('script');
@@ -1321,19 +1272,7 @@
     -->
     <script id="report-logic-script" type="text/template">
         //const embeddedData = window.embeddedData; // Esta linha será removida pois os dados virão como argumento
-        let allSalesData = embeddedData.detailed || [];
-        let allHistoryData = embeddedData.history || [];
-
-        // CORREÇÃO: Padroniza os campos de nome e supervisor para remover espaços
-        allSalesData.forEach(s => {
-            if (s.nome) s.nome = s.nome.trim();
-            if (s.superv) s.superv = s.superv.trim();
-        });
-        allHistoryData.forEach(s => {
-            if (s.nome) s.nome = s.nome.trim();
-            if (s.superv) s.superv = s.superv.trim();
-        });
-
+        const chartsData = embeddedData.charts || {};
         const aggregatedOrders = embeddedData.byOrder || [];
         const allClientsData = embeddedData.clients || [];
         const stockData05 = new Map(Object.entries(embeddedData.stockMap05 || {}));
@@ -1381,56 +1320,6 @@
 
         function initializeOptimizedDataStructures() {
             try {
-            // 1. Criar um mapa de detalhes do vendedor (codusur -> {nome, supervisor})
-            const sellerDetailsMap = new Map();
-            const allDataForSellerMapping = [...allSalesData, ...allHistoryData];
-            allDataForSellerMapping.forEach(s => {
-                if (s.codusur && (!sellerDetailsMap.has(s.codusur) || s.nome)) { // Prioriza registros com nome
-                    sellerDetailsMap.set(s.codusur, { name: s.nome, supervisor: s.superv });
-                }
-            });
-
-            // 2. Criar um mapa do cliente para o seu vendedor principal atual (codcli -> codusur)
-            const clientToCurrentSellerMap = new Map();
-            let americanasCodCli = null;
-            allClientsData.forEach(client => {
-                if (client.codigo_cliente && client.rca1) {
-                    clientToCurrentSellerMap.set(String(client.codigo_cliente), String(client.rca1));
-                }
-                // 3. Identificar o código do cliente para "Americanas" para a exceção
-                if (client.razaosocial && client.razaosocial.toUpperCase().includes('AMERICANAS')) {
-                    americanasCodCli = String(client.codigo_cliente);
-                }
-            });
-
-            // 4. Função para reatribuir vendas baseada na nova regra
-            const remapSales = (salesData) => {
-                return salesData.map(sale => {
-                    const clientCode = String(sale.codcli);
-                    // Aplica a regra para todos, exceto para o cliente "Americanas"
-                    if (clientCode !== americanasCodCli) {
-                        const currentSellerCode = clientToCurrentSellerMap.get(clientCode);
-                        if (currentSellerCode) {
-                            const sellerDetails = sellerDetailsMap.get(currentSellerCode);
-                            if (sellerDetails) {
-                                // Cria um novo objeto para não modificar o original diretamente (imutabilidade)
-                                const remappedSale = { ...sale };
-                                remappedSale.codusur = currentSellerCode;
-                                remappedSale.nome = sellerDetails.name;
-                                remappedSale.superv = sellerDetails.supervisor;
-                                return remappedSale;
-                            }
-                        }
-                    }
-                    // Retorna a venda original se a regra não se aplicar
-                    return sale;
-                });
-            };
-
-            // 5. Substituir os dados originais pelos dados reatribuídos
-            allSalesData = remapSales(allSalesData);
-            allHistoryData = remapSales(allHistoryData);
-
             allClientsData.forEach(client => {
                 let rcaList = [];
                 if (client.rcas) {
@@ -1985,6 +1874,7 @@
         let selectedCityRedes = [];
         let selectedComparisonRedes = [];
         let selectedStockRedes = [];
+        let selectedOrdersRedes = []; // CORREÇÃO: Variável de estado para o filtro de rede dos pedidos
 
         let mainRedeGroupFilter = '';
         let ordersRedeGroupFilter = ''; // ADICIONADO: Grupo de Rede para a view de Pedidos
@@ -2333,89 +2223,6 @@
         
         // <!-- FIM DO CÓDIGO RESTAURADO -->
 
-        function getUniqueMonthCount(data) {
-            const months = new Set();
-            data.forEach(sale => {
-                const saleDate = parseDate(sale.dtped);
-                if (saleDate) {
-                    const monthKey = `${saleDate.getFullYear()}-${saleDate.getMonth()}`;
-                    months.add(monthKey);
-                }
-            });
-            return months.size > 0 ? months.size : 1;
-        }
-
-        function calculateSummaryFromData(data, isFiltered, clientBaseForPositivacao) {
-            const summary = {
-                totalFaturamento: 0, totalPeso: 0, vendasPorVendedor: {}, vendasPorSupervisor: {},
-                top10ProdutosFaturamento: [], top10ProdutosPeso: [], faturamentoPorFornecedor: {},
-                skuPdv: 0, positivacaoCount: 0, positivacaoPercent: 0
-            };
-            const salesByProduct = {};
-            const faturamentoMap = new Map();
-
-            // --- INÍCIO DA MODIFICAÇÃO: KPIs de Cobertura e SKU ---
-            
-            // 1. Lógica de Positivação (Cobertura)
-            // Registar clientes que tiveram *qualquer* operação (Venda OU Bonificação)
-            const positiveClients = new Set();
-            data.forEach(sale => {
-                // Se o cliente teve Venda (vlvenda > 0) OU Bonificação (vlbonific > 0), ele é considerado positivado.
-                if (sale.codcli && (sale.vlvenda > 0 || sale.vlbonific > 0)) {
-                    positiveClients.add(sale.codcli);
-                }
-            });
-            summary.positivacaoCount = positiveClients.size;
-
-
-            let totalSkus = 0;
-            data.forEach(item => {
-                summary.totalFaturamento += item.vlvenda;
-                summary.totalPeso += item.totpesoliq;
-
-                // 2. Lógica de SKU/PDV
-                // Contamos o SKU se for uma Venda OU uma Bonificação
-                if(item.vlvenda > 0 || item.vlbonific > 0) {
-                    totalSkus++;
-                }
-
-                const vendedor = item.nome || 'N/A';
-                summary.vendasPorVendedor[vendedor] = (summary.vendasPorVendedor[vendedor] || 0) + item.vlvenda;
-
-                const supervisor = item.superv || 'N/A';
-                summary.vendasPorSupervisor[supervisor] = (summary.vendasPorSupervisor[supervisor] || 0) + item.vlvenda;
-
-                const produto = item.descricao || 'N/A';
-                const codigo = item.produto || 'N/A';
-                if (!salesByProduct[produto]) salesByProduct[produto] = { faturamento: 0, peso: 0, codigo: codigo };
-                salesByProduct[produto].faturamento += item.vlvenda;
-                salesByProduct[produto].peso += item.totpesoliq;
-
-                let fornecedorLabel;
-                if(isFiltered){
-                    const fornecedorNome = item.fornecedor || 'N/A';
-                    const codFor = item.codfor;
-                    fornecedorLabel = `${fornecedorNome} - ${codFor}`;
-                } else {
-                     fornecedorLabel = item.observacaofor || 'N/A';
-                }
-
-                const currentTotal = faturamentoMap.get(fornecedorLabel) || 0;
-                faturamentoMap.set(fornecedorLabel, currentTotal + item.vlvenda);
-            });
-
-            const totalRelevantClients = clientBaseForPositivacao.length;
-            summary.positivacaoPercent = totalRelevantClients > 0 ? (summary.positivacaoCount / totalRelevantClients) * 100 : 0;
-            // O cálculo do SKU/PDV agora usa a nova contagem de SKUs e a nova contagem de positivação
-            summary.skuPdv = summary.positivacaoCount > 0 ? totalSkus / summary.positivacaoCount : 0;
-            // --- FIM DA MODIFICAÇÃO ---
-
-            summary.faturamentoPorFornecedor = Object.fromEntries(faturamentoMap);
-            summary.top10ProdutosFaturamento = Object.entries(salesByProduct).sort(([,a],[,b]) => b.faturamento - a.faturamento).slice(0, 10).map(([p, d]) => ({ produto: p, ...d }));
-            summary.top10ProdutosPeso = Object.entries(salesByProduct).sort(([,a],[,b]) => b.peso - a.peso).slice(0, 10).map(([p, d]) => ({ produto: p, ...d }));
-            return summary;
-        }
-
         const isObject = obj => obj && typeof obj === 'object' && !Array.isArray(obj);
         const mergeDeep = (...objects) => {
             return objects.reduce((prev, obj) => {
@@ -2494,14 +2301,6 @@
                 container.style.display = 'flex'; container.style.alignItems = 'center'; container.style.justifyContent = 'center';
                 container.innerHTML = `<p class="text-slate-500">${message}</p>`;
             }
-        }
-
-        function updateProductBarChart(summary) {
-            const metric = currentProductMetric;
-            const data = metric === 'faturamento' ? summary.top10ProdutosFaturamento : summary.top10ProdutosPeso;
-            const labels = data.map(p => `(${p.codigo}) ${p.produto}`);
-            const values = data.map(p => p[metric]);
-            createChart('salesByProductBarChart', 'bar', labels, values);
         }
 
         function renderOrdersTable(data) {
@@ -2611,180 +2410,131 @@
         }
 
 
-        function updateTrendChart(currentSales, historicalSales) {
-            if (!currentSales || currentSales.length === 0 || !historicalSales || historicalSales.length === 0) {
-                showNoDataMessage('trendChart', 'Dados insuficientes para exibir a tendência.');
-                return;
-            }
-            const currentYear = lastSaleDate.getFullYear();
-            const currentMonth = lastSaleDate.getMonth();
-            const totalWorkingDays = getWorkingDaysInMonth(currentYear, currentMonth, selectedHolidays);
-            const passedWorkingDays = getPassedWorkingDaysInMonth(currentYear, currentMonth, selectedHolidays, lastSaleDate);
+        async function fetchAndRenderDashboard() {
+            if (chartView.classList.contains('hidden')) return;
 
-            const averageMonthlyRevenue = monthlyKpiAverage(historicalSales, (sales) => sales.reduce((sum, s) => sum + getRevenue(s), 0));
-            const currentMonthRevenue = currentSales.reduce((sum, sale) => sum + getRevenue(sale), 0);
-            const trend = passedWorkingDays > 0 && totalWorkingDays > 0 ? (currentMonthRevenue / passedWorkingDays) * totalWorkingDays : 0;
-            const lineChartDataset = [{ label: 'Valor', data: [averageMonthlyRevenue, trend], fill: true, borderColor: 'var(--bg-button-active)', backgroundColor: 'rgba(20, 184, 166, 0.1)', tension: 0.2, pointRadius: 6, pointBackgroundColor: 'var(--bg-button-active)', pointBorderColor: 'var(--bg-content)', pointBorderWidth: 2, pointHoverRadius: 8 }];
-            
-            const formatLabelValue = (v) => {
-                if (typeof v !== 'number') return ''; // Proteção contra valores não numéricos
-                return (v >= 1000000 ? (v / 1000000).toFixed(2) + ' M' : (v / 1000).toFixed(0) + 'k');
+            // Mostra um loader simples nos gráficos enquanto busca os dados
+            showNoDataMessage('trendChart', 'Atualizando dados...');
+            showNoDataMessage('salesByPersonChart', 'Atualizando dados...');
+            showNoDataMessage('faturamentoPorFornecedorChart', 'Atualizando dados...');
+            showNoDataMessage('salesByProductBarChart', 'Atualizando dados...');
+
+            // 1. Coleta os filtros da UI
+            const filters = {
+                supervisor_filter: supervisorFilter.value || null,
+                pasta_filter: currentFornecedor || null,
+                sellers_filter: selectedSellers.length > 0 ? selectedSellers : null,
+                fornecedor_filter: fornecedorFilter.value || null,
+                posicao_filter: posicaoFilter.value || null,
+                codcli_filter: codcliFilter.value.trim() || null,
             };
-            
-            const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim();
 
-            createChart('trendChart', 'line', ['Média Faturamento Trimestre', 'Tendência Mês Atual'], lineChartDataset, {
-                layout: { padding: { top: 30 } },
-                plugins: {
-                    legend: { display: false },
-                    datalabels: { display: true, anchor: 'end', align: 'top', offset: 8, color: textColor, font: { size: 12, weight: 'bold' }, formatter: formatLabelValue }
-                },
-                scales: {
-                    y: { ticks: { callback: function(value) { if (value >= 1000000) return 'R$ ' + (value / 1000000).toFixed(1) + 'M'; return 'R$ ' + (value / 1000) + 'k'; } } },
-                    x: { grid: { display: false } }
-                }
-            });
-        }
+            try {
+                // 2. Chama a RPC com os filtros
+                const { data, error } = await supabaseClient.rpc('get_initial_dashboard_data', filters);
 
-        function updateAllVisuals() {
-            console.log("Debug: updateAllVisuals chamada.");
-            const supervisor = supervisorFilter.value;
-            const posicao = posicaoFilter.value;
-            const codcli = codcliFilter.value.trim();
-            const selectedFornecedor = fornecedorFilter.value;
+                if (error) throw error;
 
-            let clientBaseForCoverage = allClientsData.filter(c => {
-                const rca1 = String(c.rca1 || '').trim();
-                const isAmericanas = (c.razaosocial || '').toUpperCase().includes('AMERICANAS');
-                return (isAmericanas || rca1 !== '53');
-            });
+                // 3. Renderiza os KPIs e gráficos com os novos dados
+                const kpis = data.kpis || {};
+                const chartsData = data.charts || {};
 
-            if (mainRedeGroupFilter === 'com_rede') {
-                clientBaseForCoverage = clientBaseForCoverage.filter(c => c.ramo && c.ramo !== 'N/A');
-                if (selectedMainRedes.length > 0) {
-                    clientBaseForCoverage = clientBaseForCoverage.filter(c => selectedMainRedes.includes(c.ramo));
-                }
-            } else if (mainRedeGroupFilter === 'sem_rede') {
-                clientBaseForCoverage = clientBaseForCoverage.filter(c => !c.ramo || c.ramo === 'N/A');
-            }
-            const clientCodesInRede = new Set(clientBaseForCoverage.map(c => c['codigo_cliente']));
+                // Atualiza KPIs
+                totalVendasEl.textContent = (kpis.total_faturamento || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                totalPesoEl.textContent = ((kpis.total_peso || 0) / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+                const skuPdv = (kpis.positivacao_count > 0) ? (kpis.total_skus / kpis.positivacao_count) : 0;
+                kpiSkuPdVEl.textContent = skuPdv.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+                const positivacaoPercent = (kpis.total_clients_for_coverage > 0) ? ((kpis.positivacao_count / kpis.total_clients_for_coverage) * 100) : 0;
+                kpiPositivacaoEl.textContent = `${positivacaoPercent.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+                kpiPositivacaoPercentEl.textContent = `${(kpis.positivacao_count || 0).toLocaleString('pt-BR')} PDVs`;
 
-            const getFilteredData = (sourceData) => {
-                return sourceData.filter(item => {
-                    let matches = true;
-                    if (mainRedeGroupFilter) {
-                        matches = matches && clientCodesInRede.has(item.codcli);
-                    }
-                    if (codcli) {
-                        matches = matches && item.codcli === codcli;
-                    } else {
-                        if (supervisor) {
-                            matches = matches && item.superv === supervisor;
-                        }
-                        if (selectedSellers.length > 0) {
-                            matches = matches && selectedSellers.includes(item.nome);
-                        }
-                    }
-                    if (selectedTiposVenda.length > 0) {
-                        matches = matches && selectedTiposVenda.includes(item.tipovenda);
-                    }
-                    if (currentFornecedor) {
-                        if (item.fornecedores_list) { // Para aggregatedOrders
-                            matches = matches && item.fornecedores_list.includes(currentFornecedor);
-                        } else { // Para allSalesData/allHistoryData
-                            matches = matches && item.observacaofor === currentFornecedor;
-                        }
-                    }
-                    if (selectedFornecedor) {
-                         if (item.codfors_list) { // Para aggregatedOrders
-                            matches = matches && item.codfors_list.includes(selectedFornecedor);
-                        } else { // Para allSalesData/allHistoryData
-                            matches = matches && item.codfor == selectedFornecedor;
-                        }
-                    }
-                    if (posicao) {
-                        matches = matches && item.posicao === posicao;
-                    }
-                    return matches;
+                // Renderiza Gráficos
+                const supervisorData = chartsData.sales_by_supervisor || [];
+                const pastaData = chartsData.sales_by_pasta || [];
+                const trendData = chartsData.trend || { avg_revenue: 0, trend_revenue: 0 };
+                const topProductsFat = chartsData.top_10_products_faturamento || [];
+                const topProductsPeso = chartsData.top_10_products_peso || [];
+                const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim();
+
+                // 1. Gráfico de Tendência
+                const trendDataset = [{ label: 'Valor', data: [trendData.avg_revenue, trendData.trend_revenue], fill: true, borderColor: 'var(--bg-button-active)', backgroundColor: 'rgba(20, 184, 166, 0.1)', tension: 0.2, pointRadius: 6, pointBackgroundColor: 'var(--bg-button-active)', pointBorderColor: 'var(--bg-content)', pointBorderWidth: 2, pointHoverRadius: 8 }];
+                createChart('trendChart', 'line', ['Média Faturamento Trimestre', 'Tendência Mês Atual'], trendDataset, {
+                    layout: { padding: { top: 30 } },
+                    plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'top', offset: 8, color: textColor, font: { size: 12, weight: 'bold' }, formatter: (v) => (v >= 1000000 ? (v / 1000000).toFixed(2) + ' M' : (v / 1000).toFixed(0) + 'k') } },
+                    scales: { y: { ticks: { callback: (value) => (value >= 1000000 ? 'R$ ' + (value / 1000000).toFixed(1) + 'M' : 'R$ ' + (value / 1000) + 'k') } }, x: { grid: { display: false } } }
                 });
-            };
 
-            const filteredSalesData = getFilteredData(allSalesData);
-            const filteredHistoryData = getFilteredData(allHistoryData);
-
-            // REMOVIDO: A filtragem da tabela agora é feita na sua própria função
-            // const filteredTableData = getFilteredData(aggregatedOrders);
-            
-            const isFiltered = !!supervisor || selectedSellers.length > 0 || !!codcli || !!currentFornecedor || !!mainRedeGroupFilter || !!selectedFornecedor || !!posicao || selectedTiposVenda.length > 0;
-
-            const summary = calculateSummaryFromData(filteredSalesData, isFiltered, clientBaseForCoverage);
-
-            totalVendasEl.textContent = summary.totalFaturamento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            totalPesoEl.textContent = `${(summary.totalPeso / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
-            kpiSkuPdVEl.textContent = summary.skuPdv.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-            kpiPositivacaoEl.textContent = `${summary.positivacaoPercent.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
-            kpiPositivacaoPercentEl.textContent = `${summary.positivacaoCount.toLocaleString('pt-BR')} PDVs`;
-
-            // REMOVIDO: A renderização da tabela foi movida para sua própria view
-            /*
-            if (!tableView.classList.contains('hidden')) {
-                renderTable(filteredTableData);
-            }
-            */
-
-            if (!chartView.classList.contains('hidden')) {
-                updateTrendChart(filteredSalesData, filteredHistoryData);
-                const totalForPercentage = supervisor ? Object.values(summary.vendasPorVendedor).reduce((a, b) => a + b, 0) : Object.values(summary.vendasPorSupervisor).reduce((a, b) => a + b, 0);
-                const personChartTooltipOptions = { plugins: { tooltip: { callbacks: { label: function(context) { let label = context.dataset.label || ''; if (label) label += ': '; const value = context.parsed.y; if (value !== null) { label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); if (totalForPercentage > 0) { const percentage = ((value / totalForPercentage) * 100).toFixed(2); label += ` (${percentage}%)`; } } return label; } } } } };
-                if (supervisor) {
-                    salesByPersonTitle.textContent = 'Vendas por Vendedor';
-                    createChart('salesByPersonChart', 'bar', Object.keys(summary.vendasPorVendedor).map(getFirstName), Object.values(summary.vendasPorVendedor), personChartTooltipOptions);
+                // 2. Gráfico de Vendas por Supervisor/Vendedor
+                salesByPersonTitle.textContent = supervisorFilter.value ? 'Vendas por Vendedor' : 'Vendas por Supervisor';
+                 if (supervisorData.length > 0) {
+                    const totalSales = supervisorData.reduce((sum, item) => sum + item.total_faturamento, 0);
+                    const tooltipOptions = { plugins: { tooltip: { callbacks: { label: function(context) { let label = context.dataset.label || ''; if (label) label += ': '; const value = context.parsed.y; if (value !== null) { label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); if (totalSales > 0) { const percentage = ((value / totalSales) * 100).toFixed(2); label += ` (${percentage}%)`; } } return label; } } } } };
+                    createChart('salesByPersonChart', 'bar', supervisorData.map(item => item.superv), supervisorData.map(item => item.total_faturamento), tooltipOptions);
                 } else {
-                    salesByPersonTitle.textContent = 'Vendas por Supervisor';
-                    createChart('salesByPersonChart', 'bar', Object.keys(summary.vendasPorSupervisor), Object.values(summary.vendasPorSupervisor), personChartTooltipOptions);
+                    showNoDataMessage('salesByPersonChart', 'Sem dados para os filtros aplicados.');
                 }
 
-                document.getElementById('faturamentoPorFornecedorTitle').textContent = isFiltered ? 'Faturamento por Fornecedor' : 'Faturamento por Categoria';
-                const faturamentoPorFornecedorData = summary.faturamentoPorFornecedor;
-                const totalFaturamentoFornecedor = Object.values(faturamentoPorFornecedorData).reduce((a, b) => a + b, 0);
-                const fornecedorTooltipOptions = { indexAxis: 'y', plugins: { tooltip: { callbacks: { label: function(context) { let label = context.label || ''; if (label) label += ': '; const value = context.parsed.x; if (value !== null) { label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); if (totalFaturamentoFornecedor > 0) { const percentage = ((value / totalFaturamentoFornecedor) * 100).toFixed(2); label += ` (${percentage}%)`; } } return label; } } } } };
-                const sortedFornecedores = Object.entries(faturamentoPorFornecedorData).sort(([, a], [, b]) => a - b);
-                if (sortedFornecedores.length > 0) createChart('faturamentoPorFornecedorChart', 'bar', sortedFornecedores.map(([name]) => name), sortedFornecedores.map(([, total]) => total), fornecedorTooltipOptions);
-                else showNoDataMessage('faturamentoPorFornecedorChart', 'Sem dados de faturamento.');
-                updateProductBarChart(summary);
+                // 3. Gráfico de Faturamento por Categoria/Fornecedor
+                document.getElementById('faturamentoPorFornecedorTitle').textContent = fornecedorFilter.value ? 'Faturamento por Fornecedor' : 'Faturamento por Categoria';
+                if (pastaData.length > 0) {
+                    const sortedPasta = pastaData.sort((a, b) => a.total_faturamento - b.total_faturamento);
+                    const totalPastaSales = sortedPasta.reduce((sum, item) => sum + item.total_faturamento, 0);
+                    const pastaTooltipOptions = { indexAxis: 'y', plugins: { tooltip: { callbacks: { label: function(context) { let label = context.label || ''; if (label) label += ': '; const value = context.parsed.x; if (value !== null) { label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); if (totalPastaSales > 0) { const percentage = ((value / totalPastaSales) * 100).toFixed(2); label += ` (${percentage}%)`; } } return label; } } } } };
+                    createChart('faturamentoPorFornecedorChart', 'bar', sortedPasta.map(item => item.observacaofor), sortedPasta.map(item => item.total_faturamento), pastaTooltipOptions);
+                } else {
+                    showNoDataMessage('faturamentoPorFornecedorChart', 'Sem dados para os filtros aplicados.');
+                }
+
+                // 4. Gráfico de Top Produtos
+                const metric = currentProductMetric;
+                const dataProdutos = metric === 'faturamento' ? topProductsFat : topProductsPeso;
+                if (dataProdutos.length > 0) {
+                    const labels = dataProdutos.map(p => `(${p.produto}) ${p.descricao}`);
+                    const values = dataProdutos.map(p => p[metric]);
+                    createChart('salesByProductBarChart', 'bar', labels, values);
+                } else {
+                    showNoDataMessage('salesByProductBarChart', 'Sem dados para os filtros aplicados.');
+                }
+
+            } catch (error) {
+                console.error("Erro ao buscar dados filtrados:", error);
+                showNoDataMessage('trendChart', `Erro ao carregar dados: ${error.message}`);
+                showNoDataMessage('salesByPersonChart', 'Falha no carregamento.');
+                showNoDataMessage('faturamentoPorFornecedorChart', 'Falha no carregamento.');
+                showNoDataMessage('salesByProductBarChart', 'Falha no carregamento.');
             }
         }
 
-        function populateSupervisors(filterElementId, dataSource) {
+        async function updateAllVisuals() {
+             // A lógica foi movida para fetchAndRenderDashboard
+             await fetchAndRenderDashboard();
+        }
+
+        function populateSupervisors(filterElementId, supervisors) {
             const supervisorFilterEl = document.getElementById(filterElementId);
             if (!supervisorFilterEl) return;
-            const supervisors = [...new Set(dataSource.map(item => item.superv).filter(Boolean))].sort();
+            const supervisorsList = Array.isArray(supervisors) ? supervisors : [];
             const currentSupervisorValue = supervisorFilterEl.value;
             supervisorFilterEl.innerHTML = '<option value="">Todos</option>';
-            supervisors.forEach(sup => { supervisorFilterEl.innerHTML += `<option value="${sup}">${sup}</option>`; });
-            if (supervisors.includes(currentSupervisorValue)) supervisorFilterEl.value = currentSupervisorValue;
+            supervisorsList.forEach(sup => { supervisorFilterEl.innerHTML += `<option value="${sup}">${sup}</option>`; });
+            if (supervisorsList.includes(currentSupervisorValue)) supervisorFilterEl.value = currentSupervisorValue;
             else supervisorFilterEl.value = '';
         }
 
-        function populateMainSupplierFilter(filterElementId, dataSource) {
+        function populateMainSupplierFilter(filterElementId, suppliers) {
             const filterEl = document.getElementById(filterElementId);
             if (!filterEl) return;
-            const suppliers = new Map();
-            dataSource.forEach(s => {
-                if (s.codfor && s.fornecedor) {
-                    suppliers.set(s.codfor, s.fornecedor);
-                }
-            });
-            const sortedSuppliers = [...suppliers.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+            const suppliersList = Array.isArray(suppliers) ? suppliers : [];
 
             filterEl.innerHTML = '<option value="">Todos</option>';
-            sortedSuppliers.forEach(([cod, name]) => {
-                filterEl.innerHTML += `<option value="${cod}">${cod} - ${name}</option>`;
+            suppliersList.forEach(s => {
+                filterEl.innerHTML += `<option value="${s.codfor}">${s.codfor} - ${s.fornecedor}</option>`;
             });
         }
 
-        function updateSellerFilter(supervisor, dropdown, filterText, selectedArray, dataSource) {
-            const sellersToShow = supervisor ? [...new Set(dataSource.filter(s => s.superv === supervisor).map(s => s.nome))].sort() : [...new Set(dataSource.map(item => item.nome).filter(Boolean))].sort();
+        function updateSellerFilter(supervisor, dropdown, filterText, selectedArray, dataSource, allSellers = []) {
+            // A dataSource (allSalesData) agora está vazia. Use sempre allSellers, que vem dos filtros da RPC.
+            const sellersToShow = allSellers || [];
             selectedArray = selectedArray.filter(seller => sellersToShow.includes(seller));
             dropdown.innerHTML = '';
             sellersToShow.forEach(s => { const isChecked = selectedArray.includes(s); dropdown.innerHTML += `<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${s}" ${isChecked ? 'checked' : ''}><span class="ml-2">${s}</span></label>`; });
@@ -2836,15 +2586,14 @@
             selectedTiposVenda = [];
             mainRedeGroupFilter = '';
             selectedMainRedes = [];
-            mainTableState.currentPage = 1;
 
             mainRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
             mainRedeGroupContainer.querySelector('button[data-group=""]').classList.add('active');
             updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
 
             document.querySelectorAll('#fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
-            populateSupervisors('supervisor-filter', allSalesData);
-            selectedSellers = updateSellerFilter('', vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
+            populateSupervisors('supervisor-filter', filtersData.supervisors);
+            selectedSellers = updateSellerFilter('', vendedorFilterDropdown, vendedorFilterText, [], allSalesData, filtersData.sellers);
             selectedTiposVenda = updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
             updateAllVisuals();
         }
@@ -2905,11 +2654,12 @@
             updateRedeFilter(ordersRedeFilterDropdown, ordersComRedeBtnText, selectedOrdersRedes, allClientsData);
 
             selectedOrdersSellers = updateSellerFilter(
-                ordersSupervisorFilter.value,
+                '',
                 ordersVendedorFilterDropdown,
                 ordersVendedorFilterText,
-                selectedOrdersSellers,
-                allSalesData
+                [],
+                allSalesData,
+                filtersData.sellers
             );
             selectedOrdersTiposVenda = updateTipoVendaFilter(
                 ordersTipoVendaFilterDropdown,
@@ -5627,9 +5377,9 @@
                                 updateAllVisuals();
                                 break;
                             case 'orders-view':
-                                populateSupervisors('orders-supervisor-filter', allSalesData);
-                                populateMainSupplierFilter('orders-fornecedor-filter', [...allSalesData, ...allHistoryData]);
-                                updateSellerFilter(ordersSupervisorFilter.value, ordersVendedorFilterDropdown, ordersVendedorFilterText, selectedOrdersSellers, allSalesData);
+                                populateSupervisors('orders-supervisor-filter', filtersData.supervisors);
+                                populateMainSupplierFilter('orders-fornecedor-filter', filtersData.suppliers);
+                                updateSellerFilter(ordersSupervisorFilter.value, ordersVendedorFilterDropdown, ordersVendedorFilterText, selectedOrdersSellers, allSalesData, filtersData.sellers);
                                 updateTipoVendaFilter(ordersTipoVendaFilterDropdown, ordersTipoVendaFilterText, selectedOrdersTiposVenda, allSalesData);
                                 updateRedeFilter(ordersRedeFilterDropdown, ordersComRedeBtnText, selectedOrdersRedes, allClientsData);
                                 updateOrdersView();
@@ -5849,7 +5599,7 @@
                 else if (!stockCityFilter.contains(e.target)) stockCitySuggestions.classList.add('hidden');
             });
 
-            fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentFornecedor === fornecedor) { currentFornecedor = ''; btn.classList.remove('active'); } else { currentFornecedor = fornecedor; fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } populateSupervisors('supervisor-filter', allSalesData); selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); mainTableState.currentPage = 1; updateAllVisuals(); }); });
+            fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentFornecedor === fornecedor) { currentFornecedor = ''; btn.classList.remove('active'); } else { currentFornecedor = fornecedor; fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } updateAllVisuals(); }); });
             weeklyFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentWeeklyFornecedor === fornecedor) { currentWeeklyFornecedor = ''; btn.classList.remove('active'); } else { currentWeeklyFornecedor = fornecedor; weeklyFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } updateWeeklyView(); }); });
             weeklySupervisorFilter.addEventListener('change', updateWeeklyView);
             clearWeeklyFiltersBtn.addEventListener('click', resetWeeklyFilters);
@@ -6423,13 +6173,16 @@
 
         initializeOptimizedDataStructures();
         calculateHistoricalBests(); // <-- MOVIDA PARA CIMA
-        populateSupervisors('supervisor-filter', allSalesData);
-        populateMainSupplierFilter('fornecedor-filter', [...allSalesData, ...allHistoryData]);
-        populateSupervisors('city-supervisor-filter', allSalesData);
-        populateSupervisors('stock-supervisor-filter', [...allSalesData, ...allHistoryData]);
-        updateSellerFilter('', vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
+
+        // CORREÇÃO: Povoar filtros com dados pré-agregados da RPC
+        const filtersData = embeddedData.filters || { supervisors: [], suppliers: [], sellers: [] };
+        populateSupervisors('supervisor-filter', filtersData.supervisors);
+        populateMainSupplierFilter('fornecedor-filter', filtersData.suppliers);
+        populateSupervisors('city-supervisor-filter', filtersData.supervisors);
+        populateSupervisors('stock-supervisor-filter', filtersData.supervisors);
+        updateSellerFilter('', vendedorFilterDropdown, vendedorFilterText, [], allSalesData, filtersData.sellers);
         updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
-        updateSellerFilter('', cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData);
+        updateSellerFilter('', cityVendedorFilterDropdown, cityVendedorFilterText, [], allSalesData, filtersData.sellers);
 
         updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
         updateRedeFilter(cityRedeFilterDropdown, cityComRedeBtnText, selectedCityRedes, allClientsData);
