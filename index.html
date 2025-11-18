@@ -1165,7 +1165,7 @@
                 const fetchInitialData = async () => {
                     try {
                         const rpcPromise = supabaseClient.rpc('get_initial_dashboard_data', {});
-                        const rpcTimeout = new Promise((_, reject) => 
+                        const rpcTimeout = new Promise((_, reject) =>
                             setTimeout(() => reject(new Error('Timeout de 30s na chamada RPC get_initial_dashboard_data.')), 30000)
                         );
                         return await Promise.race([rpcPromise, rpcTimeout]);
@@ -3627,11 +3627,11 @@
                      { title: 'Clientes Atendidos', current: kpis.current_clients || 0, history: kpis.history_avg_clients || 0, format: 'integer' },
                      { title: 'Ticket Médio', current: kpis.current_ticket || 0, history: kpis.history_avg_ticket || 0, format: 'currency' }
                 ]);
-                
+
                 // Renderiza Gráficos e Tabelas
                 const charts = data.charts || {};
                 const tables = data.tables || {};
-                
+
                 // Gráfico Semanal/Mensal
                 const weeklyData = charts.weekly_comparison || [];
                 if (comparisonChartType === 'weekly') {
@@ -3652,7 +3652,7 @@
                     monthlyComparisonChartContainer.classList.remove('hidden');
                     showNoDataMessage('monthlyComparisonChart', 'Gráfico mensal não implementado na RPC.');
                 }
-                
+
                 // Tabela de Supervisores
                 const supervisorData = tables.supervisor_comparison || [];
                 const supervisorTableBody = document.getElementById('supervisorComparisonTableBody');
