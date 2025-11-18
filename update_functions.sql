@@ -59,7 +59,7 @@ BEGIN
     -- KPIs
     kpis_current AS (
         SELECT
-            COALESCE(SUM(CASE WHEN tipovenda IN ('1', '9') THEN vlvenda ELSE 0 END), 0) AS total_fat,
+            COALESCE(SUM(CASE WHEN tipovenda IN ('1', '9') THEN vlvenda ELSE 0::numeric END), 0) AS total_fat,
             COALESCE(SUM(totpesoliq), 0) AS total_peso,
             COUNT(DISTINCT codcli) AS total_clients
         FROM current_sales
@@ -85,7 +85,7 @@ BEGIN
     history_daily_sales AS (
         SELECT
             dtped::date,
-            SUM(CASE WHEN tipovenda IN ('1', '9') THEN vlvenda ELSE 0 END) as daily_fat
+            SUM(CASE WHEN tipovenda IN ('1', '9') THEN vlvenda ELSE 0::numeric END) as daily_fat
         FROM history_sales
         GROUP BY 1
     ),
@@ -93,7 +93,7 @@ BEGIN
     history_supervisor_agg AS (
         SELECT
             superv,
-            SUM(CASE WHEN tipovenda IN ('1', '9') THEN vlvenda ELSE 0 END) as total_fat
+            SUM(CASE WHEN tipovenda IN ('1', '9') THEN vlvenda ELSE 0::numeric END) as total_fat
         FROM history_sales
         GROUP BY superv
     ),
@@ -114,7 +114,7 @@ BEGIN
                 jsonb_build_object(
                     'week_num', ws.week_num,
                     'current_faturamento', (
-                        SELECT COALESCE(SUM(CASE WHEN cs.tipovenda IN ('1', '9') THEN cs.vlvenda ELSE 0 END), 0)
+                        SELECT COALESCE(SUM(CASE WHEN cs.tipovenda IN ('1', '9') THEN cs.vlvenda ELSE 0::numeric END), 0)
                         FROM current_sales cs
                         WHERE cs.dtped BETWEEN ws.week_start AND ws.week_end
                     ),
@@ -135,7 +135,7 @@ BEGIN
         FROM (
             SELECT
                 s.superv,
-                COALESCE(SUM(CASE WHEN s.tipovenda IN ('1', '9') THEN s.vlvenda ELSE 0 END), 0) AS current_faturamento,
+                COALESCE(SUM(CASE WHEN s.tipovenda IN ('1', '9') THEN s.vlvenda ELSE 0::numeric END), 0) AS current_faturamento,
                 (SELECT COALESCE(hsa.total_fat / 3.0, 0) FROM history_supervisor_agg hsa WHERE hsa.superv = s.superv) AS history_avg_faturamento
             FROM current_sales s
             WHERE s.superv IS NOT NULL
