@@ -1111,179 +1111,105 @@
         window.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
         
         // 8. MODIFICADO: Nova função para carregar dados das 8 tabelas
-        async function carregarDadosDoSupabase(supabaseClient) { // MODIFICADO: Recebe o cliente
+        async function carregarDadosDoSupabase(supabaseClient) {
             const loader = document.getElementById('loader');
             const loaderText = document.getElementById('loader-text');
             const mainDashboard = document.getElementById('main-dashboard');
 
-            // CORREÇÃO: Mover a declaração das variáveis de KPI para cá
-            const totalVendasEl = document.getElementById('total-vendas');
-            const totalPesoEl = document.getElementById('total-peso');
-            const kpiSkuPdVEl = document.getElementById('kpi-sku-pdv');
-            const kpiPositivacaoEl = document.getElementById('kpi-positivacao');
-            const kpiPositivacaoPercentEl = document.getElementById('kpi-positivacao-percent');
-            
             try {
-                // A verificação de URL/Chave e a criação do cliente foram movidas para o script do porteiro
+                loaderText.textContent = 'A iniciar sistema...';
 
+                // Helper para chamadas seguras
                 const fetchColumnarData = async (tableName, columns = '*') => {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos de timeout
-
-                    try {
-                        const { data, error } = await supabaseClient
-                            .from(tableName)
-                            .select(columns)
-                            .abortSignal(controller.signal);
-
-                        clearTimeout(timeoutId);
-
-                        if (error) {
-                            console.error(`Erro ao buscar dados da tabela '${tableName}':`, error);
-                            throw new Error(`Falha no fetch da tabela ${tableName}: ${error.message}`);
-                        }
-                        return data || [];
-                    } catch (e) {
-                        clearTimeout(timeoutId);
-                        if (e.name === 'AbortError') {
-                             throw new Error(`Timeout de 15s atingido ao buscar a tabela ${tableName}.`);
-                        }
-                        throw e;
-                    }
+                    const { data, error } = await supabaseClient.from(tableName).select(columns).limit(50000); // Limit de segurança
+                    if (error) throw error;
+                    return data || [];
                 };
 
-                // Helper para chamadas de API seguras que não quebram o Promise.all
-                const safeApiCall = (promise, defaultValue = null) => 
-                    promise.catch(error => {
-                        console.error('Falha em uma chamada de API individual:', error);
-                        return defaultValue; // Retorna um valor padrão em caso de erro
-                    });
-
-                loaderText.textContent = 'Buscando dados...';
-
-                // Helper para a chamada RPC com timeout e resiliência
-                const fetchInitialData = async () => {
-                    try {
-                        const rpcPromise = supabaseClient.rpc('get_initial_dashboard_data', {});
-                        const rpcTimeout = new Promise((_, reject) => 
-                            setTimeout(() => reject(new Error('Timeout de 30s na chamada RPC get_initial_dashboard_data.')), 30000)
-                        );
-                        return await Promise.race([rpcPromise, rpcTimeout]);
-                    } catch (error) {
-                        console.error("Falha crítica ao buscar dados iniciais do dashboard (get_initial_dashboard_data):", error);
-                        // Retorna uma estrutura similar a uma chamada falha do supabase para consistência
-                        return { data: null, error: error };
-                    }
-                };
-
-                // Mantém o carregamento de todos os dados em paralelo
+                // 1. Carrega apenas tabelas de REFERÊNCIA (leves) e os metadados
+                // REMOVEMOS: data_orders, data_detailed, data_history, data_stock (serão carregados via RPC por demanda)
                 const [
-                    initialDataResult,
                     clientsData,
-                    ordersData,
                     productDetailsData,
                     activeProductsData,
-                    stockData,
-                    innovationsData
+                    metadataResult // Para pegar a data de atualização
                 ] = await Promise.all([
-                    fetchInitialData(), // Nova função resiliente
-                    safeApiCall(fetchColumnarData('data_clients'), []),
-                    safeApiCall(fetchColumnarData('data_orders'), []),
-                    safeApiCall(fetchColumnarData('data_product_details'), []),
-                    safeApiCall(fetchColumnarData('data_active_products'), []),
-                    safeApiCall(fetchColumnarData('data_stock'), []),
-                    safeApiCall(fetchColumnarData('data_innovations'), [])
+                    fetchColumnarData('data_clients'),
+                    fetchColumnarData('data_product_details'),
+                    fetchColumnarData('data_active_products'),
+                    supabaseClient.from('data_metadata').select('*') // Busca data de atualização
                 ]);
 
-                // Loga erros, mas não interrompe a execução
-                if (initialDataResult && initialDataResult.error) {
-                    console.error(`Falha na chamada RPC 'get_initial_dashboard_data':`, initialDataResult.error);
+                // 2. Carrega os dados INICIAIS do Dashboard via RPC (Super Rápido)
+                loaderText.textContent = 'Calculando indicadores...';
+                const { data: initialRpcData, error: rpcError } = await supabaseClient.rpc('get_initial_dashboard_data', {});
+
+                if (rpcError) {
+                    console.error("Erro RPC Dashboard:", rpcError);
+                    throw new Error("Falha ao carregar indicadores do servidor.");
                 }
-                const initialData = initialDataResult.data || {};
 
-                // Agora, em vez de calcular os KPIs no frontend, nós os recebemos prontos
-                const kpis = initialData.kpis || {};
-                const totalClientsForPositivacao = kpis.total_clients_for_coverage;
-
-                // Atualiza os elementos da UI com os dados pré-calculados
-                totalVendasEl.textContent = (kpis.total_faturamento || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                totalPesoEl.textContent = ((kpis.total_peso || 0) / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-                const skuPdv = (kpis.positivacao_count > 0) ? (kpis.total_skus / kpis.positivacao_count) : 0;
-                kpiSkuPdVEl.textContent = skuPdv.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-                const positivacaoPercent = (totalClientsForPositivacao > 0) ? ((kpis.positivacao_count / totalClientsForPositivacao) * 100) : 0;
-                kpiPositivacaoEl.textContent = `${positivacaoPercent.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
-                kpiPositivacaoPercentEl.textContent = `${(kpis.positivacao_count || 0).toLocaleString('pt-BR')} PDVs`;
+                // --- Processamento dos Dados ---
                 
-                const lastUpdate = initialData.last_update;
-                const lastUpdateDate = lastUpdate ? new Date(lastUpdate).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '...';
-                document.getElementById('generation-date').textContent = `Dados atualizados em: ${lastUpdateDate}`;
-                document.getElementById('orders-generation-date').textContent = `Dados atualizados em: ${lastUpdateDate}`;
-
-
-                const passedWorkingDaysCurrentMonth = initialData.passed_working_days || 1;
-
-                console.log("DEBUG: clientsData length:", clientsData.length);
-
-                loaderText.textContent = 'Processando dados...';
-
-                const productDetails = (productDetailsData ?? []).reduce((acc, item) => {
-                    acc[item.code] = {
-                        descricao: item.descricao,
-                        fornecedor: item.fornecedor,
-                        codfor: item.codfor,
-                        dtcadastro: item.dtcadastro
-                    };
+                // Prepara mapa de produtos
+                const productDetails = (productDetailsData || []).reduce((acc, item) => {
+                    acc[item.code] = { descricao: item.descricao, fornecedor: item.fornecedor, codfor: item.codfor };
                     return acc;
                 }, {});
 
-                const activeProductCodes = (activeProductsData ?? []).map(item => item.code);
+                const activeProductCodes = (activeProductsData || []).map(item => item.code);
 
-                const stockMap05 = {};
-                const stockMap08 = {};
-                (stockData ?? []).forEach(item => {
-                    if (item.filial === '05') stockMap05[item.product_code] = item.stock_qty;
-                    else if (item.filial === '08') stockMap08[item.product_code] = item.stock_qty;
-                });
+                // Data de atualização (do metadata ou da RPC)
+                let lastUpdateDate = '...';
+                if (metadataResult.data && metadataResult.data.length > 0) {
+                    const updateEntry = metadataResult.data.find(m => m.key === 'last_update');
+                    if (updateEntry) lastUpdateDate = new Date(updateEntry.value).toLocaleString('pt-BR');
+                }
 
-                const embeddedData = {
-                    detailed: [], // OTIMIZAÇÃO: Não carrega mais os dados detalhados
-                    history: [], // OTIMIZAÇÃO: Não carrega mais o histórico
-                    clients: clientsData ?? [],
-                    byOrder: ordersData ?? [],
-                    innovationsMonth: innovationsData ?? [],
+                // Configura o objeto global embeddedData (Versão Otimizada)
+                window.embeddedData = {
+                    clients: clientsData || [],
                     productDetails: productDetails,
                     activeProductCodes: activeProductCodes,
-                    stockMap05: stockMap05,
-                    stockMap08: stockMap08,
-                    passedWorkingDaysCurrentMonth: passedWorkingDaysCurrentMonth,
-                    filters: initialData.filters || {},
-                    charts: initialData.charts || {}
+
+                    // IMPORTANTE: Estes arrays ficam vazios propositadamente para não pesar.
+                    // As views específicas (Pedidos, Estoque) devem chamar suas próprias RPCs ao abrir.
+                    byOrder: [],
+                    stockMap05: {},
+                    stockMap08: {},
+                    innovationsMonth: [],
+
+                    // Dados que vieram prontos da RPC inicial
+                    kpis: initialRpcData.kpis || {},
+                    charts: initialRpcData.charts || {},
+                    filters: initialRpcData.filters || {}
                 };
 
-                window.embeddedData = embeddedData;
-                
+                // Atualiza a UI do Dashboard Principal imediatamente com os dados da RPC
+                document.getElementById('total-vendas').textContent = (initialRpcData.kpis.total_faturamento || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                document.getElementById('total-peso').textContent = ((initialRpcData.kpis.total_peso || 0) / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1 });
+                document.getElementById('generation-date').textContent = `Dados atualizados em: ${lastUpdateDate}`;
+                document.getElementById('orders-generation-date').textContent = `Dados atualizados em: ${lastUpdateDate}`;
+
+                // Carrega o script de lógica (sem a parte pesada de processamento local)
                 const scriptLogicContent = document.getElementById('report-logic-script').textContent;
                 const logicScript = document.createElement('script');
-                logicScript.id = 'dynamic-logic-script'; // Atribui um ID para controle
                 logicScript.textContent = scriptLogicContent;
-
-                // Garante que o script antigo seja removido antes de adicionar o novo
-                const existingScript = document.getElementById('dynamic-logic-script');
-                if (existingScript) {
-                    existingScript.remove();
-                }
-                
-                // CORREÇÃO: Torna o dashboard visível ANTES de executar o script de lógica
-                mainDashboard.classList.remove('hidden');
-                
                 document.body.appendChild(logicScript);
 
-                loader.style.opacity = '0';
-                setTimeout(() => loader.classList.add('hidden'), 300);
+                // Mostra o dashboard
+                mainDashboard.classList.remove('hidden');
+                loader.classList.add('hidden');
+
+                // Inicia renderização dos gráficos do dashboard principal
+                // A função fetchAndRenderDashboard() já existe no teu script de lógica e usa a RPC
+                if (typeof fetchAndRenderDashboard === 'function') {
+                     fetchAndRenderDashboard();
+                }
 
             } catch (error) {
-                console.error('Erro ao carregar dados:', error);
-                loaderText.innerHTML = `<span class="text-red-400">Falha ao carregar dados: ${error.message}</span>`;
+                console.error('Erro fatal:', error);
+                loaderText.innerHTML = `<span class="text-red-500">Erro: ${error.message}</span>`;
             }
         }
 
@@ -1949,7 +1875,6 @@
         let ordersTableState = {
             currentPage: 1,
             itemsPerPage: 50,
-            filteredData: [],
             totalPages: 1
         };
 
@@ -2580,9 +2505,7 @@
         }
 
         function updateTipoVendaFilter(dropdown, filterText, selectedArray, dataSource) {
-            // CORREÇÃO TEMPORÁRIA: Como allSalesData não é mais carregado, os valores são
-            // definidos estaticamente. O ideal seria que viessem da API.
-            const tiposVendaToShow = ['1', '9', '2', '3', '4', '5', '7'];
+            const tiposVendaToShow = dataSource || [];
             selectedArray = selectedArray.filter(tipo => tiposVendaToShow.includes(tipo));
             dropdown.innerHTML = '';
             tiposVendaToShow.forEach(s => { 
@@ -3022,10 +2945,10 @@
             historicalBests = bestDayByWeekdayBySupervisor;
         }
 
-        function populateWeeklyFilters() {
-            const supervisors = [...new Set(allSalesData.map(item => item.superv).filter(Boolean).filter(sup => sup !== 'BALCAO'))].sort();
+        function populateWeeklyFilters(supervisors = []) {
+            const supervisorsToShow = (supervisors || []).filter(sup => sup && sup !== 'BALCAO').sort();
             weeklySupervisorFilter.innerHTML = '';
-            supervisors.forEach(sup => { weeklySupervisorFilter.innerHTML += `<div class="flex items-center"><input id="sup-check-${sup.replace(/\s+/g, '-')}" type="checkbox" value="${sup}" class="w-4 h-4 text-teal-600 bg-slate-700 border-slate-600 rounded focus:ring-teal-600 ring-offset-slate-800 focus:ring-2"><label for="sup-check-${sup.replace(/\s+/g, '-')}" class="ml-2 text-sm font-medium text-slate-300">${sup}</label></div>`; });
+            supervisorsToShow.forEach(sup => { weeklySupervisorFilter.innerHTML += `<div class="flex items-center"><input id="sup-check-${sup.replace(/\s+/g, '-')}" type="checkbox" value="${sup}" class="w-4 h-4 text-teal-600 bg-slate-700 border-slate-600 rounded focus:ring-teal-600 ring-offset-slate-800 focus:ring-2"><label for="sup-check-${sup.replace(/\s+/g, '-')}" class="ml-2 text-sm font-medium text-slate-300">${sup}</label></div>`; });
         }
 
         function updateWeeklyView() {
@@ -3116,12 +3039,11 @@
             else showNoDataMessage('mixChart', 'Sem dados para o ranking.');
         }
 
-        function updateSupplierFilter(dropdown, filterText, selectedArray, dataSource, filterType = 'comparison') {
-            const suppliers = new Map();
-            dataSource.forEach(s => { if(s.codfor && s.fornecedor) suppliers.set(s.codfor, s.fornecedor); });
-            const sortedSuppliers = [...suppliers.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+        function updateSupplierFilter(dropdown, filterText, selectedArray, dataSource = [], filterType = 'comparison') {
+            const suppliersMap = new Map((dataSource || []).map(s => [String(s.codfor), s.fornecedor]));
+            const sortedSuppliers = [...suppliersMap.entries()].sort((a, b) => a[1].localeCompare(b[1]));
 
-            selectedArray = selectedArray.filter(cod => suppliers.has(cod));
+            selectedArray = selectedArray.filter(cod => suppliersMap.has(cod));
 
             dropdown.innerHTML = '';
             sortedSuppliers.forEach(([cod, name]) => {
@@ -3132,7 +3054,7 @@
             if (selectedArray.length === 0 || selectedArray.length === sortedSuppliers.length) {
                 filterText.textContent = 'Todos Fornecedores';
             } else if (selectedArray.length === 1) {
-                filterText.textContent = suppliers.get(selectedArray[0]) || '1 selecionado';
+                filterText.textContent = suppliersMap.get(selectedArray[0]) || '1 selecionado';
             } else {
                 filterText.textContent = `${selectedArray.length} fornecedores selecionados`;
             }
@@ -3416,17 +3338,21 @@
 
 
         function updateAllComparisonFilters() {
-            const { currentSales: supervisorCurrent, historySales: supervisorHistory } = getComparisonFilteredData({ excludeFilter: 'supervisor' });
-            const supervisorOptionsData = [...supervisorCurrent, ...supervisorHistory];
-            const currentSupervisor = comparisonSupervisorFilter.value;
-            populateSupervisors('comparison-supervisor-filter', supervisorOptionsData);
-            if ([...comparisonSupervisorFilter.options].some(o => o.value === currentSupervisor)) {
-                comparisonSupervisorFilter.value = currentSupervisor;
-            }
+            // A lista de supervisores agora é estática e populada na troca de view.
+            // Não deve ser recalculada aqui, pois allSalesData está vazio.
+            // const { currentSales: supervisorCurrent, historySales: supervisorHistory } = getComparisonFilteredData({ excludeFilter: 'supervisor' });
+            // const supervisorOptionsData = [...supervisorCurrent, ...supervisorHistory];
+            // const currentSupervisor = comparisonSupervisorFilter.value;
+            // populateSupervisors('comparison-supervisor-filter', supervisorOptionsData);
+            // if ([...comparisonSupervisorFilter.options].some(o => o.value === currentSupervisor)) {
+            //     comparisonSupervisorFilter.value = currentSupervisor;
+            // }
 
-            const { currentSales: sellerCurrent, historySales: sellerHistory } = getComparisonFilteredData({ excludeFilter: 'seller' });
-            const sellerOptionsData = [...sellerCurrent, ...sellerHistory];
-            selectedComparisonSellers = updateSellerFilter(comparisonSupervisorFilter.value, comparisonVendedorFilterDropdown, comparisonVendedorFilterText, selectedComparisonSellers, sellerOptionsData);
+            // A lista de vendedores agora é estática e populada na troca de view.
+            // Não deve ser recalculada aqui.
+            // const { currentSales: sellerCurrent, historySales: sellerHistory } = getComparisonFilteredData({ excludeFilter: 'seller' });
+            // const sellerOptionsData = [...sellerCurrent, ...sellerHistory];
+            // selectedComparisonSellers = updateSellerFilter(comparisonSupervisorFilter.value, comparisonVendedorFilterDropdown, comparisonVendedorFilterText, selectedComparisonSellers, sellerOptionsData);
 
             const { currentSales: supplierCurrent, historySales: supplierHistory } = getComparisonFilteredData({ excludeFilter: 'supplier' });
             const supplierOptionsData = [...supplierCurrent, ...supplierHistory];
@@ -5020,9 +4946,9 @@
             });
         }
 
-        function populateCityFilters() {
-            populateSupervisors('city-supervisor-filter', allSalesData);
-            updateSellerFilter('', cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData);
+        function populateCityFilters(filters = {}) {
+            populateSupervisors('city-supervisor-filter', filters.supervisors || []);
+            updateSellerFilter('', cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, [], filters.sellers || []);
             updateRedeFilter(cityRedeFilterDropdown, cityComRedeBtnText, selectedCityRedes, allClientsData);
         }
 
@@ -5084,22 +5010,46 @@
                                 populateSupervisors('orders-supervisor-filter', filtersData.supervisors);
                                 populateMainSupplierFilter('orders-fornecedor-filter', filtersData.suppliers);
                                 updateSellerFilter(ordersSupervisorFilter.value, ordersVendedorFilterDropdown, ordersVendedorFilterText, selectedOrdersSellers, allSalesData, filtersData.sellers);
-                                updateTipoVendaFilter(ordersTipoVendaFilterDropdown, ordersTipoVendaFilterText, selectedOrdersTiposVenda, allSalesData);
+                                updateTipoVendaFilter(ordersTipoVendaFilterDropdown, ordersTipoVendaFilterText, selectedOrdersTiposVenda, filtersData.sale_types);
                                 updateRedeFilter(ordersRedeFilterDropdown, ordersComRedeBtnText, selectedOrdersRedes, allClientsData);
                                 updateOrdersView();
                                 break;
-                            case 'comparison-view': updateAllComparisonFilters(); updateComparisonView(); break;
-                            case 'stock-view': handleStockFilterChange(); break;
-                            case 'coverage-view': updateCoverageFilters(); updateCoverageView(); break;
+                            case 'comparison-view':
+                                const globalFilters = window.embeddedData.filters;
+                                populateSupervisors('comparison-supervisor-filter', globalFilters.supervisors);
+                                updateSellerFilter(comparisonSupervisorFilter.value, comparisonVendedorFilterDropdown, comparisonVendedorFilterText, selectedComparisonSellers, [], globalFilters.sellers);
+                                updateAllComparisonFilters();
+                                updateComparisonView();
+                                break;
+                            case 'stock-view':
+                                const globalFiltersStock = window.embeddedData.filters;
+                                populateSupervisors('stock-supervisor-filter', globalFiltersStock.supervisors);
+                                updateSellerFilter(stockSupervisorFilter.value, stockVendedorFilterDropdown, stockVendedorFilterText, selectedStockSellers, [], globalFiltersStock.sellers);
+                                handleStockFilterChange();
+                                break;
+                            case 'coverage-view':
+                                const globalFiltersCoverage = window.embeddedData.filters;
+                                populateSupervisors('coverage-supervisor-filter', globalFiltersCoverage.supervisors);
+                                updateSellerFilter(coverageSupervisorFilter.value, coverageVendedorFilterDropdown, coverageVendedorFilterText, selectedCoverageSellers, [], globalFiltersCoverage.sellers);
+                                updateCoverageFilters();
+                                updateCoverageView();
+                                break;
                             case 'innovations-view':
-                                populateSupervisors('innovations-supervisor-filter', allSalesData);
-                                updateSellerFilter('', innovationsVendedorFilterDropdown, innovationsVendedorFilterText, [], allSalesData);
-                                updateSupplierFilter(innovationsSupplierFilterDropdown, innovationsSupplierFilterText, [], allSalesData, 'innovations');
+                                const globalFiltersInnovations = window.embeddedData.filters;
+                                populateSupervisors('innovations-supervisor-filter', globalFiltersInnovations.supervisors);
+                                updateSellerFilter('', innovationsVendedorFilterDropdown, innovationsVendedorFilterText, [], [], globalFiltersInnovations.sellers);
+                                updateSupplierFilter(innovationsSupplierFilterDropdown, innovationsSupplierFilterText, [], globalFiltersInnovations.suppliers, 'innovations');
                                 updateInnovationsFilters();
                                 updateInnovationsView();
                                 break;
-                            case 'weekly-view': populateWeeklyFilters(); updateWeeklyView(); break;
-                            case 'city-view': populateCityFilters(); updateCityView(); break;
+                            case 'weekly-view':
+                                populateWeeklyFilters(window.embeddedData.filters.supervisors);
+                                updateWeeklyView();
+                                break;
+                            case 'city-view':
+                                populateCityFilters(window.embeddedData.filters);
+                                updateCityView();
+                                break;
                         }
                     }
 
@@ -5172,13 +5122,13 @@
             ordersPrevPageBtn.addEventListener('click', () => {
                 if (ordersTableState.currentPage > 1) {
                     ordersTableState.currentPage--;
-                    renderOrdersTable(ordersTableState.filteredData);
+                    updateOrdersView();
                 }
             });
             ordersNextPageBtn.addEventListener('click', () => {
                 if (ordersTableState.currentPage < ordersTableState.totalPages) {
                     ordersTableState.currentPage++;
-                    renderOrdersTable(ordersTableState.filteredData);
+                    updateOrdersView();
                 }
             });
 
@@ -5879,13 +5829,13 @@
         calculateHistoricalBests(); // <-- MOVIDA PARA CIMA
         
         // CORREÇÃO: Povoar filtros com dados pré-agregados da RPC
-        const filtersData = embeddedData.filters || { supervisors: [], suppliers: [], sellers: [] };
+        const filtersData = embeddedData.filters || { supervisors: [], suppliers: [], sellers: [], sale_types: [] };
         populateSupervisors('supervisor-filter', filtersData.supervisors);
         populateMainSupplierFilter('fornecedor-filter', filtersData.suppliers);
         populateSupervisors('city-supervisor-filter', filtersData.supervisors);
         populateSupervisors('stock-supervisor-filter', filtersData.supervisors);
         updateSellerFilter('', vendedorFilterDropdown, vendedorFilterText, [], allSalesData, filtersData.sellers);
-        updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
+        updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, filtersData.sale_types);
         updateSellerFilter('', cityVendedorFilterDropdown, cityVendedorFilterText, [], allSalesData, filtersData.sellers);
 
         updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
