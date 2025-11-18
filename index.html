@@ -1152,10 +1152,21 @@
                     }
                 };
 
+                // Helper para chamadas de API seguras que não quebram o Promise.all
+                const safeApiCall = (promise, defaultValue = null) => 
+                    promise.catch(error => {
+                        console.error('Falha em uma chamada de API individual:', error);
+                        return defaultValue; // Retorna um valor padrão em caso de erro
+                    });
+
                 loaderText.textContent = 'Buscando dados...';
 
-                // OTIMIZAÇÃO: Chamar a nova função RPC para dados iniciais
-                const initialDataPromise = supabaseClient.rpc('get_initial_dashboard_data', {});
+                // OTIMIZAÇÃO: Chamar a nova função RPC para dados iniciais com timeout
+                const rpcPromise = supabaseClient.rpc('get_initial_dashboard_data', {});
+                const rpcTimeout = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Timeout de 30s na chamada RPC get_initial_dashboard_data.')), 30000)
+                );
+                const initialDataPromise = Promise.race([rpcPromise, rpcTimeout]);
 
                 // Mantém o carregamento de dados que ainda são necessários na íntegra em paralelo
                 const [
@@ -1167,17 +1178,18 @@
                     stockData,
                     innovationsData
                 ] = await Promise.all([
-                    initialDataPromise,
-                    fetchColumnarData('data_clients'),
-                    fetchColumnarData('data_orders'),
-                    fetchColumnarData('data_product_details'),
-                    fetchColumnarData('data_active_products'),
-                    fetchColumnarData('data_stock'),
-                    fetchColumnarData('data_innovations')
+                    safeApiCall(initialDataPromise, { data: null, error: new Error("RPC get_initial_dashboard_data falhou.") }),
+                    safeApiCall(fetchColumnarData('data_clients'), []),
+                    safeApiCall(fetchColumnarData('data_orders'), []),
+                    safeApiCall(fetchColumnarData('data_product_details'), []),
+                    safeApiCall(fetchColumnarData('data_active_products'), []),
+                    safeApiCall(fetchColumnarData('data_stock'), []),
+                    safeApiCall(fetchColumnarData('data_innovations'), [])
                 ]);
 
-                if (initialDataResult.error) {
-                    throw new Error(`Falha na chamada RPC 'get_initial_dashboard_data': ${initialDataResult.error.message}`);
+                // Loga erros, mas não interrompe a execução
+                if (initialDataResult && initialDataResult.error) {
+                    console.error(`Falha na chamada RPC 'get_initial_dashboard_data':`, initialDataResult.error);
                 }
                 const initialData = initialDataResult.data || {};
 
@@ -1280,8 +1292,21 @@
     <script id="report-logic-script" type="text/template">
         const allSalesData = []; // CORREÇÃO: Define a variável para evitar o ReferenceError
         const allHistoryData = []; // CORREÇÃO: Define a variável para evitar o ReferenceError
-        //const embeddedData = window.embeddedData; // Esta linha será removida pois os dados virão como argumento
+        const embeddedData = window.embeddedData; // CORREÇÃO CRÍTICA: Esta linha é necessária para que o script funcione.
         const chartsData = embeddedData.charts || {};
+
+        // CORREÇÃO: Mover a paleta de cores para o escopo global do script para que todas as funções de gráfico possam acessá-la.
+        const professionalPalette = [
+            '#6366f1',
+            '#14b8a6',
+            '#f97316',
+            '#ec4899',
+            '#8b5cf6',
+            '#f59e0b',
+            '#ef4444',
+            '#22c55e',
+            '#06b6d4'
+        ];
         const aggregatedOrders = embeddedData.byOrder || [];
         const allClientsData = embeddedData.clients || [];
         const stockData05 = new Map(Object.entries(embeddedData.stockMap05 || {}));
@@ -2261,18 +2286,6 @@
             const secondaryTextColor = getCSSVar('--text-secondary');
             const gridColor = getCSSVar('--border-primary');
             
-            const professionalPalette = [
-                '#6366f1',
-                '#14b8a6',
-                '#f97316',
-                '#ec4899',
-                '#8b5cf6',
-                '#f59e0b',
-                '#ef4444',
-                '#22c55e',
-                '#06b6d4'
-            ];
-
             let finalDatasets;
             if (Array.isArray(chartData) && chartData.length > 0 && typeof chartData[0] === 'object' && chartData[0].hasOwnProperty('label')) {
                 finalDatasets = chartData.map((dataset, index) => ({ ...dataset, backgroundColor: dataset.backgroundColor || professionalPalette[index % professionalPalette.length], borderColor: dataset.borderColor || professionalPalette[index % professionalPalette.length] }));
