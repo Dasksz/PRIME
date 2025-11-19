@@ -81,18 +81,26 @@ BEGIN
         FROM kpis_history_monthly
     ),
 
-    -- OTIMIZAÇÃO 1: Pré-agregar vendas históricas por semana e supervisor
-    history_weekly_sales AS (
+    -- CORREÇÃO: Lógica de cálculo da média histórica semanal
+    history_sales_with_week_num AS (
         SELECT
-            date_trunc('week', dtped)::date as week_start,
-            SUM(CASE WHEN tipovenda IN ('1', '9') THEN vlvenda ELSE 0 END) as weekly_faturamento
-        FROM history_sales
-        GROUP BY 1
+            s.dtped,
+            s.tipovenda,
+            s.vlvenda,
+            floor((extract(day from s.dtped) - 1) / 7) + 1 AS week_of_month
+        FROM history_sales s
+    ),
+    history_avg_by_week_num AS (
+        SELECT
+            week_of_month,
+            COALESCE(SUM(CASE WHEN tipovenda IN ('1', '9') THEN vlvenda ELSE 0::numeric END) / 3.0, 0) AS avg_faturamento
+        FROM history_sales_with_week_num
+        GROUP BY week_of_month
     ),
     history_supervisor_agg AS (
         SELECT
             superv,
-            SUM(CASE WHEN tipovenda IN ('1', '9') THEN vlvenda ELSE 0 END) as total_fat
+            SUM(CASE WHEN tipovenda IN ('1', '9') THEN vlvenda ELSE 0::numeric END) as total_fat
         FROM history_sales
         GROUP BY superv
     ),
@@ -106,22 +114,22 @@ BEGIN
         FROM generate_series(1, 6) n
         WHERE (date_trunc('week', current_month_start)::date + ((n-1) || ' weeks')::interval) < (current_month_start + '1 month'::interval)
     ),
-    -- Gráfico de comparação semanal (MODIFICADO para usar a CTE otimizada 'history_weekly_sales')
+    -- Gráfico de comparação semanal (CORRIGIDO para usar nova lógica de média e tipos corretos)
     weekly_comparison_chart AS (
         SELECT
             COALESCE(jsonb_agg(
                 jsonb_build_object(
                     'week_num', ws.week_num,
                     'current_faturamento', (
-                        SELECT COALESCE(SUM(CASE WHEN cs.tipovenda IN ('1', '9') THEN cs.vlvenda ELSE 0 END), 0)
+                        SELECT COALESCE(SUM(CASE WHEN cs.tipovenda IN ('1', '9') THEN cs.vlvenda ELSE 0::numeric END), 0)
                         FROM current_sales cs
                         WHERE cs.dtped BETWEEN ws.week_start AND ws.week_end
                     ),
                     'history_avg_faturamento', (
-                        (SELECT COALESCE(hws.weekly_faturamento, 0) FROM history_weekly_sales hws WHERE hws.week_start = (date_trunc('week', ws.week_start - '1 month'::interval))::date) +
-                        (SELECT COALESCE(hws.weekly_faturamento, 0) FROM history_weekly_sales hws WHERE hws.week_start = (date_trunc('week', ws.week_start - '2 months'::interval))::date) +
-                        (SELECT COALESCE(hws.weekly_faturamento, 0) FROM history_weekly_sales hws WHERE hws.week_start = (date_trunc('week', ws.week_start - '3 months'::interval))::date)
-                    ) / 3.0
+                         SELECT COALESCE(haw.avg_faturamento, 0)
+                         FROM history_avg_by_week_num haw
+                         WHERE haw.week_of_month = ws.week_num
+                    )
                 ) ORDER BY ws.week_num
             ), '[]'::jsonb) AS data
         FROM week_series ws
@@ -343,121 +351,197 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ADIÇÃO DA NOVA FUNÇÃO get_city_view_data
--- CORREÇÃO: Adiciona DROP FUNCTION para permitir a renomeação de parâmetros na recriação.
-DROP FUNCTION IF EXISTS get_city_view_data(TEXT, TEXT[], TEXT, TEXT[], TEXT, TEXT);
--- CORREÇÃO: Padroniza os parâmetros com prefixo p_ e defaults para strings vazias,
--- tornando a função mais robusta contra erros de 'parâmetro não encontrado' (400 Bad Request).
-CREATE OR REPLACE FUNCTION get_city_view_data(
+-- ATUALIZAÇÃO DA FUNÇÃO get_city_view_data
+-- ========= FIM DO BLOCO DE CÓDIGO SQL =========
+
+-- NOVA FUNÇÃO: get_stock_view_data para a visualização de Estoque
+-- NOVA FUNÇÃO: get_stock_view_data para a visualização de Estoque (RESTAURADA)
+DROP FUNCTION IF EXISTS get_stock_view_data(TEXT, TEXT[], TEXT[], TEXT[], TEXT, TEXT);
+CREATE OR REPLACE FUNCTION get_stock_view_data(
     p_supervisor_filter TEXT DEFAULT '',
     p_sellers_filter TEXT[] DEFAULT NULL,
+    p_suppliers_filter TEXT[] DEFAULT NULL,
+    p_products_filter TEXT[] DEFAULT NULL,
     p_rede_group_filter TEXT DEFAULT '',
-    p_redes_filter TEXT[] DEFAULT NULL,
-    p_city_filter TEXT DEFAULT '',
-    p_codcli_filter TEXT DEFAULT ''
+    p_redes_filter TEXT[] DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
     result JSONB;
     current_month_start DATE;
+    history_start_date DATE;
+    history_end_date DATE;
 BEGIN
-    -- Determina o primeiro dia do mês corrente com base na venda mais recente
     SELECT date_trunc('month', MAX(dtped))::DATE INTO current_month_start FROM data_detailed;
+    history_end_date := current_month_start - INTERVAL '1 day';
+    history_start_date := current_month_start - INTERVAL '3 months';
 
     WITH
-    -- 1. Filtra os clientes com base nos filtros de rede
-    clients_base AS (
-        SELECT c.codigo_cliente, c.ramo, c.rca1, c.rca2, c.cidade, c.bairro, c.fantasia, c.razaosocial, c.ultimacompra, c.datacadastro, c.bloqueio
-        FROM data_clients c
-        WHERE (p_rede_group_filter = '')
-           OR (p_rede_group_filter = 'sem_rede' AND (c.ramo IS NULL OR c.ramo = 'N/A'))
-           OR (p_rede_group_filter = 'com_rede' AND (p_redes_filter IS NULL OR c.ramo = ANY(p_redes_filter)))
+    -- 1. Base de clientes e vendas filtradas
+    filtered_clients AS (
+        SELECT codigo_cliente FROM data_clients
+        WHERE (p_rede_group_filter = '' OR p_rede_group_filter IS NULL)
+           OR (p_rede_group_filter = 'sem_rede' AND (ramo IS NULL OR ramo = 'N/A'))
+           OR (p_rede_group_filter = 'com_rede' AND (p_redes_filter IS NULL OR ramo = ANY(p_redes_filter)))
     ),
-    -- 2. Filtra as vendas do mês corrente com base em todos os filtros
-    filtered_sales AS (
-        SELECT s.codcli, s.cidade, s.bairro, s.vlvenda, s.observacaofor, s.tipovenda
-        FROM data_detailed s
-        JOIN clients_base cb ON s.codcli = cb.codigo_cliente -- Garante que as vendas são de clientes já filtrados pela rede
-        WHERE s.dtped >= current_month_start
-          AND (p_supervisor_filter = '' OR s.superv = p_supervisor_filter)
-          AND (p_sellers_filter IS NULL OR s.nome = ANY(p_sellers_filter))
-          AND (p_city_filter = '' OR s.cidade ILIKE p_city_filter)
-          AND (p_codcli_filter = '' OR s.codcli = p_codcli_filter)
+    current_sales AS (
+        SELECT produto, qtvenda_embalagem_master FROM data_detailed
+        WHERE codcli IN (SELECT codigo_cliente FROM filtered_clients)
+          AND (p_supervisor_filter = '' OR superv = p_supervisor_filter)
+          AND (p_sellers_filter IS NULL OR nome = ANY(p_sellers_filter))
     ),
-    -- 3. Agrega as vendas por cliente
-    client_sales_agg AS (
+    history_sales AS (
+        SELECT produto, qtvenda_embalagem_master FROM data_history
+        WHERE dtped BETWEEN history_start_date AND history_end_date
+          AND codcli IN (SELECT codigo_cliente FROM filtered_clients)
+          AND (p_supervisor_filter = '' OR superv = p_supervisor_filter)
+          AND (p_sellers_filter IS NULL OR nome = ANY(p_sellers_filter))
+    ),
+    -- 2. Agregações de vendas por produto
+    current_sales_agg AS (
+        SELECT produto, SUM(qtvenda_embalagem_master) as total_qty
+        FROM current_sales GROUP BY produto
+    ),
+    history_sales_agg AS (
+        SELECT produto, SUM(qtvenda_embalagem_master) / 3.0 as avg_monthly_qty
+        FROM history_sales GROUP BY produto
+    ),
+    -- 3. Combina todos os dados para análise
+    product_analysis AS (
         SELECT
-            codcli,
-            SUM(vlvenda) as total_faturamento,
-            SUM(CASE WHEN observacaofor = 'PEPSICO' THEN vlvenda ELSE 0 END) as pepsico_total,
-            SUM(CASE WHEN observacaofor = 'MULTIMARCAS' THEN vlvenda ELSE 0 END) as multimarcas_total
-        FROM filtered_sales
-        WHERE tipovenda IN ('1', '9')
-        GROUP BY codcli
+            pd.code AS product_code,
+            pd.descricao AS product_description,
+            pd.fornecedor AS supplier_name,
+            COALESCE(s.stock_qty, 0) as stock_qty,
+            COALESCE(csa.total_qty, 0) as current_month_sales_qty,
+            COALESCE(hsa.avg_monthly_qty, 0) as history_avg_monthly_qty
+        FROM data_product_details pd
+        LEFT JOIN data_stock s ON pd.code = s.product_code
+        LEFT JOIN current_sales_agg csa ON pd.code = csa.produto
+        LEFT JOIN history_sales_agg hsa ON pd.code = hsa.produto
+        WHERE
+            (p_suppliers_filter IS NULL OR pd.codfor = ANY(p_suppliers_filter))
+            AND (p_products_filter IS NULL OR pd.code = ANY(p_products_filter))
+            AND (COALESCE(s.stock_qty, 0) > 0 OR COALESCE(csa.total_qty, 0) > 0 OR COALESCE(hsa.avg_monthly_qty, 0) > 0)
     ),
-    -- 4. Classifica os clientes como ativos ou inativos
-    client_status AS (
+    -- 4. Classifica os produtos nas 4 categorias
+    categorized_products AS (
         SELECT
-            c.codigo_cliente,
-            c.fantasia,
-            c.razaosocial,
-            c.cidade,
-            c.bairro,
-            c.rca1,
-            c.ultimacompra,
-            c.datacadastro,
-            COALESCE(csa.total_faturamento, 0) as total_faturamento,
-            COALESCE(csa.pepsico_total, 0) as pepsico,
-            COALESCE(csa.multimarcas_total, 0) as multimarcas,
-            (csa.codcli IS NOT NULL AND csa.total_faturamento > 0) as is_active,
-            (c.datacadastro::date >= current_month_start) as is_new
-        FROM clients_base c
-        LEFT JOIN client_sales_agg csa ON c.codigo_cliente = csa.codcli
-        WHERE c.codigo_cliente <> '6720' AND c.bloqueio <> 'S'
-          AND NOT (c.rca1 = '53' AND c.razaosocial NOT ILIKE '%AMERICANAS%')
-    ),
-    -- 5. Prepara os dados para a tabela de clientes ativos
-    active_clients_table AS (
-        SELECT COALESCE(jsonb_agg(act ORDER BY total_faturamento DESC), '[]'::jsonb) as data
-        FROM client_status act
-        WHERE is_active
-    ),
-    -- 6. Prepara os dados para a tabela de clientes inativos
-    inactive_clients_table AS (
-        SELECT COALESCE(jsonb_agg(ict ORDER BY ict.ultimacompra::date DESC), '[]'::jsonb) as data
-        FROM client_status ict
-        WHERE NOT is_active
-    ),
-    -- 7. Prepara os dados para o gráfico de Top 10
-    top_10_chart AS (
-        SELECT COALESCE(jsonb_agg(chart_data), '[]'::jsonb) as data
-        FROM (
-            SELECT
-                CASE WHEN p_city_filter <> '' THEN bairro ELSE cidade END as label,
-                SUM(vlvenda) as total
-            FROM filtered_sales
-            WHERE tipovenda IN ('1', '9')
-            GROUP BY 1
-            ORDER BY total DESC
-            LIMIT 10
-        ) chart_data
+            *,
+            CASE
+                WHEN current_month_sales_qty > 0 AND history_avg_monthly_qty > 0 AND current_month_sales_qty >= history_avg_monthly_qty THEN 'growth'
+                WHEN current_month_sales_qty > 0 AND history_avg_monthly_qty > 0 AND current_month_sales_qty < history_avg_monthly_qty THEN 'decline'
+                WHEN current_month_sales_qty > 0 AND history_avg_monthly_qty = 0 THEN 'new'
+                WHEN current_month_sales_qty = 0 AND history_avg_monthly_qty > 0 THEN 'lost'
+                ELSE NULL
+            END as category
+        FROM product_analysis
     )
-    -- 8. Monta o JSON final
+    -- 5. Monta o JSON final com todas as tabelas
     SELECT jsonb_build_object(
-        'total_faturamento', (SELECT SUM(vlvenda) FROM filtered_sales WHERE tipovenda IN ('1', '9')),
-        'status_chart', (
-            SELECT jsonb_build_object(
-                'active', COUNT(*) FILTER (WHERE is_active),
-                'inactive', COUNT(*) FILTER (WHERE NOT is_active)
-            ) FROM client_status
+        'stock_table', (
+            SELECT COALESCE(jsonb_agg(jsonb_build_object(
+                'product_code', pa.product_code,
+                'product_description', pa.product_description,
+                'supplier_name', pa.supplier_name,
+                'stock_qty', pa.stock_qty,
+                'avg_monthly_qty', pa.history_avg_monthly_qty,
+                'daily_avg_qty', pa.history_avg_monthly_qty / 22.0,
+                'trend_days', CASE WHEN pa.history_avg_monthly_qty > 0 THEN (pa.stock_qty / (pa.history_avg_monthly_qty / 22.0)) ELSE 999 END
+            ) ORDER BY (CASE WHEN pa.history_avg_monthly_qty > 0 THEN (pa.stock_qty / (pa.history_avg_monthly_qty / 22.0)) ELSE 999 END) ASC), '[]'::jsonb)
+            FROM product_analysis pa
         ),
-        'top_10_chart', (SELECT data FROM top_10_chart),
-        'active_clients', (SELECT data FROM active_clients_table),
-        'inactive_clients', (SELECT data FROM inactive_clients_table)
-    )
-    INTO result;
+        'growth_table', (SELECT COALESCE(jsonb_agg(cp ORDER BY (current_month_sales_qty - history_avg_monthly_qty) DESC), '[]'::jsonb) FROM categorized_products cp WHERE category = 'growth'),
+        'decline_table', (SELECT COALESCE(jsonb_agg(cp ORDER BY (current_month_sales_qty - history_avg_monthly_qty) ASC), '[]'::jsonb) FROM categorized_products cp WHERE category = 'decline'),
+        'new_table', (SELECT COALESCE(jsonb_agg(cp ORDER BY current_month_sales_qty DESC), '[]'::jsonb) FROM categorized_products cp WHERE category = 'new'),
+        'lost_table', (SELECT COALESCE(jsonb_agg(cp ORDER BY history_avg_monthly_qty DESC), '[]'::jsonb) FROM categorized_products cp WHERE category = 'lost')
+    ) INTO result;
 
     RETURN result;
 END;
 $$ LANGUAGE plpgsql;
 
--- ========= FIM DO BLOCO DE CÓDIGO SQL =========
+-- NOVA FUNÇÃO: get_innovations_view_data para a visualização de Inovações
+-- NOVA FUNÇÃO: get_innovations_view_data para a visualização de Inovações (CORRIGIDA)
+-- NOVA FUNÇÃO: get_innovations_data_v2 para a visualização de Inovações (CORRIGIDA E RENOMEADA)
+-- NOVA FUNÇÃO: get_innovations_data_v2 para a visualização de Inovações (RESTAURADA E RENOMEADA)
+DROP FUNCTION IF EXISTS get_innovations_view_data(TEXT, TEXT[], TEXT, TEXT[]); -- Remove a antiga versão
+DROP FUNCTION IF EXISTS get_innovations_data_v2(TEXT, TEXT[], TEXT[], BOOLEAN, TEXT, TEXT, TEXT[]); -- Garante que a nova não existe
+CREATE OR REPLACE FUNCTION get_innovations_data_v2(
+    p_supervisor_filter TEXT DEFAULT '',
+    p_sellers_filter TEXT[] DEFAULT NULL,
+    p_product_codes TEXT[] DEFAULT NULL,
+    p_include_bonus BOOLEAN DEFAULT true,
+    p_city_filter TEXT DEFAULT '',
+    p_filial_filter TEXT DEFAULT 'ambas',
+    p_redes_filter TEXT[] DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+    result JSONB;
+    current_month_start DATE;
+    previous_month_start DATE;
+    previous_month_end DATE;
+BEGIN
+    SELECT date_trunc('month', MAX(dtped))::DATE INTO current_month_start FROM data_detailed;
+    previous_month_start := current_month_start - INTERVAL '1 month';
+    previous_month_end := current_month_start - INTERVAL '1 day';
+
+    WITH
+    -- 1. Clientes ativos no filtro geral
+    active_clients AS (
+        SELECT c.codigo_cliente, c.rca1 FROM data_clients c
+        WHERE c.bloqueio <> 'S'
+          AND (p_redes_filter IS NULL OR c.ramo = ANY(p_redes_filter))
+          AND (p_city_filter = '' OR c.cidade ILIKE p_city_filter)
+          -- Adicionar lógica de filial se necessário
+    ),
+    -- 2. Vendas dos produtos selecionados
+    sales AS (
+        -- Mês Atual
+        SELECT codcli, produto, tipovenda FROM data_detailed
+        WHERE produto = ANY(p_product_codes)
+          AND (p_supervisor_filter = '' OR superv = p_supervisor_filter)
+          AND (p_sellers_filter IS NULL OR nome = ANY(p_sellers_filter))
+          AND (p_filial_filter = 'ambas' OR filial = p_filial_filter)
+          AND (p_include_bonus OR tipovenda <> '4')
+        UNION ALL
+        -- Mês Anterior
+        SELECT codcli, produto, tipovenda FROM data_history
+        WHERE dtped BETWEEN previous_month_start AND previous_month_end
+          AND produto = ANY(p_product_codes)
+          AND (p_supervisor_filter = '' OR superv = p_supervisor_filter)
+          AND (p_sellers_filter IS NULL OR nome = ANY(p_sellers_filter))
+          AND (p_filial_filter = 'ambas' OR filial = p_filial_filter)
+          AND (p_include_bonus OR tipovenda <> '4')
+    ),
+    -- 3. Análise por produto
+    product_coverage AS (
+        SELECT
+            p.code AS product_code,
+            p.descricao,
+            COALESCE(s.stock_qty, 0) as stock_qty,
+            -- Contagem de clientes únicos do mês ATUAL
+            COUNT(DISTINCT CASE WHEN sa.codcli IS NOT NULL THEN sa.codcli END) FILTER (WHERE sa.dtped >= current_month_start) as current_clients,
+            -- Contagem de clientes únicos do mês ANTERIOR
+            COUNT(DISTINCT CASE WHEN sa.codcli IS NOT NULL THEN sa.codcli END) FILTER (WHERE sa.dtped < current_month_start) as previous_clients
+        FROM unnest(p_product_codes) pc(code)
+        JOIN data_product_details p ON p.code = pc.code
+        LEFT JOIN data_stock s ON s.product_code = p.code
+        LEFT JOIN (
+             SELECT s_agg.codcli, s_agg.produto, d.dtped FROM sales s_agg JOIN data_detailed d ON s_agg.codcli = d.codcli AND s_agg.produto = d.produto
+             UNION ALL
+             SELECT s_agg.codcli, s_agg.produto, h.dtped FROM sales s_agg JOIN data_history h ON s_agg.codcli = h.codcli AND s_agg.produto = h.produto
+        ) sa ON sa.produto = p.code AND sa.codcli IN (SELECT codigo_cliente FROM active_clients)
+        GROUP BY p.code, p.descricao, s.stock_qty
+    )
+    -- 4. Montagem do JSON final
+    SELECT jsonb_build_object(
+        'active_clients_count', (SELECT COUNT(*) FROM active_clients),
+        'coverage_table', (SELECT COALESCE(jsonb_agg(pc ORDER BY current_clients DESC), '[]'::jsonb) FROM product_coverage pc)
+    ) INTO result;
+
+    RETURN result;
+END;
+$$ LANGUAGE plpgsql;
+
