@@ -735,14 +735,11 @@
         </div>
          <div class="p-4 rounded-xl mb-6 border border-primary shadow-sm bg-content">
             <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-semibold">Análise de Estoque e Tendência de Saída</h2>
+                <h2 id="stock-view-title" class="text-lg font-semibold">Análise de Estoque</h2>
                 <div class="flex items-end gap-4">
                     <div>
-                        <label for="stock-working-days-input" class="block text-xs font-medium mb-1 text-center">Dias Úteis</label>
-                        <div class="flex items-center justify-center gap-1">
-                            <input type="number" id="stock-working-days-input" value="0" min="1" class="border text-sm rounded-lg block w-20 p-1.5 text-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                            <span id="max-working-days-label" class="text-xs whitespace-nowrap">(Máx: 0)</span>
-                        </div>
+                        <label for="stock-working-days-input" class="block text-xs font-medium mb-1 text-center">Dias Úteis (Manual)</label>
+                        <input type="number" id="stock-working-days-input" min="1" class="border text-sm rounded-lg block w-24 p-1.5 text-center focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Auto">
                     </div>
                     <div id="stock-trend-filter-container" class="flex items-center gap-2">
                         <button data-trend="all" class="stock-trend-btn active p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-gray-400"></div></button>
@@ -1284,10 +1281,6 @@
 
         const lastSaleDate = allSalesData.length > 0 ? new Date(Math.max.apply(null, allSalesData.map(s => parseDate(s.dtped)).filter(d => d && !isNaN(d)))) : new Date();
         lastSaleDate.setHours(0,0,0,0);
-        let maxWorkingDaysStock = 0;
-        let sortedWorkingDays = [];
-        let customWorkingDaysStock = 0;
-
         function initializeOptimizedDataStructures() {
             try {
             allClientsData.forEach(client => {
@@ -1501,24 +1494,6 @@
                 }
             });
 
-            const workingDaysSet = new Set();
-            const allSalesForDays = [...allSalesData, ...allHistoryData];
-            allSalesForDays.forEach(sale => {
-                const date = parseDate(sale.dtped);
-                if (date) {
-                    // CORREÇÃO 3: Usar getUTCDay() em vez de getDay() para cálculos de data consistentes
-                    const dayOfWeek = date.getUTCDay();
-                    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-                        workingDaysSet.add(date.toISOString().split('T')[0]);
-                    }
-                }
-            });
-        
-            sortedWorkingDays = Array.from(workingDaysSet).sort((a, b) => new Date(a) - new Date(b));
-        
-            maxWorkingDaysStock = workingDaysSet.size > 0 ? workingDaysSet.size : 1;
-            customWorkingDaysStock = maxWorkingDaysStock;
-
             optimizedData.productPastaMap = new Map();
             const populatePastaMap = (sale) => {
                 if (sale.PRODUTO && sale.observacaofor && !optimizedData.productPastaMap.has(sale.PRODUTO)) {
@@ -1528,14 +1503,6 @@
             allSalesData.forEach(populatePastaMap);
             allHistoryData.forEach(populatePastaMap);
         
-            setTimeout(() => {
-                const maxDaysLabel = document.getElementById('max-working-days-label');
-                if (maxDaysLabel) {
-                    maxDaysLabel.textContent = `(Máx: ${maxWorkingDaysStock})`;
-                }
-                 const daysInput = document.getElementById('stock-working-days-input');
-                 if(daysInput) daysInput.value = customWorkingDaysStock;
-            }, 0);
         } catch (error) {
                 console.error("Erro fatal durante initializeOptimizedDataStructures:", error);
             }
@@ -1943,253 +1910,6 @@
             return `${day}/${month}/${year}`;
         }
 
-        // <!-- INÍCIO DO CÓDIGO RESTAURADO -->
-        
-        function getCoverageFilteredData() {
-            const supervisor = coverageSupervisorFilter.value;
-            const sellers = selectedCoverageSellers;
-            const suppliers = selectedCoverageSuppliers;
-            const products = selectedCoverageProducts;
-            const city = coverageCityFilter.value.trim().toLowerCase();
-            const filial = coverageFilialFilter.value;
-
-            let clients = [...allClientsData];
-
-            if (filial !== 'ambas') {
-                clients = clients.filter(c => {
-                    const lastBranch = clientLastBranch.get(c['codigo_cliente']);
-                    return lastBranch === filial;
-                });
-            }
-
-            if (supervisor) {
-                const rcasOfSupervisor = new Set(optimizedData.rcasBySupervisor.get(supervisor) || []);
-                clients = clients.filter(c => c.rcas.some(rca => rcasOfSupervisor.has(rca)));
-            }
-            if (sellers.length > 0) {
-                const rcasOfSellers = new Set();
-                 sellers.forEach(sellerName => {
-                    const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
-                    if (rcaCode) rcasOfSellers.add(rcaCode);
-                });
-                clients = clients.filter(c => c.rcas.some(rca => rcasOfSellers.has(rca)));
-            }
-            if (city) {
-                clients = clients.filter(c => c.cidade && c.cidade.toLowerCase() === city);
-            }
-
-            let sales = [...allSalesData];
-            let history = [...allHistoryData];
-            if (filial !== 'ambas') {
-                 sales = sales.filter(s => s.filial === filial);
-                 history = history.filter(s => s.filial === filial);
-            }
-            
-            const salesFilter = s => 
-                (suppliers.length === 0 || suppliers.includes(String(s.codfor))) &&
-                (products.length === 0 || products.includes(String(s.produto)));
-                
-            sales = sales.filter(salesFilter);
-            history = history.filter(salesFilter);
-
-            return { sales, history, clients };
-        }
-        
-        function updateCoverageFilters() {
-            const { sales, history } = getCoverageFilteredData();
-            let productSource = [...sales, ...history];
-            updateProductFilter(coverageProductFilterDropdown, coverageProductFilterText, selectedCoverageProducts, productSource, 'coverage');
-        }
-        
-        function resetCoverageFilters() {
-            coverageSupervisorFilter.value = '';
-            coverageCityFilter.value = '';
-            coverageFilialFilter.value = 'ambas';
-            coverageIncludeBonusCheckbox.checked = true;
-            coverageIncludeBonus = true;
-            selectedCoverageSellers = [];
-            selectedCoverageSuppliers = [];
-            selectedCoverageProducts = [];
-            updateSellerFilter('', coverageVendedorFilterDropdown, coverageVendedorFilterText, [], allSalesData);
-            updateSupplierFilter(coverageSupplierFilterDropdown, coverageSupplierFilterText, [], allSalesData, 'coverage');
-            updateCoverageFilters();
-            updateCoverageView();
-        }
-        
-        function updateCoverageView() {
-            const { clients, sales, history } = getCoverageFilteredData();
-            const productsToAnalyze = [...new Set([...sales.map(s => s.produto), ...history.map(s => s.produto)])];
-
-            const supervisor = coverageSupervisorFilter.value;
-            const sellers = selectedCoverageSellers;
-            const sellerRcaCodes = new Set();
-            if (sellers.length > 0) {
-                sellers.forEach(sellerName => {
-                    const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
-                    if (rcaCode) sellerRcaCodes.add(rcaCode);
-                });
-            } else if (supervisor) {
-                (optimizedData.rcasBySupervisor.get(supervisor) || []).forEach(rca => sellerRcaCodes.add(rca));
-            }
-
-            const activeClientsForCoverage = clients.filter(c => {
-                const codcli = c['codigo_cliente'];
-                const rca1 = String(c.rca1 || '').trim();
-                
-                // --- INÍCIO DA MODIFICAÇÃO ---
-                // REGRA DE EXCLUSÃO REMOVIDA: Ignora clientes destes RCAs
-                /*
-                if (rca1 === '306' || rca1 === '300') {
-                    return false;
-                }
-                */
-                // --- FIM DA MODIFICAÇÃO ---
-
-                const isAmericanas = (c.razaosocial || '').toUpperCase().includes('AMERICANAS');
-                // const isVdHiago = vdHiagoClients.has(codcli); // REGRA REMOVIDA
-                
-                // Regra de inclusão
-                return (isAmericanas || rca1 !== '53');
-            });
-            const activeClientsCount = activeClientsForCoverage.length;
-            const activeClientCodes = new Set(activeClientsForCoverage.map(c => c['codigo_cliente']));
-
-            coverageActiveClientsKpi.textContent = activeClientsCount.toLocaleString('pt-BR');
-
-            if (productsToAnalyze.length === 0) {
-                coverageSelectionCoverageValueKpi.textContent = '0%';
-                coverageSelectionCoverageCountKpi.textContent = `0 de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-                coverageSelectionCoverageValueKpiPrevious.textContent = '0%';
-                coverageSelectionCoverageCountKpiPrevious.textContent = `0 de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-                coverageTopCoverageValueKpi.textContent = '0%';
-                coverageTopCoverageProductKpi.textContent = '-';
-                coverageTableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8 text-slate-500">Nenhum produto selecionado ou encontrado para os filtros.</td></tr>';
-                return;
-            }
-
-            const tableData = [];
-            const clientsWhoGotSelectionCurrent = new Set();
-            const clientsWhoGotSelectionPrevious = new Set();
-            let topCoverageItem = { name: '-', coverage: 0, clients: 0 };
-            const activeStockMap = getActiveStockMap(coverageFilialFilter.value);
-
-            productsToAnalyze.forEach(productCode => {
-                const productInfo = productDetailsMap.get(productCode) || { descricao: `Produto ${productCode}`};
-
-                let clientsWhoGotProductCurrent = 0;
-                let clientsWhoGotProductPrevious = 0;
-
-                activeClientCodes.forEach(codcli => {
-                    const clientSalesCurrent = optimizedData.salesByClientAndRca_CurrentMonth.get(codcli);
-                    const clientBonusCurrent = coverageIncludeBonus ? optimizedData.bonificationsByClientAndRca_CurrentMonth.get(codcli) : null;
-                    if ((clientSalesCurrent && clientSalesCurrent.has(productCode) && (sellerRcaCodes.size === 0 || [...clientSalesCurrent.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) ||
-                        (clientBonusCurrent && clientBonusCurrent.has(productCode) && (sellerRcaCodes.size === 0 || [...clientBonusCurrent.get(productCode)].some(rca => sellerRcaCodes.has(rca))))) {
-                        clientsWhoGotProductCurrent++;
-                        clientsWhoGotSelectionCurrent.add(codcli);
-                    }
-
-                    const clientSalesPrevious = optimizedData.salesByClientAndRca_PreviousMonth.get(codcli);
-                    const clientBonusPrevious = coverageIncludeBonus ? optimizedData.bonificationsByClientAndRca_PreviousMonth.get(codcli) : null;
-
-                    if ((clientSalesPrevious && clientSalesPrevious.has(productCode) && (sellerRcaCodes.size === 0 || [...clientSalesPrevious.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) ||
-                        (clientBonusPrevious && clientBonusPrevious.has(productCode) && (sellerRcaCodes.size === 0 || [...clientBonusPrevious.get(productCode)].some(rca => sellerRcaCodes.has(rca))))) {
-                        clientsWhoGotProductPrevious++;
-                        clientsWhoGotSelectionPrevious.add(codcli);
-                    }
-                });
-
-                const coverageCurrent = activeClientsCount > 0 ? (clientsWhoGotProductCurrent / activeClientsCount) * 100 : 0;
-                
-                if (coverageCurrent > topCoverageItem.coverage) {
-                    topCoverageItem = {
-                        name: `(${productCode}) ${productInfo.descricao}`,
-                        coverage: coverageCurrent,
-                        clients: clientsWhoGotProductCurrent
-                    };
-                }
-
-                const stockQty = activeStockMap.get(productCode) || 0;
-                const productAllSales = [...sales, ...history].filter(s => s.produto === productCode);
-                
-                const productCadastroDate = parseDate(productInfo.dtcadastro);
-                let productFirstWorkingDayIndex = 0;
-                if (productCadastroDate) {
-                    const cadastroDateString = productCadastroDate.toISOString().split('T')[0];
-                    productFirstWorkingDayIndex = sortedWorkingDays.findIndex(d => d >= cadastroDateString);
-                    if (productFirstWorkingDayIndex === -1) productFirstWorkingDayIndex = sortedWorkingDays.length;
-                }
-                const productMaxLifeInWorkingDays = sortedWorkingDays.length - productFirstWorkingDayIndex;
-                const effectiveDaysToCalculate = Math.min(customWorkingDaysStock, productMaxLifeInWorkingDays) || 1;
-                
-                const endDate = parseDate(sortedWorkingDays[sortedWorkingDays.length - 1]);
-                const targetIndex = Math.max(0, sortedWorkingDays.length - effectiveDaysToCalculate);
-                const startDate = parseDate(sortedWorkingDays[targetIndex]);
-                
-                let totalQtySoldInRange = 0;
-                productAllSales.forEach(sale => {
-                    const saleDate = parseDate(sale.dtped);
-                    if (saleDate && saleDate >= startDate && saleDate <= endDate) {
-                        totalQtySoldInRange += sale.qtvenda_embalagem_master;
-                    }
-                });
-
-                const dailyAvgSale = totalQtySoldInRange / effectiveDaysToCalculate;
-                const trendDays = dailyAvgSale > 0 ? (stockQty / dailyAvgSale) : (stockQty > 0 ? Infinity : 0);
-                
-                tableData.push({
-                    descricao: `(${productCode}) ${productInfo.descricao}`,
-                    stockQty: stockQty,
-                    trendDays: trendDays,
-                    clientsPreviousCount: clientsWhoGotProductPrevious,
-                    clientsCurrentCount: clientsWhoGotProductCurrent,
-                    coverageCurrent: coverageCurrent
-                });
-            });
-
-            coverageTopCoverageValueKpi.textContent = `${topCoverageItem.coverage.toFixed(2)}%`;
-            coverageTopCoverageProductKpi.textContent = topCoverageItem.name;
-            coverageTopCoverageProductKpi.title = topCoverageItem.name;
-
-            const selectionCoveredCountCurrent = clientsWhoGotSelectionCurrent.size;
-            const selectionCoveragePercentCurrent = activeClientsCount > 0 ? (selectionCoveredCountCurrent / activeClientsCount) * 100 : 0;
-            coverageSelectionCoverageValueKpi.textContent = `${selectionCoveragePercentCurrent.toFixed(2)}%`;
-            coverageSelectionCoverageCountKpi.textContent = `${selectionCoveredCountCurrent.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-
-            const selectionCoveredCountPrevious = clientsWhoGotSelectionPrevious.size;
-            const selectionCoveragePercentPrevious = activeClientsCount > 0 ? (selectionCoveredCountPrevious / activeClientsCount) * 100 : 0;
-            coverageSelectionCoverageValueKpiPrevious.textContent = `${selectionCoveragePercentPrevious.toFixed(2)}%`;
-            coverageSelectionCoverageCountKpiPrevious.textContent = `${selectionCoveredCountPrevious.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-            
-            tableData.sort((a, b) => b.coverageCurrent - a.coverageCurrent);
-
-            coverageTableBody.innerHTML = tableData.map(item => {
-                let trendText;
-                if (!isFinite(item.trendDays) && item.stockQty > 0) {
-                    trendText = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-500/30 text-gray-300">S/ VENDA</span>`;
-                } else if (isFinite(item.trendDays)) {
-                    const trendDays = Math.floor(item.trendDays);
-                    let trendColor = 'text-slate-400';
-                    if (trendDays < 15) trendColor = 'text-red-400';
-                    else if (trendDays < 30) trendColor = 'text-yellow-400';
-                    else trendColor = 'text-green-400';
-                    trendText = `<span class="font-bold ${trendColor}">${trendDays} dias</span>`;
-                } else {
-                    trendText = '-';
-                }
-                
-                return `
-                    <tr class="hover:bg-slate-700/50">
-                        <td class="px-2 py-1.5 text-xs">${item.descricao}</td>
-                        <td class="px-2 py-1.5 text-xs text-right">${item.stockQty.toLocaleString('pt-BR')}</td>
-                        <td class="px-2 py-1.5 text-xs text-right">${trendText}</td>
-                        <td class="px-2 py-1.5 text-xs text-right">${item.clientsPreviousCount.toLocaleString('pt-BR')}</td>
-                        <td class="px-2 py-1.5 text-xs text-right">${item.clientsCurrentCount.toLocaleString('pt-BR')}</td>
-                        <td class="px-2 py-1.5 text-xs text-right">${item.coverageCurrent.toFixed(2)}%</td>
-                    </tr>
-                `;
-            }).join('');
-        }
-        
         // <!-- FIM DO CÓDIGO RESTAURADO -->
 
         const isObject = obj => obj && typeof obj === 'object' && !Array.isArray(obj);
@@ -2697,9 +2417,8 @@
 
             document.querySelectorAll('#stock-fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
             
-            customWorkingDaysStock = maxWorkingDaysStock;
             const daysInput = document.getElementById('stock-working-days-input');
-            if(daysInput) daysInput.value = customWorkingDaysStock;
+            if (daysInput) daysInput.value = '';
 
             handleStockFilterChange();
         }
@@ -3571,13 +3290,17 @@
             newProductsTableBody.innerHTML = '<tr><td colspan="4" class="text-center p-4">...</td></tr>';
             lostProductsTableBody.innerHTML = '<tr><td colspan="4" class="text-center p-4">...</td></tr>';
 
+            const customDaysInput = document.getElementById('stock-working-days-input');
+            const customDaysValue = customDaysInput ? parseInt(customDaysInput.value, 10) : 0;
+
             const filters = {
                 p_supervisor_filter: stockSupervisorFilter.value || '',
                 p_sellers_filter: selectedStockSellers.length > 0 ? selectedStockSellers : null,
                 p_suppliers_filter: selectedStockSuppliers.length > 0 ? selectedStockSuppliers : null,
                 p_products_filter: selectedStockProducts.length > 0 ? selectedStockProducts : null,
                 p_rede_group_filter: stockRedeGroupFilter || '',
-                p_redes_filter: selectedStockRedes.length > 0 ? selectedStockRedes : null
+                p_redes_filter: selectedStockRedes.length > 0 ? selectedStockRedes : null,
+                p_custom_days: isNaN(customDaysValue) ? 0 : customDaysValue // ADICIONADO
             };
 
             try {
@@ -3586,6 +3309,12 @@
                 if (error) throw error;
                 if (!data) throw new Error("A chamada RPC para 'get_stock_view_data' não retornou dados.");
                 
+                // ATUALIZADO: Mostra os dias usados no título
+                const stockViewTitle = document.getElementById('stock-view-title');
+                if (stockViewTitle) {
+                    stockViewTitle.textContent = `Análise de Estoque (${data.working_days_used || 0} dias úteis)`;
+                }
+
                 let stockData = data.stock_table || [];
                 if (stockTrendFilter !== 'all') {
                     stockData = stockData.filter(item => {
@@ -5466,28 +5195,10 @@
 
             const stockWorkingDaysInput = document.getElementById('stock-working-days-input');
             if (stockWorkingDaysInput) {
-                stockWorkingDaysInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const value = parseInt(e.target.value);
-                        if (!isNaN(value) && value > 0 && value <= maxWorkingDaysStock) {
-                            customWorkingDaysStock = value;
-                        } else {
-                             e.target.value = customWorkingDaysStock;
-                        }
-                        handleStockFilterChange();
-                        e.target.blur(); // <-- ADICIONADO: Remove o foco do input após pressionar Enter
-                    }
-                });
-                stockWorkingDaysInput.addEventListener('blur', (e) => {
-                    const value = parseInt(e.target.value);
-                     if (isNaN(value) || value <= 0 || value > maxWorkingDaysStock) {
-                         e.target.value = customWorkingDaysStock;
-                    } else if (value !== customWorkingDaysStock) {
-
-                        customWorkingDaysStock = value;
-                        handleStockFilterChange();
-                    }
+                // ATUALIZADO: Evento 'change' é mais apropriado aqui.
+                // Ele dispara quando o usuário finaliza a edição (pressiona Enter ou clica fora).
+                stockWorkingDaysInput.addEventListener('change', () => {
+                    handleStockFilterChange();
                 });
             }
 
