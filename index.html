@@ -2755,12 +2755,12 @@
             document.getElementById('city-view-content').classList.add('hidden');
 
             const filters = {
-                supervisor_filter: citySupervisorFilter.value || null,
-                sellers_filter: selectedCitySellers.length > 0 ? selectedCitySellers : null,
-                rede_group_filter: cityRedeGroupFilter || null,
-                redes_filter: selectedCityRedes.length > 0 ? selectedCityRedes : null,
-                city_filter: cityNameFilter.value.trim() || null,
-                codcli_filter: cityCodCliFilter.value.trim() || null
+                p_supervisor_filter: citySupervisorFilter.value || '',
+                p_sellers_filter: selectedCitySellers.length > 0 ? selectedCitySellers : null,
+                p_rede_group_filter: cityRedeGroupFilter || '',
+                p_redes_filter: selectedCityRedes.length > 0 ? selectedCityRedes : null,
+                p_city_filter: cityNameFilter.value.trim() || '',
+                p_codcli_filter: cityCodCliFilter.value.trim() || ''
             };
 
             try {
