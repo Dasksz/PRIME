@@ -735,14 +735,11 @@
         </div>
          <div class="p-4 rounded-xl mb-6 border border-primary shadow-sm bg-content">
             <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-semibold">Análise de Estoque e Tendência de Saída</h2>
+                <h2 id="stock-view-title" class="text-lg font-semibold">Análise de Estoque</h2>
                 <div class="flex items-end gap-4">
                     <div>
-                        <label for="stock-working-days-input" class="block text-xs font-medium mb-1 text-center">Dias Úteis</label>
-                        <div class="flex items-center justify-center gap-1">
-                            <input type="number" id="stock-working-days-input" value="0" min="1" class="border text-sm rounded-lg block w-20 p-1.5 text-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                            <span id="max-working-days-label" class="text-xs whitespace-nowrap">(Máx: 0)</span>
-                        </div>
+                        <label for="stock-working-days-input" class="block text-xs font-medium mb-1 text-center">Dias Úteis (Manual)</label>
+                        <input type="number" id="stock-working-days-input" min="1" class="border text-sm rounded-lg block w-24 p-1.5 text-center focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Auto">
                     </div>
                     <div id="stock-trend-filter-container" class="flex items-center gap-2">
                         <button data-trend="all" class="stock-trend-btn active p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-gray-400"></div></button>
@@ -1229,7 +1226,6 @@
         const allSalesData = []; // CORREÇÃO: Define a variável para evitar o ReferenceError
         const allHistoryData = []; // CORREÇÃO: Define a variável para evitar o ReferenceError
         const embeddedData = window.embeddedData; // CORREÇÃO CRÍTICA: Esta linha é necessária para que o script funcione.
-        let globalStockData = [];
         const chartsData = embeddedData.charts || {};
 
         // CORREÇÃO: Mover a paleta de cores para o escopo global do script para que todas as funções de gráfico possam acessá-la.
@@ -1285,10 +1281,6 @@
 
         const lastSaleDate = allSalesData.length > 0 ? new Date(Math.max.apply(null, allSalesData.map(s => parseDate(s.dtped)).filter(d => d && !isNaN(d)))) : new Date();
         lastSaleDate.setHours(0,0,0,0);
-        let maxWorkingDaysStock = 0;
-        let sortedWorkingDays = [];
-        let customWorkingDaysStock = 0;
-
         function initializeOptimizedDataStructures() {
             try {
             allClientsData.forEach(client => {
@@ -1502,24 +1494,6 @@
                 }
             });
 
-            const workingDaysSet = new Set();
-            const allSalesForDays = [...allSalesData, ...allHistoryData];
-            allSalesForDays.forEach(sale => {
-                const date = parseDate(sale.dtped);
-                if (date) {
-                    // CORREÇÃO 3: Usar getUTCDay() em vez de getDay() para cálculos de data consistentes
-                    const dayOfWeek = date.getUTCDay();
-                    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-                        workingDaysSet.add(date.toISOString().split('T')[0]);
-                    }
-                }
-            });
-        
-            sortedWorkingDays = Array.from(workingDaysSet).sort((a, b) => new Date(a) - new Date(b));
-        
-            maxWorkingDaysStock = workingDaysSet.size > 0 ? workingDaysSet.size : 1;
-            customWorkingDaysStock = maxWorkingDaysStock;
-
             optimizedData.productPastaMap = new Map();
             const populatePastaMap = (sale) => {
                 if (sale.PRODUTO && sale.observacaofor && !optimizedData.productPastaMap.has(sale.PRODUTO)) {
@@ -1529,14 +1503,6 @@
             allSalesData.forEach(populatePastaMap);
             allHistoryData.forEach(populatePastaMap);
         
-            setTimeout(() => {
-                const maxDaysLabel = document.getElementById('max-working-days-label');
-                if (maxDaysLabel) {
-                    maxDaysLabel.textContent = `(Máx: ${maxWorkingDaysStock})`;
-                }
-                 const daysInput = document.getElementById('stock-working-days-input');
-                 if(daysInput) daysInput.value = customWorkingDaysStock;
-            }, 0);
         } catch (error) {
                 console.error("Erro fatal durante initializeOptimizedDataStructures:", error);
             }
@@ -1944,128 +1910,6 @@
             return `${day}/${month}/${year}`;
         }
 
-        // <!-- INÍCIO DO CÓDIGO RESTAURADO -->
-        
-        function getCoverageFilteredData() {
-            const supervisor = coverageSupervisorFilter.value;
-            const sellers = selectedCoverageSellers;
-            const suppliers = selectedCoverageSuppliers;
-            const products = selectedCoverageProducts;
-            const city = coverageCityFilter.value.trim().toLowerCase();
-            const filial = coverageFilialFilter.value;
-
-            let clients = [...allClientsData];
-
-            if (filial !== 'ambas') {
-                clients = clients.filter(c => {
-                    const lastBranch = clientLastBranch.get(c['codigo_cliente']);
-                    return lastBranch === filial;
-                });
-            }
-
-            if (supervisor) {
-                const rcasOfSupervisor = new Set(optimizedData.rcasBySupervisor.get(supervisor) || []);
-                clients = clients.filter(c => c.rcas.some(rca => rcasOfSupervisor.has(rca)));
-            }
-            if (sellers.length > 0) {
-                const rcasOfSellers = new Set();
-                 sellers.forEach(sellerName => {
-                    const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
-                    if (rcaCode) rcasOfSellers.add(rcaCode);
-                });
-                clients = clients.filter(c => c.rcas.some(rca => rcasOfSellers.has(rca)));
-            }
-            if (city) {
-                clients = clients.filter(c => c.cidade && c.cidade.toLowerCase() === city);
-            }
-
-            let sales = [...allSalesData];
-            let history = [...allHistoryData];
-            if (filial !== 'ambas') {
-                 sales = sales.filter(s => s.filial === filial);
-                 history = history.filter(s => s.filial === filial);
-            }
-            
-            const salesFilter = s => 
-                (suppliers.length === 0 || suppliers.includes(String(s.codfor))) &&
-                (products.length === 0 || products.includes(String(s.produto)));
-                
-            sales = sales.filter(salesFilter);
-            history = history.filter(salesFilter);
-
-            return { sales, history, clients };
-        }
-        
-        function updateCoverageFilters() {
-            const { sales, history } = getCoverageFilteredData();
-            let productSource = [...sales, ...history];
-            updateProductFilter(coverageProductFilterDropdown, coverageProductFilterText, selectedCoverageProducts, productSource, 'coverage');
-        }
-        
-        function resetCoverageFilters() {
-            coverageSupervisorFilter.value = '';
-            coverageCityFilter.value = '';
-            coverageFilialFilter.value = 'ambas';
-            coverageIncludeBonusCheckbox.checked = true;
-            coverageIncludeBonus = true;
-            selectedCoverageSellers = [];
-            selectedCoverageSuppliers = [];
-            selectedCoverageProducts = [];
-            updateSellerFilter('', coverageVendedorFilterDropdown, coverageVendedorFilterText, [], allSalesData);
-            updateSupplierFilter(coverageSupplierFilterDropdown, coverageSupplierFilterText, [], allSalesData, 'coverage');
-            updateCoverageFilters();
-            updateCoverageView();
-        }
-        
-        async function updateCoverageView() {
-            coverageTableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8">Carregando análise de cobertura...</td></tr>';
-
-            const filters = {
-                p_supervisor_filter: coverageSupervisorFilter.value || '',
-                p_sellers_filter: selectedCoverageSellers.length > 0 ? selectedCoverageSellers : null,
-                p_suppliers_filter: selectedCoverageSuppliers.length > 0 ? selectedCoverageSuppliers : null,
-                p_products_filter: selectedCoverageProducts.length > 0 ? selectedCoverageProducts : null,
-                p_filial_filter: coverageFilialFilter.value,
-                p_city_filter: coverageCityFilter.value.trim() || ''
-            };
-
-            try {
-                const { data, error } = await supabaseClient.rpc('get_coverage_view_data', filters);
-
-                if (error) throw error;
-                
-                const tableData = data.coverage_table || [];
-                const activeClientsCount = data.active_clients_count || 0;
-
-                // Atualiza KPI Simples
-                coverageActiveClientsKpi.textContent = activeClientsCount.toLocaleString('pt-BR');
-
-                if (tableData.length === 0) {
-                    coverageTableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8 text-slate-500">Nenhum dado encontrado.</td></tr>';
-                    return;
-                }
-
-                // Renderiza Tabela
-                coverageTableBody.innerHTML = tableData.map(item => {
-                    const coveragePct = activeClientsCount > 0 ? (item.clients_curr / activeClientsCount) * 100 : 0;
-                    const stockDays = item.stock_qty > 0 ? 'Disponível' : 'Sem Estoque';
-
-                    return `<tr>
-                <td class="px-2 py-1.5 text-xs">(${item.code}) ${item.descricao}</td>
-                <td class="px-2 py-1.5 text-xs text-right">${item.stock_qty.toLocaleString('pt-BR')}</td>
-                <td class="px-2 py-1.5 text-xs text-right">${stockDays}</td>
-                <td class="px-2 py-1.5 text-xs text-right">${item.clients_prev}</td>
-                <td class="px-2 py-1.5 text-xs text-right">${item.clients_curr}</td>
-                <td class="px-2 py-1.5 text-xs text-right">${coveragePct.toFixed(2)}%</td>
-            </tr>`;
-                }).join('');
-
-            } catch (error) {
-                console.error('Erro cobertura:', error);
-                coverageTableBody.innerHTML = `<tr><td colspan="6" class="text-center p-8 text-red-400">Erro: ${error.message}</td></tr>`;
-            }
-        }
-        
         // <!-- FIM DO CÓDIGO RESTAURADO -->
 
         const isObject = obj => obj && typeof obj === 'object' && !Array.isArray(obj);
@@ -2573,9 +2417,8 @@
 
             document.querySelectorAll('#stock-fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
             
-            customWorkingDaysStock = maxWorkingDaysStock;
             const daysInput = document.getElementById('stock-working-days-input');
-            if(daysInput) daysInput.value = customWorkingDaysStock;
+            if (daysInput) daysInput.value = '';
 
             handleStockFilterChange();
         }
@@ -2775,80 +2618,92 @@
             supervisorsToShow.forEach(sup => { weeklySupervisorFilter.innerHTML += `<div class="flex items-center"><input id="sup-check-${sup.replace(/\s+/g, '-')}" type="checkbox" value="${sup}" class="w-4 h-4 text-teal-600 bg-slate-700 border-slate-600 rounded focus:ring-teal-600 ring-offset-slate-800 focus:ring-2"><label for="sup-check-${sup.replace(/\s+/g, '-')}" class="ml-2 text-sm font-medium text-slate-300">${sup}</label></div>`; });
         }
 
-        async function updateWeeklyView() {
-            // Mostra status de carregamento
-            document.getElementById('weeklySalesChartContainer').innerHTML = '<p class="text-center text-slate-500 mt-10">Carregando dados da semana...</p>';
-            
+        function updateWeeklyView() {
             const selectedSupervisors = Array.from(weeklySupervisorFilter.querySelectorAll('input:checked')).map(cb => cb.value);
-            const supervisorParam = selectedSupervisors.length > 0 ? selectedSupervisors[0] : null; // SQL suporta 1 por vez ou null
-            const fornecedorParam = currentWeeklyFornecedor || null;
+            let dataForGeneralCharts = allSalesData;
+            if (currentWeeklyFornecedor) dataForGeneralCharts = dataForGeneralCharts.filter(row => String(row.observacaofor).trim() === currentWeeklyFornecedor);
+            if (selectedSupervisors.length > 0) dataForGeneralCharts = dataForGeneralCharts.filter(d => selectedSupervisors.includes(d.superv));
+            
+            // Use UTC methods to define the current month for filtering
+            const currentMonth = lastSaleDate.getUTCMonth(); 
+            const currentYear = lastSaleDate.getUTCFullYear();
+            
+            const monthSales = dataForGeneralCharts.filter(d => { 
+                if (!d.dtped) return false; 
+                const saleDate = parseDate(d.dtped); 
+                // Use UTC methods for comparison
+                return saleDate && saleDate.getUTCMonth() === currentMonth && saleDate.getUTCFullYear() === currentYear; 
+            });
+            
+            const totalMes = monthSales.reduce((sum, item) => sum + getRevenue(item), 0);
+            totalMesSemanalEl.textContent = totalMes.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            
+            const salesByWeekAndDay = {}; 
+            const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+            monthSales.forEach(sale => { 
+                const saleDate = parseDate(sale.dtped); 
+                if (!saleDate) return; 
+                const weekNum = getWeekOfMonth(saleDate); // Already UTC-based
+                const dayOfWeek = saleDate.getUTCDay(); // Use getUTCDay
+                if(dayOfWeek === 0 || dayOfWeek === 6) return; // Skip weekends
+                const dayName = dayNames[dayOfWeek]; 
+                if (!salesByWeekAndDay[weekNum]) { 
+                    salesByWeekAndDay[weekNum] = { 'Segunda': 0, 'Terça': 0, 'Quarta': 0, 'Quinta': 0, 'Sexta': 0 }; 
+                } 
+                salesByWeekAndDay[weekNum][dayName] = (salesByWeekAndDay[weekNum][dayName] || 0) + getRevenue(sale);
+            });
+            
+            const weekLabels = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
+            const weekNumbers = Object.keys(salesByWeekAndDay).sort((a,b) => a - b);
+            const currentMonthDatasets = weekNumbers.map((weekNum, index) => ({ 
+                label: `Semana ${weekNum}`, 
+                data: weekLabels.map(day => salesByWeekAndDay[weekNum][day] || 0), 
+                backgroundColor: professionalPalette[index % professionalPalette.length] 
+            }));
+            
+            const historicalDataForChart = [0, 0, 0, 0, 0];
+            const supervisorsToConsider = selectedSupervisors.length > 0
+                ? selectedSupervisors.map(s => s.toUpperCase())
+                : Object.keys(historicalBests);
 
-            try {
-                // CHAMA A NOVA RPC
-                const { data, error } = await supabaseClient.rpc('get_weekly_view_data', {
-                    p_supervisor: supervisorParam,
-                    p_fornecedor: fornecedorParam
-                });
-
-                if (error) throw error;
-
-                // Atualiza Total
-                totalMesSemanalEl.textContent = (data.total_month || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-                // Processa Dados do Gráfico Semanal
-                const weeklyData = data.weekly_data || [];
-                const salesByWeekAndDay = {};
-                const dayNames = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
-
-                weeklyData.forEach(item => {
-                    if (!salesByWeekAndDay[item.week_num]) {
-                        salesByWeekAndDay[item.week_num] = { 'Segunda': 0, 'Terça': 0, 'Quarta': 0, 'Quinta': 0, 'Sexta': 0 };
-                    }
-                    salesByWeekAndDay[item.week_num][item.day_name] = item.fat;
-                });
-
-                const weekLabels = dayNames;
-                const weekNumbers = Object.keys(salesByWeekAndDay).sort((a, b) => a - b);
-                const datasets = weekNumbers.map((weekNum, index) => ({
-                    label: `Semana ${weekNum}`,
-                    data: weekLabels.map(day => salesByWeekAndDay[weekNum][day] || 0),
-                    backgroundColor: professionalPalette[index % professionalPalette.length]
-                }));
-
-                if (datasets.length > 0) {
-                    createChart('weeklySalesChart', 'bar', weekLabels, datasets, {
-                        plugins: { legend: { display: true, position: 'top' } }
-                    });
-                } else {
-                    showNoDataMessage('weeklySalesChart', 'Sem vendas registradas esta semana.');
+            // CORREÇÃO: A lógica foi simplificada para usar sempre chaves em maiúsculas,
+            // tornando a correspondência com os dados históricos mais robusta.
+            supervisorsToConsider.forEach(supKey => {
+                // Procura a chave diretamente no objeto historicalBests.
+                // Se estamos a iterar a partir dos filtros, a chave foi convertida para maiúsculas.
+                // Se estamos a iterar sobre todos os supervisores, a chave já está em maiúsculas.
+                const bests = historicalBests[supKey];
+                if (bests) {
+                    historicalDataForChart[0] += bests[1] || 0; // Mon
+                    historicalDataForChart[1] += bests[2] || 0; // Tue
+                    historicalDataForChart[2] += bests[3] || 0; // Wed
+                    historicalDataForChart[3] += bests[4] || 0; // Thu
+                    historicalDataForChart[4] += bests[5] || 0; // Fri
                 }
-
-                // Tabela Resumo
-                const weeklySummaryTableBody = document.getElementById('weekly-summary-table-body');
-                if (weeklySummaryTableBody) {
-                    weeklySummaryTableBody.innerHTML = '';
-                    weekNumbers.forEach(weekNum => {
-                        const weekTotal = Object.values(salesByWeekAndDay[weekNum]).reduce((a, b) => a + b, 0);
-                        weeklySummaryTableBody.innerHTML += `<tr><td class="px-4 py-2">Semana ${weekNum}</td><td class="px-4 py-2 text-right">${weekTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td></tr>`;
-                    });
-                }
-
-                // Rankings
-                const posRank = data.positivacao_rank || [];
-                const sellRank = data.sellers_rank || [];
-
-                if (posRank.length > 0) createChart('positivacaoChart', 'bar', posRank.map(r => r.nome.split(' ')[0]), posRank.map(r => r.total));
-                else showNoDataMessage('positivacaoChart', 'Sem dados.');
-
-                if (sellRank.length > 0) createChart('topSellersChart', 'bar', sellRank.map(r => r.nome.split(' ')[0]), sellRank.map(r => r.total));
-                else showNoDataMessage('topSellersChart', 'Sem dados.');
-
-                showNoDataMessage('mixChart', 'Ranking de Mix não disponível nesta versão otimizada.');
-
-            } catch (err) {
-                console.error('Erro semanal:', err);
-                showNoDataMessage('weeklySalesChart', 'Erro ao carregar dados.');
+            });
+            const historicalDataset = { type: 'line', label: 'Melhor Dia Mês Anterior', data: historicalDataForChart, borderColor: '#b5838d', backgroundColor: 'transparent', pointBackgroundColor: '#b5838d', pointRadius: 4, tension: 0.1, borderWidth: 2, yAxisID: 'y', datalabels: { display: false } };
+            const finalDatasets = [...currentMonthDatasets, historicalDataset];
+            const weeklyChartOptions = { plugins: { legend: { display: true, position: 'top', onClick: (e, legendItem, legend) => { const index = legendItem.datasetIndex; const ci = legend.chart; if (ci.isDatasetVisible(index)) { ci.hide(index); legendItem.hidden = true; } else { ci.show(index); legendItem.hidden = false; } let newTotal = 0; ci.data.datasets.forEach((dataset, i) => { if (ci.isDatasetVisible(i) && dataset.type !== 'line') newTotal += dataset.data.reduce((acc, val) => acc + val, 0); }); totalMesSemanalEl.textContent = newTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); } } } };
+            createChart('weeklySalesChart', 'bar', weekLabels, finalDatasets, weeklyChartOptions);
+            const weeklySummaryTableBody = document.getElementById('weekly-summary-table-body');
+            if (weeklySummaryTableBody) {
+                weeklySummaryTableBody.innerHTML = ''; let grandTotal = 0;
+                Object.keys(salesByWeekAndDay).sort((a,b) => parseInt(a) - parseInt(b)).forEach(weekNum => { const weekTotal = Object.values(salesByWeekAndDay[weekNum]).reduce((a, b) => a + b, 0); grandTotal += weekTotal; weeklySummaryTableBody.innerHTML += `<tr><td class="px-4 py-2">Semana ${weekNum}</td><td class="px-4 py-2 text-right">${weekTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td></tr>`; });
+                weeklySummaryTableBody.innerHTML += `<tr class="font-bold"><td class="px-4 py-2">Total do Mês</td><td class="px-4 py-2 text-right">${grandTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td></tr>`;
             }
+            const dataForRankings = dataForGeneralCharts.filter(d => d.superv !== 'BALCAO');
+            const positivacao = {}; dataForRankings.forEach(d => { if (!d.nome || !d.codcli) return; if (!positivacao[d.nome]) positivacao[d.nome] = new Set(); positivacao[d.nome].add(d.codcli); });
+            const positivacaoRank = Object.entries(positivacao).map(([v, c]) => ({ vendedor: v, total: c.size })).sort((a, b) => b.total - a.total).slice(0, 10);
+            if (positivacaoRank.length > 0) createChart('positivacaoChart', 'bar', positivacaoRank.map(r => getFirstName(r.vendedor)), positivacaoRank.map(r => r.total));
+            else showNoDataMessage('positivacaoChart', 'Sem dados para o ranking.');
+            const salesBySeller = {}; dataForRankings.forEach(d => { if (!d.nome) return; salesBySeller[d.nome] = (salesBySeller[d.nome] || 0) + getRevenue(d); });
+            const topSellersRank = Object.entries(salesBySeller).sort(([, a], [, b]) => b - a).slice(0, 10);
+            if (topSellersRank.length > 0) createChart('topSellersChart', 'bar', topSellersRank.map(r => getFirstName(r[0])), topSellersRank.map(r => r[1]));
+            else showNoDataMessage('topSellersChart', 'Sem dados para o ranking.');
+            const vendorsInFilter = [...new Set(dataForRankings.map(d => d.nome))].filter(v => v !== 'VD HIAGO');
+            const mixRank = vendorsInFilter.map(vendedor => { const vendorSales = dataForRankings.filter(d => d.nome === vendedor); if (vendorSales.length === 0) return { vendedor, avgMix: 0 }; const supervisor = vendorSales[0].superv; let salesForMixCalc; if (supervisor === 'OSVALDO NUNES O') salesForMixCalc = vendorSales; else { const targetSuppliers = ['707', '708']; salesForMixCalc = vendorSales.filter(d => targetSuppliers.includes(String(d.codfor))); } const mixPerClient = {}; salesForMixCalc.forEach(d => { if (!d.codcli || !d.descricao) return; if (!mixPerClient[d.codcli]) mixPerClient[d.codcli] = new Set(); mixPerClient[d.codcli].add(d.descricao); }); const mixValues = Object.values(mixPerClient).map(p => p.size); if (mixValues.length === 0) return { vendedor, avgMix: 0 }; const avgMix = mixValues.reduce((a, b) => a + b, 0) / mixValues.length; return { vendedor, avgMix }; }).sort((a, b) => b.avgMix - a.avgMix).slice(0, 10);
+            if(mixRank.length > 0 && mixRank.some(r => r.avgMix > 0)) createChart('mixChart', 'bar', mixRank.map(r => getFirstName(r.vendedor)), mixRank.map(r => r.avgMix));
+            else showNoDataMessage('mixChart', 'Sem dados para o ranking.');
         }
 
         function updateSupplierFilter(dropdown, filterText, selectedArray, dataSource = [], filterType = 'comparison') {
@@ -3430,11 +3285,13 @@
 
         async function updateStockView() {
             stockAnalysisTableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8">Carregando dados de estoque...</td></tr>';
-            // Limpa tabelas auxiliares para indicar carregamento
             growthTableBody.innerHTML = '<tr><td colspan="5" class="text-center p-4">...</td></tr>';
             declineTableBody.innerHTML = '<tr><td colspan="5" class="text-center p-4">...</td></tr>';
             newProductsTableBody.innerHTML = '<tr><td colspan="4" class="text-center p-4">...</td></tr>';
             lostProductsTableBody.innerHTML = '<tr><td colspan="4" class="text-center p-4">...</td></tr>';
+            
+            const customDaysInput = document.getElementById('stock-working-days-input');
+            const customDaysValue = customDaysInput ? parseInt(customDaysInput.value, 10) : 0;
 
             const filters = {
                 p_supervisor_filter: stockSupervisorFilter.value || '',
@@ -3443,8 +3300,7 @@
                 p_products_filter: selectedStockProducts.length > 0 ? selectedStockProducts : null,
                 p_rede_group_filter: stockRedeGroupFilter || '',
                 p_redes_filter: selectedStockRedes.length > 0 ? selectedStockRedes : null,
-                // CORREÇÃO: Envia a filial selecionada para evitar duplicidade
-                p_filial_filter: stockFilialFilter.value || 'ambas'
+                p_custom_days: isNaN(customDaysValue) ? 0 : customDaysValue // ADICIONADO
             };
 
             try {
@@ -3453,13 +3309,47 @@
                 if (error) throw error;
                 if (!data) throw new Error("A chamada RPC para 'get_stock_view_data' não retornou dados.");
                 
-                // 1. GUARDA OS DADOS NA MEMÓRIA
-                globalStockData = data.stock_table || [];
+                // ATUALIZADO: Mostra os dias usados no título
+                const stockViewTitle = document.getElementById('stock-view-title');
+                if (stockViewTitle) {
+                    stockViewTitle.textContent = `Análise de Estoque (${data.working_days_used || 0} dias úteis)`;
+                }
+                
+                let stockData = data.stock_table || [];
+                if (stockTrendFilter !== 'all') {
+                    stockData = stockData.filter(item => {
+                        const trend = item.trend_days;
+                        if (stockTrendFilter === 'low') return isFinite(trend) && trend < 15;
+                        if (stockTrendFilter === 'medium') return isFinite(trend) && trend >= 15 && trend < 30;
+                        if (stockTrendFilter === 'good') return isFinite(trend) && trend >= 30;
+                        return false;
+                    });
+                }
+                
+                stockAnalysisTableBody.innerHTML = stockData.map(item => {
+                    let trendText = '-';
+                    if (item.trend_days >= 999) {
+                        trendText = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-500/30 text-gray-300">S/ VENDA</span>`;
+                    } else if (isFinite(item.trend_days)) {
+                        const trendDays = Math.floor(item.trend_days);
+                        let trendColor = 'text-slate-400';
+                        if (trendDays < 15) trendColor = 'text-red-400';
+                        else if (trendDays < 30) trendColor = 'text-yellow-400';
+                        else trendColor = 'text-green-400';
+                        trendText = `<span class="font-bold ${trendColor}">${trendDays} dias</span>`;
+                    }
+                    return `
+                        <tr>
+                            <td class="px-4 py-2 text-xs">(${item.product_code}) ${item.product_description}</td>
+                            <td class="px-4 py-2 text-xs">${item.supplier_name.split(' ').slice(0, 4).join(' ')}</td>
+                            <td class="px-4 py-2 text-right text-xs">${(item.stock_qty || 0).toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                            <td class="px-4 py-2 text-right text-xs">${(item.avg_monthly_qty || 0).toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                            <td class="px-4 py-2 text-right text-xs">${(item.daily_avg_qty || 0).toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                            <td class="px-4 py-2 text-right text-xs flex items-center justify-end">${trendText}</td>
+                        </tr>
+                    `;
+                }).join('');
 
-                // 2. Renderiza a tabela principal usando a memória (Instantâneo)
-                renderStockTableOnly();
-
-                // 3. Renderiza tabelas auxiliares
                 const renderProductTable = (bodyElement, productData, showVariation = true) => {
                     if (!productData || productData.length === 0) {
                         const colspan = showVariation ? 5 : 4;
@@ -3473,13 +3363,15 @@
                         if (isFinite(variation)) variationText = `${variation.toFixed(0)}%`;
                         else if (variation === Infinity) variationText = 'Novo';
                         
-                        return `<tr>
-                    <td class="px-2 py-1.5 text-xs">(${p.product_code}) ${p.product_description}</td>
-                    <td class="px-2 py-1.5 text-xs text-right">${p.current_month_sales_qty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                    <td class="px-2 py-1.5 text-xs text-right">${p.history_avg_monthly_qty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                    ${showVariation ? `<td class="px-2 py-1.5 text-xs text-right font-bold ${colorClass}">${variationText}</td>` : ''}
-                    <td class="px-2 py-1.5 text-xs text-right">${p.stock_qty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                </tr>`;
+                        return `
+                            <tr>
+                                <td class="px-2 py-1.5 text-xs">(${p.product_code}) ${p.product_description}</td>
+                                <td class="px-2 py-1.5 text-xs text-right">${p.current_month_sales_qty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                                <td class="px-2 py-1.5 text-xs text-right">${p.history_avg_monthly_qty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                                ${showVariation ? `<td class="px-2 py-1.5 text-xs text-right font-bold ${colorClass}">${variationText}</td>` : ''}
+                                <td class="px-2 py-1.5 text-xs text-right">${p.stock_qty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                            </tr>
+                        `;
                     }).join('');
                 };
 
@@ -3494,44 +3386,6 @@
             }
         }
 
-function renderStockTableOnly() {
-    if (!globalStockData) return;
-
-    let filteredData = globalStockData;
-
-    // Filtra localmente pelas "bolinhas"
-    if (stockTrendFilter !== 'all') {
-        filteredData = filteredData.filter(item => {
-            const trend = item.trend_days;
-            if (stockTrendFilter === 'low') return isFinite(trend) && trend < 15; // Vermelho
-            if (stockTrendFilter === 'medium') return isFinite(trend) && trend >= 15 && trend < 30; // Amarelo
-            if (stockTrendFilter === 'good') return isFinite(trend) && trend >= 30; // Verde
-            return false;
-        });
-    }
-
-    stockAnalysisTableBody.innerHTML = filteredData.map(item => {
-        let trendText = '-';
-        if (item.trend_days >= 999) {
-            trendText = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-500/30 text-gray-300">S/ VENDA</span>`;
-        } else if (isFinite(item.trend_days)) {
-            const trendDays = Math.floor(item.trend_days);
-            let trendColor = 'text-slate-400';
-            if (trendDays < 15) trendColor = 'text-red-400';
-            else if (trendDays < 30) trendColor = 'text-yellow-400';
-            else trendColor = 'text-green-400';
-            trendText = `<span class="font-bold ${trendColor}">${trendDays} dias</span>`;
-        }
-        return `<tr>
-            <td class="px-4 py-2 text-xs">(${item.product_code}) ${item.product_description}</td>
-            <td class="px-4 py-2 text-xs">${item.supplier_name.split(' ').slice(0, 4).join(' ')}</td>
-            <td class="px-4 py-2 text-right text-xs">${(item.stock_qty || 0).toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-            <td class="px-4 py-2 text-right text-xs">${(item.avg_monthly_qty || 0).toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-            <td class="px-4 py-2 text-right text-xs">${(item.daily_avg_qty || 0).toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-            <td class="px-4 py-2 text-right text-xs flex items-center justify-end">${trendText}</td>
-        </tr>`;
-    }).join('');
-}
         function getInnovationsFilteredData() {
             const supervisor = innovationsSupervisorFilter.value;
             const sellers = selectedInnovationsSellers;
@@ -5341,28 +5195,10 @@ function renderStockTableOnly() {
 
             const stockWorkingDaysInput = document.getElementById('stock-working-days-input');
             if (stockWorkingDaysInput) {
-                stockWorkingDaysInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const value = parseInt(e.target.value);
-                        if (!isNaN(value) && value > 0 && value <= maxWorkingDaysStock) {
-                            customWorkingDaysStock = value;
-                        } else {
-                             e.target.value = customWorkingDaysStock;
-                        }
-                        handleStockFilterChange();
-                        e.target.blur(); // <-- ADICIONADO: Remove o foco do input após pressionar Enter
-                    }
-                });
-                stockWorkingDaysInput.addEventListener('blur', (e) => {
-                    const value = parseInt(e.target.value);
-                     if (isNaN(value) || value <= 0 || value > maxWorkingDaysStock) {
-                         e.target.value = customWorkingDaysStock;
-                    } else if (value !== customWorkingDaysStock) {
-
-                        customWorkingDaysStock = value;
-                        handleStockFilterChange();
-                    }
+                // ATUALIZADO: Evento 'change' é mais apropriado aqui.
+                // Ele dispara quando o usuário finaliza a edição (pressiona Enter ou clica fora).
+                stockWorkingDaysInput.addEventListener('change', () => {
+                    handleStockFilterChange();
                 });
             }
 
@@ -5371,9 +5207,7 @@ function renderStockTableOnly() {
                     stockTrendFilter = btn.dataset.trend;
                     document.querySelectorAll('.stock-trend-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
-
-                    // MUDANÇA CRÍTICA: Chama a função local (rápida)
-                    renderStockTableOnly();
+                    handleStockFilterChange();
                 });
             });
         }
