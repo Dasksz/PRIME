@@ -343,13 +343,17 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ADIÇÃO DA NOVA FUNÇÃO get_city_view_data
+-- CORREÇÃO: Adiciona DROP FUNCTION para permitir a renomeação de parâmetros na recriação.
+DROP FUNCTION IF EXISTS get_city_view_data(TEXT, TEXT[], TEXT, TEXT[], TEXT, TEXT);
+-- CORREÇÃO: Padroniza os parâmetros com prefixo p_ e defaults para strings vazias,
+-- tornando a função mais robusta contra erros de 'parâmetro não encontrado' (400 Bad Request).
 CREATE OR REPLACE FUNCTION get_city_view_data(
-    supervisor_filter TEXT DEFAULT NULL,
-    sellers_filter TEXT[] DEFAULT NULL,
-    rede_group_filter TEXT DEFAULT NULL,
-    redes_filter TEXT[] DEFAULT NULL,
-    city_filter TEXT DEFAULT NULL,
-    codcli_filter TEXT DEFAULT NULL
+    p_supervisor_filter TEXT DEFAULT '',
+    p_sellers_filter TEXT[] DEFAULT NULL,
+    p_rede_group_filter TEXT DEFAULT '',
+    p_redes_filter TEXT[] DEFAULT NULL,
+    p_city_filter TEXT DEFAULT '',
+    p_codcli_filter TEXT DEFAULT ''
 )
 RETURNS JSONB AS $$
 DECLARE
@@ -364,9 +368,9 @@ BEGIN
     clients_base AS (
         SELECT c.codigo_cliente, c.ramo, c.rca1, c.rca2, c.cidade, c.bairro, c.fantasia, c.razaosocial, c.ultimacompra, c.datacadastro, c.bloqueio
         FROM data_clients c
-        WHERE (rede_group_filter IS NULL OR rede_group_filter = '')
-           OR (rede_group_filter = 'sem_rede' AND (c.ramo IS NULL OR c.ramo = 'N/A'))
-           OR (rede_group_filter = 'com_rede' AND (redes_filter IS NULL OR c.ramo = ANY(redes_filter)))
+        WHERE (p_rede_group_filter = '')
+           OR (p_rede_group_filter = 'sem_rede' AND (c.ramo IS NULL OR c.ramo = 'N/A'))
+           OR (p_rede_group_filter = 'com_rede' AND (p_redes_filter IS NULL OR c.ramo = ANY(p_redes_filter)))
     ),
     -- 2. Filtra as vendas do mês corrente com base em todos os filtros
     filtered_sales AS (
@@ -374,10 +378,10 @@ BEGIN
         FROM data_detailed s
         JOIN clients_base cb ON s.codcli = cb.codigo_cliente -- Garante que as vendas são de clientes já filtrados pela rede
         WHERE s.dtped >= current_month_start
-          AND (supervisor_filter IS NULL OR s.superv = supervisor_filter)
-          AND (sellers_filter IS NULL OR s.nome = ANY(sellers_filter))
-          AND (city_filter IS NULL OR s.cidade ILIKE city_filter)
-          AND (codcli_filter IS NULL OR s.codcli = codcli_filter)
+          AND (p_supervisor_filter = '' OR s.superv = p_supervisor_filter)
+          AND (p_sellers_filter IS NULL OR s.nome = ANY(p_sellers_filter))
+          AND (p_city_filter = '' OR s.cidade ILIKE p_city_filter)
+          AND (p_codcli_filter = '' OR s.codcli = p_codcli_filter)
     ),
     -- 3. Agrega as vendas por cliente
     client_sales_agg AS (
@@ -428,7 +432,7 @@ BEGIN
         SELECT COALESCE(jsonb_agg(chart_data), '[]'::jsonb) as data
         FROM (
             SELECT
-                CASE WHEN city_filter IS NOT NULL THEN bairro ELSE cidade END as label,
+                CASE WHEN p_city_filter <> '' THEN bairro ELSE cidade END as label,
                 SUM(vlvenda) as total
             FROM filtered_sales
             WHERE tipovenda IN ('1', '9')
