@@ -2749,140 +2749,86 @@
             if (!availableCities.includes(selectedCity)) cityNameFilter.value = '';
         }
 
-        function updateCityView() {
-            const supervisor = citySupervisorFilter.value;
-            const codcliFilterVal = cityCodCliFilter.value.trim();
-            if (codcliFilterVal && !allClientsData.some(c => String(c['codigo_cliente']) === codcliFilterVal)) return;
-            let clientsForAnalysis = getRelevantClientsForCityFilter();
-            const allAvailableCities = [...new Set(clientsForAnalysis.map(c => c.cidade).filter(Boolean))];
-            const cidadeFiltroInput = cityNameFilter.value.trim();
-            let cidadeFiltro = '';
-            if (cidadeFiltroInput && allAvailableCities.includes(cidadeFiltroInput)) cidadeFiltro = cidadeFiltroInput;
+        async function updateCityView() {
+            // Mostra o loader e esconde o conteúdo principal
+            document.getElementById('city-view-loader').classList.remove('hidden');
+            document.getElementById('city-view-content').classList.add('hidden');
 
-            const referenceDate = lastSaleDate;
-            const currentMonth = referenceDate.getMonth();
-            const currentYear = referenceDate.getFullYear();
+            const filters = {
+                p_supervisor_filter: citySupervisorFilter.value || '',
+                p_sellers_filter: selectedCitySellers.length > 0 ? selectedCitySellers : null,
+                p_rede_group_filter: cityRedeGroupFilter || '',
+                p_redes_filter: selectedCityRedes.length > 0 ? selectedCityRedes : null,
+                p_city_filter: cityNameFilter.value.trim() || '',
+                p_codcli_filter: cityCodCliFilter.value.trim() || ''
+            };
 
-            let salesForAnalysis = allSalesData;
+            try {
+                const { data, error } = await supabaseClient.rpc('get_city_view_data', filters);
 
-            const clientCodesForAnalysis = new Set(clientsForAnalysis.map(c => c['codigo_cliente']));
-            salesForAnalysis = salesForAnalysis.filter(s => clientCodesForAnalysis.has(s.codcli));
+                if (error) throw error;
+                if (!data) throw new Error("A chamada RPC para 'get_city_view_data' não retornou dados.");
 
-            if (supervisor) salesForAnalysis = salesForAnalysis.filter(s => s.superv === supervisor);
-            if (selectedCitySellers.length > 0) salesForAnalysis = salesForAnalysis.filter(s => selectedCitySellers.includes(s.nome));
+                const {
+                    total_faturamento,
+                    status_chart,
+                    top_10_chart,
+                    active_clients,
+                    inactive_clients
+                } = data;
 
-            if (cidadeFiltro) { clientsForAnalysis = clientsForAnalysis.filter(c => c.cidade && c.cidade === cidadeFiltro); salesForAnalysis = salesForAnalysis.filter(s => s.cidade && s.cidade === cidadeFiltro); }
-            if (codcliFilterVal) { clientsForAnalysis = clientsForAnalysis.filter(c => String(c['codigo_cliente']) === codcliFilterVal); salesForAnalysis = salesForAnalysis.filter(s => s.codcli === codcliFilterVal); }
+                // 1. Atualizar KPIs
+                totalFaturamentoCidadeEl.textContent = (total_faturamento || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-            const salesThisMonth = allSalesData.filter(sale => {
-                const saleDate = parseDate(sale.dtped);
-                return saleDate && saleDate.getFullYear() === currentYear && saleDate.getMonth() === currentMonth;
-            });
-
-            const clientTotalsThisMonth = new Map();
-            salesThisMonth.forEach(sale => {
-                const codcli = sale.codcli;
-                const currentTotal = clientTotalsThisMonth.get(codcli) || 0;
-                clientTotalsThisMonth.set(codcli, currentTotal + sale.vlvenda);
-            });
-
-            let activeClientsList = [];
-            let inactiveClientsList = [];
-
-            clientsForAnalysis.forEach(client => {
-                const codcli = String(client['codigo_cliente']);
-                if (codcli === '6720' || client.bloqueio === 'S') return;
-
-                const registrationDate = parseDate(client.datacadastro);
-                client.isNew = registrationDate && registrationDate.getMonth() === currentMonth && registrationDate.getFullYear() === currentYear;
-
-                const totalFaturamentoMes = clientTotalsThisMonth.get(codcli) || 0;
-
-                if (totalFaturamentoMes > 0) {
-                    activeClientsList.push(client);
+                // 2. Gráfico de Status dos Clientes
+                if (status_chart) {
+                    const statusChartOptions = { animation: { duration: 800, easing: 'easeOutQuart' }, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: function(context) { return context.label; } } }, datalabels: { formatter: (value, ctx) => { const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0); if (total === 0 || value === 0) return ''; const percentage = (value * 100 / total).toFixed(1) + "%"; return `${value}\n(${percentage})`; }, color: '#fff', font: { weight: 'bold' }, textAlign: 'center' } } };
+                    createChart('customerStatusChart', 'doughnut', ['Ativos no Mês', 'S/ Vendas no Mês'], [status_chart.active || 0, status_chart.inactive || 0], statusChartOptions);
                 } else {
-                    if (totalFaturamentoMes < 0) {
-                        client.isReturn = true;
-                    }
-                    const clientRcas = client.rcas || [];
-                    if (clientRcas.length > 0 && clientRcas.every(rca => rca === '53')) return;
-                    client.isNewForInactiveLabel = client.isNew && !parseDate(client.ultimacompra);
-                    inactiveClientsList.push(client);
-                }
-            });
-
-            inactiveClientsForExport = inactiveClientsList;
-
-            if (clientsForAnalysis.length > 0) {
-                 const statusChartOptions = { animation: { duration: 800, easing: 'easeOutQuart' }, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: function(context) { return context.label; } } }, datalabels: { formatter: (value, ctx) => { const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0); if (total === 0 || value === 0) return ''; const percentage = (value * 100 / total).toFixed(1) + "%"; return `${value}\n(${percentage})`; }, color: '#fff', font: { weight: 'bold' }, textAlign: 'center' } } };
-                createChart('customerStatusChart', 'doughnut', ['Ativos no Mês', 'S/ Vendas no Mês'], [activeClientsList.length, inactiveClientsList.length], statusChartOptions);
-            } else showNoDataMessage('customerStatusChart', 'Sem clientes no filtro para exibir o status.');
-
-            const salesByActiveClient = {};
-            activeClientsList.forEach(client => {
-                const codcli = String(client['codigo_cliente']);
-                let clientSales = salesThisMonth.filter(s => s.codcli === codcli);
-
-                if (selectedCitySellers.length > 0) {
-                    clientSales = clientSales.filter(s => selectedCitySellers.includes(s.nome));
+                    showNoDataMessage('customerStatusChart', 'Sem dados de status de clientes.');
                 }
 
-                const totalFaturamentoFiltrado = clientSales.reduce((sum, s) => sum + s.vlvenda, 0);
-
-                if (totalFaturamentoFiltrado > 0) {
-                    const pepsicoTotal = clientSales.filter(s => s.observacaofor === 'PEPSICO').reduce((sum, s) => sum + s.vlvenda, 0);
-                    const multimarcasTotal = clientSales.filter(s => s.observacaofor === 'MULTIMARCAS').reduce((sum, s) => sum + s.vlvenda, 0);
-                    const outrosTotal = totalFaturamentoFiltrado - pepsicoTotal - multimarcasTotal;
-                    salesByActiveClient[codcli] = { ...client, total: totalFaturamentoFiltrado, pepsico: pepsicoTotal, multimarcas: multimarcasTotal, outros: outrosTotal };
+                // 3. Gráfico Top 10
+                const cityChartTitleEl = document.getElementById('city-chart-title');
+                if (top_10_chart && top_10_chart.length > 0) {
+                    cityChartTitleEl.textContent = filters.city_filter ? 'Top 10 Bairros' : 'Top 10 Cidades';
+                    const cityChartOptions = { indexAxis: 'y', scales: { x: { grace: '15%' } }, plugins: { datalabels: { align: 'end', anchor: 'end', color: '#cbd5e1', font: { size: 14, weight: 'bold' }, formatter: (value) => (value / 1000).toFixed(1) + 'k', offset: 8 } } };
+                    createChart('salesByClientInCityChart', 'bar', top_10_chart.map(item => item.label), top_10_chart.map(item => item.total), cityChartOptions);
+                } else {
+                    showNoDataMessage('salesByClientInCityChart', 'Sem dados de vendas para o Top 10.');
                 }
-            });
 
-            const sortedActiveClients = Object.values(salesByActiveClient).sort((a, b) => b.total - a.total);
-            activeClientsForExport = sortedActiveClients;
-            cityActiveDetailTableBody.innerHTML = sortedActiveClients.map(data => {
-                const novoLabel = data.isNew ? `<span class="ml-2 text-xs font-semibold text-purple-400 bg-purple-900/50 px-2 py-0.5 rounded-full">NOVO</span>` : '';
-                let tooltipParts = [];
-                if (data.pepsico > 0) tooltipParts.push(`PEPSICO: ${data.pepsico.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
-                if (data.multimarcas > 0) tooltipParts.push(`MULTIMARCAS: ${data.multimarcas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
-                if (data.outros > 0.001) tooltipParts.push(`OUTROS: ${data.outros.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
-                const tooltipText = tooltipParts.length > 0 ? tooltipParts.join('<br>') : 'Sem detalhamento de categoria';
-                return `<tr><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${data['codigo_cliente']}">${data['codigo_cliente']}</a></td><td class="px-4 py-2 flex items-center">${data.fantasia || data.razaosocial}${novoLabel}</td><td class="px-4 py-2 text-right"><div class="tooltip">${data.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">${tooltipText}</span></div></td><td class="px-4 py-2">${data.cidade}</td><td class="px-4 py-2">${data.bairro}</td><td class="px-4 py-2">${data.rca1 || '-'}</td></tr>`
-            }).join('');
+                // 4. Tabela de Clientes Ativos
+                activeClientsForExport = active_clients || [];
+                cityActiveDetailTableBody.innerHTML = (active_clients || []).map(client => {
+                     const novoLabel = client.is_new ? `<span class="ml-2 text-xs font-semibold text-purple-400 bg-purple-900/50 px-2 py-0.5 rounded-full">NOVO</span>` : '';
+                    let tooltipParts = [];
+                    if (client.pepsico > 0) tooltipParts.push(`PEPSICO: ${client.pepsico.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
+                    if (client.multimarcas > 0) tooltipParts.push(`MULTIMARCAS: ${client.multimarcas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
+                    const outros = client.total_faturamento - client.pepsico - client.multimarcas;
+                    if (outros > 0.001) tooltipParts.push(`OUTROS: ${outros.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
+                    const tooltipText = tooltipParts.length > 0 ? tooltipParts.join('<br>') : 'Sem detalhamento de categoria';
+                    return `<tr><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${client.codigo_cliente}">${client.codigo_cliente}</a></td><td class="px-4 py-2 flex items-center">${client.fantasia || client.razaosocial}${novoLabel}</td><td class="px-4 py-2 text-right"><div class="tooltip">${client.total_faturamento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">${tooltipText}</span></div></td><td class="px-4 py-2">${client.cidade}</td><td class="px-4 py-2">${client.bairro}</td><td class="px-4 py-2">${client.rca1 || '-'}</td></tr>`;
+                }).join('');
 
-            inactiveClientsList.sort((a, b) => {
-                if (a.isReturn && !b.isReturn) return -1;
-                if (!a.isReturn && b.isReturn) return 1;
-                if (a.isNewForInactiveLabel && !b.isNewForInactiveLabel) return -1;
-                if (!a.isNewForInactiveLabel && b.isNewForInactiveLabel) return 1;
-                return (parseDate(b.ultimacompra) || 0) - (parseDate(a.ultimacompra) || 0);
-            });
-            cityInactiveDetailTableBody.innerHTML = inactiveClientsList.map(client => {
-                const novoLabel = client.isNewForInactiveLabel ? `<span class="ml-2 text-xs font-semibold text-purple-400 bg-purple-900/50 px-2 py-0.5 rounded-full">NOVO</span>` : '';
-                const devolucaoLabel = client.isReturn ? `<span class="ml-2 text-xs font-semibold text-red-400 bg-red-900/50 px-2 py-0.5 rounded-full">DEVOLUÇÃO</span>` : '';
-                return `<tr><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${client['codigo_cliente']}">${client['codigo_cliente']}</a></td><td class="px-4 py-2 flex items-center">${client.fantasia || client.razaosocial}${novoLabel}${devolucaoLabel}</td><td class="px-4 py-2">${client.cidade}</td><td class="px-4 py-2">${client.bairro}</td><td class="px-4 py-2 text-center">${formatDate(client.ultimacompra)}</td><td class="px-4 py-2">${client.rca1 || '-'}</td></tr>`
-            }).join('');
+                // 5. Tabela de Clientes Inativos
+                inactiveClientsForExport = inactive_clients || [];
+                cityInactiveDetailTableBody.innerHTML = (inactive_clients || []).map(client => {
+                     const novoLabel = client.is_new ? `<span class="ml-2 text-xs font-semibold text-purple-400 bg-purple-900/50 px-2 py-0.5 rounded-full">NOVO</span>` : '';
+                    return `<tr><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${client.codigo_cliente}">${client.codigo_cliente}</a></td><td class="px-4 py-2 flex items-center">${client.fantasia || client.razaosocial}${novoLabel}</td><td class="px-4 py-2">${client.cidade}</td><td class="px-4 py-2">${client.bairro}</td><td class="px-4 py-2 text-center">${formatDate(client.ultimacompra)}</td><td class="px-4 py-2">${client.rca1 || '-'}</td></tr>`;
+                }).join('');
 
-            const cityChartTitleEl = document.getElementById('city-chart-title');
-            const cityChartOptions = { indexAxis: 'y', scales: { x: { grace: '15%' } }, plugins: { datalabels: { align: 'end', anchor: 'end', color: '#cbd5e1', font: { size: 14, weight: 'bold' }, formatter: (value) => (value / 1000).toFixed(1) + 'k', offset: 8 } } };
-            const totalFaturamentoCidade = salesForAnalysis.reduce((sum, item) => sum + item.vlvenda, 0);
-            totalFaturamentoCidadeEl.textContent = totalFaturamentoCidade.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            if (cidadeFiltro) {
-                cityChartTitleEl.textContent = 'Top 10 Bairros';
-                const salesByBairro = {};
-                salesForAnalysis.forEach(sale => { const bairro = sale.bairro || 'N/A'; salesByBairro[bairro] = (salesByBairro[bairro] || 0) + sale.vlvenda; });
-                const sortedBairros = Object.entries(salesByBairro).sort(([, a], [, b]) => b - a).slice(0, 10);
-                createChart('salesByClientInCityChart', 'bar', sortedBairros.map(([name]) => name), sortedBairros.map(([, total]) => total), cityChartOptions);
-            } else {
-                cityChartTitleEl.textContent = 'Top 10 Cidades';
-                const salesByCity = {};
-                salesForAnalysis.forEach(sale => { const cidade = sale.cidade || 'N/A'; salesByCity[cidade] = (salesByCity[cidade] || 0) + sale.vlvenda; });
-                const sortedCidades = Object.entries(salesByCity).sort(([, a], [, b]) => b - a).slice(0, 10);
-                createChart('salesByClientInCityChart', 'bar', sortedCidades.map(([name]) => name), sortedCidades.map(([, total]) => total), cityChartOptions);
+            } catch (error) {
+                console.error("Erro ao buscar dados da Análise por Cidade:", error);
+                showNoDataMessage('customerStatusChart', `Erro: ${error.message}`);
+                showNoDataMessage('salesByClientInCityChart', 'Falha ao carregar dados.');
+                cityActiveDetailTableBody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-red-400">Falha ao carregar clientes ativos.</td></tr>`;
+                cityInactiveDetailTableBody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-red-400">Falha ao carregar clientes inativos.</td></tr>`;
+            } finally {
+                // Esconde o loader e mostra o conteúdo
+                document.getElementById('city-view-loader').classList.add('hidden');
+                document.getElementById('city-view-content').classList.remove('hidden');
             }
-            
-            // CORREÇÃO: Garante que o loader da página de cidade seja escondido e o conteúdo exibido
-            document.getElementById('city-view-loader').classList.add('hidden');
-            document.getElementById('city-view-content').classList.remove('hidden');
         }
 
         function getWeekOfMonth(date) {
