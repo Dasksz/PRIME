@@ -1,4 +1,62 @@
--- ========= INÍCIO DO BLOCO DE CÓDIGO SQL =========
+-- =================================================================
+-- FUNÇÃO AUXILIAR OTIMIZADA (V2) PARA FILTRAGEM DE CLIENTES (JSONB)
+-- =================================================================
+drop function IF exists get_filtered_client_base_json (jsonb);
+
+create or replace function get_filtered_client_base_json (p_filters jsonb) RETURNS table (codigo_cliente TEXT) as $$
+DECLARE
+    -- Extrai os valores do JSON para variáveis locais, com tratamento de nulos (V2)
+    p_supervisor_filter TEXT := p_filters->>'supervisor';
+    p_sellers_filter TEXT[] := CASE 
+        WHEN p_filters ? 'sellers' AND jsonb_typeof(p_filters->'sellers') = 'array' 
+        THEN ARRAY(SELECT jsonb_array_elements_text(p_filters->'sellers'))
+        ELSE NULL
+    END;
+    p_rede_group_filter TEXT := p_filters->>'rede_group';
+    p_redes_filter TEXT[] := CASE
+        WHEN p_filters ? 'redes' AND jsonb_typeof(p_filters->'redes') = 'array'
+        THEN ARRAY(SELECT jsonb_array_elements_text(p_filters->'redes'))
+        ELSE NULL
+    END;
+    p_city_filter TEXT := p_filters->>'city';
+    p_filial_filter TEXT := p_filters->>'filial';
+BEGIN
+    RETURN QUERY
+    SELECT c.codigo_cliente
+    FROM data_clients c
+    WHERE
+        -- Filtros diretos na tabela de clientes
+        (p_city_filter IS NULL OR c.cidade ILIKE p_city_filter)
+        AND
+        (p_rede_group_filter IS NULL OR
+         (p_rede_group_filter = 'sem_rede' AND (c.ramo IS NULL OR c.ramo = 'N/A')) OR
+         (p_rede_group_filter = 'com_rede' AND (p_redes_filter IS NULL OR c.ramo = ANY(p_redes_filter)))
+        )
+        AND
+        -- Filtros que dependem de dados de vendas (usando subconsultas EXISTS mais eficientes)
+        (p_supervisor_filter IS NULL OR EXISTS (
+            SELECT 1 FROM data_detailed d WHERE d.codcli = c.codigo_cliente AND d.superv = p_supervisor_filter
+            UNION ALL
+            SELECT 1 FROM data_history h WHERE h.codcli = c.codigo_cliente AND h.superv = p_supervisor_filter
+            LIMIT 1
+        ))
+        AND
+        (p_sellers_filter IS NULL OR EXISTS (
+            SELECT 1 FROM data_detailed d WHERE d.codcli = c.codigo_cliente AND d.nome = ANY(p_sellers_filter)
+            UNION ALL
+            SELECT 1 FROM data_history h WHERE h.codcli = c.codigo_cliente AND h.nome = ANY(p_sellers_filter)
+            LIMIT 1
+        ))
+        AND
+        (p_filial_filter = 'ambas' OR EXISTS (
+             SELECT 1 FROM data_detailed d WHERE d.codcli = c.codigo_cliente AND d.filial = p_filial_filter
+            UNION ALL
+            SELECT 1 FROM data_history h WHERE h.codcli = c.codigo_cliente AND h.filial = p_filial_filter
+            LIMIT 1
+        ));
+END;
+$$ LANGUAGE plpgsql;
+
 -- ATUALIZAÇÃO 1: OTIMIZAÇÃO DA FUNÇÃO get_comparison_data PARA CORRIGIR O TIMEOUT
 -- Esta versão pré-agrega os dados históricos para evitar recálculos caros.
 create or replace function get_comparison_data (
@@ -23,38 +81,34 @@ BEGIN
     history_start_date := current_month_start - INTERVAL '3 months';
 
     WITH
-    -- Base de clientes filtrada
+    -- OTIMIZAÇÃO V2: Usa a função auxiliar JSONB
     filtered_clients AS (
-        SELECT codigo_cliente FROM data_clients
-        WHERE
-            (p_rede_group_filter IS NULL) OR
-            (p_rede_group_filter = 'sem_rede' AND (ramo IS NULL OR ramo = 'N/A')) OR
-            (p_rede_group_filter = 'com_rede' AND (p_redes_filter IS NULL OR ramo = ANY(p_redes_filter)))
+        SELECT * FROM get_filtered_client_base_json(jsonb_build_object(
+            'supervisor', p_supervisor_filter,
+            'sellers', p_sellers_filter,
+            'rede_group', p_rede_group_filter,
+            'redes', p_redes_filter,
+            'city', p_city_filter,
+            'filial', p_filial_filter
+        ))
     ),
-    -- Vendas do mês atual filtradas
+    -- OTIMIZAÇÃO: Faz JOIN com os clientes filtrados
     current_sales AS (
-        SELECT s.* FROM data_detailed s
-        WHERE s.codcli IN (SELECT codigo_cliente FROM filtered_clients)
-        AND (p_supervisor_filter IS NULL OR s.superv = p_supervisor_filter)
-        AND (p_sellers_filter IS NULL OR s.nome = ANY(p_sellers_filter))
-        AND (p_suppliers_filter IS NULL OR s.codfor = ANY(p_suppliers_filter))
-        AND (p_products_filter IS NULL OR s.produto = ANY(p_products_filter))
-        AND (p_pasta_filter IS NULL OR s.observacaofor = p_pasta_filter)
-        AND (p_city_filter IS NULL OR s.cidade ILIKE p_city_filter)
-        AND (p_filial_filter = 'ambas' OR s.filial = p_filial_filter)
+        SELECT s.*
+        FROM data_detailed s
+        JOIN filtered_clients fc ON s.codcli = fc.codigo_cliente
+        WHERE (p_suppliers_filter IS NULL OR s.codfor = ANY(p_suppliers_filter))
+          AND (p_products_filter IS NULL OR s.produto = ANY(p_products_filter))
+          AND (p_pasta_filter IS NULL OR s.observacaofor = p_pasta_filter)
     ),
-    -- Vendas históricas filtradas
     history_sales AS (
-        SELECT s.* FROM data_history s
+        SELECT s.*
+        FROM data_history s
+        JOIN filtered_clients fc ON s.codcli = fc.codigo_cliente
         WHERE s.dtped BETWEEN history_start_date AND history_end_date
-        AND s.codcli IN (SELECT codigo_cliente FROM filtered_clients)
-        AND (p_supervisor_filter IS NULL OR s.superv = p_supervisor_filter)
-        AND (p_sellers_filter IS NULL OR s.nome = ANY(p_sellers_filter))
-        AND (p_suppliers_filter IS NULL OR s.codfor = ANY(p_suppliers_filter))
-        AND (p_products_filter IS NULL OR s.produto = ANY(p_products_filter))
-        AND (p_pasta_filter IS NULL OR s.observacaofor = p_pasta_filter)
-        AND (p_city_filter IS NULL OR s.cidade ILIKE p_city_filter)
-        AND (p_filial_filter = 'ambas' OR s.filial = p_filial_filter)
+          AND (p_suppliers_filter IS NULL OR s.codfor = ANY(p_suppliers_filter))
+          AND (p_products_filter IS NULL OR s.produto = ANY(p_products_filter))
+          AND (p_pasta_filter IS NULL OR s.observacaofor = p_pasta_filter)
     ),
     -- KPIs
     kpis_current AS (
@@ -180,19 +234,18 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- NOVA FUNÇÃO: get_detailed_orders para a nova visualização de Pedidos
-CREATE OR REPLACE FUNCTION get_detailed_orders(
-    p_supervisor_filter TEXT DEFAULT '',
-    p_sellers_filter TEXT[] DEFAULT NULL,
-    p_tipo_venda_filter TEXT[] DEFAULT NULL,
-    p_fornecedor_filter TEXT DEFAULT '',
-    p_codcli_filter TEXT DEFAULT '',
-    p_posicao_filter TEXT DEFAULT '',
-    p_rede_group_filter TEXT DEFAULT '',
-    p_redes_filter TEXT[] DEFAULT NULL,
-    page_number INT DEFAULT 1,
-    page_size INT DEFAULT 50
-)
-RETURNS JSONB AS $$
+create or replace function get_detailed_orders (
+  p_supervisor_filter TEXT default '',
+  p_sellers_filter text[] default null,
+  p_tipo_venda_filter text[] default null,
+  p_fornecedor_filter TEXT default '',
+  p_codcli_filter TEXT default '',
+  p_posicao_filter TEXT default '',
+  p_rede_group_filter TEXT default '',
+  p_redes_filter text[] default null,
+  page_number INT default 1,
+  page_size INT default 50
+) RETURNS JSONB as $$
 DECLARE
     result JSONB;
     offset_val INT;
@@ -350,22 +403,18 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- ADIÇÃO DA NOVA FUNÇÃO get_city_view_data
--- ATUALIZAÇÃO DA FUNÇÃO get_city_view_data
 -- ========= FIM DO BLOCO DE CÓDIGO SQL =========
-
--- NOVA FUNÇÃO: get_stock_view_data para a visualização de Estoque
 -- NOVA FUNÇÃO: get_stock_view_data para a visualização de Estoque (RESTAURADA)
-DROP FUNCTION IF EXISTS get_stock_view_data(TEXT, TEXT[], TEXT[], TEXT[], TEXT, TEXT);
-CREATE OR REPLACE FUNCTION get_stock_view_data(
-    p_supervisor_filter TEXT DEFAULT '',
-    p_sellers_filter TEXT[] DEFAULT NULL,
-    p_suppliers_filter TEXT[] DEFAULT NULL,
-    p_products_filter TEXT[] DEFAULT NULL,
-    p_rede_group_filter TEXT DEFAULT '',
-    p_redes_filter TEXT[] DEFAULT NULL
-)
-RETURNS JSONB AS $$
+drop function IF exists get_stock_view_data (TEXT, text[], text[], text[], TEXT, TEXT);
+
+create or replace function get_stock_view_data (
+  p_supervisor_filter TEXT default '',
+  p_sellers_filter text[] default null,
+  p_suppliers_filter text[] default null,
+  p_products_filter text[] default null,
+  p_rede_group_filter TEXT default '',
+  p_redes_filter text[] default null
+) RETURNS JSONB as $$
 DECLARE
     result JSONB;
     current_month_start DATE;
@@ -377,25 +426,28 @@ BEGIN
     history_start_date := current_month_start - INTERVAL '3 months';
 
     WITH
-    -- 1. Base de clientes e vendas filtradas
+    -- OTIMIZAÇÃO V2: Usa a função auxiliar JSONB
     filtered_clients AS (
-        SELECT codigo_cliente FROM data_clients
-        WHERE (p_rede_group_filter = '' OR p_rede_group_filter IS NULL)
-           OR (p_rede_group_filter = 'sem_rede' AND (ramo IS NULL OR ramo = 'N/A'))
-           OR (p_rede_group_filter = 'com_rede' AND (p_redes_filter IS NULL OR ramo = ANY(p_redes_filter)))
+        SELECT * FROM get_filtered_client_base_json(jsonb_build_object(
+            'supervisor', p_supervisor_filter,
+            'sellers', p_sellers_filter,
+            'rede_group', p_rede_group_filter,
+            'redes', p_redes_filter,
+            'city', null, -- city_filter não é usado aqui
+            'filial', 'ambas' -- filial_filter não é usado aqui
+        ))
     ),
+    -- OTIMIZAÇÃO: Faz JOIN com os clientes filtrados
     current_sales AS (
-        SELECT produto, qtvenda_embalagem_master FROM data_detailed
-        WHERE codcli IN (SELECT codigo_cliente FROM filtered_clients)
-          AND (p_supervisor_filter = '' OR superv = p_supervisor_filter)
-          AND (p_sellers_filter IS NULL OR nome = ANY(p_sellers_filter))
+        SELECT s.produto, s.qtvenda_embalagem_master
+        FROM data_detailed s
+        JOIN filtered_clients fc ON s.codcli = fc.codigo_cliente
     ),
     history_sales AS (
-        SELECT produto, qtvenda_embalagem_master FROM data_history
-        WHERE dtped BETWEEN history_start_date AND history_end_date
-          AND codcli IN (SELECT codigo_cliente FROM filtered_clients)
-          AND (p_supervisor_filter = '' OR superv = p_supervisor_filter)
-          AND (p_sellers_filter IS NULL OR nome = ANY(p_sellers_filter))
+        SELECT s.produto, s.qtvenda_embalagem_master
+        FROM data_history s
+        JOIN filtered_clients fc ON s.codcli = fc.codigo_cliente
+        WHERE s.dtped BETWEEN history_start_date AND history_end_date
     ),
     -- 2. Agregações de vendas por produto
     current_sales_agg AS (
@@ -461,22 +513,22 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- NOVA FUNÇÃO: get_innovations_view_data para a visualização de Inovações
--- NOVA FUNÇÃO: get_innovations_view_data para a visualização de Inovações (CORRIGIDA)
--- NOVA FUNÇÃO: get_innovations_data_v2 para a visualização de Inovações (CORRIGIDA E RENOMEADA)
 -- NOVA FUNÇÃO: get_innovations_data_v2 para a visualização de Inovações (RESTAURADA E RENOMEADA)
-DROP FUNCTION IF EXISTS get_innovations_view_data(TEXT, TEXT[], TEXT, TEXT[]); -- Remove a antiga versão
-DROP FUNCTION IF EXISTS get_innovations_data_v2(TEXT, TEXT[], TEXT[], BOOLEAN, TEXT, TEXT, TEXT[]); -- Garante que a nova não existe
-CREATE OR REPLACE FUNCTION get_innovations_data_v2(
-    p_supervisor_filter TEXT DEFAULT '',
-    p_sellers_filter TEXT[] DEFAULT NULL,
-    p_product_codes TEXT[] DEFAULT NULL,
-    p_include_bonus BOOLEAN DEFAULT true,
-    p_city_filter TEXT DEFAULT '',
-    p_filial_filter TEXT DEFAULT 'ambas',
-    p_redes_filter TEXT[] DEFAULT NULL
-)
-RETURNS JSONB AS $$
+drop function IF exists get_innovations_view_data (TEXT, text[], TEXT, text[]);
+
+-- Remove a antiga versão
+drop function IF exists get_innovations_data_v2 (TEXT, text[], text[], BOOLEAN, TEXT, TEXT, text[]);
+
+-- Garante que a nova não existe
+create or replace function get_innovations_data_v2 (
+  p_supervisor_filter TEXT default '',
+  p_sellers_filter text[] default null,
+  p_product_codes text[] default null,
+  p_include_bonus BOOLEAN default true,
+  p_city_filter TEXT default '',
+  p_filial_filter TEXT default 'ambas',
+  p_redes_filter text[] default null
+) RETURNS JSONB as $$
 DECLARE
     result JSONB;
     current_month_start DATE;
