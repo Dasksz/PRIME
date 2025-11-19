@@ -3571,13 +3571,17 @@
             newProductsTableBody.innerHTML = '<tr><td colspan="4" class="text-center p-4">...</td></tr>';
             lostProductsTableBody.innerHTML = '<tr><td colspan="4" class="text-center p-4">...</td></tr>';
 
+            const customDaysInput = document.getElementById('stock-working-days-input');
+            const customDaysValue = customDaysInput ? parseInt(customDaysInput.value, 10) : 0;
+
             const filters = {
                 p_supervisor_filter: stockSupervisorFilter.value || '',
                 p_sellers_filter: selectedStockSellers.length > 0 ? selectedStockSellers : null,
                 p_suppliers_filter: selectedStockSuppliers.length > 0 ? selectedStockSuppliers : null,
                 p_products_filter: selectedStockProducts.length > 0 ? selectedStockProducts : null,
                 p_rede_group_filter: stockRedeGroupFilter || '',
-                p_redes_filter: selectedStockRedes.length > 0 ? selectedStockRedes : null
+                p_redes_filter: selectedStockRedes.length > 0 ? selectedStockRedes : null,
+                p_custom_days: isNaN(customDaysValue) ? 0 : customDaysValue
             };
 
             try {
@@ -3586,6 +3590,20 @@
                 if (error) throw error;
                 if (!data) throw new Error("A chamada RPC para 'get_stock_view_data' não retornou dados.");
                 
+                // ATUALIZAÇÃO: Captura os novos valores e os elementos da UI
+                const stockViewTitle = document.getElementById('stock-view-title');
+                const maxDays = data.max_working_days || 0;
+                const usedDays = data.working_days_used || 'Auto';
+
+                if (stockViewTitle) {
+                    stockViewTitle.textContent = `Análise de Estoque (${usedDays} dias úteis)`;
+                }
+
+                // Define o placeholder com o máximo de dias retornado pela API
+                if (customDaysInput) {
+                    customDaysInput.placeholder = `Auto (Máx: ${maxDays} dias)`;
+                }
+
                 let stockData = data.stock_table || [];
                 if (stockTrendFilter !== 'all') {
                     stockData = stockData.filter(item => {
