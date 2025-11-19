@@ -1132,11 +1132,13 @@
                     clientsData,
                     productDetailsData,
                     activeProductsData,
+                    innovationsData, // ADICIONADO
                     metadataResult // Para pegar a data de atualização
                 ] = await Promise.all([
                     fetchColumnarData('data_clients'),
                     fetchColumnarData('data_product_details'),
                     fetchColumnarData('data_active_products'),
+                    fetchColumnarData('data_innovations'), // ADICIONADO
                     supabaseClient.from('data_metadata').select('*') // Busca data de atualização
                 ]);
 
@@ -1177,7 +1179,7 @@
                     byOrder: [],
                     stockMap05: {},
                     stockMap08: {},
-                    innovationsMonth: [],
+                    innovationsMonth: innovationsData || [],
 
                     // Dados que vieram prontos da RPC inicial
                     kpis: initialRpcData.kpis || {},
@@ -3562,234 +3564,97 @@
             }
         }
 
-        function updateStockView() {
-            const { sales: filteredSales, history: filteredHistory } = getStockFilteredData();
-            const allCombinedSales = [...filteredSales, ...filteredHistory];
+        async function updateStockView() {
+            stockAnalysisTableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8">Carregando dados de estoque...</td></tr>';
+            growthTableBody.innerHTML = '<tr><td colspan="5" class="text-center p-4">...</td></tr>';
+            declineTableBody.innerHTML = '<tr><td colspan="5" class="text-center p-4">...</td></tr>';
+            newProductsTableBody.innerHTML = '<tr><td colspan="4" class="text-center p-4">...</td></tr>';
+            lostProductsTableBody.innerHTML = '<tr><td colspan="4" class="text-center p-4">...</td></tr>';
 
-            const filial = stockFilialFilter.value;
-            const activeStockMap = getActiveStockMap(filial);
+            const filters = {
+                p_supervisor_filter: stockSupervisorFilter.value || '',
+                p_sellers_filter: selectedStockSellers.length > 0 ? selectedStockSellers : null,
+                p_suppliers_filter: selectedStockSuppliers.length > 0 ? selectedStockSuppliers : null,
+                p_products_filter: selectedStockProducts.length > 0 ? selectedStockProducts : null,
+                p_rede_group_filter: stockRedeGroupFilter || '',
+                p_redes_filter: selectedStockRedes.length > 0 ? selectedStockRedes : null
+            };
 
-            const selectedSuppliers = selectedStockSuppliers;
-            const selectedProducts = selectedStockProducts;
-            const currentPasta = currentStockFornecedor;
+            try {
+                const { data, error } = await supabaseClient.rpc('get_stock_view_data', filters);
 
-            const productAnalysis = new Map();
+                if (error) throw error;
+                if (!data) throw new Error("A chamada RPC para 'get_stock_view_data' não retornou dados.");
 
-            const productsWithFilteredActivity = new Set();
-            allCombinedSales.forEach(s => productsWithFilteredActivity.add(s.produto));
-
-            activeStockMap.forEach((qty, productCode) => {
-                if (qty > 0) {
-                    const details = productDetailsMap.get(productCode);
-                    if (!details) return;
-
-                    if (selectedSuppliers.length > 0 && !selectedSuppliers.includes(String(details.codfor))) {
-                        return; 
-                    }
-                    if (selectedProducts.length > 0 && !selectedProducts.includes(String(productCode))) {
-                        return; 
-                    }
-                    if (currentPasta) {
-                        const pastaDoProduto = optimizedData.productPastaMap.get(productCode) || '';
-                        if (pastaDoProduto !== currentPasta) {
-                             return; 
-                        }
-                    }
-                    
-                    productsWithFilteredActivity.add(productCode);
-                }
-            });
-            
-            productsWithFilteredActivity.forEach(productCode => {
-                if (!activeProductCodesFromCadastro.has(productCode)) return;
-
-                const details = productDetailsMap.get(productCode) || {
-                    descricao: `Produto ${productCode}`,
-                    fornecedor: 'N/A',
-                    codfor: 'N/A'
-                };
-
-                const stock = activeStockMap.get(productCode) || 0;
-                // CORREÇÃO: productAllSales combina vendas atuais e históricas para a média diária e tendência
-                const productAllSales = allCombinedSales.filter(s => s.produto === productCode);
-                // CORREÇÃO: Garante que qtvenda_embalagem_master nulo/undefined não quebre a soma
-                const totalQtySold = productAllSales.reduce((sum, s) => sum + (s.qtvenda_embalagem_master || 0), 0);
-
-                if (stock <= 0 && totalQtySold <= 0) return;
-
-                // CORREÇÃO: productHistorySales é usado *apenas* para a média mensal
-                const productHistorySales = filteredHistory.filter(s => s.produto === productCode);
-                const productCurrentSales = filteredSales.filter(s => s.produto === productCode);
-                const currentMonthSalesQty = productCurrentSales.reduce((sum, s) => sum + (s.qtvenda_embalagem_master || 0), 0);
-
-                const productCadastroDate = parseDate(details.dtcadastro);
-                let productFirstWorkingDayIndex = 0;
-
-                if (productCadastroDate) {
-                    const cadastroDateString = productCadastroDate.toISOString().split('T')[0];
-                    productFirstWorkingDayIndex = sortedWorkingDays.findIndex(d => d >= cadastroDateString);
-                    if (productFirstWorkingDayIndex === -1) {
-                        productFirstWorkingDayIndex = sortedWorkingDays.length;
-                    }
+                let stockData = data.stock_table || [];
+                if (stockTrendFilter !== 'all') {
+                    stockData = stockData.filter(item => {
+                        const trend = item.trend_days;
+                        if (stockTrendFilter === 'low') return isFinite(trend) && trend < 15;
+                        if (stockTrendFilter === 'medium') return isFinite(trend) && trend >= 15 && trend < 30;
+                        if (stockTrendFilter === 'good') return isFinite(trend) && trend >= 30;
+                        return false;
+                    });
                 }
 
-                const productMaxLifeInWorkingDays = sortedWorkingDays.length - productFirstWorkingDayIndex;
-
-                const daysFromBox = customWorkingDaysStock;
-
-                let effectiveDaysToCalculate;
-
-                const isFactuallyNewOrReactivated = (productHistorySales.length === 0 && productCurrentSales.length > 0);
-
-                if (isFactuallyNewOrReactivated) {
-                    const daysToConsider = (daysFromBox > 0) ? daysFromBox : passedWorkingDaysCurrentMonth;
-                    effectiveDaysToCalculate = Math.min(passedWorkingDaysCurrentMonth, daysToConsider);
-                } else {
-                    if (daysFromBox > 0) {
-                        effectiveDaysToCalculate = Math.min(daysFromBox, productMaxLifeInWorkingDays);
-                    } else {
-                        effectiveDaysToCalculate = productMaxLifeInWorkingDays;
+                stockAnalysisTableBody.innerHTML = stockData.map(item => {
+                    let trendText = '-';
+                    if (item.trend_days >= 999) {
+                        trendText = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-500/30 text-gray-300">S/ VENDA</span>`;
+                    } else if (isFinite(item.trend_days)) {
+                        const trendDays = Math.floor(item.trend_days);
+                        let trendColor = 'text-slate-400';
+                        if (trendDays < 15) trendColor = 'text-red-400';
+                        else if (trendDays < 30) trendColor = 'text-yellow-400';
+                        else trendColor = 'text-green-400';
+                        trendText = `<span class="font-bold ${trendColor}">${trendDays} dias</span>`;
                     }
-                }
-
-                const daysDivisor = effectiveDaysToCalculate > 0 ? effectiveDaysToCalculate : 1;
-
-                const endDate = parseDate(sortedWorkingDays[sortedWorkingDays.length - 1]);
-                const targetIndex = Math.max(0, sortedWorkingDays.length - daysDivisor);
-                const startDate = parseDate(sortedWorkingDays[targetIndex]);
-
-                let totalQtySoldInRange = 0;
-                productAllSales.forEach(sale => {
-                    const saleDate = parseDate(sale.dtped);
-                    if (saleDate && saleDate >= startDate && saleDate <= endDate) {
-                        totalQtySoldInRange += (sale.qtvenda_embalagem_master || 0);
-                    }
-                });
-
-                let dailyAvgSale = totalQtySoldInRange / daysDivisor;
-
-                const isNew = productMaxLifeInWorkingDays <= passedWorkingDaysCurrentMonth;
-
-                // CORREÇÃO: Média diária (e, por consequência, a tendência) agora usam os dados combinados (productAllSales)
-                const trendDays = dailyAvgSale > 0 ? (stock / dailyAvgSale) : Infinity;
-                // CORREÇÃO: Média mensal continua usando apenas os dados históricos (productHistorySales)
-                const monthlyAvgSale = monthlyKpiAverage(productHistorySales, (sales) => sales.reduce((sum, s) => sum + (s.qtvenda_embalagem_master || 0), 0));
-
-                productAnalysis.set(productCode, {
-                    code: productCode,
-                    ...details,
-                    stock,
-                    monthlyAvgSale,
-                    dailyAvgSale,
-                    trendDays,
-                    currentMonthSalesQty,
-                    isNew,
-                    hasHistory: productHistorySales.length > 0,
-                    soldThisMonth: currentMonthSalesQty > 0
-                });
-            });
-
-
-            let sortedAnalysis = [...productAnalysis.values()].sort((a, b) => {
-                 const trendA = isFinite(a.trendDays) ? a.trendDays : -1;
-                 const trendB = isFinite(b.trendDays) ? b.trendDays : -1;
-                return trendB - trendA;
-            });
-
-
-            if (stockTrendFilter !== 'all') {
-                sortedAnalysis = sortedAnalysis.filter(item => {
-                    const trend = item.trendDays;
-                    if (stockTrendFilter === 'low') return isFinite(trend) && trend < 15;
-                    if (stockTrendFilter === 'medium') return isFinite(trend) && trend >= 15 && trend < 30;
-                    if (stockTrendFilter === 'good') return isFinite(trend) && trend >= 30;
-                    return false;
-                });
-            }
-
-
-            stockAnalysisTableBody.innerHTML = sortedAnalysis.map(item => {
-                let trendText;
-                let newTag = item.isNew ? ` <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-500/30 text-blue-300 ml-1">NOVO</span>` : '';
-
-                if (!isFinite(item.trendDays) && item.stock > 0) {
-                    trendText = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-500/30 text-gray-300">S/ VENDA</span>`;
-                } else if (isFinite(item.trendDays)) {
-                    const trendDays = Math.floor(item.trendDays);
-                    let trendColor = 'text-slate-400';
-                    if (trendDays < 15) trendColor = 'text-red-400';
-                    else if (trendDays < 30) trendColor = 'text-yellow-400';
-                    else trendColor = 'text-green-400';
-                    trendText = `<span class="font-bold ${trendColor}">${trendDays} dias</span>`;
-                } else {
-                    trendText = '-';
-                }
-
-                return `
-                    <tr>
-                        <td class="px-4 py-2 text-xs">(${item.code}) ${item.descricao}</td>
-                        <td class="px-4 py-2 text-xs">(${item.codfor}) ${item.fornecedor.split(' ').slice(0, 4).join(' ')}</td>
-                        <td class="px-4 py-2 text-right text-xs">${item.stock.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                        <td class="px-4 py-2 text-right text-xs">${item.monthlyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                        <td class="px-4 py-2 text-right text-xs">${item.dailyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                        <td class="px-4 py-2 text-right text-xs flex items-center justify-end">${trendText}${newTag}</td>
-                    </tr>
-                `;
-            }).join('');
-
-
-            const growth = [];
-            const decline = [];
-            const newProducts = [];
-            const lostProducts = [];
-
-            productAnalysis.forEach(p => {
-                 if (p.soldThisMonth && p.hasHistory) {
-                    if (p.currentMonthSalesQty >= p.monthlyAvgSale) {
-                        growth.push(p);
-                    } else if (p.currentMonthSalesQty < p.monthlyAvgSale && p.monthlyAvgSale > 0) {
-                        decline.push(p);
-                    }
-                 } else if (p.soldThisMonth && !p.hasHistory) {
-                    newProducts.push(p);
-                 } else if (!p.soldThisMonth && p.hasHistory) {
-                    lostProducts.push(p);
-                 }
-            });
-
-            const renderProductTable = (bodyElement, data, showVariation = true) => {
-                bodyElement.innerHTML = data.map(p => {
-                    const variation = p.monthlyAvgSale > 0 ? ((p.currentMonthSalesQty - p.monthlyAvgSale) / p.monthlyAvgSale) * 100 : (p.currentMonthSalesQty > 0 ? Infinity : 0);
-                    const colorClass = variation > 0 ? 'text-green-400' : (variation < 0 ? 'text-red-400' : 'text-slate-400');
-                    let variationText = '0%';
-                    if (isFinite(variation)) {
-                        variationText = `${variation.toFixed(0)}%`;
-                    } else if (variation === Infinity) {
-                         variationText = 'Novo';
-                    }
-
-
                     return `
                         <tr>
-                            <td class="px-2 py-1.5 text-xs">(${p.code}) ${p.descricao}</td>
-                            <td class="px-2 py-1.5 text-xs text-right">${p.currentMonthSalesQty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                            <td class="px-2 py-1.5 text-xs text-right">${p.monthlyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                            ${showVariation ? `<td class="px-2 py-1.5 text-xs text-right font-bold ${colorClass}">${variationText}</td>` : ''}
-                            <td class="px-2 py-1.5 text-xs text-right">${p.stock.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                            <td class="px-4 py-2 text-xs">(${item.product_code}) ${item.product_description}</td>
+                            <td class="px-4 py-2 text-xs">${item.supplier_name.split(' ').slice(0, 4).join(' ')}</td>
+                            <td class="px-4 py-2 text-right text-xs">${(item.stock_qty || 0).toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                            <td class="px-4 py-2 text-right text-xs">${(item.avg_monthly_qty || 0).toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                            <td class="px-4 py-2 text-right text-xs">${(item.daily_avg_qty || 0).toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                            <td class="px-4 py-2 text-right text-xs flex items-center justify-end">${trendText}</td>
                         </tr>
                     `;
                 }).join('');
-            };
 
-            growth.sort((a,b) => (b.currentMonthSalesQty - b.monthlyAvgSale) - (a.currentMonthSalesQty - a.monthlyAvgSale));
-            decline.sort((a,b) => (a.currentMonthSalesQty - a.monthlyAvgSale) - (b.currentMonthSalesQty - b.monthlyAvgSale));
-            newProducts.sort((a,b) => b.currentMonthSalesQty - a.currentMonthSalesQty);
-            lostProducts.sort((a,b) => b.monthlyAvgSale - a.monthlyAvgSale);
+                const renderProductTable = (bodyElement, productData, showVariation = true) => {
+                    if (!productData || productData.length === 0) {
+                        const colspan = showVariation ? 5 : 4;
+                        bodyElement.innerHTML = `<tr><td colspan="${colspan}" class="text-center p-4 text-xs">Nenhum produto encontrado.</td></tr>`;
+                        return;
+                    }
+                    bodyElement.innerHTML = productData.map(p => {
+                        const variation = p.history_avg_monthly_qty > 0 ? ((p.current_month_sales_qty - p.history_avg_monthly_qty) / p.history_avg_monthly_qty) * 100 : (p.current_month_sales_qty > 0 ? Infinity : 0);
+                        const colorClass = variation > 0 ? 'text-green-400' : (variation < 0 ? 'text-red-400' : 'text-slate-400');
+                        let variationText = '0%';
+                        if (isFinite(variation)) variationText = `${variation.toFixed(0)}%`;
+                        else if (variation === Infinity) variationText = 'Novo';
 
-            renderProductTable(growthTableBody, growth);
-            renderProductTable(declineTableBody, decline);
-            renderProductTable(newProductsTableBody, newProducts, false);
-            renderProductTable(lostProductsTableBody, lostProducts, false);
+                        return `
+                            <tr>
+                                <td class="px-2 py-1.5 text-xs">(${p.product_code}) ${p.product_description}</td>
+                                <td class="px-2 py-1.5 text-xs text-right">${p.current_month_sales_qty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                                <td class="px-2 py-1.5 text-xs text-right">${p.history_avg_monthly_qty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                                ${showVariation ? `<td class="px-2 py-1.5 text-xs text-right font-bold ${colorClass}">${variationText}</td>` : ''}
+                                <td class="px-2 py-1.5 text-xs text-right">${p.stock_qty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                };
+
+                renderProductTable(growthTableBody, data.growth_table, true);
+                renderProductTable(declineTableBody, data.decline_table, true);
+                renderProductTable(newProductsTableBody, data.new_table, false);
+                renderProductTable(lostProductsTableBody, data.lost_table, false);
+
+            } catch (error) {
+                 console.error("Erro ao atualizar a visualização de Estoque:", error);
+                 stockAnalysisTableBody.innerHTML = `<tr><td colspan="6" class="text-center p-8 text-red-400">Falha ao carregar dados: ${error.message}</td></tr>`;
+            }
         }
 
         function getInnovationsFilteredData() {
@@ -3867,232 +3732,97 @@
             updateInnovationsView();
         }
 
-        function updateInnovationsView() {
+        async function updateInnovationsView() {
             const productsToAnalyze = selectedInnovationsProducts;
-            const { clients, sales, history } = getInnovationsFilteredData();
-
-            const supervisor = innovationsSupervisorFilter.value;
-            const sellers = selectedInnovationsSellers;
-            const sellerRcaCodes = new Set();
-            if (sellers.length > 0) {
-                sellers.forEach(sellerName => {
-                    const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
-                    if (rcaCode) sellerRcaCodes.add(rcaCode);
-                });
-            } else if (supervisor) {
-                (optimizedData.rcasBySupervisor.get(supervisor) || []).forEach(rca => sellerRcaCodes.add(rca));
-            }
-
-
-            const activeClientsForCoverage = clients.filter(c => {
-                const codcli = c['codigo_cliente'];
-                const rca1 = String(c.rca1 || '').trim();
-                
-                // --- INÍCIO DA MODIFICAÇÃO ---
-                // REGRA DE EXCLUSÃO REMOVIDA: Ignora clientes destes RCAs
-                /*
-                if (rca1 === '306' || rca1 === '300') {
-                    return false;
-                }
-                */
-                // --- FIM DA MODIFICAÇÃO ---
-
-                const isAmericanas = (c.razaosocial || '').toUpperCase().includes('AMERICANAS');
-                // const isVdHiago = vdHiagoClients.has(codcli); // REGRA REMOVIDA
-                
-                // Regra de inclusão
-                return (isAmericanas || rca1 !== '53');
-            });
-
-            const activeClientsCount = activeClientsForCoverage.length;
-            const activeClientCodes = new Set(activeClientsForCoverage.map(c => c['codigo_cliente']));
-
-            innovationsActiveClientsKpi.textContent = activeClientsCount.toLocaleString('pt-BR');
 
             if (productsToAnalyze.length === 0) {
                 innovationsPlaceholder.classList.remove('hidden');
                 innovationsResults.classList.add('hidden');
-                innovationsSelectionCoverageValueKpi.textContent = '0%';
-                innovationsSelectionCoverageCountKpi.textContent = `0 de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-                innovationsSelectionCoverageValueKpiPrevious.textContent = '0%';
-                innovationsSelectionCoverageCountKpiPrevious.textContent = `0 de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-                innovationsBonusCoverageValueKpi.textContent = '0%';
-                innovationsBonusCoverageCountKpi.textContent = `0 de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-                innovationsBonusCoverageValueKpiPrevious.textContent = '0%';
-                innovationsBonusCoverageCountKpiPrevious.textContent = `0 de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-                innovationsTopCoverageValueKpi.textContent = '0%';
-                innovationsTopCoverageProductKpi.textContent = '-';
-                innovationsTopCoverageCountKpi.textContent = '0 PDVs';
+                innovationsTableBody.innerHTML = '';
+                // Limpar KPIs se necessário
                 return;
             }
 
             innovationsPlaceholder.classList.add('hidden');
             innovationsResults.classList.remove('hidden');
+            innovationsTableBody.innerHTML = '<tr><td colspan="5" class="text-center p-8">Carregando dados de cobertura...</td></tr>';
 
-            const tableData = [];
-            const clientsWhoGotSelectionCurrent = new Set();
-            const clientsWhoGotSelectionPrevious = new Set();
-            const clientsWhoGotBonusSelectionCurrent = new Set();
-            const clientsWhoGotBonusSelectionPrevious = new Set();
-            let topCoverageItem = { name: '-', coverage: 0, clients: 0 };
+            const filters = {
+                p_supervisor_filter: innovationsSupervisorFilter.value || '',
+                p_sellers_filter: selectedInnovationsSellers.length > 0 ? selectedInnovationsSellers : null,
+                p_product_codes: productsToAnalyze,
+                p_include_bonus: innovationsIncludeBonus,
+                p_city_filter: innovationsCityFilter.value.trim() || '',
+                p_filial_filter: innovationsFilialFilter.value,
+                p_redes_filter: null // Adicionar filtro de rede se necessário
+            };
 
-            productsToAnalyze.forEach(productCode => {
-                const productInfo = productDetailsMap.get(productCode) || { descricao: `Produto ${productCode}`};
+            try {
+                const { data, error } = await supabaseClient.rpc('get_innovations_data_v2', filters);
 
-                let clientsWhoGotProductCurrent = 0;
-                let clientsWhoGotProductPrevious = 0;
+                if (error) throw error;
+                if (!data) throw new Error("A chamada RPC para 'get_innovations_data_v2' não retornou dados.");
 
-                activeClientCodes.forEach(codcli => {
-                    const clientSalesCurrent = optimizedData.salesByClientAndRca_CurrentMonth.get(codcli);
-                    const clientBonusCurrent = innovationsIncludeBonus ? optimizedData.bonificationsByClientAndRca_CurrentMonth.get(codcli) : null;
+                const activeClientsCount = data.active_clients_count || 0;
+                const coverageData = data.coverage_table || [];
 
-                    let boughtCurrent = false;
-                    if (clientSalesCurrent && clientSalesCurrent.has(productCode)) {
-                        const rcasWhoSold = clientSalesCurrent.get(productCode);
-                        if (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca))) {
-                            boughtCurrent = true;
-                        }
+                innovationsActiveClientsKpi.textContent = activeClientsCount.toLocaleString('pt-BR');
+
+                // Lógica de cálculo de KPI e renderização da tabela (movida do código antigo)
+                let topCoverageItem = { name: '-', coverage: 0, clients: 0 };
+                const tableData = coverageData.map(item => {
+                    const coverageCurrent = activeClientsCount > 0 ? (item.current_clients / activeClientsCount) * 100 : 0;
+                    const coveragePrevious = activeClientsCount > 0 ? (item.previous_clients / activeClientsCount) * 100 : 0;
+                    const variation = coveragePrevious > 0 ? ((coverageCurrent - coveragePrevious) / coveragePrevious) * 100 : (coverageCurrent > 0 ? Infinity : 0);
+
+                    if (coverageCurrent > topCoverageItem.coverage) {
+                        topCoverageItem = {
+                            name: `(${item.product_code}) ${item.descricao}`,
+                            coverage: coverageCurrent,
+                            clients: item.current_clients
+                        };
                     }
-                    let bonusCurrent = false;
-                    if (clientBonusCurrent && clientBonusCurrent.has(productCode)) {
-                        const rcasWhoBonused = clientBonusCurrent.get(productCode);
-                         if (sellerRcaCodes.size === 0 || [...rcasWhoBonused].some(rca => sellerRcaCodes.has(rca))) {
-                            bonusCurrent = true;
-                        }
-                    }
 
-                    if(boughtCurrent || bonusCurrent) clientsWhoGotProductCurrent++;
-                    });
-
-
-                    // CORREÇÃO: Lógica para Mês Anterior movida para fora do loop de clientes
-                    // e agora usa o mapa pré-calculado corretamente.
-                    const clientsWhoGotProductPreviousSet = new Set();
-                    activeClientCodes.forEach(codcli => {
-                         const clientSalesPrevious = optimizedData.salesByClientAndRca_PreviousMonth.get(codcli);
-                    const clientBonusPrevious = innovationsIncludeBonus ? optimizedData.bonificationsByClientAndRca_PreviousMonth.get(codcli) : null;
-
-                    let boughtPrevious = false;
-                     if (clientSalesPrevious && clientSalesPrevious.has(productCode)) {
-                        const rcasWhoSold = clientSalesPrevious.get(productCode);
-                        if (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca))) {
-                            boughtPrevious = true;
-                        }
-                    }
-                    let bonusPrevious = false;
-                    if (clientBonusPrevious && clientBonusPrevious.has(productCode)) {
-                        const rcasWhoBonused = clientBonusPrevious.get(productCode);
-                         if (sellerRcaCodes.size === 0 || [...rcasWhoBonused].some(rca => sellerRcaCodes.has(rca))) {
-                            bonusPrevious = true;
-                        }
-                    }
-                        if(boughtPrevious || bonusPrevious) {
-                            clientsWhoGotProductPreviousSet.add(codcli);
-                        }
-                });
-                    clientsWhoGotProductPrevious = clientsWhoGotProductPreviousSet.size;
-
-                const coverageCurrent = activeClientsCount > 0 ? (clientsWhoGotProductCurrent / activeClientsCount) * 100 : 0;
-                const coveragePrevious = activeClientsCount > 0 ? (clientsWhoGotProductPrevious / activeClientsCount) * 100 : 0;
-
-                if (coverageCurrent > topCoverageItem.coverage) {
-                    topCoverageItem = {
-                        name: `(${productCode}) ${productInfo.descricao}`,
-                        coverage: coverageCurrent,
-                        clients: clientsWhoGotProductCurrent
+                    return {
+                        descricao: `(${item.product_code}) ${item.descricao}`,
+                        stockQty: item.stock_qty,
+                        coveragePrevious: coveragePrevious,
+                        clientsPreviousCount: item.previous_clients,
+                        coverageCurrent: coverageCurrent,
+                        clientsCurrentCount: item.current_clients,
+                        variation: variation
                     };
-                }
-
-                activeClientCodes.forEach(codcli => {
-                    const currentSales = optimizedData.salesByClientAndRca_CurrentMonth.get(codcli);
-                    const currentBonus = innovationsIncludeBonus ? optimizedData.bonificationsByClientAndRca_CurrentMonth.get(codcli) : null;
-
-                    if ((currentSales && currentSales.has(productCode) && (sellerRcaCodes.size === 0 || [...currentSales.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) ||
-                        (currentBonus && currentBonus.has(productCode) && (sellerRcaCodes.size === 0 || [...currentBonus.get(productCode)].some(rca => sellerRcaCodes.has(rca))))) {
-                        clientsWhoGotSelectionCurrent.add(codcli);
-                    }
-                    if (currentBonus && currentBonus.has(productCode) && (sellerRcaCodes.size === 0 || [...currentBonus.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) {
-                        clientsWhoGotBonusSelectionCurrent.add(codcli);
-                    }
-
-                    const previousSales = optimizedData.salesByClientAndRca_PreviousMonth.get(codcli);
-                    const previousBonus = innovationsIncludeBonus ? optimizedData.bonificationsByClientAndRca_PreviousMonth.get(codcli) : null;
-
-                    if ((previousSales && previousSales.has(productCode) && (sellerRcaCodes.size === 0 || [...previousSales.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) ||
-                        (previousBonus && previousBonus.has(productCode) && (sellerRcaCodes.size === 0 || [...previousBonus.get(productCode)].some(rca => sellerRcaCodes.has(rca))))) {
-                        clientsWhoGotSelectionPrevious.add(codcli);
-                    }
-                    if (previousBonus && previousBonus.has(productCode) && (sellerRcaCodes.size === 0 || [...previousBonus.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) {
-                        clientsWhoGotBonusSelectionPrevious.add(codcli);
-                    }
                 });
 
-                const variation = coveragePrevious > 0 ? ((coverageCurrent - coveragePrevious) / coveragePrevious) * 100 : (coverageCurrent > 0 ? Infinity : 0);
-                const stockQty = getActiveStockMap(innovationsFilialFilter.value).get(productCode) || 0;
+                innovationsTopCoverageValueKpi.textContent = `${topCoverageItem.coverage.toFixed(2)}%`;
+                innovationsTopCoverageProductKpi.textContent = topCoverageItem.name;
+                innovationsTopCoverageProductKpi.title = topCoverageItem.name;
+                innovationsTopCoverageCountKpi.textContent = `${topCoverageItem.clients.toLocaleString('pt-BR')} PDVs`;
 
-                tableData.push({
-                    descricao: `(${productCode}) ${productInfo.descricao}`,
-                    stockQty: stockQty,
-                    coveragePrevious: coveragePrevious,
-                    coverageCurrent: coverageCurrent,
-                    variation: variation,
-                    clientsPreviousCount: clientsWhoGotProductPrevious,
-                    clientsCurrentCount: clientsWhoGotProductCurrent
-                });
-            });
+                // Renderizar tabela
+                innovationsTableBody.innerHTML = tableData.map(item => {
+                    let variationContent = '<span>-</span>';
+                    if (isFinite(item.variation)) {
+                        const colorClass = item.variation >= 0 ? 'text-green-400' : 'text-red-400';
+                        variationContent = `<span class="${colorClass}">${item.variation.toFixed(1)}%</span>`;
+                    } else if (item.coverageCurrent > 0) {
+                        variationContent = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/30 text-purple-300">Novo</span>`;
+                    }
+                    return `
+                        <tr>
+                            <td class="px-2 py-1.5 text-xs">${item.descricao}</td>
+                            <td class="px-2 py-1.5 text-xs text-right">${item.stockQty.toLocaleString('pt-BR')}</td>
+                            <td class="px-2 py-1.5 text-xs text-right"><div class="tooltip">${item.coveragePrevious.toFixed(2)}%<span class="tooltip-text">${item.clientsPreviousCount} PDVs</span></div></td>
+                            <td class="px-2 py-1.5 text-xs text-right"><div class="tooltip">${item.coverageCurrent.toFixed(2)}%<span class="tooltip-text">${item.clientsCurrentCount} PDVs</span></div></td>
+                            <td class="px-2 py-1.5 text-xs text-right">${variationContent}</td>
+                        </tr>
+                    `;
+                }).join('');
 
-            innovationsTopCoverageValueKpi.textContent = `${topCoverageItem.coverage.toFixed(2)}%`;
-            innovationsTopCoverageProductKpi.textContent = topCoverageItem.name;
-            innovationsTopCoverageProductKpi.title = topCoverageItem.name;
-            innovationsTopCoverageCountKpi.textContent = `${topCoverageItem.clients.toLocaleString('pt-BR')} PDVs`;
-
-            const selectionCoveredCountCurrent = clientsWhoGotSelectionCurrent.size;
-            const selectionCoveragePercentCurrent = activeClientsCount > 0 ? (selectionCoveredCountCurrent / activeClientsCount) * 100 : 0;
-            innovationsSelectionCoverageValueKpi.textContent = `${selectionCoveragePercentCurrent.toFixed(2)}%`;
-            innovationsSelectionCoverageCountKpi.textContent = `${selectionCoveredCountCurrent.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-
-            const selectionCoveredCountPrevious = clientsWhoGotSelectionPrevious.size;
-            const selectionCoveragePercentPrevious = activeClientsCount > 0 ? (selectionCoveredCountPrevious / activeClientsCount) * 100 : 0;
-            innovationsSelectionCoverageValueKpiPrevious.textContent = `${selectionCoveragePercentPrevious.toFixed(2)}%`;
-            innovationsSelectionCoverageCountKpiPrevious.textContent = `${selectionCoveredCountPrevious.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-
-            const bonusCoveredCountCurrent = clientsWhoGotBonusSelectionCurrent.size;
-            const bonusCoveragePercentCurrent = activeClientsCount > 0 ? (bonusCoveredCountCurrent / activeClientsCount) * 100 : 0;
-            innovationsBonusCoverageValueKpi.textContent = `${bonusCoveragePercentCurrent.toFixed(2)}%`;
-            innovationsBonusCoverageCountKpi.textContent = `${bonusCoveredCountCurrent.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-
-            const bonusCoveredCountPrevious = clientsWhoGotBonusSelectionPrevious.size;
-            const bonusCoveragePercentPrevious = activeClientsCount > 0 ? (bonusCoveredCountPrevious / activeClientsCount) * 100 : 0;
-            innovationsBonusCoverageValueKpiPrevious.textContent = `${bonusCoveragePercentPrevious.toFixed(2)}%`;
-            innovationsBonusCoverageCountKpiPrevious.textContent = `${bonusCoveredCountPrevious.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-
-
-            tableData.sort((a, b) => b.coverageCurrent - a.coverageCurrent);
-
-            innovationsTableBody.innerHTML = tableData.map(item => {
-                let variationContent;
-                if (isFinite(item.variation)) {
-                    const colorClass = item.variation >= 0 ? 'text-green-400' : 'text-red-400';
-                    variationContent = `<span class="${colorClass}">${item.variation.toFixed(1)}%</span>`;
-                } else if (item.coverageCurrent > 0) {
-                    variationContent = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/30 text-purple-300">Novo</span>`;
-                } else {
-                    variationContent = `<span>-</span>`;
-                }
-                return `
-                    <tr>
-                        <td class="px-2 py-1.5 text-xs">${item.descricao}</td>
-                        <td class="px-2 py-1.5 text-xs text-right">${item.stockQty.toLocaleString('pt-BR')}</td>
-                        <td class="px-2 py-1.5 text-xs text-right">
-                            <div class="tooltip">${item.coveragePrevious.toFixed(2)}%<span class="tooltip-text">${item.clientsPreviousCount} PDVs</span></div>
-                        </td>
-                        <td class="px-2 py-1.5 text-xs text-right">
-                            <div class="tooltip">${item.coverageCurrent.toFixed(2)}%<span class="tooltip-text">${item.clientsCurrentCount} PDVs</span></div>
-                        </td>
-                        <td class="px-2 py-1.5 text-xs text-right">${variationContent}</td>
-                    </tr>
-                `;
-            }).join('');
+            } catch (error) {
+                console.error("Erro ao atualizar a visualização de Inovações:", error);
+                innovationsTableBody.innerHTML = `<tr><td colspan="5" class="text-center p-8 text-red-400">Falha ao carregar dados: ${error.message}</td></tr>`;
+            }
         }
 
         function getInnovationsMonthFilteredData() {
@@ -4834,8 +4564,8 @@
                         { id: 'nav-coverage-view', text: 'Cobertura de Estoque', viewId: 'coverage-view' },
                         { id: 'nav-innovations-view', text: 'Análise de Inovações', viewId: 'innovations-view' },
                         { id: 'nav-innovations-month-view', text: 'Inovações Mês', viewId: 'innovations-month-view' },
-                        { id: 'nav-weekly-view', text: 'Acompanhamento Semanal', viewId: 'weekly-view' },
-                        { id: 'nav-city-view', text: 'Análise por Cidade', viewId: 'city-view' }
+                        { id: 'nav-weekly-view', text: 'Acompanhamento Semanal', viewId: 'weekly-view' }
+                        // { id: 'nav-city-view', text: 'Análise por Cidade', viewId: 'city-view' } // DESABILITADO TEMPORARIAMENTE
                     ]
                 },
                 {
@@ -4992,10 +4722,10 @@
                                 populateWeeklyFilters(window.embeddedData.filters.supervisors);
                                 updateWeeklyView();
                                 break;
-                            case 'city-view':
-                                populateCityFilters(window.embeddedData.filters);
-                                updateCityView();
-                                break;
+                            // case 'city-view':
+                            //     populateCityFilters(window.embeddedData.filters);
+                            //     updateCityView();
+                            //     break;
                         }
                     }
 
