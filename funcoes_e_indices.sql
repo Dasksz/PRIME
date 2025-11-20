@@ -202,7 +202,7 @@ BEGIN
 
     -- 5. Série de dias úteis com ranking reverso (para buscar "N" dias para trás)
     working_days_ranked AS (
-        SELECT
+        SELECT 
             d::date as work_date,
             row_number() OVER (ORDER BY d DESC) as rn
         FROM generate_series(first_ever_sale_date, last_sale_date, '1 day'::interval) d
@@ -225,7 +225,7 @@ BEGIN
             ) as product_lifetime_days,
 
             pfs.first_sale_date
-
+            
         FROM data_product_details pd
         LEFT JOIN stock_aggregated sa ON pd.code = sa.product_code
         LEFT JOIN product_first_sale pfs ON pd.code = pfs.produto
@@ -242,16 +242,16 @@ BEGIN
         GREATEST(
             LEAST(
                 -- Se custom_days for 0 ou maior que o tempo de vida, usa o tempo de vida
-                CASE WHEN p_custom_days <= 0 OR p_custom_days > pa.product_lifetime_days
+                CASE WHEN p_custom_days <= 0 OR p_custom_days > pa.product_lifetime_days 
                      THEN pa.product_lifetime_days
                      ELSE p_custom_days
                 END,
                 max_working_days -- Limita ao máximo de dias disponíveis
-            ),
+            ), 
         1)::INTEGER as days_divisor
       FROM product_analysis pa
     ),
-
+    
     -- 8. Calcula as vendas e médias com base no período correto
     sales_in_period AS (
       SELECT
@@ -260,13 +260,13 @@ BEGIN
         fc.supplier_name,
         fc.stock_qty,
         fc.days_divisor,
-
+        
         -- Média mensal histórica (baseada em 3 meses, inalterada)
         (SELECT COALESCE(SUM(qtvenda_embalagem_master), 0) / 3.0
          FROM all_sales
          WHERE produto = fc.product_code AND dtped BETWEEN history_start_date AND history_end_date
         ) as history_avg_monthly_qty,
-
+        
         -- Vendas no mês atual (inalterado)
         (SELECT COALESCE(SUM(qtvenda_embalagem_master), 0)
          FROM all_sales
@@ -279,9 +279,9 @@ BEGIN
          WHERE s.produto = fc.product_code
            AND s.dtped >= (SELECT work_date FROM working_days_ranked WHERE rn = fc.days_divisor)
         ) as total_sales_for_avg
-
+        
       FROM final_calc fc
-      WHERE fc.product_code IS NOT NULL AND
+      WHERE fc.product_code IS NOT NULL AND 
             (fc.stock_qty > 0 OR fc.history_avg_monthly_qty > 0 OR fc.current_month_sales_qty > 0)
     ),
 
