@@ -1528,14 +1528,6 @@
             allSalesData.forEach(populatePastaMap);
             allHistoryData.forEach(populatePastaMap);
         
-            setTimeout(() => {
-                const maxDaysLabel = document.getElementById('max-working-days-label');
-                if (maxDaysLabel) {
-                    maxDaysLabel.textContent = `(Máx: ${maxWorkingDaysStock})`;
-                }
-                 const daysInput = document.getElementById('stock-working-days-input');
-                 if(daysInput) daysInput.value = customWorkingDaysStock;
-            }, 0);
         } catch (error) {
                 console.error("Erro fatal durante initializeOptimizedDataStructures:", error);
             }
@@ -3591,17 +3583,16 @@
                 if (!data) throw new Error("A chamada RPC para 'get_stock_view_data' não retornou dados.");
                 
                 // ATUALIZAÇÃO: Captura os novos valores e os elementos da UI
-                const stockViewTitle = document.getElementById('stock-view-title');
-                const maxDays = data.max_working_days || 0;
-                const usedDays = data.working_days_used || 'Auto';
+                const maxDays = data.max_working_days || 1;
+                const usedDays = data.working_days_used || maxDays;
+                const maxDaysLabel = document.getElementById('max-working-days-label');
 
-                if (stockViewTitle) {
-                    stockViewTitle.textContent = `Análise de Estoque (${usedDays} dias úteis)`;
+                if (maxDaysLabel) {
+                    maxDaysLabel.textContent = `(Máx: ${maxDays})`;
                 }
-
-                // Define o placeholder com o máximo de dias retornado pela API
                 if (customDaysInput) {
-                    customDaysInput.placeholder = `Auto (Máx: ${maxDays} dias)`;
+                    customDaysInput.value = usedDays;
+                    customDaysInput.max = maxDays;
                 }
 
                 let stockData = data.stock_table || [];
