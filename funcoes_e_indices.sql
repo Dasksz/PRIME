@@ -112,12 +112,13 @@ $$ LANGUAGE plpgsql;
 
 -- 3. FUNÇÃO DE ESTOQUE (CORRIGIDA DUPLICIDADE DE FILIAIS)
 -- 3. FUNÇÃO DE ESTOQUE (V7 - Média Diária Corrigida)
+-- 3. FUNÇÃO DE ESTOQUE (V8 - Correção de Escopo de Coluna)
 -- ============================================================================
 -- Remove versões anteriores para garantir a substituição correta
 DROP FUNCTION IF EXISTS get_stock_view_data(text, text[], text[], text[], text, text[], text);
 DROP FUNCTION IF EXISTS get_stock_view_data(text, text[], text[], text[], text, text[], text, integer);
 
--- Criar a Função V7
+-- Criar a Função V8 (Corrigida)
 CREATE OR REPLACE FUNCTION get_stock_view_data (
   p_supervisor_filter TEXT default '',
   p_sellers_filter text[] default null,
@@ -159,7 +160,7 @@ BEGIN
     WHERE extract(isodow from d) < 6;
 
     WITH
-    -- 1. Filtra Clientes (lógica inalterada)
+    -- 1. Filtra Clientes
     sales_clients AS (
         SELECT DISTINCT codcli FROM data_detailed
         WHERE (p_supervisor_filter = '' OR superv = p_supervisor_filter)
@@ -174,7 +175,7 @@ BEGIN
               (p_rede_group_filter = 'com_rede' AND (p_redes_filter IS NULL OR c.ramo = ANY(p_redes_filter))))
     ),
     
-    -- 2. Estoque (lógica inalterada)
+    -- 2. Estoque
     stock_aggregated AS (
         SELECT product_code, SUM(stock_qty) as total_stock
         FROM data_stock
@@ -182,7 +183,7 @@ BEGIN
         GROUP BY product_code
     ),
 
-    -- 3. Vendas Atuais e Históricas (sem agregação ainda)
+    -- 3. Vendas
     all_sales AS (
       SELECT produto, qtvenda_embalagem_master, dtped
       FROM data_detailed
@@ -193,14 +194,14 @@ BEGIN
       WHERE codcli IN (SELECT codigo_cliente FROM final_clients) AND (p_filial_filter = 'ambas' OR filial = p_filial_filter)
     ),
 
-    -- 4. Encontra a data da primeira venda de cada produto
+    -- 4. Primeira venda de cada produto
     product_first_sale AS (
       SELECT produto, MIN(dtped) as first_sale_date
       FROM all_sales
       GROUP BY produto
     ),
 
-    -- 5. Série de dias úteis com ranking reverso (para buscar "N" dias para trás)
+    -- 5. Dias úteis ranqueados
     working_days_ranked AS (
         SELECT
             d::date as work_date,
@@ -209,23 +210,15 @@ BEGIN
         WHERE extract(isodow from d) < 6
     ),
 
-    -- 6. Cruzamento final e Cálculos
+    -- 6. Análise base do produto
     product_analysis AS (
         SELECT
             pd.code AS product_code,
             pd.descricao AS product_description,
             pd.fornecedor AS supplier_name,
             COALESCE(sa.total_stock, 0) as stock_qty,
-
-            -- Lógica principal: Calcula o divisor de dias para cada produto
-            (
-                SELECT COUNT(*)
-                FROM generate_series(pfs.first_sale_date, last_sale_date, '1 day') d
-                WHERE extract(isodow from d) < 6
-            ) as product_lifetime_days,
-
+            (SELECT COUNT(*) FROM generate_series(pfs.first_sale_date, last_sale_date, '1 day') d WHERE extract(isodow from d) < 6) as product_lifetime_days,
             pfs.first_sale_date
-
         FROM data_product_details pd
         LEFT JOIN stock_aggregated sa ON pd.code = sa.product_code
         LEFT JOIN product_first_sale pfs ON pd.code = pfs.produto
@@ -234,57 +227,42 @@ BEGIN
             AND (p_products_filter IS NULL OR pd.code = ANY(p_products_filter))
     ),
     
-    -- 7. Define o número de dias e a data de início para o cálculo da média
+    -- 7. Define o divisor de dias para cada produto
     final_calc AS (
       SELECT
         pa.*,
-        -- Aplica a regra de negócio para o divisor (quantos dias olhar para trás)
-        GREATEST(
-            LEAST(
-                -- Se custom_days for 0 ou maior que o tempo de vida, usa o tempo de vida
-                CASE WHEN p_custom_days <= 0 OR p_custom_days > pa.product_lifetime_days
-                     THEN pa.product_lifetime_days
-                     ELSE p_custom_days
-                END,
-                max_working_days -- Limita ao máximo de dias disponíveis
-            ),
-        1)::INTEGER as days_divisor
+        GREATEST(LEAST(
+            CASE WHEN p_custom_days <= 0 OR p_custom_days > pa.product_lifetime_days
+                 THEN pa.product_lifetime_days
+                 ELSE p_custom_days
+            END,
+            max_working_days
+        ), 1)::INTEGER as days_divisor
       FROM product_analysis pa
     ),
 
-    -- 8. Calcula as vendas e médias com base no período correto
-    sales_in_period AS (
+    -- 8. CALCULA as vendas e médias (SEM FILTRO)
+    sales_calculations AS (
       SELECT
         fc.product_code,
         fc.product_description,
         fc.supplier_name,
         fc.stock_qty,
         fc.days_divisor,
-
-        -- Média mensal histórica (baseada em 3 meses, inalterada)
-        (SELECT COALESCE(SUM(qtvenda_embalagem_master), 0) / 3.0
-         FROM all_sales
-         WHERE produto = fc.product_code AND dtped BETWEEN history_start_date AND history_end_date
-        ) as history_avg_monthly_qty,
-
-        -- Vendas no mês atual (inalterado)
-        (SELECT COALESCE(SUM(qtvenda_embalagem_master), 0)
-         FROM all_sales
-         WHERE produto = fc.product_code AND dtped >= current_month_start
-        ) as current_month_sales_qty,
-
-        -- NOVA LÓGICA: Soma as vendas apenas no período de dias úteis determinado
-        (SELECT COALESCE(SUM(s.qtvenda_embalagem_master), 0)
-         FROM all_sales s
-         WHERE s.produto = fc.product_code
-           AND s.dtped >= (SELECT work_date FROM working_days_ranked WHERE rn = fc.days_divisor)
-        ) as total_sales_for_avg
-
+        (SELECT COALESCE(SUM(qtvenda_embalagem_master), 0) / 3.0 FROM all_sales WHERE produto = fc.product_code AND dtped BETWEEN history_start_date AND history_end_date) as history_avg_monthly_qty,
+        (SELECT COALESCE(SUM(qtvenda_embalagem_master), 0) FROM all_sales WHERE produto = fc.product_code AND dtped >= current_month_start) as current_month_sales_qty,
+        (SELECT COALESCE(SUM(s.qtvenda_embalagem_master), 0) FROM all_sales s WHERE s.produto = fc.product_code AND s.dtped >= (SELECT work_date FROM working_days_ranked WHERE rn = fc.days_divisor)) as total_sales_for_avg
       FROM final_calc fc
-      WHERE fc.product_code IS NOT NULL AND
-            (fc.stock_qty > 0 OR fc.history_avg_monthly_qty > 0 OR fc.current_month_sales_qty > 0)
     ),
 
+    -- 9. FILTRA os produtos que têm estoque ou vendas
+    filtered_sales AS (
+        SELECT *
+        FROM sales_calculations
+        WHERE stock_qty > 0 OR history_avg_monthly_qty > 0 OR current_month_sales_qty > 0
+    ),
+
+    -- 10. Categoriza os produtos filtrados
     categorized_products AS (
         SELECT *,
             CASE
@@ -294,26 +272,26 @@ BEGIN
                 WHEN current_month_sales_qty = 0 AND history_avg_monthly_qty > 0 THEN 'lost'
                 ELSE NULL
             END as category
-        FROM sales_in_period
+        FROM filtered_sales
     )
     
     SELECT jsonb_build_object(
         'max_working_days', max_working_days,
-        'working_days_used', CASE WHEN p_custom_days > 0 THEN p_custom_days ELSE max_working_days END,
+        'working_days_used', CASE WHEN p_custom_days > 0 AND p_custom_days < max_working_days THEN p_custom_days ELSE max_working_days END,
         'stock_table', (
             SELECT COALESCE(jsonb_agg(jsonb_build_object(
-                'product_code', sip.product_code,
-                'product_description', sip.product_description,
-                'supplier_name', sip.supplier_name,
-                'stock_qty', sip.stock_qty,
-                'avg_monthly_qty', sip.history_avg_monthly_qty,
-                'daily_avg_qty', sip.total_sales_for_avg / sip.days_divisor,
+                'product_code', fs.product_code,
+                'product_description', fs.product_description,
+                'supplier_name', fs.supplier_name,
+                'stock_qty', fs.stock_qty,
+                'avg_monthly_qty', fs.history_avg_monthly_qty,
+                'daily_avg_qty', fs.total_sales_for_avg / fs.days_divisor,
                 'trend_days', CASE
-                                WHEN (sip.total_sales_for_avg / sip.days_divisor) > 0 THEN (sip.stock_qty / (sip.total_sales_for_avg / sip.days_divisor))
+                                WHEN (fs.total_sales_for_avg / fs.days_divisor) > 0 THEN (fs.stock_qty / (fs.total_sales_for_avg / fs.days_divisor))
                                 ELSE 999
                               END
-            ) ORDER BY (CASE WHEN (sip.total_sales_for_avg / sip.days_divisor) > 0 THEN (sip.stock_qty / (sip.total_sales_for_avg / sip.days_divisor)) ELSE 999 END) ASC), '[]'::jsonb)
-            FROM sales_in_period sip
+            ) ORDER BY (CASE WHEN (fs.total_sales_for_avg / fs.days_divisor) > 0 THEN (fs.stock_qty / (fs.total_sales_for_avg / fs.days_divisor)) ELSE 999 END) ASC), '[]'::jsonb)
+            FROM filtered_sales fs
         ),
         'growth_table', (SELECT COALESCE(jsonb_agg(cp ORDER BY (current_month_sales_qty - history_avg_monthly_qty) DESC), '[]'::jsonb) FROM categorized_products cp WHERE category = 'growth'),
         'decline_table', (SELECT COALESCE(jsonb_agg(cp ORDER BY (current_month_sales_qty - history_avg_monthly_qty) ASC), '[]'::jsonb) FROM categorized_products cp WHERE category = 'decline'),
