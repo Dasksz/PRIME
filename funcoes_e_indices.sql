@@ -135,29 +135,20 @@ $$ LANGUAGE plpgsql;
 -- 3. FUNÇÃO DE ESTOQUE (V11 - Média Diária Dinâmica e Otimizada)
 -- 3. FUNÇÃO DE ESTOQUE (V12 - Otimização de Performance Anti-Timeout)
 -- ============================================================================
-drop function IF exists get_stock_view_data (text, text[], text[], text[], text, text[], text);
+-- Atualização da função get_stock_view_data para incluir filtro de cidade e corrigir comportamento
+DROP FUNCTION IF EXISTS get_stock_view_data(text, text[], text[], text[], text, text[], text, integer);
 
-drop function IF exists get_stock_view_data (
-  text,
-  text[],
-  text[],
-  text[],
-  text,
-  text[],
-  text,
-  integer
-);
-
-create or replace function get_stock_view_data (
-  p_supervisor_filter TEXT default '',
-  p_sellers_filter text[] default null,
-  p_suppliers_filter text[] default null,
-  p_products_filter text[] default null,
-  p_rede_group_filter TEXT default '',
-  p_redes_filter text[] default null,
-  p_filial_filter TEXT default 'ambas',
-  p_custom_days INTEGER default 0
-) RETURNS JSONB as $$
+CREATE OR REPLACE FUNCTION get_stock_view_data (
+  p_supervisor_filter TEXT DEFAULT '',
+  p_sellers_filter text[] DEFAULT NULL,
+  p_suppliers_filter text[] DEFAULT NULL,
+  p_products_filter text[] DEFAULT NULL,
+  p_rede_group_filter TEXT DEFAULT '',
+  p_redes_filter text[] DEFAULT NULL,
+  p_filial_filter TEXT DEFAULT 'ambas',
+  p_city_filter TEXT DEFAULT '', -- Novo parâmetro adicionado
+  p_custom_days INTEGER DEFAULT 0
+) RETURNS JSONB AS $$
 DECLARE
     result JSONB;
     current_month_start DATE;
@@ -189,6 +180,7 @@ BEGIN
         WHERE (p_rede_group_filter = '' OR 
               (p_rede_group_filter = 'sem_rede' AND (c.ramo IS NULL OR c.ramo = 'N/A')) OR
               (p_rede_group_filter = 'com_rede' AND (p_redes_filter IS NULL OR c.ramo = ANY(p_redes_filter))))
+          AND (p_city_filter = '' OR c.cidade ILIKE p_city_filter) -- Filtro de Cidade Aplicado
           AND (p_supervisor_filter = '' OR EXISTS (
             SELECT 1 FROM data_detailed d WHERE d.codcli = c.codigo_cliente AND d.superv = p_supervisor_filter
             UNION ALL SELECT 1 FROM data_history h WHERE h.codcli = c.codigo_cliente AND h.superv = p_supervisor_filter LIMIT 1
