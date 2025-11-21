@@ -156,7 +156,8 @@ create or replace function get_stock_view_data (
   p_rede_group_filter TEXT default '',
   p_redes_filter text[] default null,
   p_filial_filter TEXT default 'ambas',
-  p_custom_days INTEGER default 0
+  p_custom_days INTEGER default 0,
+  p_city_filter TEXT default ''
 ) RETURNS JSONB as $$
 DECLARE
     result JSONB;
@@ -186,7 +187,8 @@ BEGIN
     final_clients AS (
         SELECT c.codigo_cliente 
         FROM data_clients c
-        WHERE (p_rede_group_filter = '' OR 
+        WHERE (p_city_filter = '' OR c.cidade ILIKE p_city_filter)
+          AND (p_rede_group_filter = '' OR
               (p_rede_group_filter = 'sem_rede' AND (c.ramo IS NULL OR c.ramo = 'N/A')) OR
               (p_rede_group_filter = 'com_rede' AND (p_redes_filter IS NULL OR c.ramo = ANY(p_redes_filter))))
           AND (p_supervisor_filter = '' OR EXISTS (
