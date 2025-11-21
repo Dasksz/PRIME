@@ -3355,18 +3355,21 @@
         }
 
         function updateStockProductFilter() {
-            const data = getStockFilteredData({excludeFilter: 'product'});
-            updateProductFilter(stockProductFilterDropdown, stockProductFilterText, selectedStockProducts, [...data.sales, ...data.history], 'stock');
+            const products = Object.entries(window.embeddedData.productDetails || {}).map(([code, details]) => ({
+                produto: code,
+                descricao: details.descricao
+            }));
+            updateProductFilter(stockProductFilterDropdown, stockProductFilterText, selectedStockProducts, products, 'stock');
         }
 
         function updateStockSupplierFilter() {
-            const data = getStockFilteredData({excludeFilter: 'supplier'});
-            selectedStockSuppliers = updateSupplierFilter(stockSupplierFilterDropdown, stockSupplierFilterText, selectedStockSuppliers, [...data.sales, ...data.history], 'stock');
+            const suppliers = window.embeddedData.filters.suppliers || [];
+            selectedStockSuppliers = updateSupplierFilter(stockSupplierFilterDropdown, stockSupplierFilterText, selectedStockSuppliers, suppliers, 'stock');
         }
 
         function updateStockSellerFilter() {
-            const data = getStockFilteredData({excludeFilter: 'seller'});
-            selectedStockSellers = updateSellerFilter(stockSupervisorFilter.value, stockVendedorFilterDropdown, stockVendedorFilterText, selectedStockSellers, [...data.sales, ...data.history]);
+            const sellers = window.embeddedData.filters.sellers || [];
+            selectedStockSellers = updateSellerFilter(stockSupervisorFilter.value, stockVendedorFilterDropdown, stockVendedorFilterText, selectedStockSellers, [], sellers);
         }
 
         function updateStockCitySuggestions(dataSource) {
@@ -3573,7 +3576,9 @@
                 p_products_filter: selectedStockProducts.length > 0 ? selectedStockProducts : null,
                 p_rede_group_filter: stockRedeGroupFilter || '',
                 p_redes_filter: selectedStockRedes.length > 0 ? selectedStockRedes : null,
-                p_custom_days: isNaN(customDaysValue) ? 0 : customDaysValue
+                p_custom_days: isNaN(customDaysValue) ? 0 : customDaysValue,
+                p_filial_filter: stockFilialFilter.value,
+                p_city_filter: stockCityFilter.value.trim()
             };
 
             try {
