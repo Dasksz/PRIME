@@ -156,7 +156,8 @@ create or replace function get_stock_view_data (
   p_rede_group_filter TEXT default '',
   p_redes_filter text[] default null,
   p_filial_filter TEXT default 'ambas',
-  p_custom_days INTEGER default 0
+  p_custom_days INTEGER default 0,
+  p_city_filter TEXT default ''
 ) RETURNS JSONB as $$
 DECLARE
     result JSONB;
@@ -189,6 +190,7 @@ BEGIN
         WHERE (p_rede_group_filter = '' OR 
               (p_rede_group_filter = 'sem_rede' AND (c.ramo IS NULL OR c.ramo = 'N/A')) OR
               (p_rede_group_filter = 'com_rede' AND (p_redes_filter IS NULL OR c.ramo = ANY(p_redes_filter))))
+          AND (p_city_filter = '' OR c.cidade ILIKE p_city_filter)
           AND (p_supervisor_filter = '' OR EXISTS (
             SELECT 1 FROM data_detailed d WHERE d.codcli = c.codigo_cliente AND d.superv = p_supervisor_filter
             UNION ALL SELECT 1 FROM data_history h WHERE h.codcli = c.codigo_cliente AND h.superv = p_supervisor_filter LIMIT 1

@@ -3355,18 +3355,26 @@
         }
 
         function updateStockProductFilter() {
-            const data = getStockFilteredData({excludeFilter: 'product'});
-            updateProductFilter(stockProductFilterDropdown, stockProductFilterText, selectedStockProducts, [...data.sales, ...data.history], 'stock');
+            // Alterado para usar window.embeddedData.productDetails
+            const products = Object.values(window.embeddedData.productDetails || {});
+            // Mapeia para o formato esperado por updateProductFilter (espera array de objetos com .produto e .descricao)
+            const productSource = products.map(p => ({ produto: p.code, descricao: p.descricao }));
+            updateProductFilter(stockProductFilterDropdown, stockProductFilterText, selectedStockProducts, productSource, 'stock');
         }
 
         function updateStockSupplierFilter() {
-            const data = getStockFilteredData({excludeFilter: 'supplier'});
-            selectedStockSuppliers = updateSupplierFilter(stockSupplierFilterDropdown, stockSupplierFilterText, selectedStockSuppliers, [...data.sales, ...data.history], 'stock');
+            // Alterado para usar window.embeddedData.filters.suppliers
+            const suppliers = window.embeddedData.filters.suppliers || [];
+            // Mapeia para o formato esperado: array de objetos com .codfor e .fornecedor
+            const supplierSource = suppliers.map(s => ({ codfor: s.codfor, fornecedor: s.fornecedor }));
+            selectedStockSuppliers = updateSupplierFilter(stockSupplierFilterDropdown, stockSupplierFilterText, selectedStockSuppliers, supplierSource, 'stock');
         }
 
         function updateStockSellerFilter() {
-            const data = getStockFilteredData({excludeFilter: 'seller'});
-            selectedStockSellers = updateSellerFilter(stockSupervisorFilter.value, stockVendedorFilterDropdown, stockVendedorFilterText, selectedStockSellers, [...data.sales, ...data.history]);
+            // Alterado para usar window.embeddedData.filters.sellers
+            const sellers = window.embeddedData.filters.sellers || [];
+            // updateSellerFilter espera um array de strings (nomes dos vendedores) no último argumento
+            selectedStockSellers = updateSellerFilter(stockSupervisorFilter.value, stockVendedorFilterDropdown, stockVendedorFilterText, selectedStockSellers, [], sellers);
         }
 
         function updateStockCitySuggestions(dataSource) {
@@ -3573,6 +3581,8 @@
                 p_products_filter: selectedStockProducts.length > 0 ? selectedStockProducts : null,
                 p_rede_group_filter: stockRedeGroupFilter || '',
                 p_redes_filter: selectedStockRedes.length > 0 ? selectedStockRedes : null,
+                p_filial_filter: stockFilialFilter.value,
+                p_city_filter: stockCityFilter.value.trim(),
                 p_custom_days: isNaN(customDaysValue) ? 0 : customDaysValue
             };
 
