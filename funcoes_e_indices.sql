@@ -1,701 +1,177 @@
--- ============================================================================
--- ARQUIVO MESTRE DE ATUALIZAÇÃO DO BANCO DE DADOS (V3 - FINAL)
--- Contém: Índices de Performance, Funções de Filtro Otimizadas, Views de Dashboard
--- ============================================================================
--- 1. CRIAÇÃO DE ÍNDICES DE PERFORMANCE (OBRIGATÓRIO PARA EVITAR TIMEOUTS)
--- ============================================================================
--- Acelerar tabelas de Vendas (Mês Atual)
-create index IF not exists idx_detailed_superv on data_detailed (superv);
+-- =================================================================
+-- SCRIPT V13.1-A (O SCRIPT PRINCIPAL)
+-- OBJETIVO: Corrigir tudo, EXCETO o índice.
+-- =================================================================
 
-create index IF not exists idx_detailed_nome on data_detailed (nome);
+-- ETAPA 1: FUNÇÃO AUXILIAR OTIMIZADA
+create or replace function public.is_caller_approved () 
+RETURNS boolean 
+LANGUAGE sql 
+STABLE
+SECURITY DEFINER
+set
+  search_path = public as $$
+  SELECT EXISTS (
+    SELECT 1 FROM profiles 
+    WHERE id = (select auth.uid()) AND status = 'aprovado'
+  );
+$$;
 
-create index IF not exists idx_detailed_codfor on data_detailed (codfor);
-
-create index IF not exists idx_detailed_produto on data_detailed (produto);
-
-create index IF not exists idx_detailed_codcli on data_detailed (codcli);
-
-create index IF not exists idx_detailed_filial on data_detailed (filial);
-
-create index IF not exists idx_detailed_dtped on data_detailed (dtped);
-
-create index IF not exists idx_detailed_tipovenda on data_detailed (tipovenda);
-
-create index IF not exists idx_detailed_observacaofor on data_detailed (observacaofor);
-
--- Acelerar tabelas de Histórico
-create index IF not exists idx_history_superv on data_history (superv);
-
-create index IF not exists idx_history_nome on data_history (nome);
-
-create index IF not exists idx_history_codfor on data_history (codfor);
-
-create index IF not exists idx_history_produto on data_history (produto);
-
-create index IF not exists idx_history_codcli on data_history (codcli);
-
-create index IF not exists idx_history_filial on data_history (filial);
-
-create index IF not exists idx_history_dtped on data_history (dtped);
-
-create index IF not exists idx_history_tipovenda on data_history (tipovenda);
-
-create index IF not exists idx_history_observacaofor on data_history (observacaofor);
-
--- Acelerar cruzamentos (Estoque, Clientes, Produtos)
-create index IF not exists idx_stock_code on data_stock (product_code);
-
-create index IF not exists idx_stock_filial on data_stock (filial);
-
-create index IF not exists idx_clients_code on data_clients (codigo_cliente);
-
-create index IF not exists idx_clients_cidade on data_clients (cidade);
-
-create index IF not exists idx_clients_ramo on data_clients (ramo);
-
-create index IF not exists idx_products_code on data_product_details (code);
-
-create index IF not exists idx_products_codfor on data_product_details (codfor);
-
--- Otimizar estatísticas do banco
-analyze data_detailed;
-
-analyze data_history;
-
-analyze data_stock;
-
-analyze data_clients;
-
--- 2. FUNÇÃO AUXILIAR DE FILTRAGEM DE CLIENTES (CORRIGIDA PARA TEXTO VAZIO)
--- ============================================================================
-drop function IF exists get_filtered_client_base_json (jsonb);
-
-create or replace function get_filtered_client_base_json (p_filters jsonb) RETURNS table (codigo_cliente TEXT) as $$
-DECLARE
-    -- Transforma string vazia '' em NULL para ignorar o filtro corretamente
-    p_supervisor_filter TEXT := NULLIF(p_filters->>'supervisor', '');
-    
-    p_sellers_filter TEXT[] := CASE 
-        WHEN p_filters ? 'sellers' AND jsonb_typeof(p_filters->'sellers') = 'array' 
-        THEN ARRAY(SELECT jsonb_array_elements_text(p_filters->'sellers'))
-        ELSE NULL
-    END;
-    
-    p_rede_group_filter TEXT := NULLIF(p_filters->>'rede_group', '');
-    
-    p_redes_filter TEXT[] := CASE
-        WHEN p_filters ? 'redes' AND jsonb_typeof(p_filters->'redes') = 'array'
-        THEN ARRAY(SELECT jsonb_array_elements_text(p_filters->'redes'))
-        ELSE NULL
-    END;
-    
-    p_city_filter TEXT := NULLIF(p_filters->>'city', '');
-    p_filial_filter TEXT := NULLIF(p_filters->>'filial', '');
-BEGIN
-    RETURN QUERY
-    SELECT c.codigo_cliente
-    FROM data_clients c
-    WHERE
-        -- Filtro de Cidade
-        (p_city_filter IS NULL OR c.cidade ILIKE p_city_filter)
-        AND
-        -- Filtro de Rede
-        (p_rede_group_filter IS NULL OR
-         (p_rede_group_filter = 'sem_rede' AND (c.ramo IS NULL OR c.ramo = 'N/A')) OR
-         (p_rede_group_filter = 'com_rede' AND (p_redes_filter IS NULL OR c.ramo = ANY(p_redes_filter)))
-        )
-        AND
-        -- Filtro de Filial (Trata 'ambas')
-        (p_filial_filter IS NULL OR p_filial_filter = 'ambas' OR EXISTS (
-             SELECT 1 FROM data_detailed d WHERE d.codcli = c.codigo_cliente AND d.filial = p_filial_filter
-            UNION ALL
-            SELECT 1 FROM data_history h WHERE h.codcli = c.codigo_cliente AND h.filial = p_filial_filter
-            LIMIT 1
-        ))
-        AND
-        -- Filtro de Supervisor
-        (p_supervisor_filter IS NULL OR EXISTS (
-            SELECT 1 FROM data_detailed d WHERE d.codcli = c.codigo_cliente AND d.superv = p_supervisor_filter
-            UNION ALL
-            SELECT 1 FROM data_history h WHERE h.codcli = c.codigo_cliente AND h.superv = p_supervisor_filter
-            LIMIT 1
-        ))
-        AND
-        -- Filtro de Vendedor
-        (p_sellers_filter IS NULL OR EXISTS (
-            SELECT 1 FROM data_detailed d WHERE d.codcli = c.codigo_cliente AND d.nome = ANY(p_sellers_filter)
-            UNION ALL
-            SELECT 1 FROM data_history h WHERE h.codcli = c.codigo_cliente AND h.nome = ANY(p_sellers_filter)
-            LIMIT 1
-        ));
-END;
-$$ LANGUAGE plpgsql;
-
--- 3. FUNÇÃO DE ESTOQUE (CORRIGIDA DUPLICIDADE DE FILIAIS)
--- 3. FUNÇÃO DE ESTOQUE (V11 - Média Diária Dinâmica e Otimizada)
--- 3. FUNÇÃO DE ESTOQUE (V12 - Otimização de Performance Anti-Timeout)
--- ============================================================================
-drop function IF exists get_stock_view_data (text, text[], text[], text[], text, text[], text);
-
-drop function IF exists get_stock_view_data (
-  text,
-  text[],
-  text[],
-  text[],
-  text,
-  text[],
-  text,
-  integer
+-- ETAPA 2: APLICAR POLÍTICAS OTIMIZADAS NAS TABELAS 'DATA_*'
+-- Tabela: data_detailed
+alter table public.data_detailed ENABLE row LEVEL SECURITY;
+drop policy IF exists "Permitir acesso total para service_role ou aprovados" on public.data_detailed;
+create policy "Permitir acesso total para service_role ou aprovados" on public.data_detailed 
+for all 
+using (
+  ((select auth.role()) = 'service_role')
+  or (public.is_caller_approved ())
+)
+with check (
+  ((select auth.role()) = 'service_role')
+  or (public.is_caller_approved ())
 );
 
-create or replace function get_stock_view_data (
-  p_supervisor_filter TEXT default '',
-  p_sellers_filter text[] default null,
-  p_suppliers_filter text[] default null,
-  p_products_filter text[] default null,
-  p_rede_group_filter TEXT default '',
-  p_redes_filter text[] default null,
-  p_filial_filter TEXT default 'ambas',
-  p_custom_days INTEGER default 0,
-  p_city_filter TEXT default ''
-) RETURNS JSONB as $$
-DECLARE
-    result JSONB;
-    current_month_start DATE;
-    last_sale_date DATE;
-    history_start_date DATE;
-    history_end_date DATE;
-    first_ever_sale_date DATE;
-    max_working_days INTEGER;
-BEGIN
-    SELECT date_trunc('month', MAX(dtped))::DATE, MAX(dtped)::DATE
-    INTO current_month_start, last_sale_date
-    FROM data_detailed;
-
-    history_end_date := current_month_start - INTERVAL '1 day';
-    history_start_date := current_month_start - INTERVAL '3 months';
-
-    SELECT MIN(d.dtped) INTO first_ever_sale_date FROM (
-        SELECT dtped FROM data_detailed UNION ALL SELECT dtped FROM data_history
-    ) d WHERE dtped IS NOT NULL;
-
-    SELECT COUNT(*) INTO max_working_days
-    FROM generate_series(first_ever_sale_date, last_sale_date, '1 day') d
-    WHERE extract(isodow from d) < 6;
-
-    WITH
-    final_clients AS (
-        SELECT c.codigo_cliente 
-        FROM data_clients c
-        WHERE (p_rede_group_filter = '' OR 
-              (p_rede_group_filter = 'sem_rede' AND (c.ramo IS NULL OR c.ramo = 'N/A')) OR
-              (p_rede_group_filter = 'com_rede' AND (p_redes_filter IS NULL OR c.ramo = ANY(p_redes_filter))))
-          AND (p_city_filter = '' OR c.cidade ILIKE p_city_filter)
-          AND (p_supervisor_filter = '' OR EXISTS (
-            SELECT 1 FROM data_detailed d WHERE d.codcli = c.codigo_cliente AND d.superv = p_supervisor_filter
-            UNION ALL SELECT 1 FROM data_history h WHERE h.codcli = c.codigo_cliente AND h.superv = p_supervisor_filter LIMIT 1
-          ))
-          AND (p_sellers_filter IS NULL OR EXISTS (
-            SELECT 1 FROM data_detailed d WHERE d.codcli = c.codigo_cliente AND d.nome = ANY(p_sellers_filter)
-            UNION ALL SELECT 1 FROM data_history h WHERE h.codcli = c.codigo_cliente AND h.nome = ANY(p_sellers_filter) LIMIT 1
-          ))
-    ),
-    all_sales AS (
-      SELECT produto, qtvenda_embalagem_master, dtped FROM data_detailed WHERE codcli IN (SELECT codigo_cliente FROM final_clients) AND (p_filial_filter = 'ambas' OR filial = p_filial_filter)
-      UNION ALL
-      SELECT produto, qtvenda_embalagem_master, dtped FROM data_history WHERE codcli IN (SELECT codigo_cliente FROM final_clients) AND (p_filial_filter = 'ambas' OR filial = p_filial_filter)
-    ),
-    working_days_ranked AS (
-        SELECT d::date as work_date, row_number() OVER (ORDER BY d DESC) as rn
-        FROM generate_series(first_ever_sale_date, last_sale_date, '1 day'::interval) d
-        WHERE extract(isodow from d) < 6
-    ),
-    sales_metrics AS (
-      SELECT
-        s.produto,
-        COUNT(DISTINCT s.dtped) FILTER (WHERE extract(isodow from s.dtped) < 6) as product_lifetime_days,
-        SUM(CASE WHEN s.dtped >= current_month_start THEN s.qtvenda_embalagem_master ELSE 0 END) as current_month_sales_qty,
-        SUM(CASE WHEN s.dtped BETWEEN history_start_date AND history_end_date THEN s.qtvenda_embalagem_master ELSE 0 END) / 3.0 as history_avg_monthly_qty
-      FROM all_sales s
-      GROUP BY s.produto
-    ),
-    stock_aggregated AS (
-        SELECT product_code, SUM(stock_qty) as total_stock
-        FROM data_stock
-        WHERE (p_filial_filter = 'ambas' OR filial = p_filial_filter)
-        GROUP BY product_code
-    ),
-    final_data AS (
-        SELECT
-            pd.code as product_code,
-            pd.descricao as product_description,
-            pd.fornecedor as supplier_name,
-            COALESCE(st.total_stock, 0) as stock_qty,
-            COALESCE(sm.current_month_sales_qty, 0) as current_month_sales_qty,
-            COALESCE(sm.history_avg_monthly_qty, 0) as history_avg_monthly_qty,
-            GREATEST(LEAST(
-                CASE WHEN p_custom_days <= 0 OR p_custom_days > sm.product_lifetime_days THEN sm.product_lifetime_days ELSE p_custom_days END,
-                max_working_days
-            ), 1)::INTEGER as days_divisor
-        FROM data_product_details pd
-        LEFT JOIN sales_metrics sm ON pd.code = sm.produto
-        LEFT JOIN stock_aggregated st ON pd.code = st.product_code
-        WHERE (p_suppliers_filter IS NULL OR pd.codfor = ANY(p_suppliers_filter))
-          AND (p_products_filter IS NULL OR pd.code = ANY(p_products_filter))
-          AND (COALESCE(st.total_stock, 0) > 0 OR COALESCE(sm.current_month_sales_qty, 0) > 0 OR COALESCE(sm.history_avg_monthly_qty, 0) > 0)
-    ),
-    -- OTIMIZAÇÃO DE PERFORMANCE: Pré-agrega as vendas diárias para evitar sub-selects lentos.
-    daily_sales AS (
-        SELECT produto, dtped, SUM(qtvenda_embalagem_master) as total_qty
-        FROM all_sales
-        GROUP BY produto, dtped
-    ),
-    -- OTIMIZAÇÃO DE PERFORMANCE: Junta vendas diárias com o ranking de dias úteis.
-    product_sales_ranked AS (
-        SELECT ds.produto, ds.total_qty, wdr.rn
-        FROM daily_sales ds
-        JOIN working_days_ranked wdr ON ds.dtped = wdr.work_date
-    ),
-    -- OTIMIZAÇÃO DE PERFORMANCE: Calcula o total de vendas para o período dinâmico de cada produto com um JOIN eficiente.
-    sales_in_window AS (
-        SELECT
-            fd.product_code,
-            SUM(psr.total_qty) as total_sales_for_avg
-        FROM final_data fd
-        JOIN product_sales_ranked psr ON fd.product_code = psr.produto AND psr.rn <= fd.days_divisor
-        GROUP BY fd.product_code
-    ),
-    -- Junta os dados finais e calcula a média diária de forma performática.
-    categorized_products AS (
-        SELECT
-            fd.*,
-            COALESCE(siw.total_sales_for_avg, 0) / fd.days_divisor as daily_avg_qty,
-            CASE
-                WHEN fd.current_month_sales_qty > 0 AND fd.history_avg_monthly_qty > 0 AND fd.current_month_sales_qty >= fd.history_avg_monthly_qty THEN 'growth'
-                WHEN fd.current_month_sales_qty > 0 AND fd.history_avg_monthly_qty > 0 AND fd.current_month_sales_qty < fd.history_avg_monthly_qty THEN 'decline'
-                WHEN fd.current_month_sales_qty > 0 AND fd.history_avg_monthly_qty = 0 THEN 'new'
-                WHEN fd.current_month_sales_qty = 0 AND fd.history_avg_monthly_qty > 0 THEN 'lost'
-                ELSE NULL
-            END as category
-        FROM final_data fd
-        LEFT JOIN sales_in_window siw ON fd.product_code = siw.product_code
-    )
-    SELECT jsonb_build_object(
-        'max_working_days', max_working_days,
-        'working_days_used', CASE WHEN p_custom_days > 0 AND p_custom_days < max_working_days THEN p_custom_days ELSE max_working_days END,
-        'stock_table', (
-            SELECT COALESCE(jsonb_agg(jsonb_build_object(
-                'product_code', cp.product_code,
-                'product_description', cp.product_description,
-                'supplier_name', cp.supplier_name,
-                'stock_qty', cp.stock_qty,
-                'avg_monthly_qty', cp.history_avg_monthly_qty,
-                'daily_avg_qty', cp.daily_avg_qty,
-                'trend_days', CASE WHEN cp.daily_avg_qty > 0 THEN (cp.stock_qty / cp.daily_avg_qty) ELSE 999 END
-            ) ORDER BY (CASE WHEN cp.daily_avg_qty > 0 THEN (cp.stock_qty / cp.daily_avg_qty) ELSE 999 END) ASC), '[]'::jsonb)
-            FROM categorized_products cp
-        ),
-        'growth_table', (SELECT COALESCE(jsonb_agg(cp ORDER BY (current_month_sales_qty - history_avg_monthly_qty) DESC), '[]'::jsonb) FROM categorized_products cp WHERE category = 'growth'),
-        'decline_table', (SELECT COALESCE(jsonb_agg(cp ORDER BY (current_month_sales_qty - history_avg_monthly_qty) ASC), '[]'::jsonb) FROM categorized_products cp WHERE category = 'decline'),
-        'new_table', (SELECT COALESCE(jsonb_agg(cp ORDER BY current_month_sales_qty DESC), '[]'::jsonb) FROM categorized_products cp WHERE category = 'new'),
-        'lost_table', (SELECT COALESCE(jsonb_agg(cp ORDER BY history_avg_monthly_qty DESC), '[]'::jsonb) FROM categorized_products cp WHERE category = 'lost')
-    ) INTO result;
-
-    RETURN result;
-END;
-$$ LANGUAGE plpgsql;
-
--- 4. FUNÇÃO DE ACOMPANHAMENTO SEMANAL (RECRIADA)
--- ============================================================================
-create or replace function get_weekly_view_data (
-  p_supervisor TEXT default null,
-  p_fornecedor TEXT default null
-) RETURNS JSONB as $$
-DECLARE
-    result JSONB;
-    current_month_start DATE;
-BEGIN
-    -- Define o início do mês atual com base na última venda
-    SELECT date_trunc('month', MAX(dtped))::DATE INTO current_month_start FROM data_detailed;
-
-    WITH filtered_sales AS (
-        SELECT * FROM data_detailed
-        WHERE dtped >= current_month_start
-          AND (p_supervisor IS NULL OR superv = p_supervisor)
-          AND (p_fornecedor IS NULL OR observacaofor = p_fornecedor)
-    ),
-    -- Agrupamento por Semana e Dia
-    weekly_agg AS (
-        SELECT 
-            (EXTRACT(DAY FROM dtped)::INT - 1) / 7 + 1 AS week_num,
-            CASE EXTRACT(DOW FROM dtped)
-                WHEN 1 THEN 'Segunda' WHEN 2 THEN 'Terça' WHEN 3 THEN 'Quarta'
-                WHEN 4 THEN 'Quinta' WHEN 5 THEN 'Sexta' ELSE 'Outro'
-            END as day_name,
-            EXTRACT(DOW FROM dtped) as day_idx,
-            SUM(CASE WHEN tipovenda IN ('1', '9') THEN vlvenda ELSE 0 END) as fat
-        FROM filtered_sales
-        WHERE EXTRACT(DOW FROM dtped) BETWEEN 1 AND 5 -- Apenas Seg a Sex
-        GROUP BY 1, 2, 3
-    ),
-    -- Rankings
-    ranking_positivacao AS (
-        SELECT nome, COUNT(DISTINCT codcli) as total
-        FROM filtered_sales GROUP BY 1 ORDER BY 2 DESC LIMIT 10
-    ),
-    ranking_vendedores AS (
-        SELECT nome, SUM(CASE WHEN tipovenda IN ('1', '9') THEN vlvenda ELSE 0 END) as total
-        FROM filtered_sales GROUP BY 1 ORDER BY 2 DESC LIMIT 10
-    )
-    SELECT jsonb_build_object(
-        'total_month', (SELECT COALESCE(SUM(CASE WHEN tipovenda IN ('1', '9') THEN vlvenda ELSE 0 END), 0) FROM filtered_sales),
-        'weekly_data', (SELECT COALESCE(jsonb_agg(w), '[]'::jsonb) FROM weekly_agg w),
-        'positivacao_rank', (SELECT COALESCE(jsonb_agg(r), '[]'::jsonb) FROM ranking_positivacao r),
-        'sellers_rank', (SELECT COALESCE(jsonb_agg(r), '[]'::jsonb) FROM ranking_vendedores r)
-    ) INTO result;
-
-    RETURN result;
-END;
-$$ LANGUAGE plpgsql;
-
--- 5. FUNÇÃO DE COBERTURA (V4 - CORRIGIDA: KPI FILTRADO + MÉDIA HISTÓRICA)
--- ============================================================================
-create or replace function get_coverage_view_data (
-  p_supervisor_filter TEXT default '',
-  p_sellers_filter text[] default null,
-  p_suppliers_filter text[] default null,
-  p_products_filter text[] default null,
-  p_filial_filter TEXT default 'ambas',
-  p_city_filter TEXT default ''
-) RETURNS JSONB as $$
-DECLARE
-    result JSONB;
-    current_month_start DATE;
-    previous_month_start DATE;
-    history_start DATE;
-    history_end DATE;
-BEGIN
-    -- Define datas
-    SELECT date_trunc('month', MAX(dtped))::DATE INTO current_month_start FROM data_detailed;
-    previous_month_start := current_month_start - INTERVAL '1 month';
-    
-    -- Datas para média histórica (3 meses para trás) - NECESSÁRIO PARA O CÁLCULO DE DIAS
-    history_end := current_month_start - INTERVAL '1 day';
-    history_start := current_month_start - INTERVAL '3 months';
-
-    WITH
-    -- 1. Filtro de Clientes (CORREÇÃO: Respeita os filtros para o KPI)
-    filtered_clients AS (
-        SELECT DISTINCT c.codigo_cliente
-        FROM data_clients c
-        LEFT JOIN data_detailed d ON c.codigo_cliente = d.codcli
-        WHERE c.bloqueio <> 'S'
-          AND (p_city_filter = '' OR c.cidade ILIKE p_city_filter)
-          AND (p_supervisor_filter = '' OR EXISTS (
-              SELECT 1 FROM data_detailed d2 WHERE d2.codcli = c.codigo_cliente AND d2.superv = p_supervisor_filter
-          ))
-          AND (p_sellers_filter IS NULL OR EXISTS (
-              SELECT 1 FROM data_detailed d3 WHERE d3.codcli = c.codigo_cliente AND d3.nome = ANY(p_sellers_filter)
-          ))
-    ),
-
-    -- 2. Dados de Estoque
-    stock_sum AS (
-        SELECT product_code, SUM(stock_qty) as total_stock 
-        FROM data_stock 
-        WHERE (p_filial_filter = 'ambas' OR filial = p_filial_filter)
-        GROUP BY product_code
-    ),
-    
-    -- 3. Média de Venda Histórica (ADICIONADO: Para cálculo de dias de estoque)
-    history_avg AS (
-        SELECT produto, SUM(qtvenda_embalagem_master) / 3.0 as avg_qty
-        FROM data_history
-        WHERE dtped BETWEEN history_start AND history_end
-          AND (p_filial_filter = 'ambas' OR filial = p_filial_filter)
-        GROUP BY 1
-    ),
-
-    -- 4. Base de Produtos com Estoque e Média
-    base_products AS (
-        SELECT 
-            pd.code, 
-            pd.descricao, 
-            COALESCE(s.total_stock, 0) as stock_qty,
-            COALESCE(h.avg_qty, 0) as history_avg_qty -- Campo essencial para o frontend
-        FROM data_product_details pd
-        LEFT JOIN stock_sum s ON pd.code = s.product_code
-        LEFT JOIN history_avg h ON pd.code = h.produto
-        WHERE (p_suppliers_filter IS NULL OR pd.codfor = ANY(p_suppliers_filter))
-          AND (p_products_filter IS NULL OR pd.code = ANY(p_products_filter))
-    ),
-
-    -- 5. Vendas Recentes
-    sales_data AS (
-        SELECT 
-            s.produto, 
-            s.codcli, 
-            CASE WHEN s.dtped >= current_month_start THEN 1 ELSE 0 END as is_current
-        FROM (
-            SELECT produto, codcli, dtped, superv, nome, filial, codfor FROM data_detailed
-            UNION ALL
-            SELECT produto, codcli, dtped, superv, nome, filial, codfor FROM data_history
-        ) s
-        JOIN data_clients c ON s.codcli = c.codigo_cliente
-        WHERE s.dtped >= previous_month_start
-          AND (p_supervisor_filter = '' OR s.superv = p_supervisor_filter)
-          AND (p_sellers_filter IS NULL OR s.nome = ANY(p_sellers_filter))
-          AND (p_filial_filter = 'ambas' OR s.filial = p_filial_filter)
-          AND (p_suppliers_filter IS NULL OR s.codfor = ANY(p_suppliers_filter))
-          AND (p_city_filter = '' OR c.cidade ILIKE p_city_filter)
-    ),
-
-    -- 6. Agregação Final
-    final_agg AS (
-        SELECT 
-            bp.code,
-            bp.descricao,
-            bp.stock_qty,
-            bp.history_avg_qty,
-            COUNT(DISTINCT CASE WHEN sd.is_current = 0 THEN sd.codcli END) as clients_prev,
-            COUNT(DISTINCT CASE WHEN sd.is_current = 1 THEN sd.codcli END) as clients_curr
-        FROM base_products bp
-        LEFT JOIN sales_data sd ON bp.code = sd.produto
-        GROUP BY 1, 2, 3, 4
-    )
-    
-    SELECT jsonb_build_object(
-        'coverage_table', (SELECT COALESCE(jsonb_agg(fa ORDER BY clients_curr DESC), '[]'::jsonb) FROM final_agg fa),
-        'active_clients_count', (SELECT COUNT(*) FROM filtered_clients) -- Usa a contagem filtrada
-    ) INTO result;
-
-    RETURN result;
-END;
-$$ LANGUAGE plpgsql;
-
--- ============================================================================
--- 6. FUNÇÃO DE DASHBOARD INICIAL (RECRIADA)
--- ============================================================================
-create or replace function get_initial_dashboard_data(
-    supervisor_filter text DEFAULT NULL,
-    pasta_filter text DEFAULT NULL,
-    sellers_filter text[] DEFAULT NULL,
-    fornecedor_filter text DEFAULT NULL,
-    posicao_filter text DEFAULT NULL,
-    codcli_filter text DEFAULT NULL
+-- Tabela: data_history
+alter table public.data_history ENABLE row LEVEL SECURITY;
+drop policy IF exists "Permitir acesso total para service_role ou aprovados" on public.data_history;
+create policy "Permitir acesso total para service_role ou aprovados" on public.data_history 
+for all 
+using (
+  ((select auth.role()) = 'service_role')
+  or (public.is_caller_approved ())
 )
-RETURNS jsonb
-LANGUAGE plpgsql
-AS $function$
-DECLARE
-    -- Variables
-    v_kpis jsonb;
-    v_charts jsonb;
-    v_filters jsonb;
+with check (
+  ((select auth.role()) = 'service_role')
+  or (public.is_caller_approved ())
+);
 
-    -- Dates
-    v_current_month_start date;
-    v_history_start_date date;
-    v_last_sale_date date;
+-- Tabela: data_clients
+alter table public.data_clients ENABLE row LEVEL SECURITY;
+drop policy IF exists "Permitir acesso total para service_role ou aprovados" on public.data_clients;
+create policy "Permitir acesso total para service_role ou aprovados" on public.data_clients 
+for all 
+using (
+  ((select auth.role()) = 'service_role')
+  or (public.is_caller_approved ())
+)
+with check (
+  ((select auth.role()) = 'service_role')
+  or (public.is_caller_approved ())
+);
 
-    -- Working days
-    v_passed_working_days int;
-    v_total_working_days_month int;
+-- Tabela: data_orders
+alter table public.data_orders ENABLE row LEVEL SECURITY;
+drop policy IF exists "Permitir acesso total para service_role ou aprovados" on public.data_orders;
+create policy "Permitir acesso total para service_role ou aprovados" on public.data_orders 
+for all 
+using (
+  ((select auth.role()) = 'service_role')
+  or (public.is_caller_approved ())
+)
+with check (
+  ((select auth.role()) = 'service_role')
+  or (public.is_caller_approved ())
+);
 
-    -- Trend
-    v_current_fat numeric;
-    v_history_avg_fat numeric;
-    v_trend_fat numeric;
+-- Tabela: data_product_details
+alter table public.data_product_details ENABLE row LEVEL SECURITY;
+drop policy IF exists "Permitir acesso total para service_role ou aprovados" on public.data_product_details;
+create policy "Permitir acesso total para service_role ou aprovados" on public.data_product_details 
+for all 
+using (
+  ((select auth.role()) = 'service_role')
+  or (public.is_caller_approved ())
+)
+with check (
+  ((select auth.role()) = 'service_role')
+  or (public.is_caller_approved ())
+);
 
-BEGIN
-    -- 1. Date Calculations
-    SELECT date_trunc('month', MAX(dtped))::DATE, MAX(dtped)::DATE
-    INTO v_current_month_start, v_last_sale_date
-    FROM data_detailed;
+-- Tabela: data_active_products
+alter table public.data_active_products ENABLE row LEVEL SECURITY;
+drop policy IF exists "Permitir acesso total para service_role ou aprovados" on public.data_active_products;
+create policy "Permitir acesso total para service_role ou aprovados" on public.data_active_products 
+for all 
+using (
+  ((select auth.role()) = 'service_role')
+  or (public.is_caller_approved ())
+)
+with check (
+  ((select auth.role()) = 'service_role')
+  or (public.is_caller_approved ())
+);
 
-    IF v_current_month_start IS NULL THEN
-        -- Fallback if table is empty
-        v_current_month_start := date_trunc('month', CURRENT_DATE);
-        v_last_sale_date := CURRENT_DATE;
-    END IF;
+-- Tabela: data_stock
+alter table public.data_stock ENABLE row LEVEL SECURITY;
+drop policy IF exists "Permitir acesso total para service_role ou aprovados" on public.data_stock;
+create policy "Permitir acesso total para service_role ou aprovados" on public.data_stock 
+for all 
+using (
+  ((select auth.role()) = 'service_role')
+  or (public.is_caller_approved ())
+)
+with check (
+  ((select auth.role()) = 'service_role')
+  or (public.is_caller_approved ())
+);
 
-    v_history_start_date := v_current_month_start - INTERVAL '3 months';
+-- Tabela: data_innovations
+alter table public.data_innovations ENABLE row LEVEL SECURITY;
+drop policy IF exists "Permitir acesso total para service_role ou aprovados" on public.data_innovations;
+create policy "Permitir acesso total para service_role ou aprovados" on public.data_innovations 
+for all 
+using (
+  ((select auth.role()) = 'service_role')
+  or (public.is_caller_approved ())
+)
+with check (
+  ((select auth.role()) = 'service_role')
+  or (public.is_caller_approved ())
+);
 
-    -- Calculate working days for Trend Projection
-    -- Count M-F in current month up to last sale date
-    SELECT COUNT(*) INTO v_passed_working_days
-    FROM generate_series(v_current_month_start, v_last_sale_date, '1 day'::interval) d
-    WHERE extract(isodow from d) < 6;
+-- Tabela: data_metadata
+alter table public.data_metadata ENABLE row LEVEL SECURITY;
+drop policy IF exists "Permitir acesso total para service_role ou aprovados" on public.data_metadata;
+create policy "Permitir acesso total para service_role ou aprovados" on public.data_metadata 
+for all 
+using (
+  ((select auth.role()) = 'service_role')
+  or (public.is_caller_approved ())
+)
+with check (
+  ((select auth.role()) = 'service_role')
+  or (public.is_caller_approved ())
+);
 
-    -- Total working days in current month
-    SELECT COUNT(*) INTO v_total_working_days_month
-    FROM generate_series(
-        v_current_month_start,
-        (v_current_month_start + INTERVAL '1 month' - INTERVAL '1 day')::date,
-        '1 day'::interval
-    ) d
-    WHERE extract(isodow from d) < 6;
+-- ETAPA 3: ATIVAR E OTIMIZAR 'PROFILES'
+-- 3.1: Ativar o RLS
+alter table public.profiles
+enable row level security;
 
-    IF v_passed_working_days IS NULL OR v_passed_working_days = 0 THEN v_passed_working_days := 1; END IF;
-    IF v_total_working_days_month IS NULL OR v_total_working_days_month = 0 THEN v_total_working_days_month := 1; END IF;
+-- 3.2: Apagar políticas antigas ou problemáticas
+drop policy IF exists "Usuários podem ver o próprio perfil" on public.profiles;
+drop policy IF exists "Users can update their own profile" on public.profiles;
+drop policy IF exists "Users can insert their own profile" on public.profiles;
+drop policy IF exists "Public profiles are viewable by everyone" on public.profiles;
+drop policy IF exists "Perfis: Usuários autenticados podem ver o próprio perfil" on public.profiles;
+drop policy IF exists "Perfis: Usuários autenticados podem criar o próprio perfil" on public.profiles;
+drop policy IF exists "Perfis: Usuários autenticados podem atualizar o próprio perfil" on public.profiles;
 
-    -- 2. Build Filtered Dataset (Temporary Table or CTE logic in queries)
+-- 3.3: Criar políticas NOVAS, seguras e otimizadas
+create policy "Perfis: Usuários autenticados podem ver o próprio perfil" on public.profiles
+for SELECT
+using ( (select auth.uid()) = id );
 
-    -- 3. Calculate KPIs
-    SELECT jsonb_build_object(
-        'total_faturamento', COALESCE(SUM(CASE WHEN tipovenda IN ('1', '9') THEN vlvenda ELSE 0 END), 0),
-        'total_peso', COALESCE(SUM(totpesoliq), 0),
-        'positivacao_count', COUNT(DISTINCT codcli) FILTER (WHERE vlvenda > 0),
-        'total_skus', COUNT(DISTINCT produto) FILTER (WHERE vlvenda > 0),
-        -- Placeholder for coverage base, updated below
-        'total_clients_for_coverage', 0
-    ) INTO v_kpis
-    FROM data_detailed d
-    WHERE (supervisor_filter IS NULL OR d.superv = supervisor_filter)
-      AND (pasta_filter IS NULL OR d.observacaofor = pasta_filter)
-      AND (sellers_filter IS NULL OR d.nome = ANY(sellers_filter))
-      AND (fornecedor_filter IS NULL OR d.codfor = fornecedor_filter)
-      AND (posicao_filter IS NULL OR d.posicao = posicao_filter)
-      AND (codcli_filter IS NULL OR d.codcli = codcli_filter);
+create policy "Perfis: Usuários autenticados podem criar o próprio perfil" on public.profiles
+for INSERT
+with check ( (select auth.uid()) = id );
 
-    -- Update total_clients_for_coverage
-    -- Base: Clients active in last 3 months (Detailed + History)
-    -- Filtering applies to clients matching the criteria
-    WITH active_base AS (
-        SELECT codcli FROM data_detailed d
-        WHERE (supervisor_filter IS NULL OR d.superv = supervisor_filter)
-          AND (pasta_filter IS NULL OR d.observacaofor = pasta_filter)
-          AND (sellers_filter IS NULL OR d.nome = ANY(sellers_filter))
-          AND (fornecedor_filter IS NULL OR d.codfor = fornecedor_filter)
-          AND (codcli_filter IS NULL OR d.codcli = codcli_filter)
-        UNION
-        SELECT codcli FROM data_history h
-        WHERE (supervisor_filter IS NULL OR h.superv = supervisor_filter)
-          AND (pasta_filter IS NULL OR h.observacaofor = pasta_filter)
-          AND (sellers_filter IS NULL OR h.nome = ANY(sellers_filter))
-          AND (fornecedor_filter IS NULL OR h.codfor = fornecedor_filter)
-          AND (codcli_filter IS NULL OR h.codcli = codcli_filter)
-    )
-    SELECT jsonb_set(v_kpis, '{total_clients_for_coverage}', to_jsonb(COUNT(DISTINCT codcli)))
-    INTO v_kpis
-    FROM active_base;
+create policy "Perfis: Usuários autenticados podem atualizar o próprio perfil" on public.profiles
+for UPDATE
+using ( (select auth.uid()) = id )
+with check ( (select auth.uid()) = id );
 
-    -- 4. Calculate Charts
-
-    -- 4.3 Trend Data
-    -- Current Fat
-    SELECT COALESCE(SUM(CASE WHEN tipovenda IN ('1', '9') THEN vlvenda ELSE 0 END), 0)
-    INTO v_current_fat
-    FROM data_detailed d
-    WHERE (supervisor_filter IS NULL OR d.superv = supervisor_filter)
-      AND (pasta_filter IS NULL OR d.observacaofor = pasta_filter)
-      AND (sellers_filter IS NULL OR d.nome = ANY(sellers_filter))
-      AND (fornecedor_filter IS NULL OR d.codfor = fornecedor_filter)
-      AND (posicao_filter IS NULL OR d.posicao = posicao_filter)
-      AND (codcli_filter IS NULL OR d.codcli = codcli_filter);
-
-    -- History Avg Fat
-    SELECT COALESCE(SUM(CASE WHEN tipovenda IN ('1', '9') THEN vlvenda ELSE 0 END), 0) / 3.0
-    INTO v_history_avg_fat
-    FROM data_history h
-    WHERE (supervisor_filter IS NULL OR h.superv = supervisor_filter)
-      AND (pasta_filter IS NULL OR h.observacaofor = pasta_filter)
-      AND (sellers_filter IS NULL OR h.nome = ANY(sellers_filter))
-      AND (fornecedor_filter IS NULL OR h.codfor = fornecedor_filter)
-      AND (codcli_filter IS NULL OR h.codcli = codcli_filter);
-
-    v_trend_fat := CASE
-        WHEN v_passed_working_days > 0 THEN (v_current_fat / v_passed_working_days) * v_total_working_days_month
-        ELSE 0
-    END;
-
-    v_charts := jsonb_build_object(
-        'sales_by_supervisor', (
-            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb) FROM (
-                SELECT superv, SUM(vlvenda) as total_faturamento
-                FROM data_detailed d
-                WHERE tipovenda IN ('1', '9')
-                  AND (supervisor_filter IS NULL OR d.superv = supervisor_filter)
-                  AND (pasta_filter IS NULL OR d.observacaofor = pasta_filter)
-                  AND (sellers_filter IS NULL OR d.nome = ANY(sellers_filter))
-                  AND (fornecedor_filter IS NULL OR d.codfor = fornecedor_filter)
-                  AND (posicao_filter IS NULL OR d.posicao = posicao_filter)
-                  AND (codcli_filter IS NULL OR d.codcli = codcli_filter)
-                GROUP BY superv
-                ORDER BY total_faturamento DESC
-            ) t
-        ),
-        'sales_by_pasta', (
-             SELECT COALESCE(jsonb_agg(t), '[]'::jsonb) FROM (
-                SELECT observacaofor, SUM(vlvenda) as total_faturamento
-                FROM data_detailed d
-                WHERE tipovenda IN ('1', '9')
-                  AND (supervisor_filter IS NULL OR d.superv = supervisor_filter)
-                  AND (pasta_filter IS NULL OR d.observacaofor = pasta_filter)
-                  AND (sellers_filter IS NULL OR d.nome = ANY(sellers_filter))
-                  AND (fornecedor_filter IS NULL OR d.codfor = fornecedor_filter)
-                  AND (posicao_filter IS NULL OR d.posicao = posicao_filter)
-                  AND (codcli_filter IS NULL OR d.codcli = codcli_filter)
-                GROUP BY observacaofor
-                ORDER BY total_faturamento DESC
-            ) t
-        ),
-        'trend', jsonb_build_object(
-            'avg_revenue', v_history_avg_fat,
-            'trend_revenue', v_trend_fat
-        ),
-        'top_10_products_faturamento', (
-            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb) FROM (
-                SELECT d.produto, d.descricao, SUM(d.vlvenda) as faturamento
-                FROM data_detailed d
-                WHERE d.tipovenda IN ('1', '9')
-                  AND (supervisor_filter IS NULL OR d.superv = supervisor_filter)
-                  AND (pasta_filter IS NULL OR d.observacaofor = pasta_filter)
-                  AND (sellers_filter IS NULL OR d.nome = ANY(sellers_filter))
-                  AND (fornecedor_filter IS NULL OR d.codfor = fornecedor_filter)
-                  AND (posicao_filter IS NULL OR d.posicao = posicao_filter)
-                  AND (codcli_filter IS NULL OR d.codcli = codcli_filter)
-                GROUP BY d.produto, d.descricao
-                ORDER BY faturamento DESC
-                LIMIT 10
-            ) t
-        ),
-        'top_10_products_peso', (
-            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb) FROM (
-                SELECT d.produto, d.descricao, SUM(d.totpesoliq) as peso
-                FROM data_detailed d
-                WHERE (supervisor_filter IS NULL OR d.superv = supervisor_filter)
-                  AND (pasta_filter IS NULL OR d.observacaofor = pasta_filter)
-                  AND (sellers_filter IS NULL OR d.nome = ANY(sellers_filter))
-                  AND (fornecedor_filter IS NULL OR d.codfor = fornecedor_filter)
-                  AND (posicao_filter IS NULL OR d.posicao = posicao_filter)
-                  AND (codcli_filter IS NULL OR d.codcli = codcli_filter)
-                GROUP BY d.produto, d.descricao
-                ORDER BY peso DESC
-                LIMIT 10
-            ) t
-        )
-    );
-
-    -- 5. Calculate Filters (Distinct Lists)
-    -- Uses full dataset to populate options
-    v_filters := jsonb_build_object(
-        'supervisors', (SELECT jsonb_agg(DISTINCT superv) FROM data_detailed WHERE superv IS NOT NULL),
-        'suppliers', (
-            SELECT jsonb_agg(DISTINCT jsonb_build_object('codfor', codfor, 'fornecedor', fornecedor))
-            FROM data_product_details
-            WHERE codfor IS NOT NULL
-        ),
-        'sellers', (SELECT jsonb_agg(DISTINCT nome) FROM data_detailed WHERE nome IS NOT NULL),
-        'sale_types', (SELECT jsonb_agg(DISTINCT tipovenda) FROM data_detailed WHERE tipovenda IS NOT NULL)
-    );
-
-    -- 6. Return Result
-    RETURN jsonb_build_object(
-        'kpis', v_kpis,
-        'charts', v_charts,
-        'filters', v_filters
-    );
-
-END;
-$function$;
+-- ETAPA FINAL: Forçar o Supabase a recarregar o esquema
+notify pgrst,
+  'reload schema';
