@@ -3718,6 +3718,18 @@
             const { sales, history } = getInnovationsFilteredData();
             let productSource = [...sales, ...history];
 
+            // CORREÇÃO: Filtra para mostrar APENAS produtos Pepsico (conforme regra da página)
+            productSource = productSource.filter(s => {
+                // Tenta identificar via sales data (observacaofor)
+                if (s.observacaofor && (s.observacaofor === 'PEPSICO' || s.observacaofor.includes('ELMA CHIPS'))) return true;
+
+                // Tenta identificar via product details (fornecedor)
+                const details = productDetailsMap.get(s.produto);
+                if (details && details.fornecedor && (details.fornecedor.toUpperCase().includes('PEPSICO') || details.fornecedor.toUpperCase().includes('ELMA CHIPS') || details.fornecedor.toUpperCase().includes('MABEL'))) return true;
+
+                return false;
+            });
+
             if (selectedInnovationsSuppliers.length > 0) {
                  productSource = productSource.filter(s => selectedInnovationsSuppliers.includes(String(s.codfor)));
             }
