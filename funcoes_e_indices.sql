@@ -472,3 +472,230 @@ BEGIN
     RETURN result;
 END;
 $$ LANGUAGE plpgsql;
+
+-- ============================================================================
+-- 6. FUNÇÃO DE DASHBOARD INICIAL
+-- ============================================================================
+create or replace function get_initial_dashboard_data(
+    supervisor_filter text DEFAULT NULL,
+    pasta_filter text DEFAULT NULL,
+    sellers_filter text[] DEFAULT NULL,
+    fornecedor_filter text DEFAULT NULL,
+    posicao_filter text DEFAULT NULL,
+    codcli_filter text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+AS $function$
+DECLARE
+    -- Result Containers
+    v_kpis jsonb;
+    v_charts jsonb;
+    v_filters jsonb;
+
+    -- Calculated Values
+    v_total_fat numeric;
+    v_total_peso numeric;
+    v_positivacao_count int;
+    v_total_skus int;
+    v_total_clients_coverage int;
+
+    v_current_fat_trend numeric;
+    v_history_avg_fat numeric;
+    v_trend_fat numeric;
+
+    -- Dates
+    v_current_month_start date;
+    v_history_start_date date;
+    v_last_sale_date date;
+
+    -- Working Days
+    v_passed_working_days int;
+    v_total_working_days_month int;
+
+BEGIN
+    -- 1. Date Calculations
+    SELECT date_trunc('month', MAX(dtped))::DATE, MAX(dtped)::DATE
+    INTO v_current_month_start, v_last_sale_date
+    FROM data_detailed;
+
+    IF v_current_month_start IS NULL THEN
+        -- Fallback if table is empty
+        v_current_month_start := date_trunc('month', CURRENT_DATE);
+        v_last_sale_date := CURRENT_DATE;
+    END IF;
+
+    v_history_start_date := v_current_month_start - INTERVAL '3 months';
+
+    -- Calculate working days for Trend Projection
+    -- Count M-F in current month up to last sale date
+    SELECT COUNT(*) INTO v_passed_working_days
+    FROM generate_series(v_current_month_start, v_last_sale_date, '1 day'::interval) d
+    WHERE extract(isodow from d) < 6;
+
+    -- Total working days in current month
+    SELECT COUNT(*) INTO v_total_working_days_month
+    FROM generate_series(
+        v_current_month_start,
+        (v_current_month_start + INTERVAL '1 month' - INTERVAL '1 day')::date,
+        '1 day'::interval
+    ) d
+    WHERE extract(isodow from d) < 6;
+
+    IF v_passed_working_days IS NULL OR v_passed_working_days = 0 THEN v_passed_working_days := 1; END IF;
+    IF v_total_working_days_month IS NULL OR v_total_working_days_month = 0 THEN v_total_working_days_month := 1; END IF;
+
+    -- 2. Calculate KPIs
+    SELECT
+        COALESCE(SUM(CASE WHEN tipovenda IN ('1', '9') THEN vlvenda ELSE 0 END), 0),
+        COALESCE(SUM(totpesoliq), 0),
+        COUNT(DISTINCT codcli) FILTER (WHERE vlvenda > 0),
+        COUNT(DISTINCT produto) FILTER (WHERE vlvenda > 0)
+    INTO
+        v_total_fat, v_total_peso, v_positivacao_count, v_total_skus
+    FROM data_detailed
+    WHERE (supervisor_filter IS NULL OR superv = supervisor_filter)
+      AND (pasta_filter IS NULL OR observacaofor = pasta_filter)
+      AND (sellers_filter IS NULL OR nome = ANY(sellers_filter))
+      AND (fornecedor_filter IS NULL OR codfor = fornecedor_filter)
+      AND (posicao_filter IS NULL OR posicao = posicao_filter)
+      AND (codcli_filter IS NULL OR codcli = codcli_filter);
+
+    -- 3. History Avg Calculation (Filtered by Date)
+    -- We filter data_history to include only sales from v_history_start_date
+    SELECT
+        COALESCE(SUM(CASE WHEN tipovenda IN ('1', '9') THEN vlvenda ELSE 0 END), 0) / 3.0
+    INTO
+        v_history_avg_fat
+    FROM data_history
+    WHERE dtped >= v_history_start_date
+      AND dtped < v_current_month_start
+      AND (supervisor_filter IS NULL OR superv = supervisor_filter)
+      AND (pasta_filter IS NULL OR observacaofor = pasta_filter)
+      AND (sellers_filter IS NULL OR nome = ANY(sellers_filter))
+      AND (fornecedor_filter IS NULL OR codfor = fornecedor_filter)
+      AND (codcli_filter IS NULL OR codcli = codcli_filter);
+
+    -- 4. Coverage Base Calculation
+    SELECT COUNT(DISTINCT codcli) INTO v_total_clients_coverage
+    FROM (
+        SELECT codcli FROM data_detailed
+        WHERE (supervisor_filter IS NULL OR superv = supervisor_filter)
+          AND (pasta_filter IS NULL OR observacaofor = pasta_filter)
+          AND (sellers_filter IS NULL OR nome = ANY(sellers_filter))
+          AND (fornecedor_filter IS NULL OR codfor = fornecedor_filter)
+          AND (codcli_filter IS NULL OR codcli = codcli_filter)
+        UNION
+        SELECT codcli FROM data_history
+        WHERE dtped >= v_history_start_date
+          AND (supervisor_filter IS NULL OR superv = supervisor_filter)
+          AND (pasta_filter IS NULL OR observacaofor = pasta_filter)
+          AND (sellers_filter IS NULL OR nome = ANY(sellers_filter))
+          AND (fornecedor_filter IS NULL OR codfor = fornecedor_filter)
+          AND (codcli_filter IS NULL OR codcli = codcli_filter)
+    ) as combined;
+
+    -- 5. Trend Calculation
+    v_current_fat_trend := v_total_fat;
+    v_trend_fat := CASE
+        WHEN v_passed_working_days > 0 THEN (v_current_fat_trend / v_passed_working_days) * v_total_working_days_month
+        ELSE 0
+    END;
+
+    v_kpis := jsonb_build_object(
+        'total_faturamento', v_total_fat,
+        'total_peso', v_total_peso,
+        'positivacao_count', v_positivacao_count,
+        'total_skus', v_total_skus,
+        'total_clients_for_coverage', v_total_clients_coverage
+    );
+
+    -- 6. Build Charts
+    v_charts := jsonb_build_object(
+        'sales_by_supervisor', (
+            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb) FROM (
+                SELECT superv, SUM(vlvenda) as total_faturamento
+                FROM data_detailed
+                WHERE tipovenda IN ('1', '9')
+                  AND (supervisor_filter IS NULL OR superv = supervisor_filter)
+                  AND (pasta_filter IS NULL OR observacaofor = pasta_filter)
+                  AND (sellers_filter IS NULL OR nome = ANY(sellers_filter))
+                  AND (fornecedor_filter IS NULL OR codfor = fornecedor_filter)
+                  AND (posicao_filter IS NULL OR posicao = posicao_filter)
+                  AND (codcli_filter IS NULL OR codcli = codcli_filter)
+                GROUP BY superv
+                ORDER BY total_faturamento DESC
+            ) t
+        ),
+        'sales_by_pasta', (
+             SELECT COALESCE(jsonb_agg(t), '[]'::jsonb) FROM (
+                SELECT observacaofor, SUM(vlvenda) as total_faturamento
+                FROM data_detailed
+                WHERE tipovenda IN ('1', '9')
+                  AND (supervisor_filter IS NULL OR superv = supervisor_filter)
+                  AND (pasta_filter IS NULL OR observacaofor = pasta_filter)
+                  AND (sellers_filter IS NULL OR nome = ANY(sellers_filter))
+                  AND (fornecedor_filter IS NULL OR codfor = fornecedor_filter)
+                  AND (posicao_filter IS NULL OR posicao = posicao_filter)
+                  AND (codcli_filter IS NULL OR codcli = codcli_filter)
+                GROUP BY observacaofor
+                ORDER BY total_faturamento DESC
+            ) t
+        ),
+        'trend', jsonb_build_object(
+            'avg_revenue', v_history_avg_fat,
+            'trend_revenue', v_trend_fat
+        ),
+        'top_10_products_faturamento', (
+            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb) FROM (
+                SELECT produto, descricao, SUM(vlvenda) as faturamento
+                FROM data_detailed
+                WHERE tipovenda IN ('1', '9')
+                  AND (supervisor_filter IS NULL OR superv = supervisor_filter)
+                  AND (pasta_filter IS NULL OR observacaofor = pasta_filter)
+                  AND (sellers_filter IS NULL OR nome = ANY(sellers_filter))
+                  AND (fornecedor_filter IS NULL OR codfor = fornecedor_filter)
+                  AND (posicao_filter IS NULL OR posicao = posicao_filter)
+                  AND (codcli_filter IS NULL OR codcli = codcli_filter)
+                GROUP BY produto, descricao
+                ORDER BY faturamento DESC
+                LIMIT 10
+            ) t
+        ),
+        'top_10_products_peso', (
+            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb) FROM (
+                SELECT produto, descricao, SUM(totpesoliq) as peso
+                FROM data_detailed
+                WHERE (supervisor_filter IS NULL OR superv = supervisor_filter)
+                  AND (pasta_filter IS NULL OR observacaofor = pasta_filter)
+                  AND (sellers_filter IS NULL OR nome = ANY(sellers_filter))
+                  AND (fornecedor_filter IS NULL OR codfor = fornecedor_filter)
+                  AND (posicao_filter IS NULL OR posicao = posicao_filter)
+                  AND (codcli_filter IS NULL OR codcli = codcli_filter)
+                GROUP BY produto, descricao
+                ORDER BY peso DESC
+                LIMIT 10
+            ) t
+        )
+    );
+
+    -- 7. Filters
+    v_filters := jsonb_build_object(
+        'supervisors', (SELECT jsonb_agg(DISTINCT superv) FROM data_detailed WHERE superv IS NOT NULL),
+        'suppliers', (
+            SELECT jsonb_agg(DISTINCT jsonb_build_object('codfor', codfor, 'fornecedor', fornecedor))
+            FROM data_product_details
+            WHERE codfor IS NOT NULL
+        ),
+        'sellers', (SELECT jsonb_agg(DISTINCT nome) FROM data_detailed WHERE nome IS NOT NULL),
+        'sale_types', (SELECT jsonb_agg(DISTINCT tipovenda) FROM data_detailed WHERE tipovenda IS NOT NULL)
+    );
+
+    RETURN jsonb_build_object(
+        'kpis', v_kpis,
+        'charts', v_charts,
+        'filters', v_filters
+    );
+
+END;
+$function$;
