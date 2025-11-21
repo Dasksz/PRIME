@@ -3355,21 +3355,26 @@
         }
 
         function updateStockProductFilter() {
-            const productsSource = Object.entries(window.embeddedData.productDetails).map(([code, details]) => ({
-                produto: code,
-                descricao: details.descricao
-            }));
-            updateProductFilter(stockProductFilterDropdown, stockProductFilterText, selectedStockProducts, productsSource, 'stock');
+            // Alterado para usar window.embeddedData.productDetails
+            const products = Object.values(window.embeddedData.productDetails || {});
+            // Mapeia para o formato esperado por updateProductFilter (espera array de objetos com .produto e .descricao)
+            const productSource = products.map(p => ({ produto: p.code, descricao: p.descricao }));
+            updateProductFilter(stockProductFilterDropdown, stockProductFilterText, selectedStockProducts, productSource, 'stock');
         }
 
         function updateStockSupplierFilter() {
-            const suppliersSource = window.embeddedData.filters.suppliers || [];
-            selectedStockSuppliers = updateSupplierFilter(stockSupplierFilterDropdown, stockSupplierFilterText, selectedStockSuppliers, suppliersSource, 'stock');
+            // Alterado para usar window.embeddedData.filters.suppliers
+            const suppliers = window.embeddedData.filters.suppliers || [];
+            // Mapeia para o formato esperado: array de objetos com .codfor e .fornecedor
+            const supplierSource = suppliers.map(s => ({ codfor: s.codfor, fornecedor: s.fornecedor }));
+            selectedStockSuppliers = updateSupplierFilter(stockSupplierFilterDropdown, stockSupplierFilterText, selectedStockSuppliers, supplierSource, 'stock');
         }
 
         function updateStockSellerFilter() {
-            const sellersSource = window.embeddedData.filters.sellers || [];
-            selectedStockSellers = updateSellerFilter(stockSupervisorFilter.value, stockVendedorFilterDropdown, stockVendedorFilterText, selectedStockSellers, [], sellersSource);
+            // Alterado para usar window.embeddedData.filters.sellers
+            const sellers = window.embeddedData.filters.sellers || [];
+            // updateSellerFilter espera um array de strings (nomes dos vendedores) no último argumento
+            selectedStockSellers = updateSellerFilter(stockSupervisorFilter.value, stockVendedorFilterDropdown, stockVendedorFilterText, selectedStockSellers, [], sellers);
         }
 
         function updateStockCitySuggestions(dataSource) {
