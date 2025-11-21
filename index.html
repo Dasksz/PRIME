@@ -3355,18 +3355,22 @@
         }
 
         function updateStockProductFilter() {
-            const data = getStockFilteredData({excludeFilter: 'product'});
-            updateProductFilter(stockProductFilterDropdown, stockProductFilterText, selectedStockProducts, [...data.sales, ...data.history], 'stock');
+            // CORREÇÃO: Usa lista global de produtos para popular o filtro
+            const productDetails = window.embeddedData.productDetails || {};
+            const dataSource = Object.values(productDetails).map(p => ({produto: p.code, descricao: p.descricao}));
+            updateProductFilter(stockProductFilterDropdown, stockProductFilterText, selectedStockProducts, dataSource, 'stock');
         }
 
         function updateStockSupplierFilter() {
-            const data = getStockFilteredData({excludeFilter: 'supplier'});
-            selectedStockSuppliers = updateSupplierFilter(stockSupplierFilterDropdown, stockSupplierFilterText, selectedStockSuppliers, [...data.sales, ...data.history], 'stock');
+            // CORREÇÃO: Usa lista global de fornecedores
+            const allSuppliers = window.embeddedData.filters.suppliers || [];
+            selectedStockSuppliers = updateSupplierFilter(stockSupplierFilterDropdown, stockSupplierFilterText, selectedStockSuppliers, allSuppliers, 'stock');
         }
 
         function updateStockSellerFilter() {
-            const data = getStockFilteredData({excludeFilter: 'seller'});
-            selectedStockSellers = updateSellerFilter(stockSupervisorFilter.value, stockVendedorFilterDropdown, stockVendedorFilterText, selectedStockSellers, [...data.sales, ...data.history]);
+            // CORREÇÃO: Usa lista global de vendedores
+            const allSellers = window.embeddedData.filters.sellers || [];
+            selectedStockSellers = updateSellerFilter(stockSupervisorFilter.value, stockVendedorFilterDropdown, stockVendedorFilterText, selectedStockSellers, [], allSellers);
         }
 
         function updateStockCitySuggestions(dataSource) {
@@ -3573,6 +3577,8 @@
                 p_products_filter: selectedStockProducts.length > 0 ? selectedStockProducts : null,
                 p_rede_group_filter: stockRedeGroupFilter || '',
                 p_redes_filter: selectedStockRedes.length > 0 ? selectedStockRedes : null,
+                p_filial_filter: stockFilialFilter.value, // CORREÇÃO: Adicionado filtro de filial
+                p_city_filter: stockCityFilter.value.trim(), // CORREÇÃO: Adicionado filtro de cidade
                 p_custom_days: isNaN(customDaysValue) ? 0 : customDaysValue
             };
 
