@@ -148,18 +148,6 @@ drop function IF exists get_stock_view_data (
   integer
 );
 
-drop function IF exists get_stock_view_data (
-  text,
-  text[],
-  text[],
-  text[],
-  text,
-  text[],
-  text,
-  text,
-  integer
-);
-
 create or replace function get_stock_view_data (
   p_supervisor_filter TEXT default '',
   p_sellers_filter text[] default null,
@@ -168,8 +156,8 @@ create or replace function get_stock_view_data (
   p_rede_group_filter TEXT default '',
   p_redes_filter text[] default null,
   p_filial_filter TEXT default 'ambas',
-  p_city_filter TEXT default '',
-  p_custom_days INTEGER default 0
+  p_custom_days INTEGER default 0,
+  p_city_filter TEXT default ''
 ) RETURNS JSONB as $$
 DECLARE
     result JSONB;
