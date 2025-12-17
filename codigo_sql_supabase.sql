@@ -1,177 +1,232 @@
--- =================================================================
--- SCRIPT V13.1-A (O SCRIPT PRINCIPAL)
--- OBJETIVO: Corrigir tudo, EXCETO o índice.
--- =================================================================
+-- Enable UUID extension
+create extension if not exists "uuid-ossp";
 
--- ETAPA 1: FUNÇÃO AUXILIAR OTIMIZADA
-create or replace function public.is_caller_approved () 
-RETURNS boolean 
-LANGUAGE sql 
-STABLE
-SECURITY DEFINER
-set
-  search_path = public as $$
-  SELECT EXISTS (
-    SELECT 1 FROM profiles 
-    WHERE id = (select auth.uid()) AND status = 'aprovado'
-  );
-$$;
-
--- ETAPA 2: APLICAR POLÍTICAS OTIMIZADAS NAS TABELAS 'DATA_*'
--- Tabela: data_detailed
-alter table public.data_detailed ENABLE row LEVEL SECURITY;
-drop policy IF exists "Permitir acesso total para service_role ou aprovados" on public.data_detailed;
-create policy "Permitir acesso total para service_role ou aprovados" on public.data_detailed 
-for all 
-using (
-  ((select auth.role()) = 'service_role')
-  or (public.is_caller_approved ())
-)
-with check (
-  ((select auth.role()) = 'service_role')
-  or (public.is_caller_approved ())
+-- 1. Tabela de Vendas Detalhadas (Mês Atual)
+create table if not exists public.data_detailed (
+    id uuid default uuid_generate_v4() primary key,
+    pedido text,
+    nome text, -- Vendedor
+    superv text, -- Supervisor
+    produto text,
+    descricao text,
+    fornecedor text,
+    observacaofor text, -- Pasta
+    codfor text,
+    codusur text,
+    codcli text,
+    qtvenda numeric,
+    codsupervisor text,
+    vlvenda numeric,
+    vlbonific numeric,
+    totpesoliq numeric,
+    dtped timestamp with time zone,
+    dtsaida timestamp with time zone,
+    posicao text,
+    estoqueunit numeric,
+    qtvenda_embalagem_master numeric,
+    tipovenda text,
+    filial text,
+    cliente_nome text, -- Otimização: Desnormalizado para reduzir lookups no front
+    cidade text,
+    bairro text
 );
 
--- Tabela: data_history
-alter table public.data_history ENABLE row LEVEL SECURITY;
-drop policy IF exists "Permitir acesso total para service_role ou aprovados" on public.data_history;
-create policy "Permitir acesso total para service_role ou aprovados" on public.data_history 
-for all 
-using (
-  ((select auth.role()) = 'service_role')
-  or (public.is_caller_approved ())
-)
-with check (
-  ((select auth.role()) = 'service_role')
-  or (public.is_caller_approved ())
+-- 2. Tabela de Histórico de Vendas (Trimestre)
+create table if not exists public.data_history (
+    id uuid default uuid_generate_v4() primary key,
+    pedido text,
+    nome text,
+    superv text,
+    produto text,
+    descricao text,
+    fornecedor text,
+    observacaofor text,
+    codfor text,
+    codusur text,
+    codcli text,
+    qtvenda numeric,
+    codsupervisor text,
+    vlvenda numeric,
+    vlbonific numeric,
+    totpesoliq numeric,
+    dtped timestamp with time zone,
+    dtsaida timestamp with time zone,
+    posicao text,
+    estoqueunit numeric,
+    qtvenda_embalagem_master numeric,
+    tipovenda text,
+    filial text
 );
 
--- Tabela: data_clients
-alter table public.data_clients ENABLE row LEVEL SECURITY;
-drop policy IF exists "Permitir acesso total para service_role ou aprovados" on public.data_clients;
-create policy "Permitir acesso total para service_role ou aprovados" on public.data_clients 
-for all 
-using (
-  ((select auth.role()) = 'service_role')
-  or (public.is_caller_approved ())
-)
-with check (
-  ((select auth.role()) = 'service_role')
-  or (public.is_caller_approved ())
+-- 3. Tabela de Clientes
+create table if not exists public.data_clients (
+    id uuid default uuid_generate_v4() primary key,
+    codigo_cliente text unique,
+    rca1 text,
+    rca2 text,
+    rcas text[], -- Array de RCAs
+    cidade text,
+    nomecliente text,
+    bairro text,
+    razaosocial text,
+    fantasia text,
+    cnpj_cpf text,
+    endereco text,
+    numero text,
+    cep text,
+    telefone text,
+    email text,
+    ramo text,
+    ultimacompra timestamp with time zone,
+    datacadastro timestamp with time zone,
+    bloqueio text,
+    inscricaoestadual text
 );
 
--- Tabela: data_orders
-alter table public.data_orders ENABLE row LEVEL SECURITY;
-drop policy IF exists "Permitir acesso total para service_role ou aprovados" on public.data_orders;
-create policy "Permitir acesso total para service_role ou aprovados" on public.data_orders 
-for all 
-using (
-  ((select auth.role()) = 'service_role')
-  or (public.is_caller_approved ())
-)
-with check (
-  ((select auth.role()) = 'service_role')
-  or (public.is_caller_approved ())
+-- 4. Tabela de Pedidos Agregados (Otimização para lista de pedidos)
+create table if not exists public.data_orders (
+    id uuid default uuid_generate_v4() primary key,
+    pedido text unique,
+    codcli text,
+    cliente_nome text,
+    cidade text,
+    nome text, -- Vendedor
+    superv text, -- Supervisor
+    fornecedores_str text,
+    dtped timestamp with time zone,
+    dtsaida timestamp with time zone,
+    posicao text,
+    vlvenda numeric,
+    totpesoliq numeric,
+    filial text
 );
 
--- Tabela: data_product_details
-alter table public.data_product_details ENABLE row LEVEL SECURITY;
-drop policy IF exists "Permitir acesso total para service_role ou aprovados" on public.data_product_details;
-create policy "Permitir acesso total para service_role ou aprovados" on public.data_product_details 
-for all 
-using (
-  ((select auth.role()) = 'service_role')
-  or (public.is_caller_approved ())
-)
-with check (
-  ((select auth.role()) = 'service_role')
-  or (public.is_caller_approved ())
+-- 5. Tabela de Detalhes de Produtos
+create table if not exists public.data_product_details (
+    code text primary key,
+    descricao text,
+    fornecedor text,
+    codfor text,
+    dtcadastro timestamp with time zone
 );
 
--- Tabela: data_active_products
-alter table public.data_active_products ENABLE row LEVEL SECURITY;
-drop policy IF exists "Permitir acesso total para service_role ou aprovados" on public.data_active_products;
-create policy "Permitir acesso total para service_role ou aprovados" on public.data_active_products 
-for all 
-using (
-  ((select auth.role()) = 'service_role')
-  or (public.is_caller_approved ())
-)
-with check (
-  ((select auth.role()) = 'service_role')
-  or (public.is_caller_approved ())
+-- 6. Tabela de Produtos Ativos (Apenas códigos)
+create table if not exists public.data_active_products (
+    code text primary key
 );
 
--- Tabela: data_stock
-alter table public.data_stock ENABLE row LEVEL SECURITY;
-drop policy IF exists "Permitir acesso total para service_role ou aprovados" on public.data_stock;
-create policy "Permitir acesso total para service_role ou aprovados" on public.data_stock 
-for all 
-using (
-  ((select auth.role()) = 'service_role')
-  or (public.is_caller_approved ())
-)
-with check (
-  ((select auth.role()) = 'service_role')
-  or (public.is_caller_approved ())
+-- 7. Tabela de Estoque
+create table if not exists public.data_stock (
+    id uuid default uuid_generate_v4() primary key,
+    product_code text,
+    filial text,
+    stock_qty numeric
 );
 
--- Tabela: data_innovations
-alter table public.data_innovations ENABLE row LEVEL SECURITY;
-drop policy IF exists "Permitir acesso total para service_role ou aprovados" on public.data_innovations;
-create policy "Permitir acesso total para service_role ou aprovados" on public.data_innovations 
-for all 
-using (
-  ((select auth.role()) = 'service_role')
-  or (public.is_caller_approved ())
-)
-with check (
-  ((select auth.role()) = 'service_role')
-  or (public.is_caller_approved ())
+-- 8. Tabela de Inovações (Metas/Status)
+create table if not exists public.data_innovations (
+    id uuid default uuid_generate_v4() primary key,
+    codigo text, -- Código do Produto
+    produto text, -- Nome/Descrição
+    inovacoes text -- Categoria ou Status
 );
 
--- Tabela: data_metadata
-alter table public.data_metadata ENABLE row LEVEL SECURITY;
-drop policy IF exists "Permitir acesso total para service_role ou aprovados" on public.data_metadata;
-create policy "Permitir acesso total para service_role ou aprovados" on public.data_metadata 
-for all 
-using (
-  ((select auth.role()) = 'service_role')
-  or (public.is_caller_approved ())
-)
-with check (
-  ((select auth.role()) = 'service_role')
-  or (public.is_caller_approved ())
+-- 9. Tabela de Metadados (Data de atualização, dias úteis, etc)
+create table if not exists public.data_metadata (
+    key text primary key,
+    value text
 );
 
--- ETAPA 3: ATIVAR E OTIMIZAR 'PROFILES'
--- 3.1: Ativar o RLS
-alter table public.profiles
-enable row level security;
+-- 10. Tabela para Salvar Metas (Novo Recurso)
+create table if not exists public.goals_distribution (
+    id uuid default uuid_generate_v4() primary key,
+    month_key text not null, -- Ex: '2023-10'
+    supplier text not null, -- Ex: 'PEPSICO_ALL', '707'
+    brand text default 'GENERAL', -- Ex: 'TODDYNHO' (default 'GENERAL')
+    goals_data jsonb not null, -- Estrutura com as metas por cliente/vendedor
+    updated_at timestamp with time zone default now(),
+    updated_by text -- Opcional: ID do usuário que atualizou
+);
 
--- 3.2: Apagar políticas antigas ou problemáticas
-drop policy IF exists "Usuários podem ver o próprio perfil" on public.profiles;
-drop policy IF exists "Users can update their own profile" on public.profiles;
-drop policy IF exists "Users can insert their own profile" on public.profiles;
-drop policy IF exists "Public profiles are viewable by everyone" on public.profiles;
-drop policy IF exists "Perfis: Usuários autenticados podem ver o próprio perfil" on public.profiles;
-drop policy IF exists "Perfis: Usuários autenticados podem criar o próprio perfil" on public.profiles;
-drop policy IF exists "Perfis: Usuários autenticados podem atualizar o próprio perfil" on public.profiles;
+-- Criação de Índices para Performance
+create index if not exists idx_detailed_codcli on public.data_detailed(codcli);
+create index if not exists idx_detailed_codusur on public.data_detailed(codusur);
+create index if not exists idx_detailed_produto on public.data_detailed(produto);
+create index if not exists idx_history_codcli on public.data_history(codcli);
+create index if not exists idx_history_codusur on public.data_history(codusur);
+create index if not exists idx_clients_codigo on public.data_clients(codigo_cliente);
+create index if not exists idx_clients_rca1 on public.data_clients(rca1);
+create index if not exists idx_stock_product on public.data_stock(product_code);
+create unique index if not exists idx_goals_unique on public.goals_distribution(month_key, supplier, brand);
 
--- 3.3: Criar políticas NOVAS, seguras e otimizadas
-create policy "Perfis: Usuários autenticados podem ver o próprio perfil" on public.profiles
-for SELECT
-using ( (select auth.uid()) = id );
+-- RLS (Row Level Security)
+alter table public.data_detailed enable row level security;
+alter table public.data_history enable row level security;
+alter table public.data_clients enable row level security;
+alter table public.data_orders enable row level security;
+alter table public.data_product_details enable row level security;
+alter table public.data_active_products enable row level security;
+alter table public.data_stock enable row level security;
+alter table public.data_innovations enable row level security;
+alter table public.data_metadata enable row level security;
+alter table public.goals_distribution enable row level security;
 
-create policy "Perfis: Usuários autenticados podem criar o próprio perfil" on public.profiles
-for INSERT
-with check ( (select auth.uid()) = id );
+-- Políticas de Leitura (Permitir leitura pública ou para autenticados)
+-- Ajuste conforme necessidade: 'anon' para público, 'authenticated' para logados.
+create policy "Enable read access for all users" on public.data_detailed for select using (true);
+create policy "Enable read access for all users" on public.data_history for select using (true);
+create policy "Enable read access for all users" on public.data_clients for select using (true);
+create policy "Enable read access for all users" on public.data_orders for select using (true);
+create policy "Enable read access for all users" on public.data_product_details for select using (true);
+create policy "Enable read access for all users" on public.data_active_products for select using (true);
+create policy "Enable read access for all users" on public.data_stock for select using (true);
+create policy "Enable read access for all users" on public.data_innovations for select using (true);
+create policy "Enable read access for all users" on public.data_metadata for select using (true);
+create policy "Enable read access for all users" on public.goals_distribution for select using (true);
 
-create policy "Perfis: Usuários autenticados podem atualizar o próprio perfil" on public.profiles
-for UPDATE
-using ( (select auth.uid()) = id )
-with check ( (select auth.uid()) = id );
+-- Políticas de Escrita (Geralmente restritas a service_role ou admins)
+-- Como o upload é feito via chave service_role no backend ou cliente com chave especifica,
+-- o service_role bypassa o RLS.
+-- Se for necessário permitir insert via anon (não recomendado sem proteção), descomente:
+-- create policy "Enable insert for all users" on public.data_detailed for insert with check (true);
+-- ... (repetir para outras tabelas se necessário)
 
--- ETAPA FINAL: Forçar o Supabase a recarregar o esquema
-notify pgrst,
-  'reload schema';
+-- Para a tabela de metas, permitir insert/update para autenticados (ou todos se controlado via app)
+create policy "Enable insert/update for goals" on public.goals_distribution for all using (true) with check (true);
+
+-- 11. Tabela de Perfis de Usuário (Gatekeeper)
+create table if not exists public.profiles (
+    id uuid references auth.users on delete cascade not null primary key,
+    email text,
+    status text default 'pendente', -- pendente, aprovado, bloqueado
+    role text default 'user',
+    created_at timestamp with time zone default now(),
+    updated_at timestamp with time zone default now()
+);
+
+-- RLS para Profiles
+alter table public.profiles enable row level security;
+
+-- Usuários podem ver seu próprio perfil
+create policy "Users can view own profile" on public.profiles
+    for select using (auth.uid() = id);
+
+-- Usuários podem atualizar seu próprio perfil
+create policy "Users can update own profile" on public.profiles
+    for update using (auth.uid() = id);
+
+-- Função para criar perfil automaticamente no cadastro
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, email, status)
+  values (new.id, new.email, 'pendente');
+  return new;
+end;
+$$ language plpgsql security definer;
+
+-- Trigger para chamar a função acima
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
