@@ -185,7 +185,7 @@ create policy "Enable read access for all users" on public.data_metadata for sel
 create policy "Enable read access for all users" on public.goals_distribution for select using (true);
 
 -- Políticas de Escrita (Geralmente restritas a service_role ou admins)
--- Como o upload é feito via chave service_role no backend ou cliente com chave especifica,
+-- Como o upload é feito via chave service_role no backend ou cliente com chave especifica, 
 -- o service_role bypassa o RLS.
 -- Se for necessário permitir insert via anon (não recomendado sem proteção), descomente:
 -- create policy "Enable insert for all users" on public.data_detailed for insert with check (true);
