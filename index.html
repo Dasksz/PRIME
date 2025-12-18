@@ -5,6 +5,9 @@
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Painel de Vendas - PRIME DISTRIBUIÇÃO</title>
     <link rel="icon" type="image/jpeg" href="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSnaaZ2WnZBJIxPRfabS4Ug78PKK6Gu3nbHlw&s">
     <script src="https://cdn.tailwindcss.com" defer></script>
@@ -177,9 +180,10 @@
 
 <!-- Tela de Loading -->
 <div id="tela-loading" class="flex-center-overlay z-[2000] hidden" style="background-color: #0d1126;">
-   <div class="gatekeeper-card">
+   <div class="gatekeeper-card" id="loading-card-content">
         <h2 style="margin-top: 0; font-size: 1.5rem; font-weight: 600;">Carregando...</h2>
         <p style="color: #a0aec0;">Verificando credenciais.</p>
+        <p style="color: #4a5568; font-size: 0.75rem; margin-top: 1rem;">v5.2.1</p>
     </div>
 </div>
 
@@ -1807,8 +1811,11 @@
                 telaLoading.classList.remove('hidden');
                 
                 try {
-                    // Check Profile
-                    const { data: profile, error } = await supabaseClient.from('profiles').select('*').eq('id', session.user.id).single();
+                    // Check Profile with Timeout
+                    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Tempo limite de conexão excedido.')), 10000));
+                    const profilePromise = supabaseClient.from('profiles').select('*').eq('id', session.user.id).single();
+
+                    const { data: profile, error } = await Promise.race([profilePromise, timeout]);
                     
                     if (error) {
                         // If no rows found (PGRST116), it's not a critical error, just no profile yet.
@@ -1826,9 +1833,25 @@
                     }
                 } catch (err) {
                     console.error("Error checking profile:", err);
-                    telaLoading.classList.add('hidden');
-                    // If error, show Pending screen (or we could show an error alert)
-                    telaPendente.classList.remove('hidden');
+                    // Update Loading Screen to show Error instead of hiding it (unless it was a logic error that didn't freeze UI)
+                    // If we hide telaLoading and show nothing, it's bad.
+                    // Let's repurpose telaLoading card to show error.
+                    const card = document.getElementById('loading-card-content');
+                    if (card) {
+                        card.innerHTML = `
+                            <h2 style="margin-top: 0; font-size: 1.5rem; font-weight: 600; color: #fc8181;">Erro de Conexão</h2>
+                            <p style="color: #a0aec0; margin-bottom: 1.5rem;">${err.message || 'Não foi possível verificar suas credenciais.'}</p>
+                            <button onclick="window.location.reload()" class="gatekeeper-btn" style="background-color: #2d3748; border-color: #4a5568;">
+                                Tentar Novamente
+                            </button>
+                            <p style="color: #4a5568; font-size: 0.75rem; margin-top: 1rem;">v5.2.1</p>
+                        `;
+                    } else {
+                        // Fallback
+                        alert("Erro de conexão: " + err.message);
+                        telaLoading.classList.add('hidden');
+                        telaPendente.classList.remove('hidden');
+                    }
                 }
             } else {
                 telaLogin.classList.remove('hidden');
