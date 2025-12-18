@@ -7,16 +7,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel de Vendas - PRIME DISTRIBUIÇÃO</title>
     <link rel="icon" type="image/jpeg" href="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSnaaZ2WnZBJIxPRfabS4Ug78PKK6Gu3nbHlw&s">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.min.js"></script>
+    <script src="https://cdn.tailwindcss.com" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.min.js" defer></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+    .flex-center-overlay {
+        position: fixed;
+        top: 0; right: 0; bottom: 0; left: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
     :root {
         --bg-main: #0d1126;
         --bg-card: #1d2347;
@@ -157,7 +164,7 @@
 <body class="bg-[#0d1126] text-slate-300 antialiased">
 
 <!-- Tela de Login -->
-<div id="tela-login" class="fixed inset-0 flex items-center justify-center z-[2000] hidden" style="background-color: #0d1126;">
+<div id="tela-login" class="flex-center-overlay z-[2000] hidden" style="background-color: #0d1126;">
     <div class="gatekeeper-card">
         <img src="https://i.imgur.com/Xv8Tb6d.png" alt="Logo" style="width: 80px; height: 80px; margin: 0 auto 1.5rem; border-radius: 50%;">
         <h1 style="margin-top: 0; font-size: 1.8rem; font-weight: 700;">Acesso Restrito</h1>
@@ -169,7 +176,7 @@
 </div>
 
 <!-- Tela de Loading -->
-<div id="tela-loading" class="fixed inset-0 flex items-center justify-center z-[2000] hidden" style="background-color: #0d1126;">
+<div id="tela-loading" class="flex-center-overlay z-[2000] hidden" style="background-color: #0d1126;">
    <div class="gatekeeper-card">
         <h2 style="margin-top: 0; font-size: 1.5rem; font-weight: 600;">Carregando...</h2>
         <p style="color: #a0aec0;">Verificando credenciais.</p>
@@ -177,7 +184,7 @@
 </div>
 
 <!-- Tela Pendente -->
-<div id="tela-pendente" class="fixed inset-0 flex items-center justify-center z-[2000] hidden" style="background-color: #0d1126;">
+<div id="tela-pendente" class="flex-center-overlay z-[2000] hidden" style="background-color: #0d1126;">
     <div class="gatekeeper-card">
         <h2 style="margin-top: 0; font-size: 1.5rem; font-weight: 600;">Aguardando Aprovação</h2>
         <p style="color: #a0aec0;">Seu acesso está pendente.</p>
