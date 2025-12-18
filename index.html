@@ -1799,14 +1799,28 @@
                 telaLogin.classList.add('hidden');
                 telaLoading.classList.remove('hidden');
                 
-                // Check Profile
-                const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', session.user.id).single();
-                
-                if (profile && profile.status === 'aprovado') {
+                try {
+                    // Check Profile
+                    const { data: profile, error } = await supabaseClient.from('profiles').select('*').eq('id', session.user.id).single();
+
+                    if (error) {
+                        // If no rows found (PGRST116), it's not a critical error, just no profile yet.
+                        if (error.code !== 'PGRST116') {
+                            throw error;
+                        }
+                    }
+
+                    if (profile && profile.status === 'aprovado') {
+                        telaLoading.classList.add('hidden');
+                        carregarDadosDoSupabase(supabaseClient);
+                    } else {
+                        telaLoading.classList.add('hidden');
+                        telaPendente.classList.remove('hidden');
+                    }
+                } catch (err) {
+                    console.error("Error checking profile:", err);
                     telaLoading.classList.add('hidden');
-                    carregarDadosDoSupabase(supabaseClient);
-                } else {
-                    telaLoading.classList.add('hidden');
+                    // If error, show Pending screen (or we could show an error alert)
                     telaPendente.classList.remove('hidden');
                 }
             } else {
