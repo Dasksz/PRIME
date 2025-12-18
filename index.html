@@ -180,6 +180,7 @@
    <div class="gatekeeper-card">
         <h2 style="margin-top: 0; font-size: 1.5rem; font-weight: 600;">Carregando...</h2>
         <p style="color: #a0aec0;">Verificando credenciais.</p>
+        <button id="logout-button-loading" class="gatekeeper-btn" style="background-color: #dc3545; border-color: #dc3545; margin-top: 2rem;">Sair</button>
     </div>
 </div>
 
@@ -1792,13 +1793,30 @@
         const telaLogin = document.getElementById('tela-login');
         const telaLoading = document.getElementById('tela-loading');
         const telaPendente = document.getElementById('tela-pendente');
+        const logoutButtonPendente = document.getElementById('logout-button-pendente');
+        const logoutButtonLoading = document.getElementById('logout-button-loading');
+
+        const handleLogout = async () => {
+            await supabaseClient.auth.signOut();
+            window.location.reload();
+        };
         
-        loginButton.addEventListener('click', async () => {
-            await supabaseClient.auth.signInWithOAuth({
-                provider: 'google',
-                options: { redirectTo: window.location.href }
+        if (loginButton) {
+            loginButton.addEventListener('click', async () => {
+                await supabaseClient.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: { redirectTo: window.location.href }
+                });
             });
-        });
+        }
+
+        if (logoutButtonPendente) {
+            logoutButtonPendente.addEventListener('click', handleLogout);
+        }
+
+        if (logoutButtonLoading) {
+            logoutButtonLoading.addEventListener('click', handleLogout);
+        }
 
         // Auth State Listener
         supabaseClient.auth.onAuthStateChange(async (event, session) => {
@@ -1807,8 +1825,11 @@
                 telaLoading.classList.remove('hidden');
                 
                 try {
-                    // Check Profile
-                    const { data: profile, error } = await supabaseClient.from('profiles').select('*').eq('id', session.user.id).single();
+                    // Check Profile with Timeout (10s)
+                    const fetchProfile = supabaseClient.from('profiles').select('*').eq('id', session.user.id).single();
+                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout verifying credentials')), 10000));
+
+                    const { data: profile, error } = await Promise.race([fetchProfile, timeoutPromise]);
                     
                     if (error) {
                         // If no rows found (PGRST116), it's not a critical error, just no profile yet.
@@ -1826,8 +1847,8 @@
                     }
                 } catch (err) {
                     console.error("Error checking profile:", err);
+                    // On error or timeout, switch to Pending screen (which now allows logout)
                     telaLoading.classList.add('hidden');
-                    // If error, show Pending screen (or we could show an error alert)
                     telaPendente.classList.remove('hidden');
                 }
             } else {
