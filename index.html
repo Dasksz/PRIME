@@ -10843,6 +10843,25 @@ const supervisorGroups = new Map();
                 }
             };
 
+            // List of columns that are dates and need conversion from timestamp (ms) to ISO String
+            const dateColumns = new Set(['dtped', 'dtsaida', 'ultimacompra', 'datacadastro', 'dtcadastro', 'updated_at']);
+
+            const formatValue = (key, value) => {
+                // If it's a date column and value is a number, convert to ISO string
+                if (dateColumns.has(key) && typeof value === 'number') {
+                    // Check for valid timestamp (not 0 or crazy value) if needed, 
+                    // but usually new Date(val).toISOString() handles valid ms numbers.
+                    // Postgres timestamp range: 4713 BC to 294276 AD.
+                    // 1764720000000 is year 2025, which is fine.
+                    try {
+                        return new Date(value).toISOString();
+                    } catch (e) {
+                        return null; // Fallback for invalid dates
+                    }
+                }
+                return value;
+            };
+
             const uploadColumnarBatch = async (table, columnarData) => {
                 const totalRows = columnarData.length;
                 const columns = columnarData.columns;
@@ -10855,8 +10874,9 @@ const supervisorGroups = new Map();
                         const row = {};
                         for (const col of columns) {
                             // OPTION B: Convert keys to lowercase to match Supabase DB schema
-                            // while keeping internal data uppercase for Frontend compatibility.
-                            row[col.toLowerCase()] = columnarData.values[col][j];
+                            const lowerKey = col.toLowerCase();
+                            const val = columnarData.values[col][j];
+                            row[lowerKey] = formatValue(lowerKey, val);
                         }
                         batch.push(row);
                     }
@@ -10876,7 +10896,8 @@ const supervisorGroups = new Map();
                     const batch = rawBatch.map(item => {
                         const newItem = {};
                         for (const key in item) {
-                            newItem[key.toLowerCase()] = item[key];
+                            const lowerKey = key.toLowerCase();
+                            newItem[lowerKey] = formatValue(lowerKey, item[key]);
                         }
                         return newItem;
                     });
