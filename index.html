@@ -2058,6 +2058,7 @@
 </script>
 
 <script id="report-logic-script" type="text/template">
+(() => {
         // --- OPTIMIZATION: Lazy Columnar Accessor with Write-Back Support ---
         class ColumnarDataset {
             constructor(columnarData) {
@@ -10943,7 +10944,7 @@ const supervisorGroups = new Map();
         }
 
         async function enviarDadosParaSupabase(data) {
-            const supabaseUrl = document.getElementById('supabase-url').value;
+            const supabaseUrl = document.getElementById('supabase-url').value.replace(/\/$/, "");
             const supabaseKey = document.getElementById('supabase-key').value;
 
             if (!supabaseUrl || !supabaseKey) {
@@ -10951,7 +10952,6 @@ const supervisorGroups = new Map();
                 return;
             }
 
-            const sbClient = supabase.createClient(supabaseUrl, supabaseKey);
             const BATCH_SIZE = 1000;
 
             const uploadStep = async (stepId, tableName, dataArray, isColumnar = false) => {
@@ -10985,8 +10985,21 @@ const supervisorGroups = new Map();
                             }
                         }
 
-                        const { error } = await sbClient.from(tableName).upsert(batch);
-                        if (error) throw error;
+                        const response = await fetch(`${supabaseUrl}/rest/v1/${tableName}`, {
+                            method: 'POST',
+                            headers: {
+                                'apikey': supabaseKey,
+                                'Authorization': `Bearer ${supabaseKey}`,
+                                'Content-Type': 'application/json',
+                                'Prefer': 'resolution=merge-duplicates'
+                            },
+                            body: JSON.stringify(batch)
+                        });
+
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            throw new Error(`Erro ao enviar para ${tableName}: ${response.status} - ${errorText}`);
+                        }
 
                         const progress = Math.round((end / totalRows) * 100);
                         updateProgress(`Enviando ${tableName}...`, progress);
@@ -11011,25 +11024,31 @@ const supervisorGroups = new Map();
                 updateStepStatus('step-products', 'processing');
                 if (data.product_details && data.product_details.length > 0) {
                      updateProgress('Detalhes de Produtos...', 50);
-                     await uploadStep('step-products', 'data_product_details', data.product_details, false); // Reusing ID, logic inside helper handles it somewhat, but we called it recursively.
-                     // Actually uploadStep sets status. We need to be careful not to set it to success prematurely.
-                     // Let's manually handle this grouped step or split it.
-                     // Since I already called uploadStep, it sets success. I'll just run active products next.
-                     // Visual glitch: it will flash success then processing. Acceptable for now or I can separate IDs.
-                     // Better: Use a specific internal function for the loop without UI updates?
-                     // Let's just run them sequentially. The UI will just toggle.
+                     await uploadStep('step-products', 'data_product_details', data.product_details, false);
                 }
                 if (data.active_products && data.active_products.length > 0) {
-                    // Force processing state again if it was set to success
                     updateStepStatus('step-products', 'processing');
                     updateProgress('Produtos Ativos...', 50);
-                    // Use a temporary custom logic to avoid UI toggle or just accept it.
-                    // To keep it simple:
+
                     const batchActive = data.active_products;
                     for (let i = 0; i < batchActive.length; i += BATCH_SIZE) {
                          const batch = batchActive.slice(i, i + BATCH_SIZE);
-                         const { error } = await sbClient.from('data_active_products').upsert(batch);
-                         if (error) throw error;
+
+                         const response = await fetch(`${supabaseUrl}/rest/v1/data_active_products`, {
+                            method: 'POST',
+                            headers: {
+                                'apikey': supabaseKey,
+                                'Authorization': `Bearer ${supabaseKey}`,
+                                'Content-Type': 'application/json',
+                                'Prefer': 'resolution=merge-duplicates'
+                            },
+                            body: JSON.stringify(batch)
+                        });
+
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            throw new Error(`Erro ao enviar Produtos Ativos: ${response.status} - ${errorText}`);
+                        }
                     }
                 }
                 updateStepStatus('step-products', 'success');
@@ -12610,7 +12629,7 @@ const supervisorGroups = new Map();
 
         navigateTo('dashboard');
         renderTable(aggregatedOrders);
-
+})();
 </script>
 
     <!-- Script do Uploader (Worker) -->
@@ -12621,7 +12640,7 @@ const supervisorGroups = new Map();
             sales: ['CODCLI', 'PEDIDO', 'CODUSUR', 'CODSUPERVISOR', 'DTPED', 'DTSAIDA', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX'],
             clients: ['Código', 'RCA 1', 'Nome da Cidade', 'Fantasia', 'Cliente', 'Bairro', 'CNPJ/CPF', 'Endereço Comercial', 'Número', 'CEP', 'Telefone Comercial', 'E-mail', 'Descricao', 'Data da Última Compra', 'Data e Hora de Cadastro', 'Bloqueio', 'Insc. Est. / Produtor'],
             products: ['Código', 'Qtde embalagem master(Compra)', 'Descrição', 'Nome do fornecedor', 'Fornecedor', 'Dt.Cadastro'],
-            history: ['CODCLI', 'NOME', 'SUPERV', 'PEDIDO', 'CODUSUR', 'CODSUPERVISOR', 'DTPED', 'DTSAIDA', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'POSICAO', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX']
+            history: ['CODCLI', 'PEDIDO', 'CODUSUR', 'CODSUPERVISOR', 'DTPED', 'DTSAIDA', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX']
         };
 
         const columnFormats = {
@@ -13460,6 +13479,7 @@ const supervisorGroups = new Map();
 
                 self.postMessage({ type: 'progress', status: 'Pronto!', percentage: 100 });
 
+                // Sending result back to main thread
                 self.postMessage({
                     type: 'result',
                     data: {
