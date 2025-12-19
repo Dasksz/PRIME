@@ -161,6 +161,16 @@
     .gatekeeper-card { font-family: 'Inter', sans-serif; padding: 2.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); max-width: 400px; width: 90%; background: #1d2347; text-align: center; border: 1px solid #2d3748; color: #fff; }
     .gatekeeper-btn { display: flex; align-items: center; justify-content: center; gap: 0.75rem; background-color: #2d3748; color: #fff; border: 1px solid #4a5568; padding: 12px 24px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background-color 0.3s ease; width: 100%; margin-top: 1rem; }
     .gatekeeper-btn:hover { background-color: #4a5568; }
+
+    /* Modal Uploader Styles */
+    .bg-modal-content {
+        background-color: #1d2347 !important;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    .bg-modal-content::-webkit-scrollbar { width: 8px; }
+    .bg-modal-content::-webkit-scrollbar-track { background: #161e3d; }
+    .bg-modal-content::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 10px; }
     </style>
 
 </head>
@@ -1811,8 +1821,8 @@
                 telaLoading.classList.remove('hidden');
                 
                 try {
-                    // Check Profile with Timeout
-                    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Tempo limite de conexão excedido.')), 10000));
+                    // Check Profile with Timeout - 5s as requested
+                    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Tempo limite de conexão excedido. Verifique sua internet.')), 5000));
                     const profilePromise = supabaseClient.from('profiles').select('*').eq('id', session.user.id).single();
 
                     const { data: profile, error } = await Promise.race([profilePromise, timeout]);
@@ -10779,7 +10789,139 @@ const supervisorGroups = new Map();
             await hideLoader();
         }
 
+        async function enviarDadosParaSupabase(data) {
+            const supabaseUrl = document.getElementById('supabase-url').value;
+            const supabaseKey = document.getElementById('supabase-key').value;
+
+            if (!supabaseUrl || !supabaseKey) {
+                alert("Por favor, preencha a URL e a Chave Secreta do Supabase.");
+                return;
+            }
+
+            const sbClient = supabase.createClient(supabaseUrl, supabaseKey);
+            const statusText = document.getElementById('status-text');
+            const progressBar = document.getElementById('progress-bar');
+            const statusContainer = document.getElementById('status-container');
+
+            statusContainer.classList.remove('hidden');
+            const updateStatus = (msg, percent) => {
+                statusText.textContent = msg;
+                progressBar.style.width = `${percent}%`;
+            };
+
+            const BATCH_SIZE = 1000;
+
+            const uploadColumnarBatch = async (table, columnarData) => {
+                const totalRows = columnarData.length;
+                const columns = columnarData.columns;
+
+                for (let i = 0; i < totalRows; i += BATCH_SIZE) {
+                    const batch = [];
+                    const end = Math.min(i + BATCH_SIZE, totalRows);
+
+                    for (let j = i; j < end; j++) {
+                        const row = {};
+                        for (const col of columns) {
+                            row[col] = columnarData.values[col][j];
+                        }
+                        batch.push(row);
+                    }
+
+                    const { error } = await sbClient.from(table).upsert(batch);
+                    if (error) throw error;
+
+                    const progress = Math.round((i / totalRows) * 100);
+                    updateStatus(`Enviando ${table}: ${progress}%`, progress);
+                }
+            };
+
+            const uploadArrayBatch = async (table, arrayData) => {
+                for (let i = 0; i < arrayData.length; i += BATCH_SIZE) {
+                    const batch = arrayData.slice(i, i + BATCH_SIZE);
+                    const { error } = await sbClient.from(table).upsert(batch);
+                    if (error) throw error;
+                     const progress = Math.round((i / arrayData.length) * 100);
+                    updateStatus(`Enviando ${table}: ${progress}%`, progress);
+                }
+            }
+
+            try {
+                if (data.detailed && data.detailed.length > 0) await uploadColumnarBatch('data_detailed', data.detailed);
+                if (data.history && data.history.length > 0) await uploadColumnarBatch('data_history', data.history);
+                if (data.clients && data.clients.length > 0) await uploadColumnarBatch('data_clients', data.clients);
+                if (data.stock && data.stock.length > 0) await uploadArrayBatch('data_stock', data.stock);
+                if (data.innovations && data.innovations.length > 0) await uploadArrayBatch('data_innovations', data.innovations);
+                if (data.product_details && data.product_details.length > 0) await uploadArrayBatch('data_product_details', data.product_details);
+                if (data.active_products && data.active_products.length > 0) await uploadArrayBatch('data_active_products', data.active_products);
+                if (data.metadata && data.metadata.length > 0) await uploadArrayBatch('data_metadata', data.metadata);
+
+                updateStatus('Upload Concluído com Sucesso!', 100);
+                alert('Dados enviados com sucesso!');
+                setTimeout(() => statusContainer.classList.add('hidden'), 3000);
+
+            } catch (error) {
+                console.error(error);
+                updateStatus('Erro: ' + error.message, 0);
+                alert('Erro durante o upload: ' + error.message);
+            }
+        }
+
         function setupEventListeners() {
+            // Uploader Logic
+            const openAdminBtn = document.getElementById('open-admin-btn');
+            const adminModal = document.getElementById('admin-uploader-modal');
+            const adminCloseBtn = document.getElementById('admin-modal-close-btn');
+
+            if (openAdminBtn) {
+                openAdminBtn.addEventListener('click', () => {
+                    adminModal.classList.remove('hidden');
+                });
+            }
+            if (adminCloseBtn) {
+                adminCloseBtn.addEventListener('click', () => {
+                    adminModal.classList.add('hidden');
+                });
+            }
+
+            const generateBtn = document.getElementById('generate-btn');
+            if (generateBtn) {
+                generateBtn.addEventListener('click', () => {
+                    const salesFile = document.getElementById('sales-file-input').files[0];
+                    const clientsFile = document.getElementById('clients-file-input').files[0];
+                    const productsFile = document.getElementById('products-file-input').files[0];
+                    const historyFile = document.getElementById('history-file-input').files[0];
+                    const innovationsFile = document.getElementById('innovations-file-input').files[0];
+
+                    if (!salesFile && !historyFile) {
+                        alert("Pelo menos o arquivo de Vendas ou Histórico é necessário.");
+                        return;
+                    }
+
+                    // Initialize Worker
+                    const blob = new Blob([document.getElementById('worker-script').textContent], { type: 'text/javascript' });
+                    const worker = new Worker(window.URL.createObjectURL(blob));
+
+                    document.getElementById('status-container').classList.remove('hidden');
+                    document.getElementById('status-text').textContent = "Processando arquivos...";
+
+                    worker.postMessage({ salesFile, clientsFile, productsFile, historyFile, innovationsFile });
+
+                    worker.onmessage = (e) => {
+                        const { type, data, status, percentage, message } = e.data;
+                        if (type === 'progress') {
+                            document.getElementById('status-text').textContent = status;
+                            document.getElementById('progress-bar').style.width = percentage + '%';
+                        } else if (type === 'result') {
+                            enviarDadosParaSupabase(data);
+                            worker.terminate();
+                        } else if (type === 'error') {
+                            alert('Erro no processamento: ' + message);
+                            worker.terminate();
+                        }
+                    };
+                });
+            }
+
             // Helper to mark dirty states
             const markDirty = (view) => {
                 if (viewState[view]) viewState[view].dirty = true;
@@ -12864,6 +13006,7 @@ const supervisorGroups = new Map();
                     if (!productDetailsMap.has(productCode)) {
                             const dtCad = parseDate(prod['Dt.Cadastro']);
                             productDetailsMap.set(productCode, {
+                                code: productCode,
                                 descricao: String(prod['Descrição'] || `Produto ${productCode}`),
                                 fornecedor: String(prod['Nome do fornecedor'] || 'N/A'),
                                 codfor: String(prod['Fornecedor'] || 'N/A'),
@@ -12939,6 +13082,7 @@ const supervisorGroups = new Map();
                     if (!productDetailsMap.has(code)) {
                         // Create a partial entry for display purposes
                         productDetailsMap.set(code, {
+                            code: code,
                             descricao: item.DESCRICAO || `Produto ${code}`,
                             fornecedor: item.FORNECEDOR || 'N/A',
                             codfor: item.CODFOR || 'N/A',
