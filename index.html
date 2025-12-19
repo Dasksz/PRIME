@@ -10791,14 +10791,15 @@ const supervisorGroups = new Map();
 
         async function enviarDadosParaSupabase(data) {
             const supabaseUrl = document.getElementById('supabase-url').value;
-            const supabaseKeyInput = document.getElementById('supabase-key').value;
+            const supabaseKeyInput = document.getElementById('supabase-key').value.trim();
 
             // Tentamos obter a sessão atual do usuário
             const { data: { session } } = await supabaseClient.auth.getSession();
 
             // Definição da chave de autenticação (Token)
-            // Prioridade: Token da sessão do usuário logado > Chave fornecida manualmente (fallback)
-            const authToken = session?.access_token || supabaseKeyInput;
+            // Prioridade: Chave fornecida manualmente (Service Role) > Token da sessão do usuário logado
+            // Isso permite que o usuário use a chave secreta para upload (bypass RLS) mesmo estando logado com um usuário sem permissão.
+            const authToken = supabaseKeyInput || session?.access_token;
 
             // Definição da API Key (Header 'apikey')
             // O Supabase exige que o header 'apikey' contenha a chave ANÔNIMA para passar pelo Gateway sem erro de "Forbidden use of secret key".
