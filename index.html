@@ -12428,7 +12428,7 @@ const supervisorGroups = new Map();
 </script>
 
     <!-- Script do Uploader (Worker) -->
-    <script id="worker-script" type="text/worker-javascript">    <script id="worker-script" type="text/worker-javascript">
+    <script id="worker-script" type="text/worker-javascript">
         self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
 
         const mandatoryColumns = {
@@ -13283,24 +13283,6 @@ const supervisorGroups = new Map();
                         // However, keeping the Maps might be useful if we ever wanted to hydrate locally.
                         stockMap05: Object.fromEntries(stockMap05),
                         stockMap08: Object.fromEntries(stockMap08),
-                        activeProductCodes: Array.from(activeProductCodesFromCadastro),
-                        productDetails: Object.fromEntries(productDetailsMap),
-                        passedWorkingDaysCurrentMonth: passedWorkingDaysCurrentMonth,
-                        isColumnar: true
-                    }
-                });
-
-
-                self.postMessage({
-                    type: 'result',
-                    data: {
-                        detailed: columnarDetailed,
-                        history: columnarHistory,
-                        byOrder: aggregatedByOrder,
-                        clients: columnarClients,
-                        stockMap05: Object.fromEntries(stockMap05),
-                        stockMap08: Object.fromEntries(stockMap08),
-                        innovationsMonth: innovationsDataRaw,
                         activeProductCodes: Array.from(activeProductCodesFromCadastro),
                         productDetails: Object.fromEntries(productDetailsMap),
                         passedWorkingDaysCurrentMonth: passedWorkingDaysCurrentMonth,
