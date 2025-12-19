@@ -10798,7 +10798,9 @@ const supervisorGroups = new Map();
                 return;
             }
 
-            const sbClient = supabase.createClient(supabaseUrl, supabaseKey);
+            // Removido: const sbClient = supabase.createClient(supabaseUrl, supabaseKey);
+            // Motivo: "Forbidden use of secret API key in browser"
+
             const statusText = document.getElementById('status-text');
             const progressBar = document.getElementById('progress-bar');
             const statusContainer = document.getElementById('status-container');
@@ -10810,6 +10812,24 @@ const supervisorGroups = new Map();
             };
 
             const BATCH_SIZE = 1000;
+
+            const performUpsert = async (table, batch) => {
+                const response = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
+                    method: 'POST',
+                    headers: {
+                        'apikey': supabaseKey,
+                        'Authorization': `Bearer ${supabaseKey}`,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'resolution=merge-duplicates'
+                    },
+                    body: JSON.stringify(batch)
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Erro Supabase (${response.status}): ${errorText}`);
+                }
+            };
 
             const uploadColumnarBatch = async (table, columnarData) => {
                 const totalRows = columnarData.length;
@@ -10827,8 +10847,7 @@ const supervisorGroups = new Map();
                         batch.push(row);
                     }
 
-                    const { error } = await sbClient.from(table).upsert(batch);
-                    if (error) throw error;
+                    await performUpsert(table, batch);
                     
                     const progress = Math.round((i / totalRows) * 100);
                     updateStatus(`Enviando ${table}: ${progress}%`, progress);
@@ -10838,8 +10857,7 @@ const supervisorGroups = new Map();
             const uploadArrayBatch = async (table, arrayData) => {
                 for (let i = 0; i < arrayData.length; i += BATCH_SIZE) {
                     const batch = arrayData.slice(i, i + BATCH_SIZE);
-                    const { error } = await sbClient.from(table).upsert(batch);
-                    if (error) throw error;
+                    await performUpsert(table, batch);
                      const progress = Math.round((i / arrayData.length) * 100);
                     updateStatus(`Enviando ${table}: ${progress}%`, progress);
                 }
