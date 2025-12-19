@@ -12618,7 +12618,7 @@ const supervisorGroups = new Map();
         self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
 
         const mandatoryColumns = {
-            sales: ['CODCLI', 'NOME', 'SUPERV', 'PEDIDO', 'CODUSUR', 'CODSUPERVISOR', 'DTPED', 'DTSAIDA', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'POSICAO', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX'],
+            sales: ['CODCLI', 'PEDIDO', 'CODUSUR', 'CODSUPERVISOR', 'DTPED', 'DTSAIDA', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX'],
             clients: ['Código', 'RCA 1', 'Nome da Cidade', 'Fantasia', 'Cliente', 'Bairro', 'CNPJ/CPF', 'Endereço Comercial', 'Número', 'CEP', 'Telefone Comercial', 'E-mail', 'Descricao', 'Data da Última Compra', 'Data e Hora de Cadastro', 'Bloqueio', 'Insc. Est. / Produtor'],
             products: ['Código', 'Qtde embalagem master(Compra)', 'Descrição', 'Nome do fornecedor', 'Fornecedor', 'Dt.Cadastro'],
             history: ['CODCLI', 'NOME', 'SUPERV', 'PEDIDO', 'CODUSUR', 'CODSUPERVISOR', 'DTPED', 'DTSAIDA', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'POSICAO', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX']
@@ -12884,13 +12884,25 @@ const supervisorGroups = new Map();
                     if (stockLinesCollector) {
                         // Captura as informações da linha para uso posterior (ex: enriquecer cadastro de produtos)
                         // Substitui a data (que pode estar bugada/zerada) pela data mais recente válida (fallbackDate)
+                        
+                        let obsFor = String(rawRow['OBSERVACAOFOR'] || '').trim();
+                        if (obsFor === '' || obsFor === '0') {
+                             const fornecedor = String(rawRow['FORNECEDOR'] || '').toUpperCase();
+                             if (fornecedor.includes('PEPSICO')) {
+                                 obsFor = 'PEPSICO';
+                             } else {
+                                 obsFor = 'MULTIMARCAS';
+                             }
+                        }
+
                         stockLinesCollector.push({
                             PRODUTO: productCheck,
                             DESCRICAO: String(rawRow['DESCRICAO'] || ''),
                             FORNECEDOR: String(rawRow['FORNECEDOR'] || ''),
                             CODFOR: String(rawRow['CODFOR'] || ''),
                             ESTOQUECX: parseBrazilianNumber(rawRow['ESTOQUECX']),
-                            DTPED: fallbackDate // Data sanitizada
+                            DTPED: fallbackDate, // Data sanitizada
+                            PASTA: obsFor
                         });
                     }
                     return null; // Remove da listagem principal de vendas
@@ -13272,7 +13284,8 @@ const supervisorGroups = new Map();
                             descricao: item.DESCRICAO || `Produto ${code}`,
                             fornecedor: item.FORNECEDOR || 'N/A',
                             codfor: item.CODFOR || 'N/A',
-                            dtCadastro: item.DTPED // Use the fixed date (Max Date)
+                            dtCadastro: item.DTPED, // Use the fixed date (Max Date)
+                            pasta: item.PASTA || null
                         });
                     }
                 });
@@ -13469,24 +13482,6 @@ const supervisorGroups = new Map();
                         // However, keeping the Maps might be useful if we ever wanted to hydrate locally.
                         stockMap05: Object.fromEntries(stockMap05),
                         stockMap08: Object.fromEntries(stockMap08),
-                        activeProductCodes: Array.from(activeProductCodesFromCadastro),
-                        productDetails: Object.fromEntries(productDetailsMap),
-                        passedWorkingDaysCurrentMonth: passedWorkingDaysCurrentMonth,
-                        isColumnar: true
-                    }
-                });
-
-
-                self.postMessage({
-                    type: 'result',
-                    data: {
-                        detailed: columnarDetailed,
-                        history: columnarHistory,
-                        byOrder: aggregatedByOrder,
-                        clients: columnarClients,
-                        stockMap05: Object.fromEntries(stockMap05),
-                        stockMap08: Object.fromEntries(stockMap08),
-                        innovationsMonth: innovationsDataRaw,
                         activeProductCodes: Array.from(activeProductCodesFromCadastro),
                         productDetails: Object.fromEntries(productDetailsMap),
                         passedWorkingDaysCurrentMonth: passedWorkingDaysCurrentMonth,
