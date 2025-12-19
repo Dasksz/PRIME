@@ -10854,7 +10854,9 @@ const supervisorGroups = new Map();
                     for (let j = i; j < end; j++) {
                         const row = {};
                         for (const col of columns) {
-                            row[col] = columnarData.values[col][j];
+                            // OPTION B: Convert keys to lowercase to match Supabase DB schema
+                            // while keeping internal data uppercase for Frontend compatibility.
+                            row[col.toLowerCase()] = columnarData.values[col][j];
                         }
                         batch.push(row);
                     }
@@ -10868,7 +10870,17 @@ const supervisorGroups = new Map();
             
             const uploadArrayBatch = async (table, arrayData) => {
                 for (let i = 0; i < arrayData.length; i += BATCH_SIZE) {
-                    const batch = arrayData.slice(i, i + BATCH_SIZE);
+                    const rawBatch = arrayData.slice(i, i + BATCH_SIZE);
+
+                    // OPTION B: Convert keys to lowercase for Supabase
+                    const batch = rawBatch.map(item => {
+                        const newItem = {};
+                        for (const key in item) {
+                            newItem[key.toLowerCase()] = item[key];
+                        }
+                        return newItem;
+                    });
+
                     await performUpsert(table, batch);
                      const progress = Math.round((i / arrayData.length) * 100);
                     updateStatus(`Enviando ${table}: ${progress}%`, progress);
