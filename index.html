@@ -10791,10 +10791,22 @@ const supervisorGroups = new Map();
 
         async function enviarDadosParaSupabase(data) {
             const supabaseUrl = document.getElementById('supabase-url').value;
-            const supabaseKey = document.getElementById('supabase-key').value;
+            const supabaseKeyInput = document.getElementById('supabase-key').value;
 
-            if (!supabaseUrl || !supabaseKey) {
-                alert("Por favor, preencha a URL e a Chave Secreta do Supabase.");
+            // Tentamos obter a sessão atual do usuário
+            const { data: { session } } = await supabaseClient.auth.getSession();
+
+            // Definição da chave de autenticação (Token)
+            // Prioridade: Token da sessão do usuário logado > Chave fornecida manualmente (fallback)
+            const authToken = session?.access_token || supabaseKeyInput;
+
+            // Definição da API Key (Header 'apikey')
+            // O Supabase exige que o header 'apikey' contenha a chave ANÔNIMA para passar pelo Gateway sem erro de "Forbidden use of secret key".
+            // O header 'Authorization' carrega o token real (Sessão ou Chave Secreta).
+            const apiKeyHeader = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : supabaseKeyInput;
+
+            if (!supabaseUrl || !authToken) {
+                alert("Por favor, preencha a URL e certifique-se de estar logado ou forneça a Chave Secreta.");
                 return;
             }
 
@@ -10817,8 +10829,8 @@ const supervisorGroups = new Map();
                 const response = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
                     method: 'POST',
                     headers: {
-                        'apikey': supabaseKey,
-                        'Authorization': `Bearer ${supabaseKey}`,
+                        'apikey': apiKeyHeader,
+                        'Authorization': `Bearer ${authToken}`,
                         'Content-Type': 'application/json',
                         'Prefer': 'resolution=merge-duplicates'
                     },
