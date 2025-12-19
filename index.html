@@ -1799,7 +1799,7 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         const { createClient } = supabase;
-        const supabaseClient = window.supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
         // Gatekeeper Logic
         const loginButton = document.getElementById('login-button');
@@ -10791,15 +10791,14 @@ const supervisorGroups = new Map();
 
         async function enviarDadosParaSupabase(data) {
             const supabaseUrl = document.getElementById('supabase-url').value;
-            const supabaseKeyInput = document.getElementById('supabase-key').value.trim();
+            const supabaseKeyInput = document.getElementById('supabase-key').value;
 
             // Tentamos obter a sessão atual do usuário
             const { data: { session } } = await supabaseClient.auth.getSession();
 
             // Definição da chave de autenticação (Token)
-            // Prioridade: Chave fornecida manualmente (Service Role) > Token da sessão do usuário logado
-            // Isso permite que o usuário use a chave secreta para upload (bypass RLS) mesmo estando logado com um usuário sem permissão.
-            const authToken = supabaseKeyInput || session?.access_token;
+            // Prioridade: Token da sessão do usuário logado > Chave fornecida manualmente (fallback)
+            const authToken = session?.access_token || supabaseKeyInput;
 
             // Definição da API Key (Header 'apikey')
             // O Supabase exige que o header 'apikey' contenha a chave ANÔNIMA para passar pelo Gateway sem erro de "Forbidden use of secret key".
@@ -10844,25 +10843,6 @@ const supervisorGroups = new Map();
                 }
             };
 
-            // List of columns that are dates and need conversion from timestamp (ms) to ISO String
-            const dateColumns = new Set(['dtped', 'dtsaida', 'ultimacompra', 'datacadastro', 'dtcadastro', 'updated_at']);
-
-            const formatValue = (key, value) => {
-                // If it's a date column and value is a number, convert to ISO string
-                if (dateColumns.has(key) && typeof value === 'number') {
-                    // Check for valid timestamp (not 0 or crazy value) if needed, 
-                    // but usually new Date(val).toISOString() handles valid ms numbers.
-                    // Postgres timestamp range: 4713 BC to 294276 AD.
-                    // 1764720000000 is year 2025, which is fine.
-                    try {
-                        return new Date(value).toISOString();
-                    } catch (e) {
-                        return null; // Fallback for invalid dates
-                    }
-                }
-                return value;
-            };
-
             const uploadColumnarBatch = async (table, columnarData) => {
                 const totalRows = columnarData.length;
                 const columns = columnarData.columns;
@@ -10874,10 +10854,7 @@ const supervisorGroups = new Map();
                     for (let j = i; j < end; j++) {
                         const row = {};
                         for (const col of columns) {
-                            // OPTION B: Convert keys to lowercase to match Supabase DB schema
-                            const lowerKey = col.toLowerCase();
-                            const val = columnarData.values[col][j];
-                            row[lowerKey] = formatValue(lowerKey, val);
+                            row[col] = columnarData.values[col][j];
                         }
                         batch.push(row);
                     }
@@ -10891,18 +10868,7 @@ const supervisorGroups = new Map();
             
             const uploadArrayBatch = async (table, arrayData) => {
                 for (let i = 0; i < arrayData.length; i += BATCH_SIZE) {
-                    const rawBatch = arrayData.slice(i, i + BATCH_SIZE);
-                    
-                    // OPTION B: Convert keys to lowercase for Supabase
-                    const batch = rawBatch.map(item => {
-                        const newItem = {};
-                        for (const key in item) {
-                            const lowerKey = key.toLowerCase();
-                            newItem[lowerKey] = formatValue(lowerKey, item[key]);
-                        }
-                        return newItem;
-                    });
-
+                    const batch = arrayData.slice(i, i + BATCH_SIZE);
                     await performUpsert(table, batch);
                      const progress = Math.round((i / arrayData.length) * 100);
                     updateStatus(`Enviando ${table}: ${progress}%`, progress);
