@@ -12432,7 +12432,7 @@ const supervisorGroups = new Map();
         self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
 
         const mandatoryColumns = {
-            sales: ['CODCLI', 'NOME', 'SUPERV', 'PEDIDO', 'CODUSUR', 'CODSUPERVISOR', 'DTPED', 'DTSAIDA', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'POSICAO', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX'],
+            sales: ['CODCLI', 'PEDIDO', 'CODUSUR', 'CODSUPERVISOR', 'DTPED', 'DTSAIDA', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX'],
             clients: ['Código', 'RCA 1', 'Nome da Cidade', 'Fantasia', 'Cliente', 'Bairro', 'CNPJ/CPF', 'Endereço Comercial', 'Número', 'CEP', 'Telefone Comercial', 'E-mail', 'Descricao', 'Data da Última Compra', 'Data e Hora de Cadastro', 'Bloqueio', 'Insc. Est. / Produtor'],
             products: ['Código', 'Qtde embalagem master(Compra)', 'Descrição', 'Nome do fornecedor', 'Fornecedor', 'Dt.Cadastro'],
             history: ['CODCLI', 'NOME', 'SUPERV', 'PEDIDO', 'CODUSUR', 'CODSUPERVISOR', 'DTPED', 'DTSAIDA', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'POSICAO', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX']
@@ -12689,6 +12689,18 @@ const supervisorGroups = new Map();
 
         const processSalesData = (rawData, clientMap, productMasterMap, newRcaSupervisorMap, stockLinesCollector = null, fallbackDate = null) => {
             return rawData.map(rawRow => {
+                // --- NOVA LÓGICA: Derivação de OBSERVACAOFOR se vazio ---
+                let observacaoFor = String(rawRow['OBSERVACAOFOR'] || '').trim();
+                if (!observacaoFor) {
+                    const fornecedorUpper = String(rawRow['FORNECEDOR'] || '').toUpperCase();
+                    if (fornecedorUpper.includes('PEPSICO')) {
+                        observacaoFor = 'PEPSICO';
+                    } else {
+                        observacaoFor = 'MULTIMARCAS';
+                    }
+                }
+                // --------------------------------------------------------
+
                 // --- INÍCIO DA MODIFICAÇÃO: FILTRO E CAPTURA DE LINHAS DE ESTOQUE (SEM VENDEDOR) ---
                 const productCheck = String(rawRow['PRODUTO'] || '').trim();
                 const codUsurCheck = String(rawRow['CODUSUR'] || '').trim();
@@ -12702,6 +12714,7 @@ const supervisorGroups = new Map();
                             PRODUTO: productCheck,
                             DESCRICAO: String(rawRow['DESCRICAO'] || ''),
                             FORNECEDOR: String(rawRow['FORNECEDOR'] || ''),
+                            OBSERVACAOFOR: observacaoFor,
                             CODFOR: String(rawRow['CODFOR'] || ''),
                             ESTOQUECX: parseBrazilianNumber(rawRow['ESTOQUECX']),
                             DTPED: fallbackDate // Data sanitizada
@@ -12846,7 +12859,7 @@ const supervisorGroups = new Map();
                 return {
                     PEDIDO: pedido, NOME: vendorName, SUPERV: supervisorName, PRODUTO: productCode,
                     DESCRICAO: String(rawRow['DESCRICAO'] || ''), FORNECEDOR: String(rawRow['FORNECEDOR'] || ''),
-                    OBSERVACAOFOR: String(rawRow['OBSERVACAOFOR'] || '').trim(), CODFOR: String(rawRow['CODFOR'] || '').trim(),
+                    OBSERVACAOFOR: observacaoFor, CODFOR: String(rawRow['CODFOR'] || '').trim(),
                     CODUSUR: codUsur, CODCLI: codCliStr, 
                     // OPTIMIZATION: Removed CLIENTE_NOME, CIDADE, BAIRRO to save file size (Lookup in runtime)
                     QTVENDA: qtVenda,
