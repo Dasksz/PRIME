@@ -10801,6 +10801,23 @@ const supervisorGroups = new Map();
             // Isso permite que o usuário use a chave secreta para upload (bypass RLS) mesmo estando logado com um usuário sem permissão.
             const authToken = supabaseKeyInput || session?.access_token;
 
+            // --- VALIDAÇÃO DA CHAVE SECRETA ---
+            if (supabaseKeyInput) {
+                if (supabaseKeyInput.startsWith('sb_secret')) {
+                    alert("A chave 'sb_secret' não é suportada diretamente pelo Uploader. Por favor, utilize a chave **service_role** do tipo JWT (que começa com 'ey...') disponível em Project Settings > API no Dashboard do Supabase.");
+                    throw new Error("Formato de chave inválido (sb_secret detectado). Use o JWT service_role.");
+                }
+                if (supabaseKeyInput.startsWith('sb_publishable')) {
+                    alert("Você inseriu a chave PÚBLICA (sb_publishable) no campo de senha. Esta chave não tem permissão para gravar dados. Por favor, insira a chave SECRETA (service_role) que começa com 'ey...'.");
+                    throw new Error("Chave pública inserida no lugar da secreta.");
+                }
+                if (!supabaseKeyInput.includes('.')) {
+                    alert("O formato da chave secreta parece inválido. O sistema espera um Token JWT (que contém pontos separando as partes) e geralmente começa com 'ey...'. Verifique se copiou a chave 'service_role' (secret) correta.");
+                    throw new Error("Formato de chave inválido (JWT esperado).");
+                }
+            }
+            // ----------------------------------
+
             // Definição da API Key (Header 'apikey')
             // O Supabase exige que o header 'apikey' contenha a chave ANÔNIMA para passar pelo Gateway sem erro de "Forbidden use of secret key".
             // O header 'Authorization' carrega o token real (Sessão ou Chave Secreta).
