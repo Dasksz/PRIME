@@ -3559,7 +3559,7 @@
                     const cityB = (b.city || '').toLowerCase();
                     if (cityA < cityB) return -1;
                     if (cityA > cityB) return 1;
-                    return a.name.localeCompare(b.name);
+                    return (a.name || '').localeCompare(b.name || '');
                 });
 
                 mixTableDataForExport = tableData;
