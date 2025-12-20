@@ -3467,11 +3467,11 @@
                 const missingText = missing.length > 0 ? missing.join(', ') : '';
                 
                 // Resolve Vendor Name
-                const rcaCode = client.rcas[0];
+                const rcaCode = (client.rcas && client.rcas.length > 0) ? client.rcas[0] : null;
                 let vendorName = 'N/A';
                 if (rcaCode) {
                     vendorName = optimizedData.rcaNameByCode.get(rcaCode) || rcaCode;
-                } else if (client.rcas.length === 0 || client.rcas[0] === '') {
+                } else {
                     vendorName = 'INATIVOS';
                 }
 
@@ -7722,7 +7722,8 @@ const supervisorGroups = new Map();
                     if (data.multimarcas > 0) tooltipParts.push(`MULTIMARCAS: ${data.multimarcas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
                     if (data.outros > 0.001) tooltipParts.push(`OUTROS: ${data.outros.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
                     const tooltipText = tooltipParts.length > 0 ? tooltipParts.join('<br>') : 'Sem detalhamento de categoria';
-                    return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${data['Código']}">${data['Código']}</a></td><td class="px-4 py-2 flex items-center">${data.fantasia || data.razaoSocial}${novoLabel}</td><td class="px-4 py-2 text-right"><div class="tooltip">${data.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">${tooltipText}</span></div></td><td class="px-4 py-2">${data.cidade}</td><td class="px-4 py-2">${data.bairro}</td><td class="px-4 py-2">${data.rcas[0] || '-'}</td></tr>`
+                    const rcaVal = (data.rcas && data.rcas.length > 0) ? data.rcas[0] : '-';
+                    return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${data['Código']}">${data['Código']}</a></td><td class="px-4 py-2 flex items-center">${data.fantasia || data.razaoSocial}${novoLabel}</td><td class="px-4 py-2 text-right"><div class="tooltip">${data.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">${tooltipText}</span></div></td><td class="px-4 py-2">${data.cidade}</td><td class="px-4 py-2">${data.bairro}</td><td class="px-4 py-2">${rcaVal}</td></tr>`
                 }).join('');
 
                 inactiveClientsList.sort((a, b) => {
@@ -7736,7 +7737,8 @@ const supervisorGroups = new Map();
                 cityInactiveDetailTableBody.innerHTML = inactiveClientsList.slice(0, 500).map(client => {
                     const novoLabel = client.isNewForInactiveLabel ? `<span class="ml-2 text-xs font-semibold text-purple-400 bg-purple-900/50 px-2 py-0.5 rounded-full">NOVO</span>` : '';
                     const devolucaoLabel = client.isReturn ? `<span class="ml-2 text-xs font-semibold text-red-400 bg-red-900/50 px-2 py-0.5 rounded-full">DEVOLUÇÃO</span>` : '';
-                    return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${client['Código']}">${client['Código']}</a></td><td class="px-4 py-2 flex items-center">${client.fantasia || client.razaoSocial}${novoLabel}${devolucaoLabel}</td><td class="px-4 py-2">${client.cidade}</td><td class="px-4 py-2">${client.bairro}</td><td class="px-4 py-2 text-center">${formatDate(client.ultimaCompra)}</td><td class="px-4 py-2">${client.rcas[0] || '-'}</td></tr>`
+                    const rcaVal = (client.rcas && client.rcas.length > 0) ? client.rcas[0] : '-';
+                    return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${client['Código']}">${client['Código']}</a></td><td class="px-4 py-2 flex items-center">${client.fantasia || client.razaoSocial}${novoLabel}${devolucaoLabel}</td><td class="px-4 py-2">${client.cidade}</td><td class="px-4 py-2">${client.bairro}</td><td class="px-4 py-2 text-center">${formatDate(client.ultimaCompra)}</td><td class="px-4 py-2">${rcaVal}</td></tr>`
                 }).join('');
 
                 const cityChartTitleEl = document.getElementById('city-chart-title');
@@ -12800,7 +12802,8 @@ const supervisorGroups = new Map();
                             OBSERVACAOFOR: observacaoFor,
                             CODFOR: String(rawRow['CODFOR'] || ''),
                             ESTOQUECX: parseBrazilianNumber(rawRow['ESTOQUECX']),
-                            DTPED: fallbackDate // Data sanitizada
+                            DTPED: fallbackDate, // Data sanitizada
+                            PASTA: observacaoFor // Adiciona PASTA explicitamente
                         });
                     }
                     return null; // Remove da listagem principal de vendas
@@ -13172,6 +13175,10 @@ const supervisorGroups = new Map();
                 // This ensures "Lost Products" table has Description/Supplier even if product is not in the Products File
                 stockLinesCollector.forEach(item => {
                     const code = item.PRODUTO;
+                    
+                    // CRITICAL: Ensure these products are considered "Active" so they appear in lists
+                    activeProductCodesFromCadastro.add(code);
+
                     // Note: productMasterMap stores qtdeMaster. We probably don't have that in stock lines, 
                     // but we have Description/Supplier which goes into productDetailsMap (used for display).
                     
@@ -13182,7 +13189,8 @@ const supervisorGroups = new Map();
                             descricao: item.DESCRICAO || `Produto ${code}`,
                             fornecedor: item.FORNECEDOR || 'N/A',
                             codfor: item.CODFOR || 'N/A',
-                            dtCadastro: item.DTPED // Use the fixed date (Max Date)
+                            dtCadastro: item.DTPED, // Use the fixed date (Max Date)
+                            pasta: item.PASTA || item.OBSERVACAOFOR // Ensure Pasta is available
                         });
                     }
                 });
