@@ -3559,7 +3559,7 @@
                     const cityB = (b.city || '').toLowerCase();
                     if (cityA < cityB) return -1;
                     if (cityA > cityB) return 1;
-                    return a.name.localeCompare(b.name);
+                    return (a.name || '').localeCompare(b.name || '');
                 });
 
                 mixTableDataForExport = tableData;
@@ -13175,7 +13175,7 @@ const supervisorGroups = new Map();
                 // This ensures "Lost Products" table has Description/Supplier even if product is not in the Products File
                 stockLinesCollector.forEach(item => {
                     const code = item.PRODUTO;
-                    
+
                     // CRITICAL: Ensure these products are considered "Active" so they appear in lists
                     activeProductCodesFromCadastro.add(code);
 
