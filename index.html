@@ -7780,7 +7780,7 @@ const supervisorGroups = new Map();
                         let bairro = sale.BAIRRO;
                         if (!bairro && sale.CODCLI) {
                             const c = clientMapForKPIs.get(String(sale.CODCLI));
-                            if (c) bairro = c.bairro;
+                            if (c) bairro = c.bairro || c.BAIRRO || c['Bairro'];
                         }
                         bairro = bairro || 'N/A';
                         salesByBairro[bairro] = (salesByBairro[bairro] || 0) + sale.VLVENDA; 
@@ -7794,7 +7794,7 @@ const supervisorGroups = new Map();
                         let cidade = sale.CIDADE;
                         if (!cidade && sale.CODCLI) {
                             const c = clientMapForKPIs.get(String(sale.CODCLI));
-                            if (c) cidade = c.cidade || c['Nome da Cidade'];
+                            if (c) cidade = c.cidade || c.CIDADE || c['Nome da Cidade'];
                         }
                         cidade = cidade || 'N/A';
                         salesByCity[cidade] = (salesByCity[cidade] || 0) + sale.VLVENDA; 
