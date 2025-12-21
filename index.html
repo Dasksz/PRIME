@@ -7528,7 +7528,7 @@ const supervisorGroups = new Map();
             }
 
             if (excludeFilter !== 'city' && cityInput) {
-                clients = clients.filter(c => c.cidade && c.cidade.toLowerCase() === cityInput);
+                clients = clients.filter(c => (c.cidade || c.CIDADE) && (c.cidade || c.CIDADE).toLowerCase() === cityInput);
             }
             
             if (excludeFilter !== 'codcli' && codCli) {
@@ -7587,11 +7587,11 @@ const supervisorGroups = new Map();
             // Optimized: Handle datasource which might be Sales (no CIDADE) or Clients (has cidade)
             const allAvailableCities = [...new Set(dataSource.map(item => {
                 if (item.CIDADE) return item.CIDADE; // Legacy / Aggregated
-                if (item.cidade) return item.cidade; // Client Object
+                if (item.cidade || item.CIDADE) return item.cidade || item.CIDADE; // Client Object with fallback
                 // Lookup if sales object
                 if (item.CODCLI) {
                     const c = clientMapForKPIs.get(String(item.CODCLI));
-                    if (c) return c.cidade || c['Nome da Cidade'];
+                    if (c) return c.cidade || c.CIDADE || c['Nome da Cidade'];
                 }
                 return 'N/A';
             }).filter(c => c && c !== 'N/A'))].sort();
@@ -7689,10 +7689,10 @@ const supervisorGroups = new Map();
                         salesByActiveClient[codcli] = {
                             // Explicit copy to avoid Spread issues with Proxy
                             'Código': client['Código'],
-                            fantasia: client.fantasia,
-                            razaoSocial: client.razaoSocial,
-                            cidade: client.cidade,
-                            bairro: client.bairro,
+                            fantasia: client.fantasia || client.FANTASIA || client['Nome Fantasia'],
+                            razaoSocial: client.razaoSocial || client.RAZAOSOCIAL || client.Cliente,
+                            cidade: client.cidade || client.CIDADE || client['Nome da Cidade'],
+                            bairro: client.bairro || client.BAIRRO || client['Bairro'],
                             rcas: client.rcas,
                             isNew: client.isNew,
                             // Metrics
