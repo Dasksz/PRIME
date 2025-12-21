@@ -7731,7 +7731,14 @@ const supervisorGroups = new Map();
                     if (data.outros > 0.001) tooltipParts.push(`OUTROS: ${data.outros.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
                     const tooltipText = tooltipParts.length > 0 ? tooltipParts.join('<br>') : 'Sem detalhamento de categoria';
                     const rcaVal = (data.rcas && data.rcas.length > 0) ? data.rcas[0] : '-';
-                    return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${data['Código']}">${data['Código']}</a></td><td class="px-4 py-2 flex items-center">${data.fantasia || data.razaoSocial}${novoLabel}</td><td class="px-4 py-2 text-right"><div class="tooltip">${data.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">${tooltipText}</span></div></td><td class="px-4 py-2">${data.cidade}</td><td class="px-4 py-2">${data.bairro}</td><td class="px-4 py-2">${rcaVal}</td></tr>`
+                    
+                    const fantasia = data.fantasia || data.FANTASIA || data.Fantasia || '';
+                    const razao = data.razaoSocial || data.Cliente || data.RAZAOSOCIAL || '';
+                    const nome = fantasia || razao || 'N/A';
+                    const cidade = data.cidade || data.CIDADE || data['Nome da Cidade'] || 'N/A';
+                    const bairro = data.bairro || data.BAIRRO || 'N/A';
+
+                    return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${data['Código']}">${data['Código']}</a></td><td class="px-4 py-2 flex items-center">${nome}${novoLabel}</td><td class="px-4 py-2 text-right"><div class="tooltip">${data.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">${tooltipText}</span></div></td><td class="px-4 py-2">${cidade}</td><td class="px-4 py-2">${bairro}</td><td class="px-4 py-2">${rcaVal}</td></tr>`
                 }).join('');
 
                 inactiveClientsList.sort((a, b) => {
@@ -7746,7 +7753,15 @@ const supervisorGroups = new Map();
                     const novoLabel = client.isNewForInactiveLabel ? `<span class="ml-2 text-xs font-semibold text-purple-400 bg-purple-900/50 px-2 py-0.5 rounded-full">NOVO</span>` : '';
                     const devolucaoLabel = client.isReturn ? `<span class="ml-2 text-xs font-semibold text-red-400 bg-red-900/50 px-2 py-0.5 rounded-full">DEVOLUÇÃO</span>` : '';
                     const rcaVal = (client.rcas && client.rcas.length > 0) ? client.rcas[0] : '-';
-                    return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${client['Código']}">${client['Código']}</a></td><td class="px-4 py-2 flex items-center">${client.fantasia || client.razaoSocial}${novoLabel}${devolucaoLabel}</td><td class="px-4 py-2">${client.cidade}</td><td class="px-4 py-2">${client.bairro}</td><td class="px-4 py-2 text-center">${formatDate(client.ultimaCompra)}</td><td class="px-4 py-2">${rcaVal}</td></tr>`
+                    
+                    const fantasia = client.fantasia || client.FANTASIA || client.Fantasia || '';
+                    const razao = client.razaoSocial || client.Cliente || client.RAZAOSOCIAL || '';
+                    const nome = fantasia || razao || 'N/A';
+                    const cidade = client.cidade || client.CIDADE || client['Nome da Cidade'] || 'N/A';
+                    const bairro = client.bairro || client.BAIRRO || 'N/A';
+                    const ultCompra = client.ultimaCompra || client['Data da Última Compra'] || client.ULTIMACOMPRA;
+
+                    return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${client['Código']}">${client['Código']}</a></td><td class="px-4 py-2 flex items-center">${nome}${novoLabel}${devolucaoLabel}</td><td class="px-4 py-2">${cidade}</td><td class="px-4 py-2">${bairro}</td><td class="px-4 py-2 text-center">${formatDate(ultCompra)}</td><td class="px-4 py-2">${rcaVal}</td></tr>`
                 }).join('');
 
                 const cityChartTitleEl = document.getElementById('city-chart-title');
@@ -10501,10 +10516,32 @@ const supervisorGroups = new Map();
         function openClientModal(codcli) {
             const clientData = allClientsData.find(c => String(c['Código']) === String(codcli));
             if (!clientData) return;
-            let finalAddress = clientData.endereco || 'N/A';
-            const number = clientData.numero || 'SN';
-            if (number !== 'SN' && finalAddress !== 'N/A' && !finalAddress.includes(number)) finalAddress += `, ${number}`;
-            clientModalContent.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"><div><p class="font-bold text-slate-400">Código:</p><p>${clientData['Código'] || 'N/A'}</p></div><div><p class="font-bold text-slate-400">CNPJ/CPF:</p><p>${clientData.cnpj_cpf || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Insc. Est. / Produtor:</p><p>${clientData.inscricaoEstadual || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Razão Social:</p><p>${clientData.razaoSocial || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Nome Fantasia:</p><p>${clientData.fantasia || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Endereço:</p><p>${finalAddress}</p></div><div><p class="font-bold text-slate-400">Bairro:</p><p>${clientData.bairro || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Cidade:</p><p>${clientData.cidade || 'N/A'}</p></div><div><p class="font-bold text-slate-400">CEP:</p><p>${clientData.cep || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Telefone:</p><p>${clientData.telefone || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">E-mail:</p><p>${clientData.email || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Ramo de Atividade:</p><p>${clientData.ramo || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Última Compra:</p><p>${formatDate(clientData.ultimaCompra)}</p></div></div>`;
+
+            const getVal = (obj, keys) => {
+                for (const k of keys) {
+                    if (obj[k] !== undefined && obj[k] !== null && obj[k] !== 'N/A' && obj[k] !== '') return obj[k];
+                }
+                return undefined;
+            };
+
+            const endereco = getVal(clientData, ['Endereço Comercial', 'endereco', 'ENDERECO']) || 'N/A';
+            const numero = getVal(clientData, ['NUMERO', 'numero', 'Número']) || 'SN';
+            let finalAddress = endereco;
+            if (numero !== 'SN' && finalAddress !== 'N/A' && !finalAddress.includes(numero)) finalAddress += `, ${numero}`;
+
+            const cnpj = getVal(clientData, ['CNPJ/CPF', 'cnpj_cpf']) || 'N/A';
+            const insc = getVal(clientData, ['Insc. Est. / Produtor', 'inscricaoEstadual', 'INSCRICAOESTADUAL']) || 'N/A';
+            const razao = getVal(clientData, ['Cliente', 'razaoSocial', 'nomeCliente', 'RAZAOSOCIAL', 'NOMECLIENTE']) || 'N/A';
+            const fantasia = getVal(clientData, ['FANTASIA', 'Fantasia', 'fantasia']) || 'N/A';
+            const bairro = getVal(clientData, ['BAIRRO', 'Bairro', 'bairro']) || 'N/A';
+            const cidade = getVal(clientData, ['CIDADE', 'Cidade', 'cidade', 'Nome da Cidade']) || 'N/A';
+            const cep = getVal(clientData, ['CEP', 'cep']) || 'N/A';
+            const telefone = getVal(clientData, ['Telefone Comercial', 'telefone', 'TELEFONE']) || 'N/A';
+            const email = getVal(clientData, ['EMAIL', 'email', 'E-mail']) || 'N/A';
+            const ramo = getVal(clientData, ['Descricao', 'ramo', 'DESCRICAO', 'Descricao']) || 'N/A';
+            const ultimaCompra = getVal(clientData, ['Data da Última Compra', 'ultimaCompra', 'ULTIMACOMPRA']);
+
+            clientModalContent.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"><div><p class="font-bold text-slate-400">Código:</p><p>${clientData['Código'] || 'N/A'}</p></div><div><p class="font-bold text-slate-400">CNPJ/CPF:</p><p>${cnpj}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Insc. Est. / Produtor:</p><p>${insc}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Razão Social:</p><p>${razao}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Nome Fantasia:</p><p>${fantasia}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Endereço:</p><p>${finalAddress}</p></div><div><p class="font-bold text-slate-400">Bairro:</p><p>${bairro}</p></div><div><p class="font-bold text-slate-400">Cidade:</p><p>${cidade}</p></div><div><p class="font-bold text-slate-400">CEP:</p><p>${cep}</p></div><div><p class="font-bold text-slate-400">Telefone:</p><p>${telefone}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">E-mail:</p><p>${email}</p></div><div><p class="font-bold text-slate-400">Ramo de Atividade:</p><p>${ramo}</p></div><div><p class="font-bold text-slate-400">Última Compra:</p><p>${formatDate(ultimaCompra)}</p></div></div>`;
             clientModal.classList.remove('hidden');
         }
 
@@ -10526,10 +10563,10 @@ const supervisorGroups = new Map();
             if (includeFaturamento) tableColumn.splice(2, 0, "Faturamento");
 
             clientList.sort((a, b) => {
-                const cidadeA = a.cidade || '';
-                const cidadeB = b.cidade || '';
-                const bairroA = a.bairro || '';
-                const bairroB = b.bairro || '';
+                const cidadeA = a.cidade || a.CIDADE || a['Nome da Cidade'] || '';
+                const cidadeB = b.cidade || b.CIDADE || b['Nome da Cidade'] || '';
+                const bairroA = a.bairro || a.BAIRRO || '';
+                const bairroB = b.bairro || b.BAIRRO || '';
                 if (cidadeA < cidadeB) return -1;
                 if (cidadeA > cidadeB) return 1;
                 if (bairroA < bairroB) return -1;
@@ -10541,7 +10578,14 @@ const supervisorGroups = new Map();
             let totalFaturamento = 0;
 
             clientList.forEach(client => {
-                const clientData = [ client['Código'] || '', client.fantasia || client.razaoSocial || '', client.bairro || '', client.cidade || '', formatDate(client.ultimaCompra) || 'N/A' ];
+                const fantasia = client.fantasia || client.FANTASIA || client.Fantasia || '';
+                const razao = client.razaoSocial || client.Cliente || client.RAZAOSOCIAL || '';
+                const nome = fantasia || razao;
+                const bairro = client.bairro || client.BAIRRO || client.Bairro || '';
+                const cidade = client.cidade || client.CIDADE || client.Cidade || client['Nome da Cidade'] || '';
+                const ultCompra = client.ultimaCompra || client['Data da Última Compra'] || client.ULTIMACOMPRA;
+
+                const clientData = [ client['Código'] || '', nome, bairro, cidade, formatDate(ultCompra) || 'N/A' ];
                 if (includeFaturamento) {
                     const val = client.total || 0;
                     totalFaturamento += val;
