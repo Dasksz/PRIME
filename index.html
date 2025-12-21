@@ -10965,6 +10965,24 @@ const supervisorGroups = new Map();
                 }
             };
 
+            const clearTable = async (table) => {
+                // Deleta todas as linhas da tabela (onde id não é nulo)
+                // É mais seguro usar uma condição que sempre é verdadeira se não houver truncate explícito
+                const response = await fetch(`${supabaseUrl}/rest/v1/${table}?id=not.is.null`, {
+                    method: 'DELETE',
+                    headers: {
+                        'apikey': apiKeyHeader,
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Erro ao limpar tabela ${table}: ${errorText}`);
+                }
+            };
+
             // List of columns that are dates and need conversion from timestamp (ms) to ISO String
             const dateColumns = new Set(['dtped', 'dtsaida', 'ultimacompra', 'datacadastro', 'dtcadastro', 'updated_at']);
 
@@ -11031,15 +11049,42 @@ const supervisorGroups = new Map();
             }
 
             try {
-                if (data.detailed && data.detailed.length > 0) await uploadColumnarBatch('data_detailed', data.detailed);
-                if (data.history && data.history.length > 0) await uploadColumnarBatch('data_history', data.history);
-                if (data.byOrder && data.byOrder.length > 0) await uploadArrayBatch('data_orders', data.byOrder);
-                if (data.clients && data.clients.length > 0) await uploadColumnarBatch('data_clients', data.clients);
-                if (data.stock && data.stock.length > 0) await uploadArrayBatch('data_stock', data.stock);
-                if (data.innovations && data.innovations.length > 0) await uploadArrayBatch('data_innovations', data.innovations);
-                if (data.product_details && data.product_details.length > 0) await uploadArrayBatch('data_product_details', data.product_details);
-                if (data.active_products && data.active_products.length > 0) await uploadArrayBatch('data_active_products', data.active_products);
-                if (data.metadata && data.metadata.length > 0) await uploadArrayBatch('data_metadata', data.metadata);
+                if (data.detailed && data.detailed.length > 0) {
+                    await clearTable('data_detailed');
+                    await uploadColumnarBatch('data_detailed', data.detailed);
+                }
+                if (data.history && data.history.length > 0) {
+                    await clearTable('data_history');
+                    await uploadColumnarBatch('data_history', data.history);
+                }
+                if (data.byOrder && data.byOrder.length > 0) {
+                    await clearTable('data_orders');
+                    await uploadArrayBatch('data_orders', data.byOrder);
+                }
+                if (data.clients && data.clients.length > 0) {
+                    await clearTable('data_clients');
+                    await uploadColumnarBatch('data_clients', data.clients);
+                }
+                if (data.stock && data.stock.length > 0) {
+                    await clearTable('data_stock');
+                    await uploadArrayBatch('data_stock', data.stock);
+                }
+                if (data.innovations && data.innovations.length > 0) {
+                    await clearTable('data_innovations');
+                    await uploadArrayBatch('data_innovations', data.innovations);
+                }
+                if (data.product_details && data.product_details.length > 0) {
+                    await clearTable('data_product_details');
+                    await uploadArrayBatch('data_product_details', data.product_details);
+                }
+                if (data.active_products && data.active_products.length > 0) {
+                    await clearTable('data_active_products');
+                    await uploadArrayBatch('data_active_products', data.active_products);
+                }
+                if (data.metadata && data.metadata.length > 0) {
+                    await clearTable('data_metadata');
+                    await uploadArrayBatch('data_metadata', data.metadata);
+                }
                 
                 updateStatus('Upload Concluído com Sucesso!', 100);
                 alert('Dados enviados com sucesso!');
@@ -13442,10 +13487,22 @@ const supervisorGroups = new Map();
                         if (row.CODFOR) order.CODFORS.add(row.CODFOR);
                     }
                     return Array.from(orders.values()).map(order => {
-                        order.FORNECEDORES_LIST = Array.from(order.FORNECEDORES);
-                        order.FORNECEDORES_STR = order.FORNECEDORES_LIST.join(', ');
-                        order.CODFORS_LIST = Array.from(order.CODFORS);
-                        return order;
+                        // Construct a clean object matching data_orders schema to avoid "column not found" errors
+                        return {
+                            PEDIDO: order.PEDIDO,
+                            CODCLI: order.CODCLI,
+                            CLIENTE_NOME: order.CLIENTE_NOME,
+                            CIDADE: order.CIDADE,
+                            NOME: order.NOME,
+                            SUPERV: order.SUPERV,
+                            FORNECEDORES_STR: Array.from(order.FORNECEDORES).join(', '),
+                            DTPED: order.DTPED,
+                            DTSAIDA: order.DTSAIDA,
+                            POSICAO: order.POSICAO,
+                            VLVENDA: order.VLVENDA,
+                            TOTPESOLIQ: order.TOTPESOLIQ,
+                            FILIAL: order.FILIAL
+                        };
                     });
                 };
                 const aggregatedByOrder = aggregateOrders(finalSalesData);
