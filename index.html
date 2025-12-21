@@ -2370,9 +2370,25 @@
                 const client = getClient(i); // Hydrate object for processing
                 const codCli = String(client['Código']);
 
-                client.cidade = client.cidade || 'N/A';
+                // Normalize keys from Supabase (Upper) or Local/Legacy (Lower/Camel)
+                // mapKeysToUpper might have transformed 'cidade' -> 'CIDADE', 'ramo' -> 'RAMO', etc.
+                client.cidade = client.cidade || client.CIDADE || 'N/A';
+                client.bairro = client.bairro || client.BAIRRO || 'N/A';
+                client.ramo = client.ramo || client.RAMO || 'N/A';
+                
+                // Name Normalization
+                // mapKeysToUpper maps 'NOMECLIENTE' -> 'Cliente'. Local/Worker might produce 'nomeCliente'.
+                client.nomeCliente = client.nomeCliente || client.Cliente || client.CLIENTE || client.NOMECLIENTE || 'N/A';
+                
+                // RCA Handling
+                // mapKeysToUpper maps 'RCA1' -> 'RCA 1'. Local might use 'rca1'.
+                const rca1 = client.rca1 || client['RCA 1'] || client.RCA1;
+                // Normalize access for rest of the code
+                client.rca1 = rca1;
 
-                if ((client.razaoSocial || '').toUpperCase().includes('AMERICANAS')) {
+                const razaoSocial = client.razaoSocial || client.RAZAOSOCIAL || client.Cliente || ''; // Fallback
+
+                if (razaoSocial.toUpperCase().includes('AMERICANAS')) {
                     client.rca1 = '1001';
                     client.rcas = ['1001'];
                     americanasCodCli = codCli;
@@ -2380,11 +2396,15 @@
                 // Removed INATIVOS logic as per request
                 
                 if (client.rca1) clientToCurrentSellerMap.set(codCli, String(client.rca1));
-                clientRamoMap.set(codCli, client.ramo || 'N/A');
+                clientRamoMap.set(codCli, client.ramo);
                 
-                if (client.rcas) {
-                    for (let j = 0; j < client.rcas.length; j++) {
-                        const rca = client.rcas[j];
+                // Handle RCAS array (could be 'rcas' or 'RCAS')
+                const rcas = client.rcas || client.RCAS;
+                client.rcas = rcas; // Normalize for later use if needed
+
+                if (rcas) {
+                    for (let j = 0; j < rcas.length; j++) {
+                        const rca = rcas[j];
                         if (rca) {
                             if (!optimizedData.clientsByRca.has(rca)) optimizedData.clientsByRca.set(rca, []);
                             optimizedData.clientsByRca.get(rca).push(client);
@@ -2392,7 +2412,7 @@
                     }
                 }
                 
-            optimizedData.searchIndices.clients[i] = { code: codCli, nameLower: (client.nomeCliente || '').toLowerCase(), cityLower: (client.cidade || '').toLowerCase() };
+                optimizedData.searchIndices.clients[i] = { code: codCli, nameLower: (client.nomeCliente || '').toLowerCase(), cityLower: (client.cidade || '').toLowerCase() };
             }
 
             optimizedData.rcasBySupervisor = new Map();
