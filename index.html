@@ -10965,10 +10965,10 @@ const supervisorGroups = new Map();
                 }
             };
 
-            const clearTable = async (table) => {
-                // Deleta todas as linhas da tabela (onde id não é nulo)
+            const clearTable = async (table, pkColumn = 'id') => {
+                // Deleta todas as linhas da tabela (onde pkColumn não é nulo)
                 // É mais seguro usar uma condição que sempre é verdadeira se não houver truncate explícito
-                const response = await fetch(`${supabaseUrl}/rest/v1/${table}?id=not.is.null`, {
+                const response = await fetch(`${supabaseUrl}/rest/v1/${table}?${pkColumn}=not.is.null`, {
                     method: 'DELETE',
                     headers: {
                         'apikey': apiKeyHeader,
@@ -11074,15 +11074,15 @@ const supervisorGroups = new Map();
                     await uploadArrayBatch('data_innovations', data.innovations);
                 }
                 if (data.product_details && data.product_details.length > 0) {
-                    await clearTable('data_product_details');
+                    await clearTable('data_product_details', 'code');
                     await uploadArrayBatch('data_product_details', data.product_details);
                 }
                 if (data.active_products && data.active_products.length > 0) {
-                    await clearTable('data_active_products');
+                    await clearTable('data_active_products', 'code');
                     await uploadArrayBatch('data_active_products', data.active_products);
                 }
                 if (data.metadata && data.metadata.length > 0) {
-                    await clearTable('data_metadata');
+                    await clearTable('data_metadata', 'key');
                     await uploadArrayBatch('data_metadata', data.metadata);
                 }
                 
