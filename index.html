@@ -12579,7 +12579,7 @@ const supervisorGroups = new Map();
 
         const mandatoryColumns = {
             sales: ['CODCLI', 'PEDIDO', 'CODUSUR', 'CODSUPERVISOR', 'DTPED', 'DTSAIDA', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX'],
-            clients: ['Código', 'RCA 1', 'Nome da Cidade', 'Fantasia', 'Cliente', 'Bairro', 'CNPJ/CPF', 'Endereço Comercial', 'Número', 'CEP', 'Telefone Comercial', 'E-mail', 'Descricao', 'Data da Última Compra', 'Data e Hora de Cadastro', 'Bloqueio', 'Insc. Est. / Produtor'],
+            clients: [], // Validation relaxed to support variable headers (aliases handled in processing)
             products: ['Código', 'Qtde embalagem master(Compra)', 'Descrição', 'Nome do fornecedor', 'Fornecedor', 'Dt.Cadastro'],
             history: ['CODCLI', 'NOME', 'SUPERV', 'PEDIDO', 'CODUSUR', 'CODSUPERVISOR', 'DTPED', 'DTSAIDA', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'POSICAO', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX']
         };
@@ -13187,37 +13187,66 @@ const supervisorGroups = new Map();
 
                 self.postMessage({ type: 'progress', status: 'Processando clientes...', percentage: 50 });
                 const clientMap = new Map();
+
+                // Helper to get value from multiple possible keys
+                const getVal = (row, keys) => {
+                    if (!row) return undefined;
+                    // Direct match first
+                    for (const k of keys) {
+                        if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== '') return row[k];
+                    }
+                    // Case-insensitive match
+                    const rowKeys = Object.keys(row);
+                    for (const k of keys) {
+                        const match = rowKeys.find(rk => rk.trim().toUpperCase() === k.toUpperCase());
+                        if (match && row[match] !== undefined && row[match] !== null && String(row[match]).trim() !== '') return row[match];
+                    }
+                    return undefined;
+                };
+
                 clientsDataRaw.forEach(client => {
-                    const codCli = normalizeKey(client['Código']);
+                    const codCliRaw = getVal(client, ['Código', 'CODIGO', 'Codigo', 'Cod. Cliente', 'CODCLI', 'CodCliente']);
+                    const codCli = normalizeKey(codCliRaw);
                     if (!codCli) return;
 
-                    const rca1 = String(client['RCA 1'] || '').trim();
+                    const rca1 = String(getVal(client, ['RCA 1', 'RCA', 'Rca 1', 'Vendedor 1', 'VENDEDOR']) || '').trim();
                     const rcas = new Set();
                     if (rca1) rcas.add(rca1);
 
-                    const uc = parseDate(client['Data da Última Compra']);
-                    const dc = parseDate(client['Data e Hora de Cadastro']);
+                    const ucRaw = getVal(client, ['Data da Última Compra', 'Ultima Compra', 'DTULTCOMPRA', 'Data Ultima Compra']);
+                    const dcRaw = getVal(client, ['Data e Hora de Cadastro', 'Data Cadastro', 'DTCADASTRO', 'Data de Cadastro']);
+
+                    const uc = parseDate(ucRaw);
+                    const dc = parseDate(dcRaw);
+
+                    const cidade = String(getVal(client, ['Nome da Cidade', 'Cidade', 'CIDADE', 'MUNICIPIO', 'Município', 'City', 'CIDADE_CLIENTE']) || 'N/A');
+                    const bairro = String(getVal(client, ['Bairro', 'BAIRRO', 'Bairro/Distrito', 'BAIRRO_CLIENTE']) || 'N/A');
+                    const fantasia = String(getVal(client, ['Fantasia', 'Nome Fantasia', 'NOME FANTASIA', 'NOME_FANTASIA', 'Nome', 'NOME']) || 'N/A');
+                    const razao = String(getVal(client, ['Cliente', 'Razão Social', 'RAZAO SOCIAL', 'RAZAOSOCIAL', 'Nome Cliente', 'Razão']) || 'N/A');
+
+                    // Fallback logic for Name
+                    const nomeCliente = (fantasia !== 'N/A') ? fantasia : razao;
 
                     const clientData = {
                         'codigo_cliente': codCli,
                         rcas: Array.from(rcas),
                         rca1: rca1,
-                        cidade: String(client['Nome da Cidade'] || 'N/A'),
-                        nomeCliente: String(client['Fantasia'] || client['Cliente'] || 'N/A'),
-                        bairro: String(client['Bairro'] || 'N/A'),
-                        razaoSocial: String(client['Cliente'] || 'N/A'),
-                        fantasia: String(client['Fantasia'] || 'N/A'),
-                        cnpj_cpf: String(client['CNPJ/CPF'] || 'N/A'),
-                        endereco: String(client['Endereço Comercial'] || client['Endereço'] || 'N/A'),
-                        numero: String(client['Número'] || 'SN'),
-                        cep: String(client['CEP'] || 'N/A'),
-                        telefone: String(client['Telefone Comercial'] || 'N/A'),
-                        email: String(client['E-mail'] || 'N/A'),
-                        ramo: String(client['Descricao'] || 'N/A'),
+                        cidade: cidade,
+                        nomeCliente: nomeCliente,
+                        bairro: bairro,
+                        razaoSocial: razao,
+                        fantasia: fantasia,
+                        cnpj_cpf: String(getVal(client, ['CNPJ/CPF', 'CNPJ', 'CPF', 'Cgc/Cpf']) || 'N/A'),
+                        endereco: String(getVal(client, ['Endereço Comercial', 'Endereço', 'ENDERECO', 'Logradouro', 'Rua']) || 'N/A'),
+                        numero: String(getVal(client, ['Número', 'Numero', 'NUMERO', 'No']) || 'SN'),
+                        cep: String(getVal(client, ['CEP', 'Cep']) || 'N/A'),
+                        telefone: String(getVal(client, ['Telefone Comercial', 'Telefone', 'TELEFONE', 'Tel']) || 'N/A'),
+                        email: String(getVal(client, ['E-mail', 'Email', 'EMAIL', 'Correo']) || 'N/A'),
+                        ramo: String(getVal(client, ['Descricao', 'Ramo', 'Atividade', 'RAMO_ATIVIDADE']) || 'N/A'),
                         ultimaCompra: uc ? uc.getTime() : null,
                         dataCadastro: dc ? dc.getTime() : null,
-                        bloqueio: String(client['Bloqueio'] || '').trim().toUpperCase(),
-                        inscricaoEstadual: String(client['Insc. Est. / Produtor'] || 'N/A')
+                        bloqueio: String(getVal(client, ['Bloqueio', 'BLOQUEIO', 'Status']) || '').trim().toUpperCase(),
+                        inscricaoEstadual: String(getVal(client, ['Insc. Est. / Produtor', 'Inscricao Estadual', 'IE', 'INSCRICAO']) || 'N/A')
                     };
                     if (clientRcaOverrides.has(codCli)) clientData.rcas.unshift(clientRcaOverrides.get(codCli));
                     clientMap.set(codCli, clientData);
