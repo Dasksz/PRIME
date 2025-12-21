@@ -7687,7 +7687,15 @@ const supervisorGroups = new Map();
                     if (details && details.total > 0) {
                         const outrosTotal = details.total - details.pepsico - details.multimarcas;
                         salesByActiveClient[codcli] = {
-                            ...client,
+                            // Explicit copy to avoid Spread issues with Proxy
+                            'Código': client['Código'],
+                            fantasia: client.fantasia,
+                            razaoSocial: client.razaoSocial,
+                            cidade: client.cidade,
+                            bairro: client.bairro,
+                            rcas: client.rcas,
+                            isNew: client.isNew,
+                            // Metrics
                             total: details.total,
                             pepsico: details.pepsico,
                             multimarcas: details.multimarcas,
@@ -10091,7 +10099,16 @@ const supervisorGroups = new Map();
                     status[catName] = inMain || inBonus;
                 });
                 
-                return { ...client, innovationStatus: status };
+                // Explicit copy for robustness against Proxies
+                return {
+                    'Código': client['Código'],
+                    fantasia: client.fantasia,
+                    razaoSocial: client.razaoSocial,
+                    cidade: client.cidade,
+                    bairro: client.bairro,
+                    ultimaCompra: client.ultimaCompra,
+                    innovationStatus: status
+                };
             });
 
             clientInnovationStatus.sort((a, b) => {
@@ -12776,7 +12793,9 @@ const supervisorGroups = new Map();
             return rawData.map(rawRow => {
                 // --- NOVA LÓGICA: Derivação de OBSERVACAOFOR se vazio ---
                 let observacaoFor = String(rawRow['OBSERVACAOFOR'] || '').trim();
-                if (!observacaoFor) {
+
+                // Trata '0', '00' ou vazio como inválido
+                if (!observacaoFor || observacaoFor === '0' || observacaoFor === '00') {
                     const fornecedorUpper = String(rawRow['FORNECEDOR'] || '').toUpperCase();
                     if (fornecedorUpper.includes('PEPSICO')) {
                         observacaoFor = 'PEPSICO';
