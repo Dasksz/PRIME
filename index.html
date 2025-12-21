@@ -385,7 +385,7 @@
                                             <div class="flex-1 flex flex-col sm:flex-row justify-between items-start gap-4">
                                                 <div class="text-center sm:text-left">
                                                     <h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1>
-                                                    <p class="text-slate-300 mt-1">Dados atualizados em: ${generationDate}</p>
+                                                    <p id="last-update-text" class="text-slate-300 mt-1">Dados atualizados em: ${generationDate}</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -1675,9 +1675,19 @@
                 if (newKey === 'CLIENTE_NOME') newKey = 'CLIENTE_NOME'; // Keep as is if script uses it
                 
                 // Validação de tipos
-                if (item[key] !== null && (newKey === 'DTPED' || newKey === 'DTSAIDA' || newKey === 'Data da Última Compra' || newKey === 'Data e Hora de Cadastro')) {
-                     // Ensure it's a valid date string or timestamp
-                     newItem[newKey] = item[key];
+                if (item[key] !== null) {
+                    if (newKey === 'DTPED' || newKey === 'DTSAIDA' || newKey === 'Data da Última Compra' || newKey === 'Data e Hora de Cadastro') {
+                         // Ensure it's a valid date string or timestamp
+                         newItem[newKey] = item[key];
+                    } else if (newKey === 'QTVENDA' || newKey === 'VLVENDA' || newKey === 'VLBONIFIC' || newKey === 'TOTPESOLIQ' || newKey === 'ESTOQUECX' || newKey === 'ESTOQUEUNIT' || newKey === 'PEDIDO') {
+                         // Force numeric conversion for sales metrics
+                         const val = Number(item[key]);
+                         newItem[newKey] = isNaN(val) ? 0 : val;
+                    } else if (newKey === 'FILIAL') {
+                         newItem[newKey] = String(item[key]);
+                    } else {
+                         newItem[newKey] = item[key];
+                    }
                 } else {
                      newItem[newKey] = item[key];
                 }
@@ -1762,6 +1772,7 @@
                 innovationsMonth: innovations, // Check keys
                 activeProductCodes: activeProductCodes,
                 productDetails: productDetailsMap,
+                metadata: metadata,
                 passedWorkingDaysCurrentMonth: 1, // Calculate?
                 isColumnar: false // Let logic script convert if it wants
             };
@@ -1770,6 +1781,14 @@
             const lastSale = detailedUpper.length > 0 ? detailedUpper.reduce((max, p) => p.DTPED > max ? p.DTPED : max, 0) : new Date();
             // ... logic to calc days ... simple fallback
             embeddedData.passedWorkingDaysCurrentMonth = 1; 
+
+            // Update Generation Date UI
+            const lastUpdateText = document.getElementById('last-update-text');
+            if (lastUpdateText) {
+                const dateObj = new Date(lastSale);
+                const formattedDate = dateObj.toLocaleDateString('pt-BR') + ' ' + dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                lastUpdateText.textContent = `Dados atualizados em: ${formattedDate}`;
+            }
 
             window.embeddedData = embeddedData;
 
