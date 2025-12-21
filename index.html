@@ -2370,7 +2370,14 @@
                 const client = getClient(i); // Hydrate object for processing
                 const codCli = String(client['Código']);
 
-                client.cidade = client.cidade || 'N/A';
+                // Normalize Cidade/Bairro keys from possible Uppercase or variations (DB/Worker mismatch fix)
+                // Mirrors Worker getVal logic for consistency
+                if (!client.cidade || client.cidade === 'N/A') {
+                     client.cidade = client.cidade || client.CIDADE || client['Nome da Cidade'] || client['NOME DA CIDADE'] || client.MUNICIPIO || client.Municipio || client.City || client.CIDADE_CLIENTE || 'N/A';
+                }
+                if (!client.bairro || client.bairro === 'N/A') {
+                     client.bairro = client.bairro || client.BAIRRO || client['Bairro'] || client['BAIRRO'] || client['Bairro/Distrito'] || client.BAIRRO_CLIENTE || 'N/A';
+                }
 
                 if ((client.razaoSocial || '').toUpperCase().includes('AMERICANAS')) {
                     client.rca1 = '1001';
