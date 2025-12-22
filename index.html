@@ -1755,6 +1755,7 @@
     }
 
     async function carregarDadosDoSupabase(supabaseClient) {
+        isAppReady = true;
         const loader = document.getElementById('loader');
         const loaderText = document.getElementById('loader-text');
         const dashboardView = document.getElementById('main-dashboard'); // ID no novo template é main-dashboard? Check template.
@@ -1894,23 +1895,26 @@
         });
 
         let isCheckingProfile = false;
+        let isAppReady = false;
 
         async function verifyUserProfile(session) {
             if (isCheckingProfile || !session) return;
             isCheckingProfile = true;
 
-            // Reset UI to Loading State
-            telaLogin.classList.add('hidden');
-            telaPendente.classList.add('hidden');
-            const card = document.getElementById('loading-card-content');
-            if (card) {
-                card.innerHTML = `
-                    <h2 style="margin-top: 0; font-size: 1.5rem; font-weight: 600;">Carregando...</h2>
-                    <p style="color: #a0aec0;">Verificando credenciais.</p>
-                    <p style="color: #4a5568; font-size: 0.75rem; margin-top: 1rem;">v5.2.1</p>
-                `;
+            // Only Reset UI to Loading State if App is NOT Ready (Initial Load)
+            if (!isAppReady) {
+                telaLogin.classList.add('hidden');
+                telaPendente.classList.add('hidden');
+                const card = document.getElementById('loading-card-content');
+                if (card) {
+                    card.innerHTML = `
+                        <h2 style="margin-top: 0; font-size: 1.5rem; font-weight: 600;">Carregando...</h2>
+                        <p style="color: #a0aec0;">Verificando credenciais.</p>
+                        <p style="color: #4a5568; font-size: 0.75rem; margin-top: 1rem;">v5.2.1</p>
+                    `;
+                }
+                telaLoading.classList.remove('hidden');
             }
-            telaLoading.classList.remove('hidden');
 
             try {
                 // Check Profile with Timeout - 15s
@@ -1926,35 +1930,51 @@
                 }
 
                 if (profile && profile.status === 'aprovado') {
-                    telaLoading.classList.add('hidden');
-                    carregarDadosDoSupabase(supabaseClient);
+                    if (!isAppReady) {
+                        telaLoading.classList.add('hidden');
+                        carregarDadosDoSupabase(supabaseClient);
+                    }
+                    // If App is Ready, we do nothing - keep dashboard active.
                 } else {
+                    // Profile not approved - Enforce Block
                     telaLoading.classList.add('hidden');
                     telaPendente.classList.remove('hidden');
+                    // Hide dashboard content just in case
+                    const contentWrapper = document.getElementById('content-wrapper');
+                    if(contentWrapper) contentWrapper.classList.add('hidden');
                 }
             } catch (err) {
                 console.error("Error checking profile:", err);
-                if (card) {
-                    card.innerHTML = `
-                        <h2 style="margin-top: 0; font-size: 1.5rem; font-weight: 600; color: #fc8181;">Erro de Conexão</h2>
-                        <p style="color: #a0aec0; margin-bottom: 1.5rem;">${err.message || 'Não foi possível verificar suas credenciais.'}</p>
-                        <button id="retry-connection-btn" class="gatekeeper-btn" style="background-color: #2d3748; border-color: #4a5568;">
-                            Tentar Novamente
-                        </button>
-                        <p style="color: #4a5568; font-size: 0.75rem; margin-top: 1rem;">v5.2.1</p>
-                    `;
-                    // Re-bind retry button
-                    const retryBtn = document.getElementById('retry-connection-btn');
-                    if(retryBtn) {
-                        retryBtn.addEventListener('click', () => {
-                            isCheckingProfile = false; // Reset flag to allow retry
-                            verifyUserProfile(session);
-                        });
-                    }
+
+                // If App is Ready (Silent Check), suppress error screen.
+                if (isAppReady) {
+                    console.warn("Background profile check failed. Keeping session active.");
+                    // Optionally show a toast here in future.
                 } else {
-                    alert("Erro de conexão: " + err.message);
-                    telaLoading.classList.add('hidden');
-                    telaPendente.classList.remove('hidden');
+                    // Initial Load Failed - Show Error Screen
+                    const card = document.getElementById('loading-card-content');
+                    if (card) {
+                        card.innerHTML = `
+                            <h2 style="margin-top: 0; font-size: 1.5rem; font-weight: 600; color: #fc8181;">Erro de Conexão</h2>
+                            <p style="color: #a0aec0; margin-bottom: 1.5rem;">${err.message || 'Não foi possível verificar suas credenciais.'}</p>
+                            <button id="retry-connection-btn" class="gatekeeper-btn" style="background-color: #2d3748; border-color: #4a5568;">
+                                Tentar Novamente
+                            </button>
+                            <p style="color: #4a5568; font-size: 0.75rem; margin-top: 1rem;">v5.2.1</p>
+                        `;
+                        // Re-bind retry button
+                        const retryBtn = document.getElementById('retry-connection-btn');
+                        if(retryBtn) {
+                            retryBtn.addEventListener('click', () => {
+                                isCheckingProfile = false; // Reset flag to allow retry
+                                verifyUserProfile(session);
+                            });
+                        }
+                    } else {
+                        alert("Erro de conexão: " + err.message);
+                        telaLoading.classList.add('hidden');
+                        telaPendente.classList.remove('hidden');
+                    }
                 }
             } finally {
                 isCheckingProfile = false;
