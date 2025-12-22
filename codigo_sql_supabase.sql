@@ -175,37 +175,46 @@ alter table public.goals_distribution enable row level security;
 -- Ajuste conforme necessidade: 'anon' para público, 'authenticated' para logados.
 -- Usando DROP IF EXISTS antes para evitar erros ao re-executar o script.
 
+drop policy if exists "Authenticated can read data_detailed" on public.data_detailed;
 drop policy if exists "Enable read access for all users" on public.data_detailed;
 create policy "Enable read access for all users" on public.data_detailed for select using (true);
 
+drop policy if exists "Authenticated can read data_history" on public.data_history;
 drop policy if exists "Enable read access for all users" on public.data_history;
 create policy "Enable read access for all users" on public.data_history for select using (true);
 
+drop policy if exists "Authenticated can read data_clients" on public.data_clients;
 drop policy if exists "Enable read access for all users" on public.data_clients;
 create policy "Enable read access for all users" on public.data_clients for select using (true);
 
+drop policy if exists "Authenticated can read data_orders" on public.data_orders;
 drop policy if exists "Enable read access for all users" on public.data_orders;
 create policy "Enable read access for all users" on public.data_orders for select using (true);
 
+drop policy if exists "Authenticated can read data_product_details" on public.data_product_details;
 drop policy if exists "Enable read access for all users" on public.data_product_details;
 create policy "Enable read access for all users" on public.data_product_details for select using (true);
 
+drop policy if exists "Authenticated can read data_active_products" on public.data_active_products;
 drop policy if exists "Enable read access for all users" on public.data_active_products;
 create policy "Enable read access for all users" on public.data_active_products for select using (true);
 
+drop policy if exists "Authenticated can read data_stock" on public.data_stock;
 drop policy if exists "Enable read access for all users" on public.data_stock;
 create policy "Enable read access for all users" on public.data_stock for select using (true);
 
+drop policy if exists "Authenticated can read data_innovations" on public.data_innovations;
 drop policy if exists "Enable read access for all users" on public.data_innovations;
 create policy "Enable read access for all users" on public.data_innovations for select using (true);
 
+drop policy if exists "Authenticated can read data_metadata" on public.data_metadata;
 drop policy if exists "Enable read access for all users" on public.data_metadata;
 create policy "Enable read access for all users" on public.data_metadata for select using (true);
 
 -- Removida a política redundante de leitura para goals_distribution para evitar avisos de Múltiplas Políticas Permissivas.
 -- A política "Enable insert/update for goals" abaixo cobre o acesso se estiver configurada corretamente.
--- drop policy if exists "Enable read access for all users" on public.goals_distribution;
--- create policy "Enable read access for all users" on public.goals_distribution for select using (true);
+drop policy if exists "Enable read access for all users" on public.goals_distribution;
+drop policy if exists "Goals: managers or owner can modify" on public.goals_distribution;
 
 -- Políticas de Escrita (Geralmente restritas a service_role ou admins)
 -- Como o upload é feito via chave service_role no backend ou cliente com chave especifica, 
