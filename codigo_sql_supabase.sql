@@ -107,7 +107,8 @@ create table if not exists public.data_product_details (
   descricao text,
   fornecedor text,
   codfor text,
-  dtcadastro timestamp with time zone
+  dtcadastro timestamp with time zone,
+  pasta text
 );
 
 -- 6. Tabela de Produtos Ativos (Apenas códigos)
