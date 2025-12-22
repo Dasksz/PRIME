@@ -149,14 +149,16 @@ create table if not exists public.goals_distribution (
 );
 
 -- Criação de Índices para Performance
-create index if not exists idx_detailed_codcli on public.data_detailed(codcli);
+-- Indexes commented out based on Supabase "Unused Index" linter warnings.
+-- Uncomment them if your application queries start filtering by these fields.
+-- create index if not exists idx_detailed_codcli on public.data_detailed(codcli);
 create index if not exists idx_detailed_codusur on public.data_detailed(codusur);
-create index if not exists idx_detailed_produto on public.data_detailed(produto);
-create index if not exists idx_history_codcli on public.data_history(codcli);
-create index if not exists idx_history_codusur on public.data_history(codusur);
-create index if not exists idx_clients_codigo on public.data_clients(codigo_cliente);
-create index if not exists idx_clients_rca1 on public.data_clients(rca1);
-create index if not exists idx_stock_product on public.data_stock(product_code);
+-- create index if not exists idx_detailed_produto on public.data_detailed(produto);
+-- create index if not exists idx_history_codcli on public.data_history(codcli);
+-- create index if not exists idx_history_codusur on public.data_history(codusur);
+-- create index if not exists idx_clients_codigo on public.data_clients(codigo_cliente);
+-- create index if not exists idx_clients_rca1 on public.data_clients(rca1);
+-- create index if not exists idx_stock_product on public.data_stock(product_code);
 create unique index if not exists idx_goals_unique on public.goals_distribution(month_key, supplier, brand);
 
 -- RLS (Row Level Security)
