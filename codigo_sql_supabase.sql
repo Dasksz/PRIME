@@ -209,11 +209,11 @@ alter table public.profiles enable row level security;
 
 -- Usuários podem ver seu próprio perfil
 create policy "Users can view own profile" on public.profiles
-    for select using (auth.uid() = id);
+    for select using ((select auth.uid()) = id);
 
 -- Usuários podem atualizar seu próprio perfil
 create policy "Users can update own profile" on public.profiles
-    for update using (auth.uid() = id);
+    for update using ((select auth.uid()) = id);
 
 -- Função para criar perfil automaticamente no cadastro
 create or replace function public.handle_new_user()
