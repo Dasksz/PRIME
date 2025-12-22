@@ -173,16 +173,39 @@ alter table public.goals_distribution enable row level security;
 
 -- Políticas de Leitura (Permitir leitura pública ou para autenticados)
 -- Ajuste conforme necessidade: 'anon' para público, 'authenticated' para logados.
+-- Usando DROP IF EXISTS antes para evitar erros ao re-executar o script.
+
+drop policy if exists "Enable read access for all users" on public.data_detailed;
 create policy "Enable read access for all users" on public.data_detailed for select using (true);
+
+drop policy if exists "Enable read access for all users" on public.data_history;
 create policy "Enable read access for all users" on public.data_history for select using (true);
+
+drop policy if exists "Enable read access for all users" on public.data_clients;
 create policy "Enable read access for all users" on public.data_clients for select using (true);
+
+drop policy if exists "Enable read access for all users" on public.data_orders;
 create policy "Enable read access for all users" on public.data_orders for select using (true);
+
+drop policy if exists "Enable read access for all users" on public.data_product_details;
 create policy "Enable read access for all users" on public.data_product_details for select using (true);
+
+drop policy if exists "Enable read access for all users" on public.data_active_products;
 create policy "Enable read access for all users" on public.data_active_products for select using (true);
+
+drop policy if exists "Enable read access for all users" on public.data_stock;
 create policy "Enable read access for all users" on public.data_stock for select using (true);
+
+drop policy if exists "Enable read access for all users" on public.data_innovations;
 create policy "Enable read access for all users" on public.data_innovations for select using (true);
+
+drop policy if exists "Enable read access for all users" on public.data_metadata;
 create policy "Enable read access for all users" on public.data_metadata for select using (true);
-create policy "Enable read access for all users" on public.goals_distribution for select using (true);
+
+-- Removida a política redundante de leitura para goals_distribution para evitar avisos de Múltiplas Políticas Permissivas.
+-- A política "Enable insert/update for goals" abaixo cobre o acesso se estiver configurada corretamente.
+-- drop policy if exists "Enable read access for all users" on public.goals_distribution;
+-- create policy "Enable read access for all users" on public.goals_distribution for select using (true);
 
 -- Políticas de Escrita (Geralmente restritas a service_role ou admins)
 -- Como o upload é feito via chave service_role no backend ou cliente com chave especifica, 
@@ -192,6 +215,7 @@ create policy "Enable read access for all users" on public.goals_distribution fo
 -- ... (repetir para outras tabelas se necessário)
 
 -- Para a tabela de metas, permitir insert/update para autenticados (ou todos se controlado via app)
+drop policy if exists "Enable insert/update for goals" on public.goals_distribution;
 create policy "Enable insert/update for goals" on public.goals_distribution for all using (true) with check (true);
 
 -- 11. Tabela de Perfis de Usuário (Gatekeeper)
@@ -208,10 +232,12 @@ create table if not exists public.profiles (
 alter table public.profiles enable row level security;
 
 -- Usuários podem ver seu próprio perfil
+drop policy if exists "Users can view own profile" on public.profiles;
 create policy "Users can view own profile" on public.profiles
     for select using ((select auth.uid()) = id);
 
 -- Usuários podem atualizar seu próprio perfil
+drop policy if exists "Users can update own profile" on public.profiles;
 create policy "Users can update own profile" on public.profiles
     for update using ((select auth.uid()) = id);
 
