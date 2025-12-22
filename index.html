@@ -2096,7 +2096,7 @@
         loginButton.addEventListener('click', async () => {
             await supabaseClient.auth.signInWithOAuth({
                 provider: 'google',
-                options: { redirectTo: window.location.href }
+                options: { redirectTo: window.location.origin }
             });
         });
 
@@ -7358,20 +7358,23 @@ const supervisorGroups = new Map();
             });
 
             data.forEach(item => {
-                summary.totalFaturamento += item.VLVENDA;
-                summary.totalPeso += item.TOTPESOLIQ;
+                const vlVenda = Number(item.VLVENDA) || 0;
+                const totPesoLiq = Number(item.TOTPESOLIQ) || 0;
+
+                summary.totalFaturamento += vlVenda;
+                summary.totalPeso += totPesoLiq;
 
                 const vendedor = item.NOME || 'N/A';
-                summary.vendasPorVendedor[vendedor] = (summary.vendasPorVendedor[vendedor] || 0) + item.VLVENDA;
+                summary.vendasPorVendedor[vendedor] = (summary.vendasPorVendedor[vendedor] || 0) + vlVenda;
 
                 const supervisor = item.SUPERV || 'N/A';
-                summary.vendasPorSupervisor[supervisor] = (summary.vendasPorSupervisor[supervisor] || 0) + item.VLVENDA;
+                summary.vendasPorSupervisor[supervisor] = (summary.vendasPorSupervisor[supervisor] || 0) + vlVenda;
 
                 const produto = item.DESCRICAO || 'N/A';
                 const codigo = item.PRODUTO || 'N/A';
                 if (!salesByProduct[produto]) salesByProduct[produto] = { faturamento: 0, peso: 0, codigo: codigo };
-                salesByProduct[produto].faturamento += item.VLVENDA;
-                salesByProduct[produto].peso += item.TOTPESOLIQ;
+                salesByProduct[produto].faturamento += vlVenda;
+                salesByProduct[produto].peso += totPesoLiq;
 
                 let fornecedorLabel;
                 if(isFiltered){
@@ -7383,7 +7386,7 @@ const supervisorGroups = new Map();
                 }
 
                 const currentTotal = faturamentoMap.get(fornecedorLabel) || 0;
-                faturamentoMap.set(fornecedorLabel, currentTotal + item.VLVENDA);
+                faturamentoMap.set(fornecedorLabel, currentTotal + vlVenda);
             });
 
             const totalRelevantClients = clientBaseForPositivacao.length;
@@ -7514,8 +7517,8 @@ const supervisorGroups = new Map();
                     <td class="px-4 py-2">${row.FORNECEDORES_STR || ''}</td>
                     <td class="px-4 py-2">${formatDate(row.DTPED)}</td>
                     <td class="px-4 py-2">${formatDate(row.DTSAIDA)}</td>
-                    <td class="px-4 py-2 text-right">${(row.TOTPESOLIQ || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Kg</td>
-                    <td class="px-4 py-2 text-right">${(row.VLVENDA || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                    <td class="px-4 py-2 text-right">${(Number(row.TOTPESOLIQ) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Kg</td>
+                    <td class="px-4 py-2 text-right">${(Number(row.VLVENDA) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                     <td class="px-4 py-2 text-center">${getPosicaoBadge(row.POSICAO)}</td>
                 </tr>
             `).join('');
@@ -13452,6 +13455,11 @@ const supervisorGroups = new Map();
 
         const processSalesData = (rawData, clientMap, productMasterMap, newRcaSupervisorMap, stockLinesCollector = null, fallbackDate = null) => {
             return rawData.map(rawRow => {
+                // --- HEADER DETECTION: Ignore rows that look like headers ---
+                if (String(rawRow['CODCLI'] || '').toUpperCase() === 'CODCLI' || String(rawRow['PRODUTO'] || '').toUpperCase() === 'PRODUTO' || String(rawRow['PRODUTO'] || '').toUpperCase() === 'CÓDIGO') {
+                    return null;
+                }
+
                 // --- NOVA LÓGICA: Derivação de OBSERVACAOFOR se vazio ---
                 let observacaoFor = String(rawRow['OBSERVACAOFOR'] || '').trim();
 
@@ -14011,10 +14019,10 @@ const supervisorGroups = new Map();
                             });
                         }
                         const order = orders.get(row.PEDIDO);
-                        order.QTVENDA += row.QTVENDA;
-                        order.VLVENDA += row.VLVENDA;
-                        order.VLBONIFIC += row.VLBONIFIC;
-                        order.TOTPESOLIQ += row.TOTPESOLIQ;
+                        order.QTVENDA += (Number(row.QTVENDA) || 0);
+                        order.VLVENDA += (Number(row.VLVENDA) || 0);
+                        order.VLBONIFIC += (Number(row.VLBONIFIC) || 0);
+                        order.TOTPESOLIQ += (Number(row.TOTPESOLIQ) || 0);
                         if (row.OBSERVACAOFOR) order.FORNECEDORES.add(row.OBSERVACAOFOR);
                         if (row.CODFOR) order.CODFORS.add(row.CODFOR);
                     }
