@@ -2009,7 +2009,10 @@
                 month_key: monthKey,
                 supplier: 'ALL', // Global snapshot
                 brand: 'GENERAL', // Fix for Unique Constraint
-                goals_data: goalsObj,
+                goals_data: {
+                    clients: goalsObj,
+                    targets: goalsTargets
+                },
                 updated_at: new Date().toISOString()
             };
 
@@ -11938,6 +11941,60 @@ const supervisorGroups = new Map();
             };
 
             const debouncedUpdateGoals = debounce(updateGoals, 400);
+
+            async function loadGoalsFromSupabase() {
+                try {
+                    const monthKey = new Date().toISOString().slice(0, 7); 
+                    const { data, error } = await window.supabaseClient
+                        .from('goals_distribution')
+                        .select('goals_data')
+                        .eq('month_key', monthKey)
+                        .eq('supplier', 'ALL')
+                        .eq('brand', 'GENERAL')
+                        .maybeSingle();
+
+                    if (error) {
+                        console.error('Erro ao carregar metas:', error);
+                        return;
+                    }
+
+                    if (data && data.goals_data) {
+                        const gd = data.goals_data;
+                        let clientsData = {};
+                        let targetsData = {};
+
+                        if (gd.clients || gd.targets) {
+                            clientsData = gd.clients || {};
+                            targetsData = gd.targets || {};
+                        } else {
+                            clientsData = gd;
+                        }
+
+                        globalClientGoals = new Map();
+                        for (const [key, val] of Object.entries(clientsData)) {
+                            const clientMap = new Map();
+                            for (const [k, v] of Object.entries(val)) {
+                                clientMap.set(k, v);
+                            }
+                            globalClientGoals.set(key, clientMap);
+                        }
+
+                        if (targetsData && Object.keys(targetsData).length > 0) {
+                            for (const key in targetsData) {
+                                goalsTargets[key] = targetsData[key];
+                            }
+                        }
+                        
+                        console.log('Metas carregadas do Supabase.');
+                        updateGoals(); 
+                    }
+                } catch (err) {
+                    console.error('Exceção ao carregar metas:', err);
+                }
+            }
+            
+            // Trigger Load
+            loadGoalsFromSupabase();
 
             // Sub-tabs Switching
             const goalsSubTabsContainer = document.getElementById('goals-sub-tabs-container');
