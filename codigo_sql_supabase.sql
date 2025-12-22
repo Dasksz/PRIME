@@ -1,232 +1,402 @@
--- Enable UUID extension
-create extension if not exists "uuid-ossp";
+-- ==============================================================================
+-- 1. LIMPEZA PROFUNDA (Deep Clean)
+-- ==============================================================================
+-- Remover TODAS as tabelas "fantasmas" relatadas nos logs (CSV 11, 12, 14 e 16)
+drop table if exists public.data_active_products CASCADE;
 
--- 1. Tabela de Vendas Detalhadas (Mês Atual)
-create table if not exists public.data_detailed (
-    id uuid default uuid_generate_v4() primary key,
-    pedido text,
-    nome text, -- Vendedor
-    superv text, -- Supervisor
-    produto text,
-    descricao text,
-    fornecedor text,
-    observacaofor text, -- Pasta
-    codfor text,
-    codusur text,
-    codcli text,
-    qtvenda numeric,
-    codsupervisor text,
-    vlvenda numeric,
-    vlbonific numeric,
-    totpesoliq numeric,
-    dtped timestamp with time zone,
-    dtsaida timestamp with time zone,
-    posicao text,
-    estoqueunit numeric,
-    qtvenda_embalagem_master numeric,
-    tipovenda text,
-    filial text,
-    cliente_nome text, -- Otimização: Desnormalizado para reduzir lookups no front
-    cidade text,
-    bairro text
-);
+drop table if exists public.data_clients CASCADE;
 
--- 2. Tabela de Histórico de Vendas (Trimestre)
-create table if not exists public.data_history (
-    id uuid default uuid_generate_v4() primary key,
-    pedido text,
-    nome text,
-    superv text,
-    produto text,
-    descricao text,
-    fornecedor text,
-    observacaofor text,
-    codfor text,
-    codusur text,
-    codcli text,
-    qtvenda numeric,
-    codsupervisor text,
-    vlvenda numeric,
-    vlbonific numeric,
-    totpesoliq numeric,
-    dtped timestamp with time zone,
-    dtsaida timestamp with time zone,
-    posicao text,
-    estoqueunit numeric,
-    qtvenda_embalagem_master numeric,
-    tipovenda text,
-    filial text
-);
+drop table if exists public.goals_distribution CASCADE;
 
--- 3. Tabela de Clientes
-create table if not exists public.data_clients (
-    id uuid default uuid_generate_v4() primary key,
-    codigo_cliente text unique,
-    rca1 text,
-    rca2 text,
-    rcas text[], -- Array de RCAs
-    cidade text,
-    nomecliente text,
-    bairro text,
-    razaosocial text,
-    fantasia text,
-    cnpj_cpf text,
-    endereco text,
-    numero text,
-    cep text,
-    telefone text,
-    email text,
-    ramo text,
-    ultimacompra timestamp with time zone,
-    datacadastro timestamp with time zone,
-    bloqueio text,
-    inscricaoestadual text
-);
+drop table if exists public.profiles CASCADE;
 
--- 4. Tabela de Pedidos Agregados (Otimização para lista de pedidos)
-create table if not exists public.data_orders (
-    id uuid default uuid_generate_v4() primary key,
-    pedido text unique,
-    codcli text,
-    cliente_nome text,
-    cidade text,
-    nome text, -- Vendedor
-    superv text, -- Supervisor
-    fornecedores_str text,
-    dtped timestamp with time zone,
-    dtsaida timestamp with time zone,
-    posicao text,
-    vlvenda numeric,
-    totpesoliq numeric,
-    filial text
-);
+drop table if exists public.data_detailed CASCADE;
 
--- 5. Tabela de Detalhes de Produtos
-create table if not exists public.data_product_details (
-    code text primary key,
-    descricao text,
-    fornecedor text,
-    codfor text,
-    dtcadastro timestamp with time zone
-);
+drop table if exists public.data_history CASCADE;
 
--- 6. Tabela de Produtos Ativos (Apenas códigos)
-create table if not exists public.data_active_products (
-    code text primary key
-);
+drop table if exists public.data_product_details CASCADE;
 
--- 7. Tabela de Estoque
-create table if not exists public.data_stock (
-    id uuid default uuid_generate_v4() primary key,
-    product_code text,
-    filial text,
-    stock_qty numeric
-);
+drop table if exists public.data_stock CASCADE;
 
--- 8. Tabela de Inovações (Metas/Status)
-create table if not exists public.data_innovations (
-    id uuid default uuid_generate_v4() primary key,
-    codigo text, -- Código do Produto
-    produto text, -- Nome/Descrição
-    inovacoes text -- Categoria ou Status
-);
+drop table if exists public.data_innovations CASCADE;
 
--- 9. Tabela de Metadados (Data de atualização, dias úteis, etc)
-create table if not exists public.data_metadata (
-    key text primary key,
-    value text
-);
+-- Nova do CSV 16
+drop table if exists public.data_metadata CASCADE;
 
--- 10. Tabela para Salvar Metas (Novo Recurso)
-create table if not exists public.goals_distribution (
-    id uuid default uuid_generate_v4() primary key,
-    month_key text not null, -- Ex: '2023-10'
-    supplier text not null, -- Ex: 'PEPSICO_ALL', '707'
-    brand text default 'GENERAL', -- Ex: 'TODDYNHO' (default 'GENERAL')
-    goals_data jsonb not null, -- Estrutura com as metas por cliente/vendedor
-    updated_at timestamp with time zone default now(),
-    updated_by text -- Opcional: ID do usuário que atualizou
-);
+-- Nova do CSV 16
+drop table if exists public.data_orders CASCADE;
 
--- Criação de Índices para Performance
-create index if not exists idx_detailed_codcli on public.data_detailed(codcli);
-create index if not exists idx_detailed_codusur on public.data_detailed(codusur);
-create index if not exists idx_detailed_produto on public.data_detailed(produto);
-create index if not exists idx_history_codcli on public.data_history(codcli);
-create index if not exists idx_history_codusur on public.data_history(codusur);
-create index if not exists idx_clients_codigo on public.data_clients(codigo_cliente);
-create index if not exists idx_clients_rca1 on public.data_clients(rca1);
-create index if not exists idx_stock_product on public.data_stock(product_code);
-create unique index if not exists idx_goals_unique on public.goals_distribution(month_key, supplier, brand);
+-- Nova do CSV 16
+-- Remover tabelas do sistema atual para recriar limpo
+drop table if exists public.sales_items CASCADE;
 
--- RLS (Row Level Security)
-alter table public.data_detailed enable row level security;
-alter table public.data_history enable row level security;
-alter table public.data_clients enable row level security;
-alter table public.data_orders enable row level security;
-alter table public.data_product_details enable row level security;
-alter table public.data_active_products enable row level security;
-alter table public.data_stock enable row level security;
-alter table public.data_innovations enable row level security;
-alter table public.data_metadata enable row level security;
-alter table public.goals_distribution enable row level security;
+drop table if exists public.sales CASCADE;
 
--- Políticas de Leitura (Permitir leitura pública ou para autenticados)
--- Ajuste conforme necessidade: 'anon' para público, 'authenticated' para logados.
-create policy "Enable read access for all users" on public.data_detailed for select using (true);
-create policy "Enable read access for all users" on public.data_history for select using (true);
-create policy "Enable read access for all users" on public.data_clients for select using (true);
-create policy "Enable read access for all users" on public.data_orders for select using (true);
-create policy "Enable read access for all users" on public.data_product_details for select using (true);
-create policy "Enable read access for all users" on public.data_active_products for select using (true);
-create policy "Enable read access for all users" on public.data_stock for select using (true);
-create policy "Enable read access for all users" on public.data_innovations for select using (true);
-create policy "Enable read access for all users" on public.data_metadata for select using (true);
-create policy "Enable read access for all users" on public.goals_distribution for select using (true);
+drop table if exists public.products CASCADE;
 
--- Políticas de Escrita (Geralmente restritas a service_role ou admins)
--- Como o upload é feito via chave service_role no backend ou cliente com chave especifica, 
--- o service_role bypassa o RLS.
--- Se for necessário permitir insert via anon (não recomendado sem proteção), descomente:
--- create policy "Enable insert for all users" on public.data_detailed for insert with check (true);
--- ... (repetir para outras tabelas se necessário)
+drop table if exists public.user_profiles CASCADE;
 
--- Para a tabela de metas, permitir insert/update para autenticados (ou todos se controlado via app)
-create policy "Enable insert/update for goals" on public.goals_distribution for all using (true) with check (true);
+-- Remover funções antigas (CSV 13 e 15)
+drop function IF exists public.handle_new_user () CASCADE;
 
--- 11. Tabela de Perfis de Usuário (Gatekeeper)
-create table if not exists public.profiles (
-    id uuid references auth.users on delete cascade not null primary key,
-    email text,
-    status text default 'pendente', -- pendente, aprovado, bloqueado
-    role text default 'user',
-    created_at timestamp with time zone default now(),
-    updated_at timestamp with time zone default now()
-);
+drop function IF exists public.check_admin_permission () CASCADE;
 
--- RLS para Profiles
-alter table public.profiles enable row level security;
+drop function IF exists public.update_product_stock (UUID, INTEGER) CASCADE;
 
--- Usuários podem ver seu próprio perfil
-create policy "Users can view own profile" on public.profiles
-    for select using (auth.uid() = id);
+drop function IF exists public.register_sale (TEXT, TEXT, JSONB) CASCADE;
 
--- Usuários podem atualizar seu próprio perfil
-create policy "Users can update own profile" on public.profiles
-    for update using (auth.uid() = id);
+drop function IF exists public.get_initial_dashboard_data () CASCADE;
 
--- Função para criar perfil automaticamente no cadastro
-create or replace function public.handle_new_user()
-returns trigger as $$
-begin
-  insert into public.profiles (id, email, status)
-  values (new.id, new.email, 'pendente');
-  return new;
-end;
-$$ language plpgsql security definer;
+drop function IF exists public.get_city_performance_data () CASCADE;
 
--- Trigger para chamar a função acima
-drop trigger if exists on_auth_user_created on auth.users;
+-- Nova do CSV 15
+-- Removemos variações com e sem argumentos
+drop function IF exists public.get_comparison_data (TEXT) CASCADE;
+
+drop function IF exists public.get_comparison_data () CASCADE;
+
+drop function IF exists public.get_stock_view_data () CASCADE;
+
+drop function IF exists public.get_sales_view_data (TIMESTAMP, TIMESTAMP) CASCADE;
+
+drop function IF exists public.get_sales_view_data () CASCADE;
+
+-- ==============================================================================
+-- 2. FUNÇÕES BASE (Trigger e Segurança)
+-- ==============================================================================
+-- 2.1 Trigger de Criação de Perfil
+create or replace function public.handle_new_user () RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
+BEGIN
+  INSERT INTO public.user_profiles (id, email, full_name, role)
+  VALUES (
+    new.id, 
+    new.email, 
+    new.raw_user_meta_data->>'full_name',
+    COALESCE(new.raw_user_meta_data->>'role', 'employee')
+  );
+  RETURN new;
+END;
+$$;
+
+drop trigger IF exists on_auth_user_created on auth.users;
+
 create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute procedure public.handle_new_user();
+after INSERT on auth.users for EACH row
+execute FUNCTION public.handle_new_user ();
+
+-- 2.2 Tabelas Principais
+create table public.user_profiles (
+  id UUID primary key references auth.users (id) on delete CASCADE,
+  email TEXT,
+  role TEXT default 'employee' check (role in ('admin', 'employee')),
+  full_name TEXT,
+  created_at timestamp with time zone default timezone ('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone ('utc'::text, now()) not null
+);
+
+-- 2.3 Função Helper de Permissão
+create or replace function public.check_admin_permission () RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.user_profiles
+    WHERE id = (select auth.uid()) AND role = 'admin'
+  );
+END;
+$$;
+
+-- 2.4 Restante das Tabelas
+create table public.products (
+  id UUID default gen_random_uuid () primary key,
+  name TEXT not null,
+  description TEXT,
+  price DECIMAL(10, 2) not null check (price >= 0),
+  stock_quantity INTEGER not null default 0 check (stock_quantity >= 0),
+  min_stock_level INTEGER default 5,
+  category TEXT,
+  sku TEXT unique,
+  image_url TEXT,
+  created_at timestamp with time zone default timezone ('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone ('utc'::text, now()) not null,
+  created_by UUID references public.user_profiles (id)
+);
+
+create table public.sales (
+  id UUID default gen_random_uuid () primary key,
+  user_id UUID references public.user_profiles (id) not null,
+  total_amount DECIMAL(10, 2) not null default 0,
+  payment_method TEXT check (
+    payment_method in (
+      'credit_card',
+      'debit_card',
+      'cash',
+      'pix',
+      'transfer'
+    )
+  ),
+  status TEXT default 'completed' check (
+    status in ('completed', 'pending', 'cancelled', 'refunded')
+  ),
+  notes TEXT,
+  created_at timestamp with time zone default timezone ('utc'::text, now()) not null
+);
+
+create table public.sales_items (
+  id UUID default gen_random_uuid () primary key,
+  sale_id UUID references public.sales (id) on delete CASCADE not null,
+  product_id UUID references public.products (id) not null,
+  quantity INTEGER not null check (quantity > 0),
+  unit_price DECIMAL(10, 2) not null,
+  subtotal DECIMAL(10, 2) not null,
+  created_at timestamp with time zone default timezone ('utc'::text, now()) not null
+);
+
+-- ==============================================================================
+-- 3. POLÍTICAS RLS (Sem Sobreposição)
+-- ==============================================================================
+alter table public.user_profiles ENABLE row LEVEL SECURITY;
+
+alter table public.products ENABLE row LEVEL SECURITY;
+
+alter table public.sales ENABLE row LEVEL SECURITY;
+
+alter table public.sales_items ENABLE row LEVEL SECURITY;
+
+-- 3.1 user_profiles
+create policy "Unified view access for user_profiles" on public.user_profiles for
+select
+  using (
+    (
+      select
+        auth.uid ()
+    ) = id
+    or public.check_admin_permission () = true
+  );
+
+create policy "Admin update access for user_profiles" on public.user_profiles
+for update
+  using (public.check_admin_permission () = true);
+
+-- 3.2 products
+create policy "View products (All authenticated)" on public.products for
+select
+  to authenticated using (true);
+
+create policy "Insert products (Admin only)" on public.products for INSERT to authenticated
+with
+  check (public.check_admin_permission () = true);
+
+create policy "Update products (Admin only)" on public.products
+for update
+  to authenticated using (public.check_admin_permission () = true);
+
+create policy "Delete products (Admin only)" on public.products for DELETE to authenticated using (public.check_admin_permission () = true);
+
+-- 3.3 sales
+create policy "View sales (Owner or Admin)" on public.sales for
+select
+  to authenticated using (
+    (
+      select
+        auth.uid ()
+    ) = user_id
+    or public.check_admin_permission () = true
+  );
+
+create policy "Create sales (Authenticated)" on public.sales for INSERT to authenticated
+with
+  check (
+    (
+      select
+        auth.uid ()
+    ) = user_id
+  );
+
+-- 3.4 sales_items
+create policy "View sales items (Owner or Admin)" on public.sales_items for
+select
+  to authenticated using (
+    exists (
+      select
+        1
+      from
+        public.sales
+      where
+        sales.id = sales_items.sale_id
+        and (
+          sales.user_id = (
+            select
+              auth.uid ()
+          )
+          or public.check_admin_permission () = true
+        )
+    )
+  );
+
+create policy "Create sales items (Authenticated)" on public.sales_items for INSERT to authenticated
+with
+  check (
+    exists (
+      select
+        1
+      from
+        public.sales
+      where
+        sales.id = sales_items.sale_id
+        and sales.user_id = (
+          select
+            auth.uid ()
+        )
+    )
+  );
+
+-- ==============================================================================
+-- 4. FUNÇÕES DE NEGÓCIO (Com search_path corrigido)
+-- ==============================================================================
+create or replace function public.update_product_stock (p_product_id UUID, p_quantity INTEGER) RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
+BEGIN
+    UPDATE public.products
+    SET stock_quantity = stock_quantity - p_quantity,
+        updated_at = now()
+    WHERE id = p_product_id;
+    
+    IF (SELECT stock_quantity FROM public.products WHERE id = p_product_id) < 0 THEN
+        RAISE EXCEPTION 'Stock insuficiente para o produto %', p_product_id;
+    END IF;
+END;
+$$;
+
+create or replace function public.register_sale (
+  p_payment_method TEXT,
+  p_notes TEXT,
+  p_items JSONB
+) RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
+DECLARE
+    v_sale_id UUID;
+    v_total_amount DECIMAL(10,2) := 0;
+    v_item JSONB;
+    v_subtotal DECIMAL(10,2);
+    v_current_user UUID;
+BEGIN
+    v_current_user := (select auth.uid());
+
+    INSERT INTO public.sales (user_id, payment_method, notes, status)
+    VALUES (v_current_user, p_payment_method, p_notes, 'completed')
+    RETURNING id INTO v_sale_id;
+
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+    LOOP
+        v_subtotal := (v_item->>'quantity')::INTEGER * (v_item->>'unit_price')::DECIMAL;
+        v_total_amount := v_total_amount + v_subtotal;
+
+        INSERT INTO public.sales_items (sale_id, product_id, quantity, unit_price, subtotal)
+        VALUES (
+            v_sale_id,
+            (v_item->>'product_id')::UUID,
+            (v_item->>'quantity')::INTEGER,
+            (v_item->>'unit_price')::DECIMAL,
+            v_subtotal
+        );
+
+        PERFORM public.update_product_stock(
+            (v_item->>'product_id')::UUID,
+            (v_item->>'quantity')::INTEGER
+        );
+    END LOOP;
+
+    UPDATE public.sales 
+    SET total_amount = v_total_amount 
+    WHERE id = v_sale_id;
+
+    RETURN v_sale_id;
+END;
+$$;
+
+-- Funções de Leitura (Views)
+create or replace function public.get_initial_dashboard_data () RETURNS json LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
+DECLARE
+    result json;
+BEGIN
+    SELECT json_build_object(
+        'total_sales_today', (SELECT COALESCE(SUM(total_amount), 0) FROM sales WHERE created_at >= CURRENT_DATE),
+        'total_orders_today', (SELECT COUNT(*) FROM sales WHERE created_at >= CURRENT_DATE),
+        'low_stock_count', (SELECT COUNT(*) FROM products WHERE stock_quantity <= min_stock_level),
+        'recent_sales', (
+            SELECT json_agg(t) FROM (
+                SELECT s.id, s.total_amount, s.created_at, up.full_name as seller
+                FROM sales s
+                JOIN user_profiles up ON s.user_id = up.id
+                ORDER BY s.created_at DESC LIMIT 5
+            ) t
+        )
+    ) INTO result;
+    RETURN result;
+END;
+$$;
+
+create or replace function public.get_comparison_data (period text default '7_days') RETURNS json LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
+DECLARE
+    start_date timestamp;
+    result json;
+BEGIN
+    IF period = '30_days' THEN start_date := NOW() - INTERVAL '30 days';
+    ELSE start_date := NOW() - INTERVAL '7 days'; END IF;
+
+    SELECT json_agg(t) INTO result FROM (
+        SELECT DATE(created_at) as date, COUNT(*) as sales_count, SUM(total_amount) as revenue
+        FROM sales WHERE created_at >= start_date
+        GROUP BY DATE(created_at) ORDER BY DATE(created_at)
+    ) t;
+
+    RETURN json_build_object('period', period, 'data', COALESCE(result, '[]'::json));
+END;
+$$;
+
+create or replace function public.get_stock_view_data () RETURNS json LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
+DECLARE result json;
+BEGIN
+    SELECT json_agg(t) INTO result FROM (
+        SELECT p.name, p.sku, p.stock_quantity, p.min_stock_level, p.category,
+            CASE WHEN p.stock_quantity = 0 THEN 'Sem Stock'
+                 WHEN p.stock_quantity <= p.min_stock_level THEN 'Baixo'
+                 ELSE 'Normal' END as status
+        FROM products p ORDER BY p.stock_quantity ASC
+    ) t;
+    RETURN COALESCE(result, '[]'::json);
+END;
+$$;
+
+create or replace function public.get_sales_view_data (
+  start_date timestamp default null,
+  end_date timestamp default null
+) RETURNS json LANGUAGE plpgsql SECURITY DEFINER
+set
+  search_path = public as $$
+DECLARE
+    result json;
+    v_start timestamp := COALESCE(start_date, NOW() - INTERVAL '30 days');
+    v_end timestamp := COALESCE(end_date, NOW());
+BEGIN
+    SELECT json_agg(t) INTO result FROM (
+        SELECT s.id, s.created_at, s.total_amount, s.payment_method, s.status, up.full_name as seller_name,
+            (SELECT json_agg(json_build_object('product_name', p.name, 'quantity', si.quantity, 'unit_price', si.unit_price, 'subtotal', si.subtotal))
+             FROM sales_items si JOIN products p ON si.product_id = p.id WHERE si.sale_id = s.id) as items
+        FROM sales s JOIN user_profiles up ON s.user_id = up.id
+        WHERE s.created_at BETWEEN v_start AND v_end ORDER BY s.created_at DESC
+    ) t;
+    RETURN COALESCE(result, '[]'::json);
+END;
+$$;
