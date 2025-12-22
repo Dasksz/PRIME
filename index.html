@@ -7541,7 +7541,7 @@ const supervisorGroups = new Map();
                     if (selectedSellers.length > 0) matches = matches && selectedSellers.includes(order.NOME);
                 }
                 if (selectedTiposVenda.length > 0) matches = matches && selectedTiposVenda.includes(order.TIPOVENDA);
-                if (currentFornecedor) matches = matches && order.FORNECEDORES_LIST.includes(currentFornecedor);
+                if (currentFornecedor) matches = matches && order.FORNECEDORES_LIST && order.FORNECEDORES_LIST.includes(currentFornecedor);
                 if (selectedMainSuppliers.length > 0) matches = matches && order.CODFORS_LIST && order.CODFORS_LIST.some(c => selectedMainSuppliers.includes(c));
                 if (posicao) matches = matches && order.POSICAO === posicao;
                 return matches;
