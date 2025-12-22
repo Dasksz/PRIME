@@ -138,6 +138,24 @@
                                 border: 1px solid #2d3748; /* Borda (slate-700) */
                                 box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); 
                             }
+
+                            /* Autofill styles to prevent white background in dark mode */
+                            input:-webkit-autofill,
+                            input:-webkit-autofill:hover,
+                            input:-webkit-autofill:focus,
+                            input:-webkit-autofill:active {
+                                -webkit-box-shadow: 0 0 0 30px #334155 inset !important; /* bg-slate-700 */
+                                -webkit-text-fill-color: white !important;
+                                transition: background-color 5000s ease-in-out 0s;
+                            }
+
+                            html.light input:-webkit-autofill,
+                            html.light input:-webkit-autofill:hover,
+                            html.light input:-webkit-autofill:focus,
+                            html.light input:-webkit-autofill:active {
+                                -webkit-box-shadow: 0 0 0 30px #ffffff inset !important;
+                                -webkit-text-fill-color: #0f172a !important;
+                            }
                             
                             /* Botão de tendência de estoque ativo */
         .stock-trend-btn.active, .coverage-trend-btn.active {
@@ -1132,7 +1150,7 @@
                                         </div>
                                         <div id="goals-gv-codcli-filter-wrapper">
                                             <label for="goals-gv-codcli-filter" class="block mb-2 text-sm font-medium text-slate-400">Cód. Cliente</label>
-                                            <input type="text" id="goals-gv-codcli-filter" placeholder="Digite o código..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5">
+                                            <input type="text" id="goals-gv-codcli-filter" placeholder="Digite o código..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off">
                                         </div>
                                         <button id="clear-goals-gv-filters-btn" class="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
                                     </div>
