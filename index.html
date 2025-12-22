@@ -1893,15 +1893,32 @@
             });
         });
 
+        let isCheckingProfile = false;
+
+        // Visibility Change Listener for Reconnection
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                const errorCard = document.getElementById('loading-card-content');
+                // Check if we are showing the connection error screen
+                if (errorCard && errorCard.innerHTML.includes('Erro de Conexão')) {
+                    console.log('Tab became visible and error screen detected. Reloading...');
+                    window.location.reload();
+                }
+            }
+        });
+
         // Auth State Listener
         supabaseClient.auth.onAuthStateChange(async (event, session) => {
+            if (isCheckingProfile) return;
+
             if (session) {
+                isCheckingProfile = true;
                 telaLogin.classList.add('hidden');
                 telaLoading.classList.remove('hidden');
                 
                 try {
-                    // Check Profile with Timeout - 5s as requested
-                    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Tempo limite de conexão excedido. Verifique sua internet.')), 5000));
+                    // Check Profile with Timeout - 15s as requested
+                    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Tempo limite de conexão excedido. Verifique sua internet.')), 15000));
                     const profilePromise = supabaseClient.from('profiles').select('*').eq('id', session.user.id).single();
 
                     const { data: profile, error } = await Promise.race([profilePromise, timeout]);
@@ -1941,6 +1958,8 @@
                         telaLoading.classList.add('hidden');
                         telaPendente.classList.remove('hidden');
                     }
+                } finally {
+                    isCheckingProfile = false;
                 }
             } else {
                 telaLogin.classList.remove('hidden');
