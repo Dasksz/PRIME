@@ -929,6 +929,12 @@
         </svg>
         Salvar Metas
     </button>
+    <button id="clear-goals-btn" class="ml-4 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+        Limpar Metas
+    </button>
 <div class="flex bg-[#161e3d] p-1 rounded-lg border border-slate-700" id="goals-tabs">
                                         <button data-tab="gv" class="px-6 py-2 rounded-md text-sm font-bold transition-colors bg-slate-700 text-white shadow-sm border border-teal-500 text-teal-500 active" id="btn-tab-gv">Rateio Metas</button>
                                         <button data-tab="sv" class="px-6 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white transition-colors border border-transparent" id="btn-tab-sv">Relatório</button>
@@ -1934,13 +1940,25 @@
 
         // Save Goals Logic
         const saveBtn = document.getElementById('save-goals-btn');
+        const clearBtn = document.getElementById('clear-goals-btn');
         const masterKeyModal = document.getElementById('master-key-modal');
         const masterKeyInput = document.getElementById('master-key-input');
         const masterKeyConfirm = document.getElementById('master-key-confirm');
         const masterKeyCancel = document.getElementById('master-key-cancel');
 
+        // State to know if we are saving or clearing
+        let pendingAction = null; // 'save' or 'clear'
+
         if (saveBtn) {
             saveBtn.addEventListener('click', () => {
+                pendingAction = 'save';
+                masterKeyModal.classList.remove('hidden');
+            });
+        }
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                pendingAction = 'clear';
                 masterKeyModal.classList.remove('hidden');
             });
         }
@@ -1975,20 +1993,34 @@
             masterKeyModal.classList.add('hidden');
             masterKeyInput.value = '';
             
-            const statusText = document.getElementById('save-goals-btn');
-            const originalText = statusText.innerHTML;
-            statusText.disabled = true;
-            statusText.innerHTML = 'Salvando...';
+            // Dispatch based on pendingAction
+            if (pendingAction === 'save') {
+                const statusText = document.getElementById('save-goals-btn');
+                const originalText = statusText.innerHTML;
+                statusText.disabled = true;
+                statusText.innerHTML = 'Salvando...';
 
-            try {
-                await saveGoalsToSupabase(authToken);
-            } catch (error) {
-                console.error(error);
-                alert('Erro ao salvar metas: ' + error.message);
-            } finally {
-                statusText.disabled = false;
-                statusText.innerHTML = originalText;
+                try {
+                    await saveGoalsToSupabase(authToken);
+                } catch (error) {
+                    console.error(error);
+                    alert('Erro ao salvar metas: ' + error.message);
+                } finally {
+                    statusText.disabled = false;
+                    statusText.innerHTML = originalText;
+                }
+            } else if (pendingAction === 'clear') {
+                // Call clearGoalsFromSupabase
+                // Note: clearGoalsFromSupabase handles its own button state
+                try {
+                    await clearGoalsFromSupabase(authToken);
+                } catch (error) {
+                    console.error(error);
+                    alert('Erro ao limpar metas: ' + error.message);
+                }
             }
+            
+            pendingAction = null;
         });
 
         async function saveGoalsToSupabase(authToken) {
@@ -2035,6 +2067,72 @@
 
             alert('Metas salvas com sucesso!');
         }
+
+        async function clearGoalsFromSupabase(authToken) {
+            const btn = document.getElementById('clear-goals-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = 'Limpando...';
+            btn.disabled = true;
+
+            const monthKey = new Date().toISOString().slice(0, 7);
+
+            try {
+                // DELETE via REST
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/goals_distribution?month_key=eq.${monthKey}&supplier=eq.ALL&brand=eq.GENERAL`, {
+                    method: 'DELETE',
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Erro ao limpar metas (${response.status}): ${errorText}`);
+                }
+
+                // Limpar estado local
+                if(typeof globalClientGoals !== 'undefined') globalClientGoals.clear();
+                if(typeof goalsTargets !== 'undefined') {
+                    for(let k in goalsTargets) goalsTargets[k] = { fat: 0, vol: 0 };
+                }
+                
+                // Atualizar UI Input fields
+                const elFat = document.getElementById('goal-global-fat');
+                const elVol = document.getElementById('goal-global-vol');
+                const elMix = document.getElementById('goal-global-mix');
+                const elMixSalty = document.getElementById('goal-global-mix-salty');
+                const elMixFoods = document.getElementById('goal-global-mix-foods');
+
+                if(elFat) elFat.value = '0,00';
+                if(elVol) elVol.value = '0,000';
+                if(elMix) elMix.value = '0';
+                if(elMixSalty) elMixSalty.value = '0';
+                if(elMixFoods) elMixFoods.value = '0';
+
+                // Re-calcular métricas e atualizar tabela (que usará os defaults ou zero)
+                // Precisamos chamar updateGoals(), mas ele está dentro do scopo do module script principal
+                // ou acessível via window se exposto. 
+                // VERIFICAÇÃO: updateGoals está definido dentro do scopo 'DOMContentLoaded'.
+                // Precisamos expor ou disparar um evento.
+                // Vou disparar um evento customizado 'goalsCleared' e ouvir no scopo principal.
+                document.dispatchEvent(new CustomEvent('goalsCleared'));
+
+                alert('Metas limpas com sucesso!');
+            } catch (err) {
+                console.error('Erro ao limpar metas:', err);
+                alert('Erro ao limpar metas: ' + err.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // Attach listener for Clear Button - This needs to be inside the DOMContentLoaded where authentication happens or keys are available
+        // But `clearGoalsFromSupabase` needs access to URL/KEY.
+        // Wait, `saveGoalsToSupabase` uses `SUPABASE_URL` which is defined in the script scope above.
+        // I will hook the button click in the authentication handler block (where save-goals-btn is handled).
     });
 </script>
 
@@ -11939,6 +12037,10 @@ const supervisorGroups = new Map();
                 markDirty('goals');
                 handleGoalsFilterChange();
             };
+
+            document.addEventListener('goalsCleared', () => {
+                updateGoals();
+            });
 
             const debouncedUpdateGoals = debounce(updateGoals, 400);
 
