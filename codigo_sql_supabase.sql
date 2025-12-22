@@ -149,14 +149,34 @@ create table if not exists public.goals_distribution (
 );
 
 -- Criação de Índices para Performance
-create index if not exists idx_detailed_codcli on public.data_detailed(codcli);
+-- Indexes commented out based on Supabase "Unused Index" linter warnings.
+-- Uncomment them if your application queries start filtering by these fields.
+
+drop index if exists public.idx_detailed_codcli;
+-- create index if not exists idx_detailed_codcli on public.data_detailed(codcli);
+
 create index if not exists idx_detailed_codusur on public.data_detailed(codusur);
-create index if not exists idx_detailed_produto on public.data_detailed(produto);
-create index if not exists idx_history_codcli on public.data_history(codcli);
-create index if not exists idx_history_codusur on public.data_history(codusur);
-create index if not exists idx_clients_codigo on public.data_clients(codigo_cliente);
-create index if not exists idx_clients_rca1 on public.data_clients(rca1);
-create index if not exists idx_stock_product on public.data_stock(product_code);
+
+drop index if exists public.idx_detailed_produto;
+-- create index if not exists idx_detailed_produto on public.data_detailed(produto);
+
+drop index if exists public.idx_history_codcli;
+-- create index if not exists idx_history_codcli on public.data_history(codcli);
+
+drop index if exists public.idx_history_codusur;
+-- create index if not exists idx_history_codusur on public.data_history(codusur);
+
+drop index if exists public.idx_clients_codigo;
+-- create index if not exists idx_clients_codigo on public.data_clients(codigo_cliente);
+
+drop index if exists public.idx_clients_rca1;
+-- create index if not exists idx_clients_rca1 on public.data_clients(rca1);
+
+drop index if exists public.idx_stock_product;
+-- create index if not exists idx_stock_product on public.data_stock(product_code);
+
+drop index if exists public.idx_goals_distribution_updated_by;
+
 create unique index if not exists idx_goals_unique on public.goals_distribution(month_key, supplier, brand);
 
 -- RLS (Row Level Security)
@@ -175,37 +195,46 @@ alter table public.goals_distribution enable row level security;
 -- Ajuste conforme necessidade: 'anon' para público, 'authenticated' para logados.
 -- Usando DROP IF EXISTS antes para evitar erros ao re-executar o script.
 
+drop policy if exists "Authenticated can read data_detailed" on public.data_detailed;
 drop policy if exists "Enable read access for all users" on public.data_detailed;
 create policy "Enable read access for all users" on public.data_detailed for select using (true);
 
+drop policy if exists "Authenticated can read data_history" on public.data_history;
 drop policy if exists "Enable read access for all users" on public.data_history;
 create policy "Enable read access for all users" on public.data_history for select using (true);
 
+drop policy if exists "Authenticated can read data_clients" on public.data_clients;
 drop policy if exists "Enable read access for all users" on public.data_clients;
 create policy "Enable read access for all users" on public.data_clients for select using (true);
 
+drop policy if exists "Authenticated can read data_orders" on public.data_orders;
 drop policy if exists "Enable read access for all users" on public.data_orders;
 create policy "Enable read access for all users" on public.data_orders for select using (true);
 
+drop policy if exists "Authenticated can read data_product_details" on public.data_product_details;
 drop policy if exists "Enable read access for all users" on public.data_product_details;
 create policy "Enable read access for all users" on public.data_product_details for select using (true);
 
+drop policy if exists "Authenticated can read data_active_products" on public.data_active_products;
 drop policy if exists "Enable read access for all users" on public.data_active_products;
 create policy "Enable read access for all users" on public.data_active_products for select using (true);
 
+drop policy if exists "Authenticated can read data_stock" on public.data_stock;
 drop policy if exists "Enable read access for all users" on public.data_stock;
 create policy "Enable read access for all users" on public.data_stock for select using (true);
 
+drop policy if exists "Authenticated can read data_innovations" on public.data_innovations;
 drop policy if exists "Enable read access for all users" on public.data_innovations;
 create policy "Enable read access for all users" on public.data_innovations for select using (true);
 
+drop policy if exists "Authenticated can read data_metadata" on public.data_metadata;
 drop policy if exists "Enable read access for all users" on public.data_metadata;
 create policy "Enable read access for all users" on public.data_metadata for select using (true);
 
 -- Removida a política redundante de leitura para goals_distribution para evitar avisos de Múltiplas Políticas Permissivas.
 -- A política "Enable insert/update for goals" abaixo cobre o acesso se estiver configurada corretamente.
--- drop policy if exists "Enable read access for all users" on public.goals_distribution;
--- create policy "Enable read access for all users" on public.goals_distribution for select using (true);
+drop policy if exists "Enable read access for all users" on public.goals_distribution;
+drop policy if exists "Goals: managers or owner can modify" on public.goals_distribution;
 
 -- Políticas de Escrita (Geralmente restritas a service_role ou admins)
 -- Como o upload é feito via chave service_role no backend ou cliente com chave especifica, 
@@ -243,13 +272,17 @@ create policy "Users can update own profile" on public.profiles
 
 -- Função para criar perfil automaticamente no cadastro
 create or replace function public.handle_new_user()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
 begin
   insert into public.profiles (id, email, status)
   values (new.id, new.email, 'pendente');
   return new;
 end;
-$$ language plpgsql security definer;
+$$;
 
 -- Trigger para chamar a função acima
 drop trigger if exists on_auth_user_created on auth.users;
