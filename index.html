@@ -55,6 +55,40 @@
     html.light .text-slate-300 { color: var(--text-primary) !important; }
     html.light .text-slate-400 { color: #64748b !important; } /* slate-500 */
     
+    /* Light Mode Overrides for Specific Dark Backgrounds */
+    html.light .bg-\[\#0f172a\] { background-color: #f1f5f9 !important; } /* Light gray instead of very dark blue */
+    html.light .bg-\[\#151c36\] { background-color: #ffffff !important; } /* White instead of dark table body */
+    html.light .bg-\[\#161e3d\] { background-color: #f8fafc !important; } /* Very light gray instead of dark container */
+    
+    html.light .bg-slate-700 { background-color: #e2e8f0 !important; color: #1e293b !important; border-color: #cbd5e1 !important; }
+    html.light .bg-slate-800 { background-color: #f1f5f9 !important; color: #1e293b !important; border-color: #cbd5e1 !important; }
+    
+    /* Ensure Inputs inside filters (often slate-700) are readable */
+    html.light input.bg-slate-700, html.light select.bg-slate-700, html.light button.bg-slate-700 {
+        background-color: #ffffff !important;
+        color: #1e293b !important;
+        border: 1px solid #cbd5e1 !important;
+    }
+    
+    /* Goal Cards - Light Mode Variants */
+    html.light .bg-\[\#1e2a5a\] { background-color: #dbeafe !important; border-color: #bfdbfe !important; } /* blue-100 */
+    html.light .bg-\[\#3c2a21\] { background-color: #ffedd5 !important; border-color: #fed7aa !important; } /* orange-100 */
+    html.light .bg-\[\#3b0764\] { background-color: #f3e8ff !important; border-color: #e9d5ff !important; } /* purple-100 */
+    html.light .bg-\[\#064e3b\] { background-color: #d1fae5 !important; border-color: #a7f3d0 !important; } /* emerald-100 */
+    html.light .bg-\[\#713f12\] { background-color: #fef9c3 !important; border-color: #fde047 !important; } /* yellow-100 */
+
+    /* Ensure text within these cards is readable in light mode */
+    /* Note: .text-white is already overridden to dark in light mode, so dark text on light bg works. */
+    /* However, some labels inside cards use specific colors like text-blue-300. We might need to darken them. */
+    html.light .text-blue-300 { color: #1d4ed8 !important; } /* blue-700 */
+    html.light .text-orange-300 { color: #c2410c !important; } /* orange-700 */
+    html.light .text-purple-300 { color: #7e22ce !important; } /* purple-700 */
+    html.light .text-emerald-300 { color: #047857 !important; } /* emerald-700 */
+    html.light .text-yellow-300 { color: #b45309 !important; } /* amber-700 */
+    
+    /* Also handle the inner input background in cards which is bg-[#0f172a] */
+    /* This is already handled by the generic override above */
+
     /* Theme Toggle Switch */
     .theme-switch-wrapper { display: flex; align-items: center; margin-top: auto; padding: 1rem; border-top: 1px solid var(--border-color); }
     .theme-switch { display: inline-block; height: 24px; position: relative; width: 48px; margin-right: 10px; }
@@ -13708,6 +13742,8 @@ const supervisorGroups = new Map();
                             NOME: order.NOME,
                             SUPERV: order.SUPERV,
                             FORNECEDORES_STR: Array.from(order.FORNECEDORES).join(', '),
+                            FORNECEDORES_LIST: Array.from(order.FORNECEDORES),
+                            CODFORS_LIST: Array.from(order.CODFORS),
                             DTPED: order.DTPED,
                             DTSAIDA: order.DTSAIDA,
                             POSICAO: order.POSICAO,
