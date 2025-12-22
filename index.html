@@ -2935,7 +2935,7 @@
         const codcliFilter = document.getElementById('codcli-filter');
         const clearFiltersBtn = document.getElementById('clear-filters-btn');
         const salesByPersonTitle = document.getElementById('sales-by-person-title');
-        const fornecedorToggleContainer = document.getElementById('fornecedor-toggle-container');
+        const fornecedorToggleContainerEl = document.getElementById('fornecedor-toggle-container');
 
         const citySupervisorFilter = document.getElementById('city-supervisor-filter');
         const cityVendedorFilterBtn = document.getElementById('city-vendedor-filter-btn');
@@ -11715,10 +11715,10 @@ const supervisorGroups = new Map();
                 else if (!stockCityFilter.contains(e.target)) stockCitySuggestions.classList.add('hidden');
             });
 
-            fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { 
+            fornecedorToggleContainerEl.querySelectorAll('.fornecedor-btn').forEach(btn => {
                 btn.addEventListener('click', () => { 
                     const fornecedor = btn.dataset.fornecedor; 
-                    if (currentFornecedor === fornecedor) { currentFornecedor = ''; btn.classList.remove('active'); } else { currentFornecedor = fornecedor; fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } 
+                    if (currentFornecedor === fornecedor) { currentFornecedor = ''; btn.classList.remove('active'); } else { currentFornecedor = fornecedor; fornecedorToggleContainerEl.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
                     
                     let supplierDataSource = [...allSalesData, ...allHistoryData];
                     if (currentFornecedor) {
