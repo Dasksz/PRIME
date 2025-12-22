@@ -223,6 +223,34 @@
     .bg-modal-content::-webkit-scrollbar { width: 8px; }
     .bg-modal-content::-webkit-scrollbar-track { background: #161e3d; }
     .bg-modal-content::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 10px; }
+
+                            /* KPI Glow Effects */
+                            .kpi-glow-base {
+                                border: 1px solid transparent !important; /* Override default border */
+                                background-origin: border-box;
+                                background-clip: padding-box, border-box;
+                                position: relative;
+                            }
+
+                            .kpi-glow-blue {
+                                background-image: linear-gradient(var(--bg-card), var(--bg-card)), linear-gradient(135deg, #3b82f6, #06b6d4); /* Blue to Cyan */
+                                box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+                            }
+                            
+                            .kpi-glow-green {
+                                background-image: linear-gradient(var(--bg-card), var(--bg-card)), linear-gradient(135deg, #22c55e, #10b981); /* Green to Emerald */
+                                box-shadow: 0 0 15px rgba(34, 197, 94, 0.4);
+                            }
+                            
+                            .kpi-glow-yellow {
+                                background-image: linear-gradient(var(--bg-card), var(--bg-card)), linear-gradient(135deg, #eab308, #f59e0b); /* Yellow to Amber */
+                                box-shadow: 0 0 15px rgba(234, 179, 8, 0.4);
+                            }
+
+                            .kpi-glow-purple {
+                                background-image: linear-gradient(var(--bg-card), var(--bg-card)), linear-gradient(135deg, #a855f7, #ec4899); /* Purple to Pink */
+                                box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
+                            }
     </style>
 
 </head>
@@ -445,19 +473,19 @@
 
                                 <!-- KPIs com bordas e cores atualizadas -->
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                                    <div class="kpi-card border-t-4 border-indigo-500 transition transform hover:-translate-y-1 duration-200">
+                                    <div class="kpi-card kpi-glow-base kpi-glow-blue transition transform hover:-translate-y-1 duration-200">
                                         <h3 class="text-slate-400 font-medium uppercase text-sm">Volume Kg</h3>
                                         <p id="total-peso" class="text-4xl font-bold text-white my-2">0,0</p>
                                     </div>
-                                    <div class="kpi-card border-t-4 border-teal-500 transition transform hover:-translate-y-1 duration-200">
+                                    <div class="kpi-card kpi-glow-base kpi-glow-green transition transform hover:-translate-y-1 duration-200">
                                         <h3 class="text-slate-400 font-medium uppercase text-sm">Faturamento R$</h3>
                                         <p id="total-vendas" class="text-4xl font-bold text-white my-2">R$ 0,00</p>
                                     </div>
-                                    <div class="kpi-card border-t-4 border-green-500 transition transform hover:-translate-y-1 duration-200">
+                                    <div class="kpi-card kpi-glow-base kpi-glow-yellow transition transform hover:-translate-y-1 duration-200">
                                         <h3 class="text-slate-400 font-medium uppercase text-sm">SKU/PDV</h3>
                                         <p id="kpi-sku-pdv" class="text-4xl font-bold text-white my-2">0,0</p>
                                     </div>
-                                    <div class="kpi-card border-t-4 border-purple-500 transition transform hover:-translate-y-1 duration-200">
+                                    <div class="kpi-card kpi-glow-base kpi-glow-purple transition transform hover:-translate-y-1 duration-200">
                                         <h3 class="text-slate-400 font-medium uppercase text-sm">Cobertura PDVs</h3>
                                         <p id="kpi-positivacao" class="text-4xl font-bold text-white my-2">0,0%</p>
                                         <p id="kpi-positivacao-percent" class="text-sm text-slate-400 -mt-1">0 PDVs</p>
