@@ -9744,14 +9744,14 @@ const supervisorGroups = new Map();
                 globalInnovationCategories = {};
                 globalProductToCategoryMap = new Map();
                 innovationsMonthData.forEach(item => {
-                    const categoryName = item.Inovacoes;
+                    const categoryName = item.Inovacoes || item.inovacoes || item.INOVACOES;
                     if (!categoryName) return;
                     if (!globalInnovationCategories[categoryName]) {
                         globalInnovationCategories[categoryName] = { productCodes: new Set(), products: [] };
                     }
-                    const productCode = String(item.Codigo).trim();
+                    const productCode = String(item.Codigo || item.codigo || item.CODIGO).trim();
                     globalInnovationCategories[categoryName].productCodes.add(productCode);
-                    globalInnovationCategories[categoryName].products.push({ ...item, Codigo: productCode });
+                    globalInnovationCategories[categoryName].products.push({ ...item, Codigo: productCode, Inovacoes: categoryName });
                     globalProductToCategoryMap.set(productCode, categoryName);
                 });
             }
