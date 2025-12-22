@@ -233,22 +233,22 @@
                             }
 
                             .kpi-glow-blue {
-                                background-image: linear-gradient(var(--bg-card), var(--bg-card)), linear-gradient(135deg, #3b82f6, #06b6d4); /* Blue to Cyan */
+                                background-image: linear-gradient(var(--card-bg, #1d2347), var(--card-bg, #1d2347)), linear-gradient(135deg, #3b82f6, #06b6d4); /* Blue to Cyan */
                                 box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
                             }
                             
                             .kpi-glow-green {
-                                background-image: linear-gradient(var(--bg-card), var(--bg-card)), linear-gradient(135deg, #22c55e, #10b981); /* Green to Emerald */
+                                background-image: linear-gradient(var(--card-bg, #1d2347), var(--card-bg, #1d2347)), linear-gradient(135deg, #22c55e, #10b981); /* Green to Emerald */
                                 box-shadow: 0 0 15px rgba(34, 197, 94, 0.4);
                             }
                             
                             .kpi-glow-yellow {
-                                background-image: linear-gradient(var(--bg-card), var(--bg-card)), linear-gradient(135deg, #eab308, #f59e0b); /* Yellow to Amber */
+                                background-image: linear-gradient(var(--card-bg, #1d2347), var(--card-bg, #1d2347)), linear-gradient(135deg, #eab308, #f59e0b); /* Yellow to Amber */
                                 box-shadow: 0 0 15px rgba(234, 179, 8, 0.4);
                             }
 
                             .kpi-glow-purple {
-                                background-image: linear-gradient(var(--bg-card), var(--bg-card)), linear-gradient(135deg, #a855f7, #ec4899); /* Purple to Pink */
+                                background-image: linear-gradient(var(--card-bg, #1d2347), var(--card-bg, #1d2347)), linear-gradient(135deg, #a855f7, #ec4899); /* Purple to Pink */
                                 box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
                             }
     </style>
@@ -1111,12 +1111,11 @@
                                 <!-- Meta Input Cards -->
                                 <div id="goals-input-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-6 bg-[#161e3d] p-4 rounded-lg border border-slate-700/50">
                                     <!-- Faturamento Card -->
-                                    <div class="bg-[#1e2a5a] border border-blue-900/50 rounded-lg p-3 relative overflow-hidden group">
-                                        <div class="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-                                        <label class="text-[10px] font-bold text-blue-300 uppercase tracking-wider mb-1 block">META FATURAMENTO (R$)</label>
+                                    <div class="bg-[#064e3b] kpi-glow-base kpi-glow-green rounded-lg p-3 relative overflow-hidden group shadow-md" style="--card-bg: #064e3b;">
+                                        <label class="text-[10px] font-bold text-green-300 uppercase tracking-wider mb-1 block">META FATURAMENTO (R$)</label>
                                         <div class="flex gap-2">
-                                            <input type="text" id="goal-global-fat" class="w-full bg-[#0f172a] border border-blue-900/50 text-white font-bold text-lg p-2 rounded focus:outline-none focus:border-blue-500" value="0,00">
-                                            <button id="btn-distribute-fat" class="bg-blue-600 hover:bg-blue-500 text-white px-3 rounded flex items-center justify-center transition-colors">
+                                            <input type="text" id="goal-global-fat" class="w-full bg-[#0f172a] border border-green-900/50 text-white font-bold text-lg p-2 rounded focus:outline-none focus:border-green-500" value="0,00">
+                                            <button id="btn-distribute-fat" class="bg-green-600 hover:bg-green-500 text-white px-3 rounded flex items-center justify-center transition-colors">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
                                             </button>
                                         </div>
@@ -1126,12 +1125,11 @@
                                         </div>
                                     </div>
                                     <!-- Volume Card -->
-                                    <div class="bg-[#3c2a21] border border-orange-900/50 rounded-lg p-3 relative overflow-hidden group">
-                                        <div class="absolute top-0 left-0 w-1 h-full bg-orange-500"></div>
-                                        <label class="text-[10px] font-bold text-orange-300 uppercase tracking-wider mb-1 block">META VOLUME (KG)</label>
+                                    <div class="bg-[#1e2a5a] kpi-glow-base kpi-glow-blue rounded-lg p-3 relative overflow-hidden group shadow-md" style="--card-bg: #1e2a5a;">
+                                        <label class="text-[10px] font-bold text-blue-300 uppercase tracking-wider mb-1 block">META VOLUME (KG)</label>
                                         <div class="flex gap-2">
-                                            <input type="text" id="goal-global-vol" class="w-full bg-[#0f172a] border border-orange-900/50 text-white font-bold text-lg p-2 rounded focus:outline-none focus:border-orange-500" value="0,000">
-                                            <button id="btn-distribute-vol" class="bg-orange-600 hover:bg-orange-500 text-white px-3 rounded flex items-center justify-center transition-colors">
+                                            <input type="text" id="goal-global-vol" class="w-full bg-[#0f172a] border border-blue-900/50 text-white font-bold text-lg p-2 rounded focus:outline-none focus:border-blue-500" value="0,000">
+                                            <button id="btn-distribute-vol" class="bg-blue-600 hover:bg-blue-500 text-white px-3 rounded flex items-center justify-center transition-colors">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
                                             </button>
                                         </div>
@@ -1141,8 +1139,7 @@
                                         </div>
                                     </div>
                                     <!-- Positivação Card -->
-                                    <div class="bg-[#3b0764] border border-purple-900/50 rounded-lg p-3 relative overflow-hidden group">
-                                        <div class="absolute top-0 left-0 w-1 h-full bg-purple-500"></div>
+                                    <div class="bg-[#3b0764] kpi-glow-base kpi-glow-purple rounded-lg p-3 relative overflow-hidden group shadow-md" style="--card-bg: #3b0764;">
                                         <label class="text-[10px] font-bold text-purple-300 uppercase tracking-wider mb-1 block">META POSITIVAÇÃO</label>
                                         <div class="flex gap-2">
                                             <input type="text" id="goal-global-mix" class="w-full bg-[#0f172a] border border-purple-900/50 text-white font-bold text-lg p-2 rounded focus:outline-none focus:border-purple-500" value="0" readonly>
@@ -1156,8 +1153,7 @@
                                         </div>
                                     </div>
                                     <!-- Mix Salty Card (Hidden by Default) -->
-                                    <div id="card-mix-salty" class="hidden bg-[#064e3b] border border-emerald-900/50 rounded-lg p-3 relative overflow-hidden group">
-                                        <div class="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
+                                    <div id="card-mix-salty" class="hidden bg-[#064e3b] kpi-glow-base kpi-glow-green rounded-lg p-3 relative overflow-hidden group shadow-md" style="--card-bg: #064e3b;">
                                         <label class="text-[10px] font-bold text-emerald-300 uppercase tracking-wider mb-1 block">META MIX SALTY</label>
                                         <div class="flex gap-2">
                                             <input type="text" id="goal-global-mix-salty" class="w-full bg-[#0f172a] border border-emerald-900/50 text-white font-bold text-lg p-2 rounded focus:outline-none focus:border-emerald-500" value="0" readonly>
@@ -1170,8 +1166,7 @@
                                         </div>
                                     </div>
                                     <!-- Mix Foods Card (Hidden by Default) -->
-                                    <div id="card-mix-foods" class="hidden bg-[#713f12] border border-yellow-900/50 rounded-lg p-3 relative overflow-hidden group">
-                                        <div class="absolute top-0 left-0 w-1 h-full bg-yellow-500"></div>
+                                    <div id="card-mix-foods" class="hidden bg-[#713f12] kpi-glow-base kpi-glow-yellow rounded-lg p-3 relative overflow-hidden group shadow-md" style="--card-bg: #713f12;">
                                         <label class="text-[10px] font-bold text-yellow-300 uppercase tracking-wider mb-1 block">META MIX FOODS</label>
                                         <div class="flex gap-2">
                                             <input type="text" id="goal-global-mix-foods" class="w-full bg-[#0f172a] border border-yellow-900/50 text-white font-bold text-lg p-2 rounded focus:outline-none focus:border-yellow-500" value="0" readonly>
@@ -1302,12 +1297,12 @@
                                 </div>
                             </header>
                              <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-6">
-                                <div class="kpi-card transition transform hover:-translate-y-1 duration-200"><p class="text-slate-400 text-sm font-medium">Clientes Ativos (Filtro)</p><p id="innovations-month-active-clients-kpi" class="text-3xl font-bold text-teal-400 my-1">0</p><p class="text-xs text-slate-500">Base para os KPIs</p></div>
-                                <div class="kpi-card transition transform hover:-translate-y-1 duration-200"><p class="text-slate-400 text-sm font-medium">Cobertura Mês Anterior</p><p id="innovations-month-selection-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p><p id="innovations-month-selection-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p></div>
-                                <div class="kpi-card transition transform hover:-translate-y-1 duration-200"><p class="text-slate-400 text-sm font-medium">Cobertura Mês Atual</p><p id="innovations-month-selection-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p><p id="innovations-month-selection-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p></div>
-                                <div class="kpi-card transition transform hover:-translate-y-1 duration-200"><p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Ant.</p><p id="innovations-month-bonus-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p><p id="innovations-month-bonus-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p></div>
-                                <div class="kpi-card transition transform hover:-translate-y-1 duration-200"><p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Atual</p><p id="innovations-month-bonus-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p><p id="innovations-month-bonus-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p></div>
-                                <div class="kpi-card transition transform hover:-translate-y-1 duration-200"><p id="innovations-month-top-coverage-title" class="text-slate-400 text-sm font-medium">Item com Maior Cobertura</p><p id="innovations-month-top-coverage-value-kpi" class="text-3xl font-bold text-purple-400 my-1">0%</p><p id="innovations-month-top-coverage-kpi" class="text-xs text-slate-500 truncate" title="Nenhum item analisado">-</p><p id="innovations-month-top-coverage-count-kpi" class="text-xs text-slate-500">0 PDVs</p></div>
+                                <div class="kpi-card kpi-glow-base kpi-glow-blue transition transform hover:-translate-y-1 duration-200"><p class="text-slate-400 text-sm font-medium">Clientes Ativos (Filtro)</p><p id="innovations-month-active-clients-kpi" class="text-3xl font-bold text-teal-400 my-1">0</p><p class="text-xs text-slate-500">Base para os KPIs</p></div>
+                                <div class="kpi-card kpi-glow-base kpi-glow-yellow transition transform hover:-translate-y-1 duration-200"><p class="text-slate-400 text-sm font-medium">Cobertura Mês Anterior</p><p id="innovations-month-selection-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p><p id="innovations-month-selection-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p></div>
+                                <div class="kpi-card kpi-glow-base kpi-glow-green transition transform hover:-translate-y-1 duration-200"><p class="text-slate-400 text-sm font-medium">Cobertura Mês Atual</p><p id="innovations-month-selection-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p><p id="innovations-month-selection-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p></div>
+                                <div class="kpi-card kpi-glow-base kpi-glow-yellow transition transform hover:-translate-y-1 duration-200"><p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Ant.</p><p id="innovations-month-bonus-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p><p id="innovations-month-bonus-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p></div>
+                                <div class="kpi-card kpi-glow-base kpi-glow-green transition transform hover:-translate-y-1 duration-200"><p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Atual</p><p id="innovations-month-bonus-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p><p id="innovations-month-bonus-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p></div>
+                                <div class="kpi-card kpi-glow-base kpi-glow-purple transition transform hover:-translate-y-1 duration-200"><p id="innovations-month-top-coverage-title" class="text-slate-400 text-sm font-medium">Item com Maior Cobertura</p><p id="innovations-month-top-coverage-value-kpi" class="text-3xl font-bold text-purple-400 my-1">0%</p><p id="innovations-month-top-coverage-kpi" class="text-xs text-slate-500 truncate" title="Nenhum item analisado">-</p><p id="innovations-month-top-coverage-count-kpi" class="text-xs text-slate-500">0 PDVs</p></div>
                             </div>
                             <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
@@ -1421,17 +1416,17 @@
                                     <p id="mix-total-clients-kpi" class="text-3xl font-bold text-white my-1">0</p>
                                     <p class="text-xs text-slate-500">Base para análise</p>
                                 </div>
-                                <div class="kpi-card border-t-4 border-teal-500 transition transform hover:-translate-y-1 duration-200">
+                                <div class="kpi-card kpi-glow-base kpi-glow-green transition transform hover:-translate-y-1 duration-200">
                                     <p class="text-slate-400 text-sm font-medium">Positivados Salty</p>
                                     <p id="mix-salty-kpi" class="text-3xl font-bold text-teal-400 my-1">0%</p>
                                     <p id="mix-salty-count-kpi" class="text-xs text-slate-500">0 clientes</p>
                                 </div>
-                                <div class="kpi-card border-t-4 border-yellow-500 transition transform hover:-translate-y-1 duration-200">
+                                <div class="kpi-card kpi-glow-base kpi-glow-yellow transition transform hover:-translate-y-1 duration-200">
                                     <p class="text-slate-400 text-sm font-medium">Positivados Foods</p>
                                     <p id="mix-foods-kpi" class="text-3xl font-bold text-yellow-400 my-1">0%</p>
                                     <p id="mix-foods-count-kpi" class="text-xs text-slate-500">0 clientes</p>
                                 </div>
-                                <div class="kpi-card border-t-4 border-purple-500 transition transform hover:-translate-y-1 duration-200">
+                                <div class="kpi-card kpi-glow-base kpi-glow-purple transition transform hover:-translate-y-1 duration-200">
                                     <p class="text-slate-400 text-sm font-medium">Mix Ideal (Ambos)</p>
                                     <p id="mix-both-kpi" class="text-3xl font-bold text-purple-400 my-1">0%</p>
                                     <p id="mix-both-count-kpi" class="text-xs text-slate-500">0 clientes</p>
@@ -1565,22 +1560,22 @@
                             </header>
                             <!-- KPIs (Cobertura) -->
                              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                                <div class="kpi-card transition transform hover:-translate-y-1 duration-200">
+                                <div class="kpi-card kpi-glow-base kpi-glow-blue transition transform hover:-translate-y-1 duration-200">
                                     <p class="text-slate-400 text-sm font-medium">Clientes Ativos (Filtro)</p>
                                     <p id="coverage-active-clients-kpi" class="text-3xl font-bold text-teal-400 my-1">0</p>
                                     <p class="text-xs text-slate-500">Base para os KPIs</p>
                                 </div>
-                                <div class="kpi-card transition transform hover:-translate-y-1 duration-200">
+                                <div class="kpi-card kpi-glow-base kpi-glow-yellow transition transform hover:-translate-y-1 duration-200">
                                     <p class="text-slate-400 text-sm font-medium">Cobertura Mês Anterior</p>
                                     <p id="coverage-selection-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p>
                                     <p id="coverage-selection-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p>
                                 </div>
-                                <div class="kpi-card transition transform hover:-translate-y-1 duration-200">
+                                <div class="kpi-card kpi-glow-base kpi-glow-green transition transform hover:-translate-y-1 duration-200">
                                     <p class="text-slate-400 text-sm font-medium">Cobertura Mês Atual</p>
                                     <p id="coverage-selection-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p>
                                     <p id="coverage-selection-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p>
                                 </div>
-                                <div class="kpi-card transition transform hover:-translate-y-1 duration-200">
+                                <div class="kpi-card kpi-glow-base kpi-glow-purple transition transform hover:-translate-y-1 duration-200">
                                     <p class="text-slate-400 text-sm font-medium">Item com Maior Cobertura</p>
                                     <p id="coverage-top-coverage-value-kpi" class="text-3xl font-bold text-purple-400 my-1">0%</p>
                                     <p id="coverage-top-coverage-product-kpi" class="text-xs text-slate-500 truncate" title="Nenhum item analisado">-</p>
@@ -8421,7 +8416,13 @@ const supervisorGroups = new Map();
                     displayValue = formatValue(kpi.current, kpi.format);
                 }
 
-                return `<div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700 transition transform hover:-translate-y-1 duration-200">
+                let glowClass = 'kpi-glow-blue';
+                if (kpi.title.includes('Faturamento')) glowClass = 'kpi-glow-green';
+                else if (kpi.title.includes('Volume')) glowClass = 'kpi-glow-blue';
+                else if (kpi.title.includes('Positivação') || kpi.title.includes('Cobertura')) glowClass = 'kpi-glow-purple';
+                else if (kpi.title.includes('SKU') || kpi.title.includes('Mix')) glowClass = 'kpi-glow-yellow';
+
+                return `<div class="kpi-card p-4 rounded-lg text-center kpi-glow-base ${glowClass} transition transform hover:-translate-y-1 duration-200">
                             <p class="text-slate-400 text-sm">${kpi.title}</p>
                             <p class="text-2xl font-bold text-white my-2">${displayValue}</p>
                             <p class="text-sm ${colorClass}">${variation.toFixed(2)}% vs Média do Trimestre</p>
