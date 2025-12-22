@@ -252,13 +252,17 @@ create policy "Users can update own profile" on public.profiles
 
 -- Função para criar perfil automaticamente no cadastro
 create or replace function public.handle_new_user()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
 begin
   insert into public.profiles (id, email, status)
   values (new.id, new.email, 'pendente');
   return new;
 end;
-$$ language plpgsql security definer;
+$$;
 
 -- Trigger para chamar a função acima
 drop trigger if exists on_auth_user_created on auth.users;
