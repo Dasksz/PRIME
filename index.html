@@ -1788,62 +1788,42 @@
             loader.classList.remove('hidden');
             loaderText.textContent = 'Buscando dados...';
 
-            const parseCSV = (text, type) => {
+            // Shared client map for both parsers
+            const clientMap = {
+                'CODIGO_CLIENTE': 'Código',
+                'RCA1': 'RCA 1',
+                'RCA2': 'RCA 2',
+                'NOMECLIENTE': 'Cliente',
+                'RAZAOSOCIAL': 'Cliente',
+                'ULTIMACOMPRA': 'Data da Última Compra',
+                'DATACADASTRO': 'Data e Hora de Cadastro',
+                'INSCRICAOESTADUAL': 'Insc. Est. / Produtor',
+                'CNPJ_CPF': 'CNPJ/CPF',
+                'ENDERECO': 'Endereço Comercial',
+                'TELEFONE': 'Telefone Comercial'
+            };
+
+            const parseCSVToObjects = (text, type) => {
                 const result = [];
                 let headers = null;
-
                 let currentVal = '';
                 let currentLine = [];
                 let inQuote = false;
 
-                // Maps for Clients
-                const clientMap = {
-                    'CODIGO_CLIENTE': 'Código',
-                    'RCA1': 'RCA 1',
-                    'RCA2': 'RCA 2',
-                    'NOMECLIENTE': 'Cliente',
-                    'RAZAOSOCIAL': 'Cliente',
-                    'ULTIMACOMPRA': 'Data da Última Compra',
-                    'DATACADASTRO': 'Data e Hora de Cadastro',
-                    'INSCRICAOESTADUAL': 'Insc. Est. / Produtor',
-                    'CNPJ_CPF': 'CNPJ/CPF',
-                    'ENDERECO': 'Endereço Comercial',
-                    'TELEFONE': 'Telefone Comercial'
-                };
-
                 const pushLine = (lineValues) => {
                     if (!headers) {
                         headers = lineValues;
-                        // Headers are processed (trimmed) later when using them
                         return;
                     }
-                    if (lineValues.length !== headers.length) return; // Skip malformed lines
+                    if (lineValues.length !== headers.length) return;
 
                     const obj = {};
                     for (let j = 0; j < headers.length; j++) {
                         let header = headers[j].trim().toUpperCase();
                         let val = lineValues[j];
 
-                        if (type === 'clients' && clientMap[header]) {
-                            header = clientMap[header];
-                        }
-
-                        if (type === 'sales' || type === 'history') {
-                            if (['QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUECX', 'ESTOQUEUNIT', 'QTVENDA_EMBALAGEM_MASTER', 'PEDIDO'].includes(header)) {
-                                val = val === '' ? 0 : Number(val);
-                            }
-                        }
-                        if (type === 'stock') {
-                            if (header === 'STOCK_QTY') val = val === '' ? 0 : Number(val);
-                        }
-                        if (type === 'orders') {
-                             if (['VLVENDA', 'TOTPESOLIQ', 'VLBONIFIC', 'QTVENDA'].includes(header)) val = val === '' ? 0 : Number(val);
-                        }
-                        if (type === 'clients' && header === 'RCAS' && typeof val === 'string' && val.startsWith('{')) {
-                            // Removes { and } then splits by comma, removing quotes if present
-                            // Note: This is a simple Postgres array parser. Complex arrays might fail but here we expect strings.
-                            val = val.slice(1, -1).split(',').map(s => s.replace(/^"|"$/g, ''));
-                        }
+                        if (type === 'clients' && clientMap[header]) header = clientMap[header];
+                        if (type === 'orders' && ['VLVENDA', 'TOTPESOLIQ', 'VLBONIFIC', 'QTVENDA'].includes(header)) val = val === '' ? 0 : Number(val);
 
                         obj[header] = val;
                     }
@@ -1854,68 +1834,122 @@
                     const char = text[i];
                     if (inQuote) {
                         if (char === '"') {
-                            if (i + 1 < text.length && text[i + 1] === '"') {
-                                currentVal += '"';
-                                i++;
-                            } else {
-                                inQuote = false;
-                            }
-                        } else {
-                            currentVal += char;
-                        }
+                            if (i + 1 < text.length && text[i + 1] === '"') { currentVal += '"'; i++; }
+                            else { inQuote = false; }
+                        } else { currentVal += char; }
                     } else {
-                        if (char === '"') {
-                            inQuote = true;
-                        } else if (char === ',') {
-                            currentLine.push(currentVal);
-                            currentVal = '';
-                        } else if (char === '\n' || char === '\r') {
-                            if (char === '\r' && i + 1 < text.length && text[i+1] === '\n') i++; // Handle \r\n
-                            currentLine.push(currentVal);
-                            currentVal = '';
-
-                            pushLine(currentLine);
-                            currentLine = [];
-                        } else {
-                            currentVal += char;
-                        }
+                        if (char === '"') { inQuote = true; }
+                        else if (char === ',') { currentLine.push(currentVal); currentVal = ''; }
+                        else if (char === '\n' || char === '\r') {
+                            if (char === '\r' && i + 1 < text.length && text[i+1] === '\n') i++;
+                            currentLine.push(currentVal); currentVal = '';
+                            pushLine(currentLine); currentLine = [];
+                        } else { currentVal += char; }
                     }
                 }
-
-                // Handle last line if no newline at end
-                if (currentLine.length > 0 || currentVal !== '') {
-                    currentLine.push(currentVal);
-                    pushLine(currentLine);
-                }
-
+                if (currentLine.length > 0 || currentVal !== '') { currentLine.push(currentVal); pushLine(currentLine); }
                 return result;
             };
 
-            const fetchAll = async (table, columns = null, type = null) => {
-                let allData = [];
+            const parseCSVToColumnar = (text, type, existingColumnar = null) => {
+                const columnar = existingColumnar || { columns: [], values: {}, length: 0 };
+                let headers = columnar.columns.length > 0 ? columnar.columns : null;
+                let currentVal = '';
+                let currentLine = [];
+                let inQuote = false;
+                let isHeader = !headers;
+
+                const pushLine = (lineValues) => {
+                    if (lineValues.length === 0 || (lineValues.length === 1 && lineValues[0] === '')) return;
+
+                    if (isHeader) {
+                        headers = lineValues.map(h => {
+                            let header = h.trim().toUpperCase();
+                            if (type === 'clients' && clientMap[header]) header = clientMap[header];
+                            return header;
+                        });
+                        columnar.columns = headers;
+                        headers.forEach(h => { if (!columnar.values[h]) columnar.values[h] = []; });
+                        isHeader = false;
+                        return;
+                    }
+
+                    if (headers && lineValues.length === headers.length) {
+                        for (let j = 0; j < headers.length; j++) {
+                            const header = headers[j];
+                            let val = lineValues[j];
+
+                            if (type === 'sales' || type === 'history') {
+                                if (['QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUECX', 'ESTOQUEUNIT', 'QTVENDA_EMBALAGEM_MASTER', 'PEDIDO'].includes(header)) {
+                                    val = val === '' ? 0 : Number(val);
+                                }
+                            }
+                            if (type === 'stock' && header === 'STOCK_QTY') val = val === '' ? 0 : Number(val);
+                            if (type === 'clients' && header === 'RCAS' && typeof val === 'string' && val.startsWith('{')) {
+                                val = val.slice(1, -1).split(',').map(s => s.replace(/^"|"$/g, ''));
+                            }
+
+                            columnar.values[header].push(val);
+                        }
+                        columnar.length++;
+                    }
+                };
+
+                for (let i = 0; i < text.length; i++) {
+                    const char = text[i];
+                    if (inQuote) {
+                        if (char === '"') {
+                            if (i + 1 < text.length && text[i + 1] === '"') { currentVal += '"'; i++; }
+                            else { inQuote = false; }
+                        } else { currentVal += char; }
+                    } else {
+                        if (char === '"') { inQuote = true; }
+                        else if (char === ',') { currentLine.push(currentVal); currentVal = ''; }
+                        else if (char === '\n' || char === '\r') {
+                            if (char === '\r' && i + 1 < text.length && text[i+1] === '\n') i++;
+                            currentLine.push(currentVal); currentVal = '';
+                            pushLine(currentLine); currentLine = [];
+                        } else { currentVal += char; }
+                    }
+                }
+                if (currentLine.length > 0 || currentVal !== '') { currentLine.push(currentVal); pushLine(currentLine); }
+                return columnar;
+            };
+
+            const fetchAll = async (table, columns = null, type = null, format = 'object') => {
+                let result = format === 'columnar' ? null : [];
                 let page = 0;
                 let pageSize = 2000;
+
                 while(true) {
                     let query = supabaseClient.from(table).select(columns || '*', { count: 'exact', head: false });
 
                     if (columns) {
+                        // Fetch CSV
                         const { data, error } = await query.range(page*pageSize, (page+1)*pageSize-1).csv();
                         if (error) throw error;
                         if (!data || data.length === 0) break;
-                        const parsed = parseCSV(data, type);
-                        if (parsed.length === 0) break;
-                        allData = allData.concat(parsed);
-                        if (parsed.length < pageSize) break;
+
+                        if (format === 'columnar') {
+                            result = parseCSVToColumnar(data, type, result);
+                        } else {
+                            const objects = parseCSVToObjects(data, type);
+                            result = result.concat(objects);
+                        }
+
+                        const newlines = (data.match(/\n/g) || []).length;
+                        if (newlines < pageSize && data.length > 0) break;
                     } else {
+                        // Fetch JSON (standard)
                         const { data, error } = await query.range(page*pageSize, (page+1)*pageSize-1);
                         if (error) throw error;
                         if (!data || data.length === 0) break;
-                        allData = allData.concat(data);
+                        result = result.concat(data);
                         if (data.length < pageSize) break;
                     }
                     page++;
                 }
-                return allData;
+                return result;
             };
 
             const colsDetailed = 'pedido,codcli,nome,superv,codsupervisor,produto,descricao,fornecedor,observacaofor,codfor,codusur,qtvenda,vlvenda,vlbonific,totpesoliq,dtped,dtsaida,posicao,estoqueunit,tipovenda,filial,qtvenda_embalagem_master';
@@ -1924,65 +1958,83 @@
             const colsOrders = 'pedido,codcli,cliente_nome,cidade,nome,superv,fornecedores_str,dtped,dtsaida,posicao,vlvenda,totpesoliq,filial';
 
             const [detailedUpper, historyUpper, clientsUpper, products, activeProds, stock, innovations, metadata, ordersUpper] = await Promise.all([
-                fetchAll('data_detailed', colsDetailed, 'sales'),
-                fetchAll('data_history', colsDetailed, 'history'),
-                fetchAll('data_clients', colsClients, 'clients'),
+                fetchAll('data_detailed', colsDetailed, 'sales', 'columnar'),
+                fetchAll('data_history', colsDetailed, 'history', 'columnar'),
+                fetchAll('data_clients', colsClients, 'clients', 'columnar'),
                 fetchAll('data_product_details'),
                 fetchAll('data_active_products'),
-                fetchAll('data_stock', colsStock, 'stock'),
+                fetchAll('data_stock', colsStock, 'stock', 'columnar'),
                 fetchAll('data_innovations'),
                 fetchAll('data_metadata'),
-                fetchAll('data_orders', colsOrders, 'orders')
+                fetchAll('data_orders', colsOrders, 'orders', 'object') // Keep orders as objects for renderTable
             ]);
 
             loaderText.textContent = 'Processando...';
 
-            const detailed = detailedUpper; // Compatibility alias
-            const history = historyUpper; // Compatibility alias
-            const clients = clientsUpper; // Compatibility alias
-            const orders = ordersUpper; // Compatibility alias
+            const detailed = detailedUpper;
+            const history = historyUpper;
+            const clients = clientsUpper;
+            const orders = ordersUpper;
             
             // Reconstruct Helper Maps
             const productDetailsMap = {};
-            products.forEach(p => {
-                productDetailsMap[p.code] = {
-                    descricao: p.descricao,
-                    fornecedor: p.fornecedor,
-                    codfor: p.codfor,
-                    dtCadastro: p.dtcadastro ? new Date(p.dtcadastro).getTime() : null
-                };
-            });
+            if (products && products.length) {
+                products.forEach(p => {
+                    productDetailsMap[p.code] = {
+                        descricao: p.descricao,
+                        fornecedor: p.fornecedor,
+                        codfor: p.codfor,
+                        dtCadastro: p.dtcadastro ? new Date(p.dtcadastro).getTime() : null,
+                        ...p
+                    };
+                });
+            }
 
             const activeProductCodes = activeProds.map(p => p.code);
-            
+
             const stockMap05 = {};
             const stockMap08 = {};
-            stock.forEach(s => {
-                if (s.filial === '05') stockMap05[s.product_code] = Number(s.stock_qty);
-                if (s.filial === '08') stockMap08[s.product_code] = Number(s.stock_qty);
-            });
+            if (stock && stock.values) {
+                const pCodes = stock.values['PRODUCT_CODE'];
+                const filials = stock.values['FILIAL'];
+                const qtys = stock.values['STOCK_QTY'];
+                const len = stock.length;
+                for(let i = 0; i < len; i++) {
+                    const code = pCodes[i];
+                    const fil = filials[i];
+                    const qty = qtys[i];
+                    if (fil === '05') stockMap05[code] = qty;
+                    if (fil === '08') stockMap08[code] = qty;
+                }
+            }
 
-            
-            const ordersUpper = mapKeysToUpper(orders, 'orders');
-    const embeddedData = {
+            // Calculate Last Sale Date (Columnar optimized)
+            let lastSale = 0;
+            if (detailedUpper.values && detailedUpper.values['DTPED']) {
+                const dtpeds = detailedUpper.values['DTPED'];
+                const len = dtpeds.length;
+                for(let i=0; i<len; i++) {
+                    if (dtpeds[i] > lastSale) lastSale = dtpeds[i];
+                }
+            } else if (Array.isArray(detailedUpper) && detailedUpper.length > 0) {
+                 lastSale = detailedUpper.reduce((max, p) => p.DTPED > max ? p.DTPED : max, 0);
+            }
+            if (lastSale === 0) lastSale = Date.now();
+
+            const embeddedData = {
                 detailed: detailedUpper,
                 history: historyUpper,
                 clients: clientsUpper,
                 byOrder: ordersUpper,
                 stockMap05: stockMap05,
                 stockMap08: stockMap08,
-                innovationsMonth: innovations, // Check keys
+                innovationsMonth: innovations,
                 activeProductCodes: activeProductCodes,
                 productDetails: productDetailsMap,
                 metadata: metadata,
-                passedWorkingDaysCurrentMonth: 1, // Calculate?
-                isColumnar: false // Let logic script convert if it wants
+                passedWorkingDaysCurrentMonth: 1,
+                isColumnar: true
             };
-            
-            // Recalculate passed working days
-            const lastSale = detailedUpper.length > 0 ? detailedUpper.reduce((max, p) => p.DTPED > max ? p.DTPED : max, 0) : new Date();
-            // ... logic to calc days ... simple fallback
-            embeddedData.passedWorkingDaysCurrentMonth = 1; 
 
             // Update Generation Date UI
             const lastUpdateText = document.getElementById('last-update-text');
@@ -2415,6 +2467,8 @@
 </script>
 
 <script id="report-logic-script" type="text/template">
+        const embeddedData = window.embeddedData;
+
         // --- OPTIMIZATION: Lazy Columnar Accessor with Write-Back Support ---
         class ColumnarDataset {
             constructor(columnarData) {
