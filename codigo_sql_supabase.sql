@@ -151,14 +151,32 @@ create table if not exists public.goals_distribution (
 -- Criação de Índices para Performance
 -- Indexes commented out based on Supabase "Unused Index" linter warnings.
 -- Uncomment them if your application queries start filtering by these fields.
+
+drop index if exists public.idx_detailed_codcli;
 -- create index if not exists idx_detailed_codcli on public.data_detailed(codcli);
+
 create index if not exists idx_detailed_codusur on public.data_detailed(codusur);
+
+drop index if exists public.idx_detailed_produto;
 -- create index if not exists idx_detailed_produto on public.data_detailed(produto);
+
+drop index if exists public.idx_history_codcli;
 -- create index if not exists idx_history_codcli on public.data_history(codcli);
+
+drop index if exists public.idx_history_codusur;
 -- create index if not exists idx_history_codusur on public.data_history(codusur);
+
+drop index if exists public.idx_clients_codigo;
 -- create index if not exists idx_clients_codigo on public.data_clients(codigo_cliente);
+
+drop index if exists public.idx_clients_rca1;
 -- create index if not exists idx_clients_rca1 on public.data_clients(rca1);
+
+drop index if exists public.idx_stock_product;
 -- create index if not exists idx_stock_product on public.data_stock(product_code);
+
+drop index if exists public.idx_goals_distribution_updated_by;
+
 create unique index if not exists idx_goals_unique on public.goals_distribution(month_key, supplier, brand);
 
 -- RLS (Row Level Security)
