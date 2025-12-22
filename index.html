@@ -1911,6 +1911,16 @@
         const telaLoading = document.getElementById('tela-loading');
         const telaPendente = document.getElementById('tela-pendente');
         
+        // Logout Button Logic for Pending Screen
+        const logoutButtonPendente = document.getElementById('logout-button-pendente');
+        if (logoutButtonPendente) {
+            logoutButtonPendente.addEventListener('click', async () => {
+                const { error } = await supabaseClient.auth.signOut();
+                if (error) console.error('Erro ao sair:', error);
+                window.location.reload();
+            });
+        }
+
         loginButton.addEventListener('click', async () => {
             await supabaseClient.auth.signInWithOAuth({
                 provider: 'google',
