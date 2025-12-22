@@ -13457,12 +13457,12 @@ const supervisorGroups = new Map();
             return rawData.map(rawRow => {
                 // --- HEADER DETECTION: Ignore rows that look like headers ---
                 if (
-                    String(rawRow['CODCLI'] || '').toUpperCase() === 'CODCLI' || 
-                    String(rawRow['PRODUTO'] || '').toUpperCase() === 'PRODUTO' || 
-                    String(rawRow['PRODUTO'] || '').toUpperCase() === 'CÓDIGO' ||
-                    String(rawRow['SUPERV'] || '').toUpperCase() === 'SUPERV' ||
-                    String(rawRow['NOME'] || '').toUpperCase() === 'NOME' ||
-                    String(rawRow['TIPOVENDA'] || '').toUpperCase() === 'TIPOVENDA'
+                    String(rawRow['CODCLI'] || '').trim().toUpperCase() === 'CODCLI' ||
+                    String(rawRow['PRODUTO'] || '').trim().toUpperCase() === 'PRODUTO' ||
+                    String(rawRow['PRODUTO'] || '').trim().toUpperCase() === 'CÓDIGO' ||
+                    String(rawRow['SUPERV'] || '').trim().toUpperCase() === 'SUPERV' ||
+                    String(rawRow['NOME'] || '').trim().toUpperCase() === 'NOME' ||
+                    String(rawRow['TIPOVENDA'] || '').trim().toUpperCase() === 'TIPOVENDA'
                 ) {
                     return null;
                 }
@@ -13518,8 +13518,8 @@ const supervisorGroups = new Map();
                 // --- INÍCIO DA MODIFICAÇÃO: LÓGICA DE ATRIBUIÇÃO DE VENDEDOR ---
                 
                 // 1. Pega os valores padrão da linha de venda
-                let vendorName = String(rawRow['NOME'] || '');
-                let supervisorName = String(rawRow['SUPERV'] || '');
+                let vendorName = String(rawRow['NOME'] || '').trim();
+                let supervisorName = String(rawRow['SUPERV'] || '').trim();
                 let codUsur = String(rawRow['CODUSUR'] || '').trim(); // Este é o 'codUsurVenda'
                 let codSupervisor = String(rawRow['CODSUPERVISOR'] || '').trim();
                 const pedido = String(rawRow['PEDIDO'] || '');
@@ -13742,6 +13742,9 @@ const supervisorGroups = new Map();
                 // --- FIM DA MODIFICAÇÃO ---
                     try {
                         const codUsur = String(row['CODUSUR'] || '').trim();
+                        // Filter out headers that might have slipped through
+                        if (codUsur.toUpperCase() === 'CODUSUR' || codUsur.toUpperCase() === 'COD USUR' || String(row['SUPERV'] || '').trim().toUpperCase() === 'SUPERV') return;
+
                         if (codUsur === '1001') return;
 
                         const dtPed = row['DTPED'];
