@@ -2040,7 +2040,7 @@
             const lastUpdateText = document.getElementById('last-update-text');
             if (lastUpdateText) {
                 const dateObj = new Date(lastSale);
-                const formattedDate = dateObj.toLocaleDateString('pt-BR') + ' ' + dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                const formattedDate = dateObj.toLocaleDateString('pt-BR');
                 lastUpdateText.textContent = `Dados atualizados em: ${formattedDate}`;
             }
 
@@ -2096,7 +2096,7 @@
         loginButton.addEventListener('click', async () => {
             await supabaseClient.auth.signInWithOAuth({
                 provider: 'google',
-                options: { redirectTo: window.location.origin }
+                options: { redirectTo: window.location.origin + window.location.pathname }
             });
         });
 
@@ -13456,7 +13456,14 @@ const supervisorGroups = new Map();
         const processSalesData = (rawData, clientMap, productMasterMap, newRcaSupervisorMap, stockLinesCollector = null, fallbackDate = null) => {
             return rawData.map(rawRow => {
                 // --- HEADER DETECTION: Ignore rows that look like headers ---
-                if (String(rawRow['CODCLI'] || '').toUpperCase() === 'CODCLI' || String(rawRow['PRODUTO'] || '').toUpperCase() === 'PRODUTO' || String(rawRow['PRODUTO'] || '').toUpperCase() === 'CÓDIGO') {
+                if (
+                    String(rawRow['CODCLI'] || '').toUpperCase() === 'CODCLI' ||
+                    String(rawRow['PRODUTO'] || '').toUpperCase() === 'PRODUTO' ||
+                    String(rawRow['PRODUTO'] || '').toUpperCase() === 'CÓDIGO' ||
+                    String(rawRow['SUPERV'] || '').toUpperCase() === 'SUPERV' ||
+                    String(rawRow['NOME'] || '').toUpperCase() === 'NOME' ||
+                    String(rawRow['TIPOVENDA'] || '').toUpperCase() === 'TIPOVENDA'
+                ) {
                     return null;
                 }
 
@@ -13797,7 +13804,8 @@ const supervisorGroups = new Map();
                                 descricao: String(prod['Descrição'] || `Produto ${productCode}`),
                                 fornecedor: String(prod['Nome do fornecedor'] || 'N/A'),
                                 codfor: String(prod['Fornecedor'] || 'N/A'),
-                                dtCadastro: dtCad ? dtCad.getTime() : null
+                                dtCadastro: dtCad ? dtCad.getTime() : null,
+                                pasta: null
                             });
                         }
                 });
@@ -13884,9 +13892,9 @@ const supervisorGroups = new Map();
                 const stockLinesCollector = [];
 
                 // Pass collector and maxDate to processSalesData
-                const processedSalesData = processSalesData(salesDataRaw, clientMap, productMasterMap, newRcaSupervisorMap, stockLinesCollector, maxSalesDate);
+                const processedSalesData = processSalesData(salesDataRaw, clientMap, productMasterMap, newRcaSupervisorMap, stockLinesCollector, maxSalesDate).filter(item => item !== null);
                 // History data usually doesn't have stock lines, but passing null/null is safe or consistent
-                const processedHistoryData = processSalesData(historyDataRaw, clientMap, productMasterMap, newRcaSupervisorMap, null, null);
+                const processedHistoryData = processSalesData(historyDataRaw, clientMap, productMasterMap, newRcaSupervisorMap, null, null).filter(item => item !== null);
 
                 // Update productMasterMap / productDetailsMap with info from stockLines (if missing)
                 // This ensures "Lost Products" table has Description/Supplier even if product is not in the Products File
@@ -13907,7 +13915,7 @@ const supervisorGroups = new Map();
                             fornecedor: item.FORNECEDOR || 'N/A',
                             codfor: item.CODFOR || 'N/A',
                             dtCadastro: item.DTPED, // Use the fixed date (Max Date)
-                            pasta: item.PASTA || item.OBSERVACAOFOR // Ensure Pasta is available
+                            pasta: item.PASTA || item.OBSERVACAOFOR || null // Ensure Pasta is available
                         });
                     }
                 });
@@ -14083,9 +14091,9 @@ const supervisorGroups = new Map();
                 });
 
                 const finalInnovationsData = innovationsDataRaw.map(item => ({
-                    codigo: item['Codigo'] || item['codigo'],
-                    produto: item['Produto'] || item['produto'],
-                    inovacoes: item['Inovacoes'] || item['inovacoes']
+                    codigo: item['Codigo'] || item['codigo'] || null,
+                    produto: item['Produto'] || item['produto'] || null,
+                    inovacoes: item['Inovacoes'] || item['inovacoes'] || null
                 }));
                 
                 const finalMetadata = [];
