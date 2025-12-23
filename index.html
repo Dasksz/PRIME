@@ -2894,24 +2894,6 @@
         let customWorkingDaysStock = 0;
 
         function initializeOptimizedDataStructures() {
-            // --- FIX: Fallback logic for OBSERVACAOFOR (Pasta) ---
-            // Ensures filters work even if data source (Supabase) has empty fields
-            for (let i = 0; i < allSalesData.length; i++) {
-                const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
-                let observacaoFor = String(s.OBSERVACAOFOR || '').trim();
-                
-                if (!observacaoFor || observacaoFor === '0' || observacaoFor === '00') {
-                    const fornecedorUpper = String(s.FORNECEDOR || '').toUpperCase();
-                    if (fornecedorUpper.includes('PEPSICO')) {
-                        observacaoFor = 'PEPSICO';
-                    } else {
-                        observacaoFor = 'MULTIMARCAS';
-                    }
-                    s.OBSERVACAOFOR = observacaoFor;
-                }
-            }
-            // -----------------------------------------------------
-
             const sellerDetailsMap = new Map();
             const sellerLastSaleDateMap = new Map(); // Track latest date per seller
             const clientToCurrentSellerMap = new Map();
@@ -2954,7 +2936,8 @@
                 
                 // Name Normalization
                 // mapKeysToUpper maps 'NOMECLIENTE' -> 'Cliente'. Local/Worker might produce 'nomeCliente'.
-                client.nomeCliente = client.nomeCliente || client.Cliente || client.CLIENTE || client.NOMECLIENTE || 'N/A';
+                // Fix: Include razaoSocial and RAZAOSOCIAL in naming priority
+                client.nomeCliente = client.nomeCliente || client.razaoSocial || client.RAZAOSOCIAL || client.Cliente || client.CLIENTE || client.NOMECLIENTE || 'N/A';
                 
                 // RCA Handling
                 // mapKeysToUpper maps 'RCA1' -> 'RCA 1'. Local might use 'rca1'.
@@ -3033,7 +3016,15 @@
 
                     const supervisor = getVal(i, 'SUPERV') || 'N/A';
                     const rca = getVal(i, 'NOME') || 'N/A';
-                    const pasta = getVal(i, 'OBSERVACAOFOR') || 'N/A';
+                    
+                    // --- FIX: Derive PASTA if empty directly inside indexing loop ---
+                    let pasta = getVal(i, 'OBSERVACAOFOR');
+                    if (!pasta || pasta === '0' || pasta === '00' || pasta === 'N/A') {
+                        const rawFornecedor = String(getVal(i, 'FORNECEDOR') || '').toUpperCase();
+                        pasta = rawFornecedor.includes('PEPSICO') ? 'PEPSICO' : 'MULTIMARCAS';
+                    }
+                    // ---------------------------------------------------------------
+                    
                     const supplier = getVal(i, 'CODFOR');
                     const client = getVal(i, 'CODCLI');
                     const position = getVal(i, 'POSICAO') || 'N/A';
