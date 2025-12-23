@@ -2987,17 +2987,11 @@
                 };
 
                 for (let i = 0; i < data.length; i++) {
-                    // Optimized: Do not create Proxy 'sale' object here. Read directly.
-                    // This avoids massive Proxy creation and Date object conversion overhead.
-                    
-                    const id = `${isHistory ? 'h' : 'c'}_${i}`;
+                    // Optimized: Use Integer Index as ID
+                    const id = i;
 
-                    if (dataMap instanceof IndexMap) {
-                        dataMap.set(id, i);
-                    } else {
-                        // For non-IndexMap usage, we store the object (or Proxy if Columnar)
-                        dataMap.set(id, isColumnar ? data.get(i) : data[i]);
-                    }
+                    // Note: dataMap is now the dataset itself, we don't need to set anything into it.
+                    // We just index the position 'i'.
 
                     const supervisor = getVal(i, 'SUPERV') || 'N/A';
                     const rca = getVal(i, 'NOME') || 'N/A';
@@ -9164,10 +9158,13 @@ const supervisorGroups = new Map();
             return kpiValues.reduce((a, b) => a + b, 0) / kpiValues.length;
         }
 
-        const getFilteredDataFromIndices = (indices, dataMap, filters, excludeFilter = null) => {
+        const getFilteredDataFromIndices = (indices, dataset, filters, excludeFilter = null) => {
             const isExcluded = (f) => excludeFilter === f || (Array.isArray(excludeFilter) && excludeFilter.includes(f));
             const setsToIntersect = [];
             let hasFilter = false;
+
+            // Helper to get item
+            const getItem = (idx) => (dataset.get ? dataset.get(idx) : dataset[idx]);
 
             if (filters.filial && filters.filial !== 'ambas') {
                 hasFilter = true;
@@ -9276,8 +9273,14 @@ const supervisorGroups = new Map();
             }
 
             if (setsToIntersect.length === 0 && !hasFilter && !filters.clientCodes) {
-                if (dataMap instanceof IndexMap) return dataMap._source; 
-                return Array.from(dataMap.values());
+                if (dataset.values && typeof dataset.values === 'function') {
+                    return dataset.values();
+                }
+                if (Array.isArray(dataset)) return dataset;
+
+                const all = [];
+                for(let i=0; i<dataset.length; i++) all.push(getItem(i));
+                return all;
             }
 
             let resultIds;
@@ -9303,15 +9306,30 @@ const supervisorGroups = new Map();
                 }
                 // --- OPTIMIZATION END ---
             } else if (filters.clientCodes) {
-                 const allData = Array.from(dataMap.values());
-                 return allData.filter(s => filters.clientCodes.has(s.CODCLI));
+                 const allData = [];
+                 // Use iteration if values() unavailable
+                 if (dataset.values && typeof dataset.values === 'function') {
+                     const vals = dataset.values();
+                     for(let i=0; i<vals.length; i++) if(filters.clientCodes.has(vals[i].CODCLI)) allData.push(vals[i]);
+                 } else {
+                     for(let i=0; i<dataset.length; i++) {
+                         const item = getItem(i);
+                         if(filters.clientCodes.has(item.CODCLI)) allData.push(item);
+                     }
+                 }
+                 return allData;
             } else {
-                return Array.from(dataMap.values());
+                // Should be unreachable due to first check, but safe fallback
+                if (dataset.values && typeof dataset.values === 'function') return dataset.values();
+                if (Array.isArray(dataset)) return dataset;
+                const all = [];
+                for(let i=0; i<dataset.length; i++) all.push(getItem(i));
+                return all;
             }
 
             const result = [];
             for (const id of resultIds) {
-                const item = dataMap.get(id);
+                const item = getItem(id);
                 if (!filters.clientCodes || filters.clientCodes.has(item.CODCLI)) {
                     result.push(item);
                 }
