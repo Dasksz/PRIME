@@ -7810,11 +7810,13 @@ const supervisorGroups = new Map();
 
                 if (setsToIntersect.length === 0 && !hasFilter) {
                     // No filters: return all items
-                    if (dataset.values && typeof dataset.values === 'function') {
+                    // Check if it is a ColumnarDataset specifically to avoid calling .values() on native Array (which returns iterator)
+                    if (dataset instanceof ColumnarDataset) {
                         return dataset.values();
                     }
                     if (Array.isArray(dataset)) return dataset;
-                    // Fallback iteration
+                    
+                    // Fallback iteration (safe for array-like objects)
                     const all = [];
                     for(let i=0; i<dataset.length; i++) all.push(getItem(i));
                     return all;
