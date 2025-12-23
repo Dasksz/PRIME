@@ -111,6 +111,15 @@ create table if not exists public.data_orders (
   codfors_list text[]
 );
 
+alter table public.data_orders
+add column if not exists tipovenda text;
+
+alter table public.data_orders
+add column if not exists fornecedores_list text[];
+
+alter table public.data_orders
+add column if not exists codfors_list text[];
+
 -- 5. Tabela de Detalhes de Produtos
 create table if not exists public.data_product_details (
   code text primary key,
