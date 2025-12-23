@@ -105,7 +105,10 @@ create table if not exists public.data_orders (
   posicao text,
   vlvenda numeric,
   totpesoliq numeric,
-  filial text
+  filial text,
+  tipovenda text,
+  fornecedores_list text[],
+  codfors_list text[]
 );
 
 -- 5. Tabela de Detalhes de Produtos
