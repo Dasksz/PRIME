@@ -2983,14 +2983,23 @@
                 const { bySupervisor, byRca, byPasta, bySupplier, byClient, byPosition, byRede, byTipoVenda, byProduct, byCity, byFilial } = indexSet;
 
                 const isColumnar = data instanceof ColumnarDataset;
-                const colValues = isColumnar ? data.values : null;
+                // Use _data because .values is now a method
+                const colValues = isColumnar ? data._data : null;
 
                 // Optimization: Helper to read values without creating Proxy
                 const getVal = (i, prop) => {
-                    if (isColumnar && colValues[prop]) {
+                    if (isColumnar && colValues && colValues[prop]) {
                         return colValues[prop][i];
                     }
-                    return data[i][prop];
+                    // Fallback for non-columnar or missing columns
+                    if (isColumnar) {
+                         // If column missing in _data, try safe access via get() but this creates proxy
+                         // Better: assume if not in _data, it's not there or handled by overrides (which are rare here)
+                         // But if we MUST fallback:
+                         const item = data.get(i);
+                         return item ? item[prop] : undefined;
+                    }
+                    return data[i] ? data[i][prop] : undefined;
                 };
 
                 for (let i = 0; i < data.length; i++) {
