@@ -7677,14 +7677,20 @@ const supervisorGroups = new Map();
             const passedWorkingDays = getPassedWorkingDaysInMonth(currentYear, currentMonth, selectedHolidays, lastSaleDate);
 
             const monthCount = getUniqueMonthCount(historicalSales);
-            const pastQuarterRevenue = historicalSales.reduce((sum, sale) => sum + sale.VLVENDA, 0);
-            const averageMonthlyRevenue = pastQuarterRevenue / QUARTERLY_DIVISOR;
-            const currentMonthRevenue = currentSales.reduce((sum, sale) => sum + sale.VLVENDA, 0);
-            const trend = passedWorkingDays > 0 && totalWorkingDays > 0 ? (currentMonthRevenue / passedWorkingDays) * totalWorkingDays : 0;
+            
+            // Robust calculation: handle potential undefined/NaN in full dataset
+            const pastQuarterRevenue = historicalSales.reduce((sum, sale) => sum + (Number(sale.VLVENDA) || 0), 0);
+            let averageMonthlyRevenue = pastQuarterRevenue / QUARTERLY_DIVISOR;
+            if (isNaN(averageMonthlyRevenue)) averageMonthlyRevenue = 0;
+
+            const currentMonthRevenue = currentSales.reduce((sum, sale) => sum + (Number(sale.VLVENDA) || 0), 0);
+            let trend = passedWorkingDays > 0 && totalWorkingDays > 0 ? (currentMonthRevenue / passedWorkingDays) * totalWorkingDays : 0;
+            if (isNaN(trend)) trend = 0;
+
             const lineChartDataset = [{ label: 'Valor', data: [averageMonthlyRevenue, trend], fill: true, borderColor: '#14b8a6', backgroundColor: 'rgba(20, 184, 166, 0.1)', tension: 0.2, pointRadius: 6, pointBackgroundColor: '#14b8a6', pointBorderColor: '#FFF', pointBorderWidth: 2, pointHoverRadius: 8 }];
             
             const formatLabelValue = (v) => {
-                if (typeof v !== 'number') return ''; // Proteção contra valores não numéricos
+                if (typeof v !== 'number' || isNaN(v)) return ''; // Proteção contra valores não numéricos
                 return (v >= 1000000 ? (v / 1000000).toFixed(2) + ' M' : (v / 1000).toFixed(0) + 'k');
             };
 
