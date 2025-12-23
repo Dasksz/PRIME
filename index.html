@@ -476,21 +476,21 @@
                                 <!-- KPIs com bordas e cores atualizadas -->
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
                                     <div class="kpi-card kpi-glow-base kpi-glow-blue transition transform hover:-translate-y-1 duration-200">
-                                        <h3 class="text-slate-400 font-medium uppercase text-sm">Volume Kg</h3>
+                                        <h3 class="text-slate-300 font-medium uppercase text-sm">Volume Kg</h3>
                                         <p id="total-peso" class="text-4xl font-bold text-white my-2">0,0</p>
                                     </div>
                                     <div class="kpi-card kpi-glow-base kpi-glow-green transition transform hover:-translate-y-1 duration-200">
-                                        <h3 class="text-slate-400 font-medium uppercase text-sm">Faturamento R$</h3>
+                                        <h3 class="text-slate-300 font-medium uppercase text-sm">Faturamento R$</h3>
                                         <p id="total-vendas" class="text-4xl font-bold text-white my-2">R$ 0,00</p>
                                     </div>
                                     <div class="kpi-card kpi-glow-base kpi-glow-yellow transition transform hover:-translate-y-1 duration-200">
-                                        <h3 class="text-slate-400 font-medium uppercase text-sm">SKU/PDV</h3>
+                                        <h3 class="text-slate-300 font-medium uppercase text-sm">SKU/PDV</h3>
                                         <p id="kpi-sku-pdv" class="text-4xl font-bold text-white my-2">0,0</p>
                                     </div>
                                     <div class="kpi-card kpi-glow-base kpi-glow-purple transition transform hover:-translate-y-1 duration-200">
-                                        <h3 class="text-slate-400 font-medium uppercase text-sm">Cobertura PDVs</h3>
+                                        <h3 class="text-slate-300 font-medium uppercase text-sm">Cobertura PDVs</h3>
                                         <p id="kpi-positivacao" class="text-4xl font-bold text-white my-2">0,0%</p>
-                                        <p id="kpi-positivacao-percent" class="text-sm text-slate-400 -mt-1">0 PDVs</p>
+                                        <p id="kpi-positivacao-percent" class="text-sm text-slate-300 -mt-1">0 PDVs</p>
                                     </div>
                                 </div>
 
@@ -692,7 +692,7 @@
                                         <div class="flex justify-between items-center mb-4">
                                             <div class="w-1/4"><span class="text-xl font-bold text-indigo-400">Top 10</span></div>
                                             <div class="w-1/2 text-center"><h2 id="city-chart-title" class="text-lg font-semibold text-white"></h2></div>
-                                            <div class="w-1/4 text-right"><p class="text-slate-400 text-sm">Total Vendido</p><p id="total-faturamento-cidade" class="text-xl font-bold text-green-400">R$ 0,00</p></div>
+                                            <div class="w-1/4 text-right"><p class="text-slate-300 text-sm">Total Vendido</p><p id="total-faturamento-cidade" class="text-xl font-bold text-green-400">R$ 0,00</p></div>
                                         </div>
                                         <div id="salesByClientInCityChartContainer" class="relative h-96"></div>
                                     </div>
@@ -701,7 +701,7 @@
                                             <div class="w-1/4"></div>
                                             <div class="w-1/2 text-center"><h2 class="text-lg font-semibold text-white">Status dos Clientes</h2></div>
                                             <div class="w-1/4 text-right">
-                                                <p class="text-slate-400 text-sm">Total Clientes</p>
+                                                <p class="text-slate-300 text-sm">Total Clientes</p>
                                                 <p id="total-clientes-cidade" class="text-xl font-bold text-teal-400">0</p>
                                             </div>
                                         </div>
@@ -733,7 +733,7 @@
                             </div>
                             <div class="grid grid-cols-1 gap-6">
                                 <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                    <div class="flex justify-between items-center mb-4"><h2 class="text-lg font-semibold text-white text-center">Faturamento Mensal por Dia da Semana</h2><div class="text-right"><p class="text-slate-400 text-sm">Total do Mês</p><p id="total-mes-semanal" class="text-xl font-bold text-green-400">R$ 0,00</p></div></div><div id="weeklySalesChartContainer" class="relative h-96"></div>
+                                    <div class="flex justify-between items-center mb-4"><h2 class="text-lg font-semibold text-white text-center">Faturamento Mensal por Dia da Semana</h2><div class="text-right"><p class="text-slate-300 text-sm">Total do Mês</p><p id="total-mes-semanal" class="text-xl font-bold text-green-400">R$ 0,00</p></div></div><div id="weeklySalesChartContainer" class="relative h-96"></div>
                                     <div class="mt-6 border-t border-slate-700 pt-4"><h3 class="text-md font-semibold text-white mb-3 text-center">Resumo de Faturamento Semanal</h3><div class="overflow-x-auto"><table class="min-w-full text-sm text-left text-slate-300"><thead class="text-xs text-slate-400 uppercase"><tr><th class="px-4 py-2 bg-slate-800 rounded-l-lg">Semana</th><th class="px-4 py-2 bg-slate-800 text-right rounded-r-lg">Faturamento Total</th></tr></thead><tbody id="weekly-summary-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
                                 </div>
                                 <div class="grid grid-cols-1 gap-6"><div class="grid grid-cols-1 lg:grid-cols-2 gap-6"><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm"><h2 class="text-lg font-semibold text-white mb-4 text-center">Ranking de Positivação</h2><div id="positivacaoChartContainer" class="relative h-80"></div></div><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm"><h2 class="text-lg font-semibold text-white mb-4 text-center">Ranking de Mix de Produtos (Por PDV)</h2><div id="mixChartContainer" class="relative h-80"></div></div></div><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm"><h2 class="text-lg font-semibold text-white mb-4 text-center">Top 10 Vendedores (Faturamento)</h2><div id="topSellersChartContainer" class="relative h-80"></div></div></div>
@@ -1121,7 +1121,7 @@
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
                                             </button>
                                         </div>
-                                        <div class="flex justify-between text-[10px] text-slate-400 mt-1">
+                                        <div class="flex justify-between text-[10px] text-slate-300 mt-1">
                                             <span>Média Trim: <span id="ref-avg-fat" class="text-white font-bold">R$ 0,00</span></span>
                                             <span>Mês Ant: <span id="ref-prev-fat" class="text-white font-bold">R$ 0,00</span></span>
                                         </div>
@@ -1135,7 +1135,7 @@
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
                                             </button>
                                         </div>
-                                        <div class="flex justify-between text-[10px] text-slate-400 mt-1">
+                                        <div class="flex justify-between text-[10px] text-slate-300 mt-1">
                                             <span>Média Trim: <span id="ref-avg-vol" class="text-white font-bold">0,000</span></span>
                                             <span>Mês Ant: <span id="ref-prev-vol" class="text-white font-bold">0,000</span></span>
                                         </div>
@@ -1149,7 +1149,7 @@
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
                                             </button>
                                         </div>
-                                        <div class="flex justify-between text-[10px] text-slate-400 mt-1">
+                                        <div class="flex justify-between text-[10px] text-slate-300 mt-1">
                                             <span>Média Trim: <span id="ref-avg-clients" class="text-white font-bold">0</span></span>
                                             <span>Mês Ant: <span id="ref-prev-clients" class="text-white font-bold">0</span></span>
                                         </div>
@@ -1163,7 +1163,7 @@
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
                                             </button>
                                         </div>
-                                        <div class="flex justify-between text-[10px] text-slate-400 mt-1">
+                                        <div class="flex justify-between text-[10px] text-slate-300 mt-1">
                                             <span>50% Ativos</span>
                                         </div>
                                     </div>
@@ -1176,7 +1176,7 @@
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
                                             </button>
                                         </div>
-                                        <div class="flex justify-between text-[10px] text-slate-400 mt-1">
+                                        <div class="flex justify-between text-[10px] text-slate-300 mt-1">
                                             <span>30% Ativos</span>
                                         </div>
                                     </div>
@@ -8926,10 +8926,10 @@ const supervisorGroups = new Map();
                 else if (kpi.title.includes('SKU') || kpi.title.includes('Mix')) glowClass = 'kpi-glow-yellow';
 
                 return `<div class="kpi-card p-4 rounded-lg text-center kpi-glow-base ${glowClass} transition transform hover:-translate-y-1 duration-200">
-                            <p class="text-slate-400 text-sm">${kpi.title}</p>
+                            <p class="text-slate-300 text-sm">${kpi.title}</p>
                             <p class="text-2xl font-bold text-white my-2">${displayValue}</p>
                             <p class="text-sm ${colorClass}">${variation.toFixed(2)}% vs Média do Trimestre</p>
-                            <p class="text-xs text-slate-500">Média Trim.: ${formatValue(kpi.history, kpi.format)}</p>
+                            <p class="text-xs text-slate-400">Média Trim.: ${formatValue(kpi.history, kpi.format)}</p>
                         </div>`;
             }).join('');
         }
