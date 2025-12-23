@@ -2762,6 +2762,7 @@
             nextChunk();
         }
         
+        const FORBIDDEN_KEYS = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR', 'PASTA', 'RAMO', 'ATIVIDADE', 'CIDADE', 'MUNICIPIO', 'BAIRRO'];
         let allSalesData, allHistoryData, allClientsData;
 
         function sanitizeData(data) {
@@ -7423,11 +7424,17 @@ const supervisorGroups = new Map();
                 summary.totalFaturamento += vlVenda;
                 summary.totalPeso += totPesoLiq;
 
+                const isForbidden = (str) => !str || FORBIDDEN_KEYS.includes(str.trim().toUpperCase());
+
                 const vendedor = item.NOME || 'N/A';
-                summary.vendasPorVendedor[vendedor] = (summary.vendasPorVendedor[vendedor] || 0) + vlVenda;
+                if (!isForbidden(vendedor)) {
+                    summary.vendasPorVendedor[vendedor] = (summary.vendasPorVendedor[vendedor] || 0) + vlVenda;
+                }
 
                 const supervisor = item.SUPERV || 'N/A';
-                summary.vendasPorSupervisor[supervisor] = (summary.vendasPorSupervisor[supervisor] || 0) + vlVenda;
+                if (!isForbidden(supervisor)) {
+                    summary.vendasPorSupervisor[supervisor] = (summary.vendasPorSupervisor[supervisor] || 0) + vlVenda;
+                }
 
                 const produto = item.DESCRICAO || 'N/A';
                 const codigo = item.PRODUTO || 'N/A';
@@ -7444,8 +7451,10 @@ const supervisorGroups = new Map();
                      fornecedorLabel = item.OBSERVACAOFOR || 'N/A';
                 }
 
-                const currentTotal = faturamentoMap.get(fornecedorLabel) || 0;
-                faturamentoMap.set(fornecedorLabel, currentTotal + vlVenda);
+                if (!isForbidden(fornecedorLabel)) {
+                    const currentTotal = faturamentoMap.get(fornecedorLabel) || 0;
+                    faturamentoMap.set(fornecedorLabel, currentTotal + vlVenda);
+                }
             });
 
             const totalRelevantClients = clientBaseForPositivacao.length;
@@ -13273,6 +13282,8 @@ const supervisorGroups = new Map();
     <script id="worker-script" type="text/worker-javascript">
         self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
 
+        const FORBIDDEN_KEYS = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR', 'PASTA', 'RAMO', 'ATIVIDADE', 'CIDADE', 'MUNICIPIO', 'BAIRRO'];
+
         const mandatoryColumns = {
             sales: ['CODCLI', 'PEDIDO', 'CODUSUR', 'CODSUPERVISOR', 'DTPED', 'DTSAIDA', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX'],
             clients: [], // Validation relaxed to support variable headers (aliases handled in processing)
@@ -13532,7 +13543,14 @@ const supervisorGroups = new Map();
         const processSalesData = (rawData, clientMap, productMasterMap, newRcaSupervisorMap, stockLinesCollector = null, fallbackDate = null) => {
             return rawData.map(rawRow => {
                 // --- HEADER DETECTION: Ignore rows that look like headers ---
+                // Enhanced robust detection: Check against forbidden keys list
+                const checkHeader = (val) => val && FORBIDDEN_KEYS.includes(val.trim().toUpperCase());
+
                 if (
+                    checkHeader(String(rawRow['CODCLI'] || '')) ||
+                    checkHeader(String(rawRow['PRODUTO'] || '')) ||
+                    checkHeader(String(rawRow['SUPERV'] || '')) ||
+                    checkHeader(String(rawRow['NOME'] || '')) ||
                     String(rawRow['CODCLI'] || '').trim().toUpperCase() === 'CODCLI' ||
                     String(rawRow['PRODUTO'] || '').trim().toUpperCase() === 'PRODUTO' ||
                     String(rawRow['PRODUTO'] || '').trim().toUpperCase() === 'CÓDIGO' ||

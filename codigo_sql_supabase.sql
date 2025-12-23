@@ -30,6 +30,9 @@ create table if not exists public.data_detailed (
   cidade text,
   bairro text
 );
+-- Ensure columns exist even if table was created previously
+alter table public.data_detailed add column if not exists observacaofor text;
+
 
 -- 2. Tabela de Histórico de Vendas (Trimestre)
 create table if not exists public.data_history (
@@ -57,6 +60,7 @@ create table if not exists public.data_history (
   tipovenda text,
   filial text
 );
+alter table public.data_history add column if not exists observacaofor text;
 
 -- 3. Tabela de Clientes
 create table if not exists public.data_clients (
@@ -110,6 +114,9 @@ create table if not exists public.data_product_details (
   dtcadastro timestamp with time zone,
   pasta text
 );
+-- Ensure pasta column exists
+alter table public.data_product_details add column if not exists pasta text;
+
 
 -- 6. Tabela de Produtos Ativos (Apenas códigos)
 create table if not exists public.data_active_products (code text primary key);
