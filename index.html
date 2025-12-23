@@ -1800,7 +1800,8 @@
                 'INSCRICAOESTADUAL': 'Insc. Est. / Produtor',
                 'CNPJ_CPF': 'CNPJ/CPF',
                 'ENDERECO': 'Endereço Comercial',
-                'TELEFONE': 'Telefone Comercial'
+                'TELEFONE': 'Telefone Comercial',
+                'RCAS': 'rcas'
             };
 
             const parseCSVToObjects = (text, type) => {
@@ -1885,8 +1886,23 @@
                                 }
                             }
                             if (type === 'stock' && header === 'STOCK_QTY') val = val === '' ? 0 : Number(val);
-                            if (type === 'clients' && header === 'RCAS' && typeof val === 'string' && val.startsWith('{')) {
-                                val = val.slice(1, -1).split(',').map(s => s.replace(/^"|"$/g, ''));
+                            if (type === 'clients' && header === 'rcas') {
+                                if (typeof val === 'string') {
+                                    val = val.trim();
+                                    if (val.startsWith('{')) {
+                                        val = val.slice(1, -1).split(',').map(s => s.replace(/^"|"$/g, ''));
+                                    } else if (val.startsWith('[')) {
+                                        try { val = JSON.parse(val); } catch(e) { val = [val]; }
+                                    } else if (val === '') {
+                                        val = [];
+                                    } else {
+                                        val = [val];
+                                    }
+                                } else if (!val) {
+                                    val = [];
+                                } else if (!Array.isArray(val)) {
+                                    val = [val];
+                                }
                             }
 
                             columnar.values[header].push(val);
@@ -4703,7 +4719,10 @@
                 supervisorsSet.forEach(sup => {
                     (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
                 });
-                clients = clients.filter(c => c.rcas.some(r => rcasSet.has(r)));
+                clients = clients.filter(c => {
+                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
+                    return clientRcas.some(r => rcasSet.has(r));
+                });
             }
 
             // Filter by Seller
@@ -4713,7 +4732,10 @@
                     const code = optimizedData.rcaCodeByName.get(name);
                     if(code) rcasSet.add(code);
                 });
-                clients = clients.filter(c => c.rcas.some(r => rcasSet.has(r)));
+                clients = clients.filter(c => {
+                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
+                    return clientRcas.some(r => rcasSet.has(r));
+                });
             }
 
             // Filter by Client Code
@@ -6894,8 +6916,9 @@ const supervisorGroups = new Map();
                 }
                 clients = allClientsData.filter(c => {
                     if (filial !== 'ambas' && clientLastBranch.get(c['Código']) !== filial) return false;
-                    if (rcasOfSupervisor.size > 0 && !c.rcas.some(rca => rcasOfSupervisor.has(rca))) return false;
-                    if (rcasOfSellers.size > 0 && !c.rcas.some(rca => rcasOfSellers.has(rca))) return false;
+                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
+                    if (rcasOfSupervisor.size > 0 && !clientRcas.some(rca => rcasOfSupervisor.has(rca))) return false;
+                    if (rcasOfSellers.size > 0 && !clientRcas.some(rca => rcasOfSellers.has(rca))) return false;
                     if (!isExcluded('city') && city && (!c.cidade || c.cidade.toLowerCase() !== city)) return false;
                     return true;
                 });
@@ -10267,7 +10290,10 @@ const supervisorGroups = new Map();
                 selectedInnovationsSupervisors.forEach(sup => {
                     (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
                 });
-                clients = clients.filter(c => c.rcas.some(rca => rcasSet.has(rca)));
+                clients = clients.filter(c => {
+                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
+                    return clientRcas.some(rca => rcasSet.has(rca));
+                });
             }
             if (excludeFilter !== 'seller' && sellers.length > 0) {
                 const rcasOfSellers = new Set();
@@ -10275,7 +10301,10 @@ const supervisorGroups = new Map();
                     const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
                     if (rcaCode) rcasOfSellers.add(rcaCode);
                 });
-                clients = clients.filter(c => c.rcas.some(rca => rcasOfSellers.has(rca)));
+                clients = clients.filter(c => {
+                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
+                    return clientRcas.some(rca => rcasOfSellers.has(rca));
+                });
             }
             if (excludeFilter !== 'city' && city) {
                 clients = clients.filter(c => c.cidade && c.cidade.toLowerCase() === city);
