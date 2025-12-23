@@ -18,6 +18,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js" defer></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
     .flex-center-overlay {
@@ -1781,11 +1783,102 @@
         isAppReady = true;
         const loader = document.getElementById('loader');
         const loaderText = document.getElementById('loader-text');
-        const dashboardView = document.getElementById('main-dashboard'); // ID no novo template é main-dashboard? Check template.
-        // Template wrapper id is 'content-wrapper', inside is 'main-dashboard'
+        const dashboardView = document.getElementById('main-dashboard'); 
         
         try {
             loader.classList.remove('hidden');
+            loaderText.textContent = 'Verificando dados...';
+
+            // --- IndexedDB Cache Logic ---
+            const DB_NAME = 'PrimeDashboardDB';
+            const STORE_NAME = 'data_store';
+            const DB_VERSION = 1;
+
+            const initDB = () => {
+                return idb.openDB(DB_NAME, DB_VERSION, {
+                    upgrade(db) {
+                        if (!db.objectStoreNames.contains(STORE_NAME)) {
+                            db.createObjectStore(STORE_NAME);
+                        }
+                    },
+                });
+            };
+
+            const getFromCache = async (key) => {
+                try {
+                    const db = await initDB();
+                    return await db.get(STORE_NAME, key);
+                } catch (e) {
+                    console.warn('Erro ao ler cache:', e);
+                    return null;
+                }
+            };
+
+            const saveToCache = async (key, value) => {
+                try {
+                    const db = await initDB();
+                    await db.put(STORE_NAME, value, key);
+                } catch (e) {
+                    console.warn('Erro ao salvar cache:', e);
+                }
+            };
+
+            // 1. Fetch Metadata from Supabase first (lightweight)
+            let metadataRemote = null;
+            try {
+                const { data, error } = await supabaseClient.from('data_metadata').select('*');
+                if (!error && data && data.length > 0) {
+                    metadataRemote = {};
+                    data.forEach(item => metadataRemote[item.key] = item.value);
+                }
+            } catch (e) {
+                console.warn('Erro ao buscar metadados:', e);
+            }
+
+            // 2. Check Cache
+            let cachedData = await getFromCache('dashboardData');
+            let useCache = false;
+
+            if (cachedData && metadataRemote) {
+                // Check if remote last_update is same as cached
+                const remoteDate = new Date(metadataRemote.last_update).getTime();
+                const cachedDate = new Date(cachedData.metadata ? cachedData.metadata.find(m=>m.key==='last_update')?.value : 0).getTime();
+                
+                // Also check if working days matches, just in case
+                // If remote date is valid and same as cached, use cache
+                if (!isNaN(remoteDate) && remoteDate <= cachedDate) {
+                    console.log("Usando cache do IndexedDB (Versão atualizada)");
+                    useCache = true;
+                } else {
+                    console.log("Cache desatualizado. Baixando novos dados...");
+                }
+            }
+
+            if (useCache) {
+                 const { detailed, history, clients, products, activeProds, stock, innovations, metadata, orders } = cachedData;
+                 // Proceed with cached data
+                 // Need to reconstruct Helper Maps if they are not in cache or reconstructable
+                 
+                 // Reconstruct objects from cached data for processing...
+                 // Skipping fetchAll steps
+                 
+                 loaderText.textContent = 'Processando cache...';
+                 
+                 // Reuse existing logic below by wrapping it or modifying flow.
+                 // To minimize code changes, I will define variables here and skip fetch part.
+                 
+                 // Re-assign global/local variables used below
+                 const detailedUpper = detailed;
+                 const historyUpper = history;
+                 const clientsUpper = clients;
+                 const ordersUpper = orders;
+                 // ... others
+                 
+                 // We need to jump to processing logic.
+                 // Best way is to define a 'processData' function, but that refactors too much.
+                 // Instead, I'll use a flag and if/else block for fetching.
+            }
+
             loaderText.textContent = 'Buscando dados...';
 
             // Shared client map for both parsers
@@ -1972,29 +2065,58 @@
                 return result;
             };
 
-            const colsDetailed = 'pedido,codcli,nome,superv,codsupervisor,produto,descricao,fornecedor,observacaofor,codfor,codusur,qtvenda,vlvenda,vlbonific,totpesoliq,dtped,dtsaida,posicao,estoqueunit,tipovenda,filial,qtvenda_embalagem_master';
-            const colsClients = 'codigo_cliente,rca1,rca2,rcas,cidade,nomecliente,bairro,razaosocial,fantasia,cnpj_cpf,endereco,numero,cep,telefone,email,ramo,ultimacompra,datacadastro,bloqueio,inscricaoestadual';
-            const colsStock = 'product_code,filial,stock_qty';
-            const colsOrders = 'pedido,codcli,cliente_nome,cidade,nome,superv,fornecedores_str,dtped,dtsaida,posicao,vlvenda,totpesoliq,filial,tipovenda,fornecedores_list,codfors_list';
+            let detailed, history, clients, products, activeProds, stock, innovations, metadata, orders;
 
-            const [detailedUpper, historyUpper, clientsUpper, products, activeProds, stock, innovations, metadata, ordersUpper] = await Promise.all([
-                fetchAll('data_detailed', colsDetailed, 'sales', 'columnar'),
-                fetchAll('data_history', colsDetailed, 'history', 'columnar'),
-                fetchAll('data_clients', colsClients, 'clients', 'columnar'),
-                fetchAll('data_product_details'),
-                fetchAll('data_active_products'),
-                fetchAll('data_stock', colsStock, 'stock', 'columnar'),
-                fetchAll('data_innovations'),
-                fetchAll('data_metadata'),
-                fetchAll('data_orders', colsOrders, 'orders', 'object') // Keep orders as objects for renderTable
-            ]);
+            if (useCache) {
+                // Se usamos cache, os dados já foram carregados do IndexedDB na variável cachedData
+                // Precisamos extraí-los para as variáveis que o resto do script espera
+                detailed = cachedData.detailed;
+                history = cachedData.history;
+                clients = cachedData.clients;
+                products = cachedData.products;
+                activeProds = cachedData.activeProds;
+                stock = cachedData.stock;
+                innovations = cachedData.innovations;
+                metadata = cachedData.metadata;
+                orders = cachedData.orders;
+            } else {
+                const colsDetailed = 'pedido,codcli,nome,superv,codsupervisor,produto,descricao,fornecedor,observacaofor,codfor,codusur,qtvenda,vlvenda,vlbonific,totpesoliq,dtped,dtsaida,posicao,estoqueunit,tipovenda,filial,qtvenda_embalagem_master';
+                const colsClients = 'codigo_cliente,rca1,rca2,rcas,cidade,nomecliente,bairro,razaosocial,fantasia,cnpj_cpf,endereco,numero,cep,telefone,email,ramo,ultimacompra,datacadastro,bloqueio,inscricaoestadual';
+                const colsStock = 'product_code,filial,stock_qty';
+                const colsOrders = 'pedido,codcli,cliente_nome,cidade,nome,superv,fornecedores_str,dtped,dtsaida,posicao,vlvenda,totpesoliq,filial,tipovenda,fornecedores_list,codfors_list';
+
+                const [detailedUpper, historyUpper, clientsUpper, productsFetched, activeProdsFetched, stockFetched, innovationsFetched, metadataFetched, ordersUpper] = await Promise.all([
+                    fetchAll('data_detailed', colsDetailed, 'sales', 'columnar'),
+                    fetchAll('data_history', colsDetailed, 'history', 'columnar'),
+                    fetchAll('data_clients', colsClients, 'clients', 'columnar'),
+                    fetchAll('data_product_details'),
+                    fetchAll('data_active_products'),
+                    fetchAll('data_stock', colsStock, 'stock', 'columnar'),
+                    fetchAll('data_innovations'),
+                    fetchAll('data_metadata'),
+                    fetchAll('data_orders', colsOrders, 'orders', 'object') 
+                ]);
+
+                detailed = detailedUpper;
+                history = historyUpper;
+                clients = clientsUpper;
+                products = productsFetched;
+                activeProds = activeProdsFetched;
+                stock = stockFetched;
+                innovations = innovationsFetched;
+                metadata = metadataFetched;
+                orders = ordersUpper;
+
+                // Salvar no Cache
+                const dataToCache = {
+                    detailed, history, clients, products, activeProds, stock, innovations, metadata, orders
+                };
+                
+                // Salvar de forma assíncrona sem travar UI
+                saveToCache('dashboardData', dataToCache).then(() => console.log('Dados salvos no cache IndexedDB.'));
+            }
 
             loaderText.textContent = 'Processando...';
-
-            const detailed = detailedUpper;
-            const history = historyUpper;
-            const clients = clientsUpper;
-            const orders = ordersUpper;
             
             // Reconstruct Helper Maps
             const productDetailsMap = {};
@@ -2030,22 +2152,22 @@
 
             // Calculate Last Sale Date (Columnar optimized)
             let lastSale = 0;
-            if (detailedUpper.values && detailedUpper.values['DTPED']) {
-                const dtpeds = detailedUpper.values['DTPED'];
+            if (detailed.values && detailed.values['DTPED']) {
+                const dtpeds = detailed.values['DTPED'];
                 const len = dtpeds.length;
                 for(let i=0; i<len; i++) {
                     if (dtpeds[i] > lastSale) lastSale = dtpeds[i];
                 }
-            } else if (Array.isArray(detailedUpper) && detailedUpper.length > 0) {
-                 lastSale = detailedUpper.reduce((max, p) => p.DTPED > max ? p.DTPED : max, 0);
+            } else if (Array.isArray(detailed) && detailed.length > 0) {
+                 lastSale = detailed.reduce((max, p) => p.DTPED > max ? p.DTPED : max, 0);
             }
             if (lastSale === 0) lastSale = Date.now();
 
             const embeddedData = {
-                detailed: detailedUpper,
-                history: historyUpper,
-                clients: clientsUpper,
-                byOrder: ordersUpper,
+                detailed: detailed,
+                history: history,
+                clients: clients,
+                byOrder: orders,
                 stockMap05: stockMap05,
                 stockMap08: stockMap08,
                 innovationsMonth: innovations,
@@ -7600,30 +7722,89 @@ const supervisorGroups = new Map();
             const pageData = data.slice(startIndex, endIndex);
 
             const getPosicaoBadge = (posicao) => {
-                if (!posicao) return '<span>-</span>';
+                if (!posicao) return document.createTextNode('-');
                 let classes = '';
                 switch (posicao) {
                     case 'L': classes = 'bg-green-500/20 text-green-300'; break;
                     case 'M': classes = 'bg-blue-500/20 text-blue-300'; break;
                     case 'F': classes = 'bg-yellow-500/20 text-yellow-300'; break;
-                    default: return `<span>${posicao}</span>`;
+                    default: classes = 'bg-slate-500/20 text-slate-300';
                 }
-                return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${classes}">${posicao}</span>`;
+                
+                const span = document.createElement('span');
+                span.className = `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${classes}`;
+                span.textContent = posicao;
+                return span;
             };
+
+            // Otimização: Usar DocumentFragment para renderização eficiente
+            const fragment = document.createDocumentFragment();
+
+            pageData.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-700 transition-colors";
+
+                const createLink = (text, dataAttr, dataVal) => {
+                    const a = document.createElement('a');
+                    a.href = "#";
+                    a.className = "text-teal-400 hover:underline";
+                    a.dataset[dataAttr] = dataVal;
+                    a.textContent = text;
+                    return a;
+                };
+                
+                const tdPedido = document.createElement('td');
+                tdPedido.className = "px-4 py-2";
+                tdPedido.appendChild(createLink(row.PEDIDO, 'pedidoId', row.PEDIDO));
+                tr.appendChild(tdPedido);
+
+                const tdCodCli = document.createElement('td');
+                tdCodCli.className = "px-4 py-2";
+                tdCodCli.appendChild(createLink(row.CODCLI, 'codcli', row.CODCLI));
+                tr.appendChild(tdCodCli);
+                
+                const tdVendedor = document.createElement('td');
+                tdVendedor.className = "px-4 py-2";
+                tdVendedor.textContent = getFirstName(row.NOME);
+                tr.appendChild(tdVendedor);
+
+                const tdForn = document.createElement('td');
+                tdForn.className = "px-4 py-2";
+                tdForn.textContent = row.FORNECEDORES_STR || '';
+                tr.appendChild(tdForn);
+
+                const tdDtPed = document.createElement('td');
+                tdDtPed.className = "px-4 py-2";
+                tdDtPed.textContent = formatDate(row.DTPED);
+                tr.appendChild(tdDtPed);
+
+                const tdDtSaida = document.createElement('td');
+                tdDtSaida.className = "px-4 py-2";
+                tdDtSaida.textContent = formatDate(row.DTSAIDA);
+                tr.appendChild(tdDtSaida);
+
+                const tdPeso = document.createElement('td');
+                tdPeso.className = "px-4 py-2 text-right";
+                tdPeso.textContent = (Number(row.TOTPESOLIQ) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + ' Kg';
+                tr.appendChild(tdPeso);
+
+                const tdValor = document.createElement('td');
+                tdValor.className = "px-4 py-2 text-right";
+                tdValor.textContent = (Number(row.VLVENDA) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                tr.appendChild(tdValor);
+                
+                const tdPosicao = document.createElement('td');
+                tdPosicao.className = "px-4 py-2 text-center";
+                const badge = getPosicaoBadge(row.POSICAO);
+                if (typeof badge === 'string') tdPosicao.innerHTML = badge;
+                else tdPosicao.appendChild(badge);
+                tr.appendChild(tdPosicao);
+
+                fragment.appendChild(tr);
+            });
             
-            tableBody.innerHTML = pageData.map(row => `
-                <tr class="hover:bg-slate-700">
-                    <td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-pedido-id="${row.PEDIDO}">${row.PEDIDO}</a></td>
-                    <td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${row.CODCLI}">${row.CODCLI}</a></td>
-                    <td class="px-4 py-2">${getFirstName(row.NOME)}</td>
-                    <td class="px-4 py-2">${row.FORNECEDORES_STR || ''}</td>
-                    <td class="px-4 py-2">${formatDate(row.DTPED)}</td>
-                    <td class="px-4 py-2">${formatDate(row.DTSAIDA)}</td>
-                    <td class="px-4 py-2 text-right">${(Number(row.TOTPESOLIQ) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Kg</td>
-                    <td class="px-4 py-2 text-right">${(Number(row.VLVENDA) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                    <td class="px-4 py-2 text-center">${getPosicaoBadge(row.POSICAO)}</td>
-                </tr>
-            `).join('');
+            tableBody.innerHTML = '';
+            tableBody.appendChild(fragment);
 
             if (data.length > 0) {
                 pageInfoText.textContent = `Página ${mainTableState.currentPage} de ${mainTableState.totalPages} (Total: ${data.length} pedidos)`;
@@ -13381,6 +13562,7 @@ const supervisorGroups = new Map();
     <!-- Script do Uploader (Worker) -->
     <script id="worker-script" type="text/worker-javascript">
         self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+        self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js');
 
         const FORBIDDEN_KEYS = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR', 'PASTA', 'RAMO', 'ATIVIDADE', 'CIDADE', 'MUNICIPIO', 'BAIRRO'];
 
@@ -13589,47 +13771,58 @@ const supervisorGroups = new Map();
                     resolve([]);
                     return;
                 }
+                
+                if (file.name.endsWith('.csv')) {
+                     // Read file content first to handle encoding robustly (reusing original logic)
+                     const textReader = new FileReader();
+                     textReader.onload = (e) => {
+                         const buffer = e.target.result;
+                         let decodedData;
+                         try {
+                             decodedData = new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(buffer));
+                         } catch (err) {
+                             decodedData = new TextDecoder('iso-8859-1').decode(new Uint8Array(buffer));
+                         }
+
+                         // Use PapaParse on the decoded string
+                         Papa.parse(decodedData, {
+                             header: true,
+                             skipEmptyLines: true,
+                             complete: (results) => {
+                                 try {
+                                     let jsonData = results.data;
+                                     if (jsonData.length === 0 && fileType !== 'innovations') {
+                                          throw new Error(`O arquivo CSV '${file.name}' está vazio.`);
+                                     }
+                                     
+                                     // Validate
+                                     if (fileType !== 'innovations') {
+                                        validateData(jsonData, fileType, file.name);
+                                     }
+                                     resolve(jsonData);
+                                 } catch (err) {
+                                     reject(err);
+                                 }
+                             },
+                             error: (err) => {
+                                 reject(new Error(`Erro no parsing CSV: ${err.message}`));
+                             }
+                         });
+                     };
+                     textReader.onerror = () => reject(new Error(`Erro ao ler o arquivo '${file.name}'.`));
+                     textReader.readAsArrayBuffer(file);
+                     return;
+                }
+
+                // XLSX Fallback
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     try {
-                        let jsonData;
                         const data = event.target.result;
-                        if (file.name.endsWith('.csv')) {
-                            let decodedData;
-                            try {
-                                decodedData = new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(data));
-                            } catch (e) {
-                                decodedData = new TextDecoder('iso-8859-1').decode(new Uint8Array(data));
-                            }
-
-                            const lines = decodedData.split(/\r?\n/).filter(line => line.trim() !== '');
-                            if (lines.length < 1) {
-                                if (fileType !== 'innovations') {
-                                    throw new Error(`O arquivo CSV '${file.name}' está vazio.`);
-                                }
-                                resolve([]);
-                                return;
-                            };
-
-                            const firstLine = lines[0];
-                            const delimiter = firstLine.includes(';') ? ';' : ',';
-                            
-                            const headers = lines.shift().trim().split(delimiter).map(h => h.replace(/"/g, '').trim().replace(/^\uFEFF/, ''));
-                            
-                            jsonData = lines.map(line => {
-                                const values = line.split(delimiter);
-                                let row = {};
-                                for (let i = 0; i < headers.length; i++) {
-                                    row[headers[i]] = (values[i] || '').replace(/"/g, '').trim();
-                                }
-                                return row;
-                            });
-                        } else {
-                            const workbook = XLSX.read(new Uint8Array(data), {type: 'array'});
-                            const firstSheetName = workbook.SheetNames[0];
-                            const worksheet = workbook.Sheets[firstSheetName];
-                            jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false, cellDates: true });
-                        }
+                        const workbook = XLSX.read(new Uint8Array(data), {type: 'array'});
+                        const firstSheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[firstSheetName];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false, cellDates: true });
 
                         if (fileType !== 'innovations') {
                             validateData(jsonData, fileType, file.name);
