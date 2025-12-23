@@ -1742,7 +1742,7 @@
                     if (newKey === 'RCA1') newKey = 'RCA 1';
                     if (newKey === 'RCA2') newKey = 'RCA 2';
                     if (newKey === 'NOMECLIENTE') newKey = 'Cliente';
-                    if (newKey === 'RAZAOSOCIAL') newKey = 'Cliente'; // Fallback
+                    if (newKey === 'RAZAOSOCIAL') newKey = 'razaoSocial'; // Fix: Separate key
                     if (newKey === 'ULTIMACOMPRA') newKey = 'Data da Última Compra';
                     if (newKey === 'DATACADASTRO') newKey = 'Data e Hora de Cadastro';
                     if (newKey === 'INSCRICAOESTADUAL') newKey = 'Insc. Est. / Produtor';
@@ -1794,7 +1794,7 @@
                 'RCA1': 'RCA 1',
                 'RCA2': 'RCA 2',
                 'NOMECLIENTE': 'Cliente',
-                'RAZAOSOCIAL': 'Cliente',
+                'RAZAOSOCIAL': 'razaoSocial',
                 'ULTIMACOMPRA': 'Data da Última Compra',
                 'DATACADASTRO': 'Data e Hora de Cadastro',
                 'INSCRICAOESTADUAL': 'Insc. Est. / Produtor',
@@ -1814,10 +1814,6 @@
                 const pushLine = (lineValues) => {
                     if (!headers) {
                         headers = lineValues;
-                        return;
-                    }
-                    // Skip duplicate headers from pagination
-                    if (lineValues.length > 0 && headers.length > 0 && lineValues[0] === headers[0] && lineValues[lineValues.length-1] === headers[headers.length-1]) {
                         return;
                     }
                     if (lineValues.length !== headers.length) return;
@@ -1866,11 +1862,6 @@
 
                 const pushLine = (lineValues) => {
                     if (lineValues.length === 0 || (lineValues.length === 1 && lineValues[0] === '')) return;
-
-                    // Skip duplicate headers from pagination
-                    if (!isHeader && headers && lineValues.length === headers.length && lineValues[0] === headers[0] && lineValues[lineValues.length-1] === headers[headers.length-1]) {
-                        return;
-                    }
 
                     if (isHeader) {
                         headers = lineValues.map(h => {
@@ -2498,7 +2489,7 @@
         class ColumnarDataset {
             constructor(columnarData) {
                 this.columns = columnarData.columns;
-                this.values = columnarData.values;
+                this._data = columnarData.values; // Renamed to avoid shadowing values() method
                 this.length = columnarData.length;
                 this._overrides = new Map(); // Stores mutations: Map<index, Object>
             }
@@ -2507,7 +2498,7 @@
                 if (index < 0 || index >= this.length) return undefined;
 
                 const overrides = this._overrides;
-                const values = this.values;
+                const values = this._data;
                 const columns = this.columns;
 
                 // Return a Lazy Proxy that constructs properties only on access
@@ -2607,29 +2598,13 @@
                 return accumulator;
             }
 
-            map(callback) {
+            values() {
+                // Returns all items as Proxies (expensive if iterated fully, but needed for 'no filter' cases)
                 const result = new Array(this.length);
                 for (let i = 0; i < this.length; i++) {
-                    result[i] = callback(this.get(i), i);
+                    result[i] = this.get(i);
                 }
                 return result;
-            }
-
-            filter(callback) {
-                const result = [];
-                for (let i = 0; i < this.length; i++) {
-                    const item = this.get(i);
-                    if (callback(item, i)) result.push(item);
-                }
-                return result;
-            }
-
-            reduce(callback, initialValue) {
-                let accumulator = initialValue;
-                for (let i = 0; i < this.length; i++) {
-                    accumulator = callback(accumulator, this.get(i), i);
-                }
-                return accumulator;
             }
 
             some(callback) {
@@ -2842,6 +2817,13 @@
         const activeProductCodesFromCadastro = new Set(embeddedData.activeProductCodes || []);
         const productDetailsMap = new Map(Object.entries(embeddedData.productDetails || {}));
         const passedWorkingDaysCurrentMonth = embeddedData.passedWorkingDaysCurrentMonth || 1;
+        
+        if (embeddedData.lastSaleDate) {
+            const ts = parseInt(embeddedData.lastSaleDate);
+            if (!isNaN(ts) && ts > 0) {
+                lastSaleDate = new Date(ts);
+            }
+        }
 
         const clientsWithSalesThisMonth = new Set();
         // Populate set
@@ -2851,8 +2833,8 @@
         }
 
         const optimizedData = {
-            salesById: embeddedData.isColumnar ? new IndexMap(allSalesData) : new Map(),
-            historyById: embeddedData.isColumnar ? new IndexMap(allHistoryData) : new Map(),
+            salesById: allSalesData, // Use dataset directly to avoid empty IndexMap issues
+            historyById: allHistoryData, // Use dataset directly
             indices: {
                 current: {
                     bySupervisor: new Map(),
@@ -2895,11 +2877,15 @@
         let maxDateTs = 0;
         for(let i=0; i<allSalesData.length; i++) {
             const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
-            const d = parseDate(s.DTPED);
-            if(d && !isNaN(d)) {
-                const ts = d.getTime();
-                if(ts > maxDateTs) maxDateTs = ts;
+            let ts = 0;
+            if (typeof s.DTPED === 'number' && s.DTPED > 1000000) {
+                 ts = s.DTPED;
+            } else {
+                 const d = parseDate(s.DTPED);
+                 if(d && !isNaN(d)) ts = d.getTime();
             }
+            
+            if(ts > maxDateTs) maxDateTs = ts;
         }
         const lastSaleDate = maxDateTs > 0 ? new Date(maxDateTs) : new Date();
         lastSaleDate.setUTCHours(0,0,0,0);
@@ -2908,6 +2894,24 @@
         let customWorkingDaysStock = 0;
 
         function initializeOptimizedDataStructures() {
+            // --- FIX: Fallback logic for OBSERVACAOFOR (Pasta) ---
+            // Ensures filters work even if data source (Supabase) has empty fields
+            for (let i = 0; i < allSalesData.length; i++) {
+                const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
+                let observacaoFor = String(s.OBSERVACAOFOR || '').trim();
+                
+                if (!observacaoFor || observacaoFor === '0' || observacaoFor === '00') {
+                    const fornecedorUpper = String(s.FORNECEDOR || '').toUpperCase();
+                    if (fornecedorUpper.includes('PEPSICO')) {
+                        observacaoFor = 'PEPSICO';
+                    } else {
+                        observacaoFor = 'MULTIMARCAS';
+                    }
+                    s.OBSERVACAOFOR = observacaoFor;
+                }
+            }
+            // -----------------------------------------------------
+
             const sellerDetailsMap = new Map();
             const sellerLastSaleDateMap = new Map(); // Track latest date per seller
             const clientToCurrentSellerMap = new Map();
@@ -3001,28 +3005,31 @@
                 const { bySupervisor, byRca, byPasta, bySupplier, byClient, byPosition, byRede, byTipoVenda, byProduct, byCity, byFilial } = indexSet;
 
                 const isColumnar = data instanceof ColumnarDataset;
-                const colValues = isColumnar ? data.values : null;
+                // Use _data because .values is now a method
+                const colValues = isColumnar ? data._data : null;
 
                 // Optimization: Helper to read values without creating Proxy
                 const getVal = (i, prop) => {
-                    if (isColumnar && colValues[prop]) {
+                    if (isColumnar && colValues && colValues[prop]) {
                         return colValues[prop][i];
                     }
-                    return data[i][prop];
+                    // Fallback for non-columnar or missing columns
+                    if (isColumnar) {
+                         // If column missing in _data, try safe access via get() but this creates proxy
+                         // Better: assume if not in _data, it's not there or handled by overrides (which are rare here)
+                         // But if we MUST fallback:
+                         const item = data.get(i);
+                         return item ? item[prop] : undefined;
+                    }
+                    return data[i] ? data[i][prop] : undefined;
                 };
 
                 for (let i = 0; i < data.length; i++) {
-                    // Optimized: Do not create Proxy 'sale' object here. Read directly.
-                    // This avoids massive Proxy creation and Date object conversion overhead.
-                    
-                    const id = `${isHistory ? 'h' : 'c'}_${i}`;
+                    // Optimized: Use Integer Index as ID
+                    const id = i;
 
-                    if (dataMap instanceof IndexMap) {
-                        dataMap.set(id, i);
-                    } else {
-                        // For non-IndexMap usage, we store the object (or Proxy if Columnar)
-                        dataMap.set(id, isColumnar ? data.get(i) : data[i]);
-                    }
+                    // Note: dataMap is now the dataset itself, we don't need to set anything into it.
+                    // We just index the position 'i'.
 
                     const supervisor = getVal(i, 'SUPERV') || 'N/A';
                     const rca = getVal(i, 'NOME') || 'N/A';
@@ -3113,65 +3120,13 @@
             supervisorToRcaMap.forEach((rcas, supervisor) => {
                 optimizedData.rcasBySupervisor.set(supervisor, Array.from(rcas));
             });
-
-            // Enrichment Map for Orders (Client-Side Aggregation for Missing Columns)
-            const orderEnrichmentMap = new Map();
-            // Iterate allSalesData (Indices logic already ran, but we need raw loop for Orders)
-            // Use accessor loop for Columnar support
-            const getSale = (i) => allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
             
-            for(let i=0; i<allSalesData.length; i++) {
-                const s = getSale(i);
-                if (!s.PEDIDO) continue;
-                
-                if (!orderEnrichmentMap.has(s.PEDIDO)) {
-                    orderEnrichmentMap.set(s.PEDIDO, { 
-                        tipoVenda: s.TIPOVENDA, // Take first
-                        codfors: new Set(),
-                        fornecedores: new Set()
-                    });
-                }
-                const entry = orderEnrichmentMap.get(s.PEDIDO);
-                if (s.CODFOR) entry.codfors.add(String(s.CODFOR));
-                if (s.OBSERVACAOFOR) entry.fornecedores.add(s.OBSERVACAOFOR);
-            }
-            
-            // Process Aggregated Orders (Remap and Enrich)
+            // Process Aggregated Orders (Remap only)
             for(let i = 0; i < aggregatedOrders.length; i++) {
                 const sale = aggregatedOrders[i];
                 // Convert to Date if number
                 if (sale.DTPED && !(sale.DTPED instanceof Date)) sale.DTPED = new Date(sale.DTPED);
                 if (sale.DTSAIDA && !(sale.DTSAIDA instanceof Date)) sale.DTSAIDA = new Date(sale.DTSAIDA);
-
-                // --- Client-Side Enrichment ---
-                const enriched = orderEnrichmentMap.get(sale.PEDIDO);
-                
-                // 1. TIPOVENDA
-                if (!sale.TIPOVENDA || sale.TIPOVENDA === 'N/A') {
-                    if (enriched && enriched.tipoVenda) sale.TIPOVENDA = enriched.tipoVenda;
-                    else sale.TIPOVENDA = 'N/A';
-                }
-
-                // 2. CODFORS_LIST (Priority to local enrichment)
-                if (enriched && enriched.codfors.size > 0) {
-                    sale.CODFORS_LIST = Array.from(enriched.codfors);
-                } else if (sale.CODFORS_LIST) {
-                    // Fallback to Supabase data if present
-                    if (typeof sale.CODFORS_LIST === 'string') {
-                        let clean = sale.CODFORS_LIST.replace(/^{|}$|^\[|\]$/g, '');
-                        sale.CODFORS_LIST = clean ? clean.split(',').map(s => s.replace(/"/g, '').trim()) : [];
-                    }
-                } else {
-                    sale.CODFORS_LIST = [];
-                }
-
-                // 3. FORNECEDORES_LIST (Priority to local enrichment)
-                if (enriched && enriched.fornecedores.size > 0) {
-                    sale.FORNECEDORES_LIST = Array.from(enriched.fornecedores);
-                } else if (!sale.FORNECEDORES_LIST) {
-                    sale.FORNECEDORES_LIST = sale.FORNECEDORES_STR ? sale.FORNECEDORES_STR.split(', ') : [];
-                }
-                // -----------------------------
 
                 if (sale.CODCLI !== americanasCodCli) {
                     const currentSellerCode = clientToCurrentSellerMap.get(sale.CODCLI);
@@ -7800,7 +7755,7 @@ const supervisorGroups = new Map();
                 return result;
             };
 
-            const getFilteredIds = (indices, dataMap) => {
+            const getFilteredIds = (indices, dataset) => {
                 let setsToIntersect = [];
                 let hasFilter = false;
 
@@ -7881,12 +7836,26 @@ const supervisorGroups = new Map();
                     return []; 
                 }
                 
+                // Helper to retrieve item from dataset (ColumnarDataset or Array)
+                const getItem = (idx) => (dataset.get ? dataset.get(idx) : dataset[idx]);
+
                 if (setsToIntersect.length === 0 && !hasFilter) {
-                    return Array.from(dataMap.values()); 
+                    // No filters: return all items
+                    // Check if it is a ColumnarDataset specifically to avoid calling .values() on native Array (which returns iterator)
+                    if (dataset instanceof ColumnarDataset) {
+                        return dataset.values();
+                    }
+                    if (Array.isArray(dataset)) return dataset;
+                    
+                    // Fallback iteration (safe for array-like objects)
+                    const all = [];
+                    for(let i=0; i<dataset.length; i++) all.push(getItem(i));
+                    return all;
                 }
 
                 const finalIds = intersectSets(setsToIntersect);
-                return Array.from(finalIds).map(id => dataMap.get(id));
+                // finalIds are indices (integers). Use getItem to retrieve the object/proxy.
+                return Array.from(finalIds).map(id => getItem(id));
             };
 
             const filteredSalesData = getFilteredIds(optimizedData.indices.current, optimizedData.salesById);
@@ -7902,7 +7871,8 @@ const supervisorGroups = new Map();
                     if (selectedMainSupervisors.length > 0) matches = matches && selectedMainSupervisors.includes(order.SUPERV);
                     if (selectedSellers.length > 0) matches = matches && selectedSellers.includes(order.NOME);
                 }
-                if (selectedTiposVenda.length > 0) matches = matches && selectedTiposVenda.includes(order.TIPOVENDA);
+                // Robust filtering with existence checks
+                if (selectedTiposVenda.length > 0) matches = matches && order.TIPOVENDA && selectedTiposVenda.includes(order.TIPOVENDA);
                 if (currentFornecedor) matches = matches && order.FORNECEDORES_LIST && order.FORNECEDORES_LIST.includes(currentFornecedor);
                 if (selectedMainSuppliers.length > 0) matches = matches && order.CODFORS_LIST && order.CODFORS_LIST.some(c => selectedMainSuppliers.includes(c));
                 if (posicao) matches = matches && order.POSICAO === posicao;
@@ -9228,10 +9198,13 @@ const supervisorGroups = new Map();
             return kpiValues.reduce((a, b) => a + b, 0) / kpiValues.length;
         }
 
-        const getFilteredDataFromIndices = (indices, dataMap, filters, excludeFilter = null) => {
+        const getFilteredDataFromIndices = (indices, dataset, filters, excludeFilter = null) => {
             const isExcluded = (f) => excludeFilter === f || (Array.isArray(excludeFilter) && excludeFilter.includes(f));
             const setsToIntersect = [];
             let hasFilter = false;
+
+            // Helper to get item
+            const getItem = (idx) => (dataset.get ? dataset.get(idx) : dataset[idx]);
 
             if (filters.filial && filters.filial !== 'ambas') {
                 hasFilter = true;
@@ -9340,8 +9313,14 @@ const supervisorGroups = new Map();
             }
 
             if (setsToIntersect.length === 0 && !hasFilter && !filters.clientCodes) {
-                if (dataMap instanceof IndexMap) return dataMap._source; 
-                return Array.from(dataMap.values());
+                if (dataset.values && typeof dataset.values === 'function') {
+                    return dataset.values();
+                }
+                if (Array.isArray(dataset)) return dataset;
+                
+                const all = [];
+                for(let i=0; i<dataset.length; i++) all.push(getItem(i));
+                return all;
             }
 
             let resultIds;
@@ -9367,15 +9346,30 @@ const supervisorGroups = new Map();
                 }
                 // --- OPTIMIZATION END ---
             } else if (filters.clientCodes) {
-                 const allData = Array.from(dataMap.values());
-                 return allData.filter(s => filters.clientCodes.has(s.CODCLI));
+                 const allData = [];
+                 // Use iteration if values() unavailable
+                 if (dataset.values && typeof dataset.values === 'function') {
+                     const vals = dataset.values();
+                     for(let i=0; i<vals.length; i++) if(filters.clientCodes.has(vals[i].CODCLI)) allData.push(vals[i]);
+                 } else {
+                     for(let i=0; i<dataset.length; i++) {
+                         const item = getItem(i);
+                         if(filters.clientCodes.has(item.CODCLI)) allData.push(item);
+                     }
+                 }
+                 return allData;
             } else {
-                return Array.from(dataMap.values());
+                // Should be unreachable due to first check, but safe fallback
+                if (dataset.values && typeof dataset.values === 'function') return dataset.values();
+                if (Array.isArray(dataset)) return dataset;
+                const all = [];
+                for(let i=0; i<dataset.length; i++) all.push(getItem(i));
+                return all;
             }
 
             const result = [];
             for (const id of resultIds) {
-                const item = dataMap.get(id);
+                const item = getItem(id);
                 if (!filters.clientCodes || filters.clientCodes.has(item.CODCLI)) {
                     result.push(item);
                 }
@@ -13443,6 +13437,11 @@ const supervisorGroups = new Map();
                 return !isNaN(dateString.getTime()) ? dateString : null;
             }
             if (typeof dateString === 'number') {
+                // Fix: Check if number is a JS Timestamp (large number) or Excel Serial (small number)
+                // Excel dates are around 45000 (for year 2023). Timestamps are > 1.6e12
+                if (dateString > 1000000) {
+                    return new Date(dateString);
+                }
                 return new Date(Math.round((dateString - 25569) * 86400 * 1000));
             }
             if (typeof dateString !== 'string') return null;
@@ -14227,6 +14226,7 @@ const supervisorGroups = new Map();
                             const client = clientMap.get(row.CODCLI);
                             orders.set(row.PEDIDO, {
                                 ...row,
+                                TIPOVENDA: String(row.TIPOVENDA || 'N/A'),
                                 CLIENTE_NOME: client ? (client.nomeCliente || client.fantasia) : 'N/A',
                                 CIDADE: client ? client.cidade : 'N/A',
                                 QTVENDA: 0,
@@ -14262,7 +14262,7 @@ const supervisorGroups = new Map();
                             TOTPESOLIQ: order.TOTPESOLIQ,
                             FILIAL: order.FILIAL,
                             // Added for Filtering
-                            TIPOVENDA: order.TIPOVENDA,
+                            TIPOVENDA: String(order.TIPOVENDA || 'N/A'),
                             FORNECEDORES_LIST: Array.from(order.FORNECEDORES),
                             CODFORS_LIST: Array.from(order.CODFORS)
                         };
@@ -14314,6 +14314,7 @@ const supervisorGroups = new Map();
                 const finalMetadata = [];
                 finalMetadata.push({ key: 'passed_working_days', value: String(passedWorkingDaysCurrentMonth) });
                 finalMetadata.push({ key: 'last_update', value: new Date().toISOString() });
+                finalMetadata.push({ key: 'last_sale_date', value: String(maxTs) });
 
                 self.postMessage({ type: 'progress', status: 'Pronto!', percentage: 100 });
 
@@ -14342,6 +14343,7 @@ const supervisorGroups = new Map();
                         activeProductCodes: Array.from(activeProductCodesFromCadastro),
                         productDetails: Object.fromEntries(productDetailsMap),
                         passedWorkingDaysCurrentMonth: passedWorkingDaysCurrentMonth,
+                        lastSaleDate: String(maxTs),
                         isColumnar: true
                     }
                 });
