@@ -2598,29 +2598,13 @@
                 return accumulator;
             }
 
-            map(callback) {
+            values() {
+                // Returns all items as Proxies (expensive if iterated fully, but needed for 'no filter' cases)
                 const result = new Array(this.length);
                 for (let i = 0; i < this.length; i++) {
-                    result[i] = callback(this.get(i), i);
+                    result[i] = this.get(i);
                 }
                 return result;
-            }
-
-            filter(callback) {
-                const result = [];
-                for (let i = 0; i < this.length; i++) {
-                    const item = this.get(i);
-                    if (callback(item, i)) result.push(item);
-                }
-                return result;
-            }
-
-            reduce(callback, initialValue) {
-                let accumulator = initialValue;
-                for (let i = 0; i < this.length; i++) {
-                    accumulator = callback(accumulator, this.get(i), i);
-                }
-                return accumulator;
             }
 
             some(callback) {
@@ -2842,8 +2826,8 @@
         }
 
         const optimizedData = {
-            salesById: embeddedData.isColumnar ? new IndexMap(allSalesData) : new Map(),
-            historyById: embeddedData.isColumnar ? new IndexMap(allHistoryData) : new Map(),
+            salesById: allSalesData, // Use dataset directly to avoid empty IndexMap issues
+            historyById: allHistoryData, // Use dataset directly
             indices: {
                 current: {
                     bySupervisor: new Map(),
@@ -7739,7 +7723,7 @@ const supervisorGroups = new Map();
                 return result;
             };
 
-            const getFilteredIds = (indices, dataMap) => {
+            const getFilteredIds = (indices, dataset) => {
                 let setsToIntersect = [];
                 let hasFilter = false;
 
@@ -7820,12 +7804,24 @@ const supervisorGroups = new Map();
                     return []; 
                 }
                 
+                // Helper to retrieve item from dataset (ColumnarDataset or Array)
+                const getItem = (idx) => (dataset.get ? dataset.get(idx) : dataset[idx]);
+
                 if (setsToIntersect.length === 0 && !hasFilter) {
-                    return Array.from(dataMap.values()); 
+                    // No filters: return all items
+                    if (dataset.values && typeof dataset.values === 'function') {
+                        return dataset.values();
+                    }
+                    if (Array.isArray(dataset)) return dataset;
+                    // Fallback iteration
+                    const all = [];
+                    for(let i=0; i<dataset.length; i++) all.push(getItem(i));
+                    return all;
                 }
 
                 const finalIds = intersectSets(setsToIntersect);
-                return Array.from(finalIds).map(id => dataMap.get(id));
+                // finalIds are indices (integers). Use getItem to retrieve the object/proxy.
+                return Array.from(finalIds).map(id => getItem(id));
             };
 
             const filteredSalesData = getFilteredIds(optimizedData.indices.current, optimizedData.salesById);
@@ -7841,7 +7837,8 @@ const supervisorGroups = new Map();
                     if (selectedMainSupervisors.length > 0) matches = matches && selectedMainSupervisors.includes(order.SUPERV);
                     if (selectedSellers.length > 0) matches = matches && selectedSellers.includes(order.NOME);
                 }
-                if (selectedTiposVenda.length > 0) matches = matches && selectedTiposVenda.includes(order.TIPOVENDA);
+                // Robust filtering with existence checks
+                if (selectedTiposVenda.length > 0) matches = matches && order.TIPOVENDA && selectedTiposVenda.includes(order.TIPOVENDA);
                 if (currentFornecedor) matches = matches && order.FORNECEDORES_LIST && order.FORNECEDORES_LIST.includes(currentFornecedor);
                 if (selectedMainSuppliers.length > 0) matches = matches && order.CODFORS_LIST && order.CODFORS_LIST.some(c => selectedMainSuppliers.includes(c));
                 if (posicao) matches = matches && order.POSICAO === posicao;
