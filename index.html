@@ -1826,6 +1826,10 @@
                         if (type === 'clients' && clientMap[header]) header = clientMap[header];
                         if (type === 'orders' && ['VLVENDA', 'TOTPESOLIQ', 'VLBONIFIC', 'QTVENDA'].includes(header)) val = val === '' ? 0 : Number(val);
                         
+                        if (val && typeof val === 'string' && val.startsWith('{') && val.endsWith('}')) {
+                            val = val.slice(1, -1).split(',').map(s => s.replace(/^"|"$/g, ''));
+                        }
+
                         obj[header] = val;
                     }
                     result.push(obj);
@@ -1971,7 +1975,7 @@
             const colsDetailed = 'pedido,codcli,nome,superv,codsupervisor,produto,descricao,fornecedor,observacaofor,codfor,codusur,qtvenda,vlvenda,vlbonific,totpesoliq,dtped,dtsaida,posicao,estoqueunit,tipovenda,filial,qtvenda_embalagem_master';
             const colsClients = 'codigo_cliente,rca1,rca2,rcas,cidade,nomecliente,bairro,razaosocial,fantasia,cnpj_cpf,endereco,numero,cep,telefone,email,ramo,ultimacompra,datacadastro,bloqueio,inscricaoestadual';
             const colsStock = 'product_code,filial,stock_qty';
-            const colsOrders = 'pedido,codcli,cliente_nome,cidade,nome,superv,fornecedores_str,dtped,dtsaida,posicao,vlvenda,totpesoliq,filial';
+            const colsOrders = 'pedido,codcli,cliente_nome,cidade,nome,superv,fornecedores_str,dtped,dtsaida,posicao,vlvenda,totpesoliq,filial,tipovenda,fornecedores_list,codfors_list';
 
             const [detailedUpper, historyUpper, clientsUpper, products, activeProds, stock, innovations, metadata, ordersUpper] = await Promise.all([
                 fetchAll('data_detailed', colsDetailed, 'sales', 'columnar'),
