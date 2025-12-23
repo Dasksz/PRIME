@@ -1742,7 +1742,7 @@
                     if (newKey === 'RCA1') newKey = 'RCA 1';
                     if (newKey === 'RCA2') newKey = 'RCA 2';
                     if (newKey === 'NOMECLIENTE') newKey = 'Cliente';
-                    if (newKey === 'RAZAOSOCIAL') newKey = 'Cliente'; // Fallback
+                    if (newKey === 'RAZAOSOCIAL') newKey = 'razaoSocial'; // Fix: Separate key
                     if (newKey === 'ULTIMACOMPRA') newKey = 'Data da Última Compra';
                     if (newKey === 'DATACADASTRO') newKey = 'Data e Hora de Cadastro';
                     if (newKey === 'INSCRICAOESTADUAL') newKey = 'Insc. Est. / Produtor';
@@ -1794,7 +1794,7 @@
                 'RCA1': 'RCA 1',
                 'RCA2': 'RCA 2',
                 'NOMECLIENTE': 'Cliente',
-                'RAZAOSOCIAL': 'Cliente',
+                'RAZAOSOCIAL': 'razaoSocial',
                 'ULTIMACOMPRA': 'Data da Última Compra',
                 'DATACADASTRO': 'Data e Hora de Cadastro',
                 'INSCRICAOESTADUAL': 'Insc. Est. / Produtor',
@@ -2877,11 +2877,15 @@
         let maxDateTs = 0;
         for(let i=0; i<allSalesData.length; i++) {
             const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
-            const d = parseDate(s.DTPED);
-            if(d && !isNaN(d)) {
-                const ts = d.getTime();
-                if(ts > maxDateTs) maxDateTs = ts;
+            let ts = 0;
+            if (typeof s.DTPED === 'number' && s.DTPED > 1000000) {
+                 ts = s.DTPED;
+            } else {
+                 const d = parseDate(s.DTPED);
+                 if(d && !isNaN(d)) ts = d.getTime();
             }
+
+            if(ts > maxDateTs) maxDateTs = ts;
         }
         const lastSaleDate = maxDateTs > 0 ? new Date(maxDateTs) : new Date();
         lastSaleDate.setUTCHours(0,0,0,0);
@@ -2890,6 +2894,24 @@
         let customWorkingDaysStock = 0;
 
         function initializeOptimizedDataStructures() {
+            // --- FIX: Fallback logic for OBSERVACAOFOR (Pasta) ---
+            // Ensures filters work even if data source (Supabase) has empty fields
+            for (let i = 0; i < allSalesData.length; i++) {
+                const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
+                let observacaoFor = String(s.OBSERVACAOFOR || '').trim();
+
+                if (!observacaoFor || observacaoFor === '0' || observacaoFor === '00') {
+                    const fornecedorUpper = String(s.FORNECEDOR || '').toUpperCase();
+                    if (fornecedorUpper.includes('PEPSICO')) {
+                        observacaoFor = 'PEPSICO';
+                    } else {
+                        observacaoFor = 'MULTIMARCAS';
+                    }
+                    s.OBSERVACAOFOR = observacaoFor;
+                }
+            }
+            // -----------------------------------------------------
+
             const sellerDetailsMap = new Map();
             const sellerLastSaleDateMap = new Map(); // Track latest date per seller
             const clientToCurrentSellerMap = new Map();
@@ -13415,6 +13437,11 @@ const supervisorGroups = new Map();
                 return !isNaN(dateString.getTime()) ? dateString : null;
             }
             if (typeof dateString === 'number') {
+                // Fix: Check if number is a JS Timestamp (large number) or Excel Serial (small number)
+                // Excel dates are around 45000 (for year 2023). Timestamps are > 1.6e12
+                if (dateString > 1000000) {
+                    return new Date(dateString);
+                }
                 return new Date(Math.round((dateString - 25569) * 86400 * 1000));
             }
             if (typeof dateString !== 'string') return null;
