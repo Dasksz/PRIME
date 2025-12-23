@@ -9279,6 +9279,7 @@ const supervisorGroups = new Map();
             }
 
             if (setsToIntersect.length === 0 && !hasFilter && !filters.clientCodes) {
+                if (dataMap instanceof IndexMap) return dataMap._source; 
                 return Array.from(dataMap.values());
             }
 
@@ -13841,7 +13842,15 @@ const supervisorGroups = new Map();
         // --- OPTIMIZATION: Columnar Data Transformation ---
         function toColumnar(data) {
             if (!data || data.length === 0) return { columns: [], values: {}, length: 0 };
-            const columns = Object.keys(data[0]);
+            
+            // Scan first 50 rows to get all possible keys to avoid missing columns if first row is partial
+            const keysSet = new Set();
+            const limit = Math.min(data.length, 50);
+            for(let i=0; i<limit; i++) {
+                Object.keys(data[i]).forEach(k => keysSet.add(k));
+            }
+            const columns = Array.from(keysSet);
+            
             const values = {};
             columns.forEach(col => values[col] = new Array(data.length));
 
@@ -14190,7 +14199,11 @@ const supervisorGroups = new Map();
                             POSICAO: order.POSICAO,
                             VLVENDA: order.VLVENDA,
                             TOTPESOLIQ: order.TOTPESOLIQ,
-                            FILIAL: order.FILIAL
+                            FILIAL: order.FILIAL,
+                            // Added for Filtering
+                            TIPOVENDA: order.TIPOVENDA,
+                            FORNECEDORES_LIST: Array.from(order.FORNECEDORES),
+                            CODFORS_LIST: Array.from(order.CODFORS)
                         };
                     });
                 };
