@@ -2152,22 +2152,22 @@
 
             // Calculate Last Sale Date (Columnar optimized)
             let lastSale = 0;
-            if (detailedUpper.values && detailedUpper.values['DTPED']) {
-                const dtpeds = detailedUpper.values['DTPED'];
+            if (detailed.values && detailed.values['DTPED']) {
+                const dtpeds = detailed.values['DTPED'];
                 const len = dtpeds.length;
                 for(let i=0; i<len; i++) {
                     if (dtpeds[i] > lastSale) lastSale = dtpeds[i];
                 }
-            } else if (Array.isArray(detailedUpper) && detailedUpper.length > 0) {
-                 lastSale = detailedUpper.reduce((max, p) => p.DTPED > max ? p.DTPED : max, 0);
+            } else if (Array.isArray(detailed) && detailed.length > 0) {
+                 lastSale = detailed.reduce((max, p) => p.DTPED > max ? p.DTPED : max, 0);
             }
             if (lastSale === 0) lastSale = Date.now();
 
             const embeddedData = {
-                detailed: detailedUpper,
-                history: historyUpper,
-                clients: clientsUpper,
-                byOrder: ordersUpper,
+                detailed: detailed,
+                history: history,
+                clients: clients,
+                byOrder: orders,
                 stockMap05: stockMap05,
                 stockMap08: stockMap08,
                 innovationsMonth: innovations,
