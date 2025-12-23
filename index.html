@@ -7797,7 +7797,8 @@ const supervisorGroups = new Map();
 
         function updateSupervisorFilter(dropdown, filterText, selectedArray, dataSource, skipRender = false) {
             if (!dropdown || !filterText) return selectedArray;
-            const supervisors = [...new Set(dataSource.map(item => item.SUPERV).filter(Boolean))].sort();
+            const forbidden = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR'];
+            const supervisors = [...new Set(dataSource.map(item => item.SUPERV).filter(s => s && !forbidden.includes(s.toUpperCase())))].sort();
             
             selectedArray = selectedArray.filter(sup => supervisors.includes(sup));
 
@@ -7818,12 +7819,13 @@ const supervisorGroups = new Map();
         }
 
         function updateSellerFilter(supervisors, dropdown, filterText, selectedArray, dataSource, skipRender = false) {
+            const forbidden = ['NOME', 'VENDEDOR', 'SUPERV', 'CODUSUR', 'CODCLI', 'SUPERVISOR'];
             let sellersToShow;
             if (supervisors && supervisors.length > 0) {
                 const supSet = new Set(supervisors);
-                sellersToShow = [...new Set(dataSource.filter(s => supSet.has(s.SUPERV)).map(s => s.NOME))].sort();
+                sellersToShow = [...new Set(dataSource.filter(s => supSet.has(s.SUPERV)).map(s => s.NOME).filter(n => n && !forbidden.includes(n.toUpperCase())))].sort();
             } else {
-                sellersToShow = [...new Set(dataSource.map(item => item.NOME).filter(Boolean))].sort();
+                sellersToShow = [...new Set(dataSource.map(item => item.NOME).filter(n => n && !forbidden.includes(n.toUpperCase())))].sort();
             }
             
             selectedArray = selectedArray.filter(seller => sellersToShow.includes(seller));
@@ -13743,7 +13745,8 @@ const supervisorGroups = new Map();
                     try {
                         const codUsur = String(row['CODUSUR'] || '').trim();
                         // Filter out headers that might have slipped through
-                        if (codUsur.toUpperCase() === 'CODUSUR' || codUsur.toUpperCase() === 'COD USUR' || String(row['SUPERV'] || '').trim().toUpperCase() === 'SUPERV') return;
+                        const supervCheck = String(row['SUPERV'] || '').trim().toUpperCase();
+                        if (codUsur.toUpperCase() === 'CODUSUR' || codUsur.toUpperCase() === 'COD USUR' || supervCheck === 'SUPERV' || supervCheck === 'SUPERVISOR' || isNaN(parseInt(codUsur))) return;
 
                         if (codUsur === '1001') return;
 
