@@ -2544,11 +2544,42 @@
                 });
             }
 
-            // Interface Compatibility
+            // Implement basic Array methods to behave like an array
+            map(callback) {
+                const result = new Array(this.length);
+                for (let i = 0; i < this.length; i++) {
+                    result[i] = callback(this.get(i), i, this);
+                }
+                return result;
+            }
+
+            filter(callback) {
+                const result = [];
+                for (let i = 0; i < this.length; i++) {
+                    const item = this.get(i);
+                    if (callback(item, i, this)) {
+                        result.push(item);
+                    }
+                }
+                return result;
+            }
+
             forEach(callback) {
                 for (let i = 0; i < this.length; i++) {
-                    callback(this.get(i), i);
+                    callback(this.get(i), i, this);
                 }
+            }
+
+            reduce(callback, initialValue) {
+                let accumulator = initialValue;
+                for (let i = 0; i < this.length; i++) {
+                    if (i === 0 && initialValue === undefined) {
+                        accumulator = this.get(i);
+                    } else {
+                        accumulator = callback(accumulator, this.get(i), i, this);
+                    }
+                }
+                return accumulator;
             }
 
             map(callback) {
@@ -2733,13 +2764,41 @@
         
         let allSalesData, allHistoryData, allClientsData;
 
+        function sanitizeData(data) {
+            if (!data) return [];
+            const forbidden = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR'];
+
+            // Check if it's a ColumnarDataset proxy or regular array.
+            // If it's a ColumnarDataset, we can't easily filter in-place without rebuilding.
+            // However, ColumnarDataset usually proxies access.
+            // Since we're trying to fix garbage, it's safer to check if we can filter.
+
+            if (Array.isArray(data)) {
+                return data.filter(item => {
+                    const superv = String(item.SUPERV || '').trim().toUpperCase();
+                    const nome = String(item.NOME || '').trim().toUpperCase();
+                    const codUsur = String(item.CODUSUR || '').trim().toUpperCase();
+                    // Check against headers
+                    if (forbidden.includes(superv) || forbidden.includes(nome) || forbidden.includes(codUsur)) return false;
+                    return true;
+                });
+            }
+            // If Columnar, we assume the worker already did a good job, OR we might need to implement filtering for ColumnarDataset.
+            // But since 'fromColumnar' was removed/replaced by 'ColumnarDataset' class usage?
+            // Wait, looking at the code above: 'allSalesData = new ColumnarDataset(...)'.
+            // Filtering a ColumnarDataset is hard.
+            // But wait! The worker ALREADY sanitizes via 'processSalesData' logic I added.
+
+            return data;
+        }
+
         if (embeddedData.isColumnar) {
             allSalesData = new ColumnarDataset(embeddedData.detailed);
             allHistoryData = new ColumnarDataset(embeddedData.history);
             allClientsData = new ColumnarDataset(embeddedData.clients);
         } else {
-            allSalesData = embeddedData.detailed;
-            allHistoryData = embeddedData.history;
+            allSalesData = sanitizeData(embeddedData.detailed);
+            allHistoryData = sanitizeData(embeddedData.history);
             allClientsData = embeddedData.clients;
         }
 
