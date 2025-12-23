@@ -1980,7 +1980,7 @@
             const colsDetailed = 'pedido,codcli,nome,superv,codsupervisor,produto,descricao,fornecedor,observacaofor,codfor,codusur,qtvenda,vlvenda,vlbonific,totpesoliq,dtped,dtsaida,posicao,estoqueunit,tipovenda,filial,qtvenda_embalagem_master';
             const colsClients = 'codigo_cliente,rca1,rca2,rcas,cidade,nomecliente,bairro,razaosocial,fantasia,cnpj_cpf,endereco,numero,cep,telefone,email,ramo,ultimacompra,datacadastro,bloqueio,inscricaoestadual';
             const colsStock = 'product_code,filial,stock_qty';
-            const colsOrders = 'pedido,codcli,cliente_nome,cidade,nome,superv,fornecedores_str,dtped,dtsaida,posicao,vlvenda,totpesoliq,filial,tipovenda,codfors_list';
+            const colsOrders = 'pedido,codcli,cliente_nome,cidade,nome,superv,fornecedores_str,dtped,dtsaida,posicao,vlvenda,totpesoliq,filial';
 
             const [detailedUpper, historyUpper, clientsUpper, products, activeProds, stock, innovations, metadata, ordersUpper] = await Promise.all([
                 fetchAll('data_detailed', colsDetailed, 'sales', 'columnar'),
@@ -3113,37 +3113,65 @@
             supervisorToRcaMap.forEach((rcas, supervisor) => {
                 optimizedData.rcasBySupervisor.set(supervisor, Array.from(rcas));
             });
+
+            // Enrichment Map for Orders (Client-Side Aggregation for Missing Columns)
+            const orderEnrichmentMap = new Map();
+            // Iterate allSalesData (Indices logic already ran, but we need raw loop for Orders)
+            // Use accessor loop for Columnar support
+            const getSale = (i) => allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
+
+            for(let i=0; i<allSalesData.length; i++) {
+                const s = getSale(i);
+                if (!s.PEDIDO) continue;
+
+                if (!orderEnrichmentMap.has(s.PEDIDO)) {
+                    orderEnrichmentMap.set(s.PEDIDO, {
+                        tipoVenda: s.TIPOVENDA, // Take first
+                        codfors: new Set(),
+                        fornecedores: new Set()
+                    });
+                }
+                const entry = orderEnrichmentMap.get(s.PEDIDO);
+                if (s.CODFOR) entry.codfors.add(String(s.CODFOR));
+                if (s.OBSERVACAOFOR) entry.fornecedores.add(s.OBSERVACAOFOR);
+            }
             
-            // Process Aggregated Orders (Remap only)
+            // Process Aggregated Orders (Remap and Enrich)
             for(let i = 0; i < aggregatedOrders.length; i++) {
                 const sale = aggregatedOrders[i];
                 // Convert to Date if number
                 if (sale.DTPED && !(sale.DTPED instanceof Date)) sale.DTPED = new Date(sale.DTPED);
                 if (sale.DTSAIDA && !(sale.DTSAIDA instanceof Date)) sale.DTSAIDA = new Date(sale.DTSAIDA);
 
-                // Polyfill for Filters
-                if (!sale.FORNECEDORES_LIST) {
-                    sale.FORNECEDORES_LIST = sale.FORNECEDORES_STR ? sale.FORNECEDORES_STR.split(', ') : [];
+                // --- Client-Side Enrichment ---
+                const enriched = orderEnrichmentMap.get(sale.PEDIDO);
+
+                // 1. TIPOVENDA
+                if (!sale.TIPOVENDA || sale.TIPOVENDA === 'N/A') {
+                    if (enriched && enriched.tipoVenda) sale.TIPOVENDA = enriched.tipoVenda;
+                    else sale.TIPOVENDA = 'N/A';
                 }
 
-                // Polyfill for CODFORS_LIST (Supabase CSV returns array as string "{a,b}" or "['a','b']")
-                if (sale.CODFORS_LIST) {
+                // 2. CODFORS_LIST (Priority to local enrichment)
+                if (enriched && enriched.codfors.size > 0) {
+                    sale.CODFORS_LIST = Array.from(enriched.codfors);
+                } else if (sale.CODFORS_LIST) {
+                    // Fallback to Supabase data if present
                     if (typeof sale.CODFORS_LIST === 'string') {
-                        // Handle Postgres Array Format "{123,456}" or JSON "['123','456']"
                         let clean = sale.CODFORS_LIST.replace(/^{|}$|^\[|\]$/g, '');
-                        if (clean) {
-                            sale.CODFORS_LIST = clean.split(',').map(s => s.replace(/"/g, '').trim());
-                        } else {
-                            sale.CODFORS_LIST = [];
-                        }
+                        sale.CODFORS_LIST = clean ? clean.split(',').map(s => s.replace(/"/g, '').trim()) : [];
                     }
                 } else {
                     sale.CODFORS_LIST = [];
                 }
 
-                // Ensure TIPOVENDA is present (it should be if we added to colsOrders)
-                // But for safety against old data:
-                if (sale.TIPOVENDA === undefined) sale.TIPOVENDA = 'N/A';
+                // 3. FORNECEDORES_LIST (Priority to local enrichment)
+                if (enriched && enriched.fornecedores.size > 0) {
+                    sale.FORNECEDORES_LIST = Array.from(enriched.fornecedores);
+                } else if (!sale.FORNECEDORES_LIST) {
+                    sale.FORNECEDORES_LIST = sale.FORNECEDORES_STR ? sale.FORNECEDORES_STR.split(', ') : [];
+                }
+                // -----------------------------
 
                 if (sale.CODCLI !== americanasCodCli) {
                     const currentSellerCode = clientToCurrentSellerMap.get(sale.CODCLI);
