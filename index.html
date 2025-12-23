@@ -2811,7 +2811,7 @@
         // Init Client Map manually since map() might be slower on Columnar
         for(let i=0; i<allClientsData.length; i++) {
             const c = allClientsData instanceof ColumnarDataset ? allClientsData.get(i) : allClientsData[i];
-            clientMapForKPIs.set(String(c['Código']), c);
+            clientMapForKPIs.set(String(c['Código'] || c['codigo_cliente']), c);
         }
 
         const activeProductCodesFromCadastro = new Set(embeddedData.activeProductCodes || []);
@@ -2915,7 +2915,7 @@
 
             for (let i = 0; i < allClientsData.length; i++) {
                 const client = getClient(i); // Hydrate object for processing
-                const codCli = String(client['Código']);
+                const codCli = String(client['Código'] || client['codigo_cliente']);
 
                 // Normalize keys from Supabase (Upper) or Local/Legacy (Lower/Camel)
                 // mapKeysToUpper might have transformed 'cidade' -> 'CIDADE', 'ramo' -> 'RAMO', etc.
@@ -3550,7 +3550,7 @@
             const historyValues = isHistoryColumnar ? optimizedData.historyById._source.values : null;
 
             activeClients.forEach(client => {
-                const codCli = client['Código'];
+                const codCli = String(client['Código'] || client['codigo_cliente']);
                 const clientHistoryIds = optimizedData.indices.history.byClient.get(codCli);
                 
                 // Temp accumulation for this client to ensure Positive Balance check
@@ -4771,7 +4771,7 @@
             }
 
             activeClients.forEach(client => {
-                const codCli = client['Código'];
+                const codCli = String(client['Código'] || client['codigo_cliente']);
                 const clientHistoryIds = optimizedData.indices.history.byClient.get(codCli);
                 
                 // Temp accumulation for this client to ensure Positive Balance check
@@ -5131,7 +5131,7 @@
             // Use standard loop for performance
             for (let i = 0; i < allClientsData.length; i++) {
                 const client = allClientsData instanceof ColumnarDataset ? allClientsData.get(i) : allClientsData[i];
-                const codCli = client['Código'];
+                const codCli = String(client['Código'] || client['codigo_cliente']);
 
                 // 1. Exclusions (Structure)
                 const rca1 = String(client.rca1 || '').trim();
@@ -5251,7 +5251,7 @@
                 });
 
                 allActiveClients.forEach(client => {
-                    const codCli = client['Código'];
+                    const codCli = String(client['Código'] || client['codigo_cliente']);
                     const clientHistoryIds = optimizedData.indices.history.byClient.get(codCli);
                     if (clientHistoryIds) {
                         let sumFat = 0;
@@ -5281,7 +5281,7 @@
             const clientMetrics = [];
 
             filteredClients.forEach(client => {
-                const codCli = client['Código'];
+                const codCli = String(client['Código'] || client['codigo_cliente']);
                 const clientHistoryIds = optimizedData.indices.history.byClient.get(codCli);
                 
                 let sumFat = 0;
@@ -5442,7 +5442,7 @@
             const distributionMap = new Map(); // Map<ClientCod, Map<Key, AvgValue>>
 
             filteredClients.forEach(client => {
-                const codCli = client['Código'];
+                const codCli = String(client['Código'] || client['codigo_cliente']);
                 const clientHistoryIds = optimizedData.indices.history.byClient.get(codCli);
                 
                 if (!distributionMap.has(codCli)) distributionMap.set(codCli, new Map());
@@ -5487,7 +5487,7 @@
 
             // 2. Distribute
             filteredClients.forEach(client => {
-                const codCli = client['Código'];
+                const codCli = String(client['Código'] || client['codigo_cliente']);
                 const clientMap = distributionMap.get(codCli);
                 
                 if (!globalClientGoals.has(codCli)) globalClientGoals.set(codCli, new Map());
@@ -5785,7 +5785,7 @@
             let totalAvgFat = 0; let totalPrevFat = 0; let totalAvgVol = 0; let totalPrevVol = 0; let sumActiveMonths = 0; let totalPrevClients = 0;
 
             runAsyncChunked(filteredClients, (client) => {
-                const codCli = client['Código'];
+                const codCli = String(client['Código'] || client['codigo_cliente']);
                 const clientHistoryIds = optimizedData.indices.history.byClient.get(codCli);
 
                 let cSumFat = 0; let cSumVol = 0; let cPrevFat = 0; let cPrevVol = 0;
@@ -5851,7 +5851,7 @@
                 const metaPos = cSumFat > 1 ? 1 : 0;
 
                 const metric = {
-                    cod: codCli, name: client.fantasia || client.razaoSocial || 'Cliente Sem Nome', seller: sellerName,
+                    cod: codCli, name: client.nomeCliente || client.fantasia || client.razaoSocial || 'Cliente Sem Nome', seller: sellerName,
                     avgFat, avgVol, prevFat: cPrevFat, prevVol: cPrevVol,
                     activeMonthsCount, isActivePrevMonth,
                     shareFat: (globalTotalAvgFat > 0 && avgFat > 0) ? (avgFat / globalTotalAvgFat) : 0,
@@ -6332,7 +6332,7 @@
 
             // ASYNC LOOP
             runAsyncChunked(filteredClients, (client) => {
-                const codCli = client['Código'];
+                const codCli = String(client['Código'] || client['codigo_cliente']);
                 const clientHistoryIds = optimizedData.indices.history.byClient.get(codCli);
 
                 let sellerName = 'N/A';
@@ -13214,6 +13214,20 @@ const supervisorGroups = new Map();
         updateSellerFilter(selectedMainSupervisors, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
         updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
         updateSellerFilter(selectedCitySupervisors, cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData);
+
+        // --- FIXED: Initialize Filters for Other Views ---
+        // Coverage
+        selectedCoverageSupervisors = updateSupervisorFilter(document.getElementById('coverage-supervisor-filter-dropdown'), document.getElementById('coverage-supervisor-filter-text'), selectedCoverageSupervisors, allSalesData);
+        updateSellerFilter(selectedCoverageSupervisors, document.getElementById('coverage-vendedor-filter-dropdown'), document.getElementById('coverage-vendedor-filter-text'), selectedCoverageSellers, allSalesData);
+
+        // Innovations
+        selectedInnovationsSupervisors = updateSupervisorFilter(document.getElementById('innovations-month-supervisor-filter-dropdown'), document.getElementById('innovations-month-supervisor-filter-text'), selectedInnovationsSupervisors, allSalesData, true);
+        updateSellerFilter(selectedInnovationsSupervisors, document.getElementById('innovations-month-vendedor-filter-dropdown'), document.getElementById('innovations-month-vendedor-filter-text'), selectedInnovationsMonthSellers, allSalesData);
+
+        // Mix
+        selectedMixSupervisors = updateSupervisorFilter(document.getElementById('mix-supervisor-filter-dropdown'), document.getElementById('mix-supervisor-filter-text'), selectedMixSupervisors, allSalesData);
+        updateSellerFilter(selectedMixSupervisors, document.getElementById('mix-vendedor-filter-dropdown'), document.getElementById('mix-vendedor-filter-text'), selectedMixSellers, allSalesData);
+        // -------------------------------------------------
 
         updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
         updateRedeFilter(cityRedeFilterDropdown, cityComRedeBtnText, selectedCityRedes, allClientsData);
