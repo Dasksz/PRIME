@@ -2818,6 +2818,13 @@
         const productDetailsMap = new Map(Object.entries(embeddedData.productDetails || {}));
         const passedWorkingDaysCurrentMonth = embeddedData.passedWorkingDaysCurrentMonth || 1;
 
+        if (embeddedData.lastSaleDate) {
+            const ts = parseInt(embeddedData.lastSaleDate);
+            if (!isNaN(ts) && ts > 0) {
+                lastSaleDate = new Date(ts);
+            }
+        }
+
         const clientsWithSalesThisMonth = new Set();
         // Populate set
         for(let i=0; i<allSalesData.length; i++) {
@@ -14181,6 +14188,7 @@ const supervisorGroups = new Map();
                             const client = clientMap.get(row.CODCLI);
                             orders.set(row.PEDIDO, {
                                 ...row,
+                                TIPOVENDA: String(row.TIPOVENDA || 'N/A'),
                                 CLIENTE_NOME: client ? (client.nomeCliente || client.fantasia) : 'N/A',
                                 CIDADE: client ? client.cidade : 'N/A',
                                 QTVENDA: 0,
@@ -14216,7 +14224,7 @@ const supervisorGroups = new Map();
                             TOTPESOLIQ: order.TOTPESOLIQ,
                             FILIAL: order.FILIAL,
                             // Added for Filtering
-                            TIPOVENDA: order.TIPOVENDA,
+                            TIPOVENDA: String(order.TIPOVENDA || 'N/A'),
                             FORNECEDORES_LIST: Array.from(order.FORNECEDORES),
                             CODFORS_LIST: Array.from(order.CODFORS)
                         };
@@ -14268,6 +14276,7 @@ const supervisorGroups = new Map();
                 const finalMetadata = [];
                 finalMetadata.push({ key: 'passed_working_days', value: String(passedWorkingDaysCurrentMonth) });
                 finalMetadata.push({ key: 'last_update', value: new Date().toISOString() });
+                finalMetadata.push({ key: 'last_sale_date', value: String(maxTs) });
 
                 self.postMessage({ type: 'progress', status: 'Pronto!', percentage: 100 });
 
@@ -14296,6 +14305,7 @@ const supervisorGroups = new Map();
                         activeProductCodes: Array.from(activeProductCodesFromCadastro),
                         productDetails: Object.fromEntries(productDetailsMap),
                         passedWorkingDaysCurrentMonth: passedWorkingDaysCurrentMonth,
+                        lastSaleDate: String(maxTs),
                         isColumnar: true
                     }
                 });
