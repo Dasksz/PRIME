@@ -2489,7 +2489,7 @@
         class ColumnarDataset {
             constructor(columnarData) {
                 this.columns = columnarData.columns;
-                this.values = columnarData.values;
+                this._data = columnarData.values; // Renamed to avoid shadowing values() method
                 this.length = columnarData.length;
                 this._overrides = new Map(); // Stores mutations: Map<index, Object>
             }
@@ -2498,7 +2498,7 @@
                 if (index < 0 || index >= this.length) return undefined;
 
                 const overrides = this._overrides;
-                const values = this.values;
+                const values = this._data;
                 const columns = this.columns;
 
                 // Return a Lazy Proxy that constructs properties only on access
