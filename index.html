@@ -1816,6 +1816,10 @@
                         headers = lineValues;
                         return;
                     }
+                    // Skip duplicate headers from pagination
+                    if (lineValues.length > 0 && headers.length > 0 && lineValues[0] === headers[0] && lineValues[lineValues.length-1] === headers[headers.length-1]) {
+                        return;
+                    }
                     if (lineValues.length !== headers.length) return;
 
                     const obj = {};
@@ -1862,6 +1866,11 @@
 
                 const pushLine = (lineValues) => {
                     if (lineValues.length === 0 || (lineValues.length === 1 && lineValues[0] === '')) return;
+
+                    // Skip duplicate headers from pagination
+                    if (!isHeader && headers && lineValues.length === headers.length && lineValues[0] === headers[0] && lineValues[lineValues.length-1] === headers[headers.length-1]) {
+                        return;
+                    }
 
                     if (isHeader) {
                         headers = lineValues.map(h => {
@@ -1971,7 +1980,7 @@
             const colsDetailed = 'pedido,codcli,nome,superv,codsupervisor,produto,descricao,fornecedor,observacaofor,codfor,codusur,qtvenda,vlvenda,vlbonific,totpesoliq,dtped,dtsaida,posicao,estoqueunit,tipovenda,filial,qtvenda_embalagem_master';
             const colsClients = 'codigo_cliente,rca1,rca2,rcas,cidade,nomecliente,bairro,razaosocial,fantasia,cnpj_cpf,endereco,numero,cep,telefone,email,ramo,ultimacompra,datacadastro,bloqueio,inscricaoestadual';
             const colsStock = 'product_code,filial,stock_qty';
-            const colsOrders = 'pedido,codcli,cliente_nome,cidade,nome,superv,fornecedores_str,dtped,dtsaida,posicao,vlvenda,totpesoliq,filial';
+            const colsOrders = 'pedido,codcli,cliente_nome,cidade,nome,superv,fornecedores_str,dtped,dtsaida,posicao,vlvenda,totpesoliq,filial,tipovenda,codfors_list';
 
             const [detailedUpper, historyUpper, clientsUpper, products, activeProds, stock, innovations, metadata, ordersUpper] = await Promise.all([
                 fetchAll('data_detailed', colsDetailed, 'sales', 'columnar'),
@@ -3111,6 +3120,30 @@
                 // Convert to Date if number
                 if (sale.DTPED && !(sale.DTPED instanceof Date)) sale.DTPED = new Date(sale.DTPED);
                 if (sale.DTSAIDA && !(sale.DTSAIDA instanceof Date)) sale.DTSAIDA = new Date(sale.DTSAIDA);
+
+                // Polyfill for Filters
+                if (!sale.FORNECEDORES_LIST) {
+                    sale.FORNECEDORES_LIST = sale.FORNECEDORES_STR ? sale.FORNECEDORES_STR.split(', ') : [];
+                }
+
+                // Polyfill for CODFORS_LIST (Supabase CSV returns array as string "{a,b}" or "['a','b']")
+                if (sale.CODFORS_LIST) {
+                    if (typeof sale.CODFORS_LIST === 'string') {
+                        // Handle Postgres Array Format "{123,456}" or JSON "['123','456']"
+                        let clean = sale.CODFORS_LIST.replace(/^{|}$|^\[|\]$/g, '');
+                        if (clean) {
+                            sale.CODFORS_LIST = clean.split(',').map(s => s.replace(/"/g, '').trim());
+                        } else {
+                            sale.CODFORS_LIST = [];
+                        }
+                    }
+                } else {
+                    sale.CODFORS_LIST = [];
+                }
+
+                // Ensure TIPOVENDA is present (it should be if we added to colsOrders)
+                // But for safety against old data:
+                if (sale.TIPOVENDA === undefined) sale.TIPOVENDA = 'N/A';
 
                 if (sale.CODCLI !== americanasCodCli) {
                     const currentSellerCode = clientToCurrentSellerMap.get(sale.CODCLI);
