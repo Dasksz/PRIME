@@ -2762,6 +2762,7 @@
             nextChunk();
         }
         
+        const FORBIDDEN_KEYS = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR', 'PASTA', 'RAMO', 'ATIVIDADE', 'CIDADE', 'MUNICIPIO', 'BAIRRO'];
         let allSalesData, allHistoryData, allClientsData;
 
         function sanitizeData(data) {
@@ -7423,11 +7424,17 @@ const supervisorGroups = new Map();
                 summary.totalFaturamento += vlVenda;
                 summary.totalPeso += totPesoLiq;
 
+                const isForbidden = (str) => !str || FORBIDDEN_KEYS.includes(str.trim().toUpperCase());
+
                 const vendedor = item.NOME || 'N/A';
-                summary.vendasPorVendedor[vendedor] = (summary.vendasPorVendedor[vendedor] || 0) + vlVenda;
+                if (!isForbidden(vendedor)) {
+                    summary.vendasPorVendedor[vendedor] = (summary.vendasPorVendedor[vendedor] || 0) + vlVenda;
+                }
 
                 const supervisor = item.SUPERV || 'N/A';
-                summary.vendasPorSupervisor[supervisor] = (summary.vendasPorSupervisor[supervisor] || 0) + vlVenda;
+                if (!isForbidden(supervisor)) {
+                    summary.vendasPorSupervisor[supervisor] = (summary.vendasPorSupervisor[supervisor] || 0) + vlVenda;
+                }
 
                 const produto = item.DESCRICAO || 'N/A';
                 const codigo = item.PRODUTO || 'N/A';
@@ -7444,8 +7451,10 @@ const supervisorGroups = new Map();
                      fornecedorLabel = item.OBSERVACAOFOR || 'N/A';
                 }
 
-                const currentTotal = faturamentoMap.get(fornecedorLabel) || 0;
-                faturamentoMap.set(fornecedorLabel, currentTotal + vlVenda);
+                if (!isForbidden(fornecedorLabel)) {
+                    const currentTotal = faturamentoMap.get(fornecedorLabel) || 0;
+                    faturamentoMap.set(fornecedorLabel, currentTotal + vlVenda);
+                }
             });
 
             const totalRelevantClients = clientBaseForPositivacao.length;
@@ -8156,6 +8165,7 @@ const supervisorGroups = new Map();
         }
 
         function updateCitySuggestions(filterInput, suggestionsContainer, dataSource) {
+            const forbidden = ['CIDADE', 'MUNICIPIO', 'CIDADE_CLIENTE', 'NOME DA CIDADE', 'CITY'];
             const inputValue = filterInput.value.toLowerCase();
             // Optimized: Handle datasource which might be Sales (no CIDADE) or Clients (has cidade)
             const allAvailableCities = [...new Set(dataSource.map(item => {
@@ -8167,7 +8177,7 @@ const supervisorGroups = new Map();
                     if (c) return c.cidade || c.CIDADE || c['Nome da Cidade'];
                 }
                 return 'N/A';
-            }).filter(c => c && c !== 'N/A'))].sort();
+            }).filter(c => c && c !== 'N/A' && !forbidden.includes(c.toUpperCase())))].sort();
             const filteredCities = inputValue ? allAvailableCities.filter(c => c.toLowerCase().includes(inputValue)) : allAvailableCities;
 
             if (filteredCities.length > 0 && (document.activeElement === filterInput || !suggestionsContainer.classList.contains('manual-hide'))) {
@@ -8415,7 +8425,8 @@ const supervisorGroups = new Map();
         }
 
         function populateWeeklyFilters() {
-            const supervisors = [...new Set(allSalesData.map(item => item.SUPERV).filter(Boolean).filter(sup => sup !== 'BALCAO'))].sort();
+            const forbidden = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'SUPERVISOR'];
+            const supervisors = [...new Set(allSalesData.map(item => item.SUPERV).filter(Boolean).filter(sup => sup !== 'BALCAO' && !forbidden.includes(sup.toUpperCase())))].sort();
             weeklySupervisorFilter.innerHTML = '';
             supervisors.forEach(sup => { weeklySupervisorFilter.innerHTML += `<div class="flex items-center"><input id="sup-check-${sup.replace(/\s+/g, '-')}" type="checkbox" value="${sup}" class="w-4 h-4 text-teal-600 bg-slate-700 border-slate-600 rounded focus:ring-teal-600 ring-offset-slate-800 focus:ring-2"><label for="sup-check-${sup.replace(/\s+/g, '-')}" class="ml-2 text-sm font-medium text-slate-300">${sup}</label></div>`; });
         }
@@ -8569,6 +8580,7 @@ const supervisorGroups = new Map();
         }
 
         function updateComparisonCitySuggestions(dataSource) {
+            const forbidden = ['CIDADE', 'MUNICIPIO', 'CIDADE_CLIENTE', 'NOME DA CIDADE', 'CITY'];
             const inputValue = comparisonCityFilter.value.toLowerCase();
             // Optimized Lookup
             const allAvailableCities = [...new Set(dataSource.map(item => {
@@ -8578,7 +8590,7 @@ const supervisorGroups = new Map();
                     if (c) return c.cidade || c['Nome da Cidade'];
                 }
                 return 'N/A';
-            }).filter(c => c && c !== 'N/A'))].sort();
+            }).filter(c => c && c !== 'N/A' && !forbidden.includes(c.toUpperCase())))].sort();
             const filteredCities = inputValue ? allAvailableCities.filter(c => c.toLowerCase().includes(inputValue)) : allAvailableCities;
             if (filteredCities.length > 0 && document.activeElement === comparisonCityFilter) {
                 comparisonCitySuggestions.innerHTML = filteredCities.map(c => `<div class="p-2 hover:bg-slate-600 cursor-pointer">${c}</div>`).join('');
@@ -9434,6 +9446,7 @@ const supervisorGroups = new Map();
         }
 
         function updateStockCitySuggestions(dataSource) {
+            const forbidden = ['CIDADE', 'MUNICIPIO', 'CIDADE_CLIENTE', 'NOME DA CIDADE', 'CITY'];
             const inputValue = stockCityFilter.value.toLowerCase();
             // Optimized Lookup
             const allAvailableCities = [...new Set(dataSource.map(item => {
@@ -9443,7 +9456,7 @@ const supervisorGroups = new Map();
                     if (c) return c.cidade || c['Nome da Cidade'];
                 }
                 return 'N/A';
-            }).filter(c => c && c !== 'N/A'))].sort();
+            }).filter(c => c && c !== 'N/A' && !forbidden.includes(c.toUpperCase())))].sort();
             const filteredCities = inputValue ? allAvailableCities.filter(c => c.toLowerCase().includes(inputValue)) : allAvailableCities;
             if (filteredCities.length > 0 && document.activeElement === stockCityFilter) {
                 stockCitySuggestions.innerHTML = filteredCities.map(c => `<div class="p-2 hover:bg-slate-600 cursor-pointer">${c}</div>`).join('');
@@ -13269,6 +13282,8 @@ const supervisorGroups = new Map();
     <script id="worker-script" type="text/worker-javascript">
         self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
 
+        const FORBIDDEN_KEYS = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR', 'PASTA', 'RAMO', 'ATIVIDADE', 'CIDADE', 'MUNICIPIO', 'BAIRRO'];
+
         const mandatoryColumns = {
             sales: ['CODCLI', 'PEDIDO', 'CODUSUR', 'CODSUPERVISOR', 'DTPED', 'DTSAIDA', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX'],
             clients: [], // Validation relaxed to support variable headers (aliases handled in processing)
@@ -13528,7 +13543,14 @@ const supervisorGroups = new Map();
         const processSalesData = (rawData, clientMap, productMasterMap, newRcaSupervisorMap, stockLinesCollector = null, fallbackDate = null) => {
             return rawData.map(rawRow => {
                 // --- HEADER DETECTION: Ignore rows that look like headers ---
+                // Enhanced robust detection: Check against forbidden keys list
+                const checkHeader = (val) => val && FORBIDDEN_KEYS.includes(val.trim().toUpperCase());
+                
                 if (
+                    checkHeader(String(rawRow['CODCLI'] || '')) ||
+                    checkHeader(String(rawRow['PRODUTO'] || '')) ||
+                    checkHeader(String(rawRow['SUPERV'] || '')) ||
+                    checkHeader(String(rawRow['NOME'] || '')) ||
                     String(rawRow['CODCLI'] || '').trim().toUpperCase() === 'CODCLI' || 
                     String(rawRow['PRODUTO'] || '').trim().toUpperCase() === 'PRODUTO' || 
                     String(rawRow['PRODUTO'] || '').trim().toUpperCase() === 'CÓDIGO' ||
