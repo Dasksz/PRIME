@@ -8156,6 +8156,7 @@ const supervisorGroups = new Map();
         }
 
         function updateCitySuggestions(filterInput, suggestionsContainer, dataSource) {
+            const forbidden = ['CIDADE', 'MUNICIPIO', 'CIDADE_CLIENTE', 'NOME DA CIDADE', 'CITY'];
             const inputValue = filterInput.value.toLowerCase();
             // Optimized: Handle datasource which might be Sales (no CIDADE) or Clients (has cidade)
             const allAvailableCities = [...new Set(dataSource.map(item => {
@@ -8167,7 +8168,7 @@ const supervisorGroups = new Map();
                     if (c) return c.cidade || c.CIDADE || c['Nome da Cidade'];
                 }
                 return 'N/A';
-            }).filter(c => c && c !== 'N/A'))].sort();
+            }).filter(c => c && c !== 'N/A' && !forbidden.includes(c.toUpperCase())))].sort();
             const filteredCities = inputValue ? allAvailableCities.filter(c => c.toLowerCase().includes(inputValue)) : allAvailableCities;
 
             if (filteredCities.length > 0 && (document.activeElement === filterInput || !suggestionsContainer.classList.contains('manual-hide'))) {
@@ -8415,7 +8416,8 @@ const supervisorGroups = new Map();
         }
 
         function populateWeeklyFilters() {
-            const supervisors = [...new Set(allSalesData.map(item => item.SUPERV).filter(Boolean).filter(sup => sup !== 'BALCAO'))].sort();
+            const forbidden = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'SUPERVISOR'];
+            const supervisors = [...new Set(allSalesData.map(item => item.SUPERV).filter(Boolean).filter(sup => sup !== 'BALCAO' && !forbidden.includes(sup.toUpperCase())))].sort();
             weeklySupervisorFilter.innerHTML = '';
             supervisors.forEach(sup => { weeklySupervisorFilter.innerHTML += `<div class="flex items-center"><input id="sup-check-${sup.replace(/\s+/g, '-')}" type="checkbox" value="${sup}" class="w-4 h-4 text-teal-600 bg-slate-700 border-slate-600 rounded focus:ring-teal-600 ring-offset-slate-800 focus:ring-2"><label for="sup-check-${sup.replace(/\s+/g, '-')}" class="ml-2 text-sm font-medium text-slate-300">${sup}</label></div>`; });
         }
@@ -8569,6 +8571,7 @@ const supervisorGroups = new Map();
         }
 
         function updateComparisonCitySuggestions(dataSource) {
+            const forbidden = ['CIDADE', 'MUNICIPIO', 'CIDADE_CLIENTE', 'NOME DA CIDADE', 'CITY'];
             const inputValue = comparisonCityFilter.value.toLowerCase();
             // Optimized Lookup
             const allAvailableCities = [...new Set(dataSource.map(item => {
@@ -8578,7 +8581,7 @@ const supervisorGroups = new Map();
                     if (c) return c.cidade || c['Nome da Cidade'];
                 }
                 return 'N/A';
-            }).filter(c => c && c !== 'N/A'))].sort();
+            }).filter(c => c && c !== 'N/A' && !forbidden.includes(c.toUpperCase())))].sort();
             const filteredCities = inputValue ? allAvailableCities.filter(c => c.toLowerCase().includes(inputValue)) : allAvailableCities;
             if (filteredCities.length > 0 && document.activeElement === comparisonCityFilter) {
                 comparisonCitySuggestions.innerHTML = filteredCities.map(c => `<div class="p-2 hover:bg-slate-600 cursor-pointer">${c}</div>`).join('');
@@ -9434,6 +9437,7 @@ const supervisorGroups = new Map();
         }
 
         function updateStockCitySuggestions(dataSource) {
+            const forbidden = ['CIDADE', 'MUNICIPIO', 'CIDADE_CLIENTE', 'NOME DA CIDADE', 'CITY'];
             const inputValue = stockCityFilter.value.toLowerCase();
             // Optimized Lookup
             const allAvailableCities = [...new Set(dataSource.map(item => {
@@ -9443,7 +9447,7 @@ const supervisorGroups = new Map();
                     if (c) return c.cidade || c['Nome da Cidade'];
                 }
                 return 'N/A';
-            }).filter(c => c && c !== 'N/A'))].sort();
+            }).filter(c => c && c !== 'N/A' && !forbidden.includes(c.toUpperCase())))].sort();
             const filteredCities = inputValue ? allAvailableCities.filter(c => c.toLowerCase().includes(inputValue)) : allAvailableCities;
             if (filteredCities.length > 0 && document.activeElement === stockCityFilter) {
                 stockCitySuggestions.innerHTML = filteredCities.map(c => `<div class="p-2 hover:bg-slate-600 cursor-pointer">${c}</div>`).join('');
