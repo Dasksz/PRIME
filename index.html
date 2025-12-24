@@ -82,7 +82,7 @@
     .bg-\[\#713f12\] { --card-bg: #713f12; }
 
     /* Goal Cards - Light Mode Variants */
-    html.light .bg-\[\#1e2a5a\] { --card-bg: #dbeafe; background-color: #dbeafe !important; border-color: #bfdbfe !important; } /* blue-100 */
+    html.light .bg-\[\#1e2a5a\] { --card-bg: #fff7ed; background-color: #fff7ed !important; border-color: #fed7aa !important; } /* orange-50 and orange-200 border */
     html.light .bg-\[\#3c2a21\] { --card-bg: #ffedd5; background-color: #ffedd5 !important; border-color: #fed7aa !important; } /* orange-100 */
     html.light .bg-\[\#3b0764\] { --card-bg: #f3e8ff; background-color: #f3e8ff !important; border-color: #e9d5ff !important; } /* purple-100 */
     html.light .bg-\[\#064e3b\] { --card-bg: #d1fae5; background-color: #d1fae5 !important; border-color: #a7f3d0 !important; } /* emerald-100 */
@@ -288,9 +288,34 @@
         background-color: #94a3b8 !important; /* slate-400 */
     }
     
-    /* Fix Hover on Table Rows */
+    /* Fix Hover on Table Rows - User requested Orange */
     html.light .hover\:bg-slate-700:hover {
-        background-color: #e2e8f0 !important; /* slate-200 */
+        background-color: #FF9933 !important;
+        color: #ffffff !important;
+    }
+    
+    /* Ensure links inside the hovered orange row are white */
+    html.light .hover\:bg-slate-700:hover a {
+        color: #ffffff !important;
+        text-decoration-color: #ffffff !important;
+    }
+
+    /* Fix Badge Backgrounds for Light Mode */
+    html.light .bg-green-500\/20 { background-color: #dcfce7 !important; }
+    html.light .bg-blue-500\/20 { background-color: #dbeafe !important; }
+    html.light .bg-yellow-500\/20 { background-color: #fef9c3 !important; }
+    html.light .bg-slate-500\/20 { background-color: #f1f5f9 !important; }
+
+    /* Fix Pagination Buttons */
+    html.light #table-pagination-controls button {
+        background-color: #FF9933 !important;
+        color: #ffffff !important;
+        border-color: #ea580c !important;
+    }
+    html.light #table-pagination-controls button:disabled {
+        background-color: #cbd5e1 !important;
+        border-color: #94a3b8 !important;
+        cursor: not-allowed;
     }
     
     /* Fix Specific Input Backgrounds if missed */
@@ -720,6 +745,24 @@
     html.light .text-white { color: var(--text-heading) !important; }
     html.light .text-slate-300 { color: var(--text-primary) !important; }
     html.light .text-slate-400 { color: #64748b !important; } /* slate-500 */
+
+    /* PRIME Text in Header - Force White - Specificity Boost */
+    html.light header h1 span.text-yellow-300,
+    html.light header .text-yellow-300 { 
+        color: #ffffff !important; 
+    }
+
+    /* Fix Buttons with White Text in Light Mode (Override the global .text-white rule) */
+    html.light button.text-white, 
+    html.light .metric-btn.text-white,
+    html.light .bg-green-600.text-white, 
+    html.light .bg-red-600.text-white, 
+    html.light .bg-blue-600.text-white, 
+    html.light .bg-teal-500.text-white,
+    html.light .bg-indigo-600.text-white,
+    html.light .bg-orange-500.text-white { 
+        color: #ffffff !important; 
+    }
     
     /* Theme Toggle Switch */
     .theme-switch-wrapper { display: flex; align-items: center; margin-top: auto; padding: 1rem; border-top: 1px solid var(--border-color); }
@@ -2516,8 +2559,11 @@
                 
                 // Force Chart.js update if charts exist (optional but good practice)
                 if (typeof charts !== 'undefined') {
-                    // Trigger a re-render or reload if necessary for charts to pick up colors
-                    // For now, just CSS variables handle most UI
+                    if (typeof updateDashboard === 'function') {
+                        updateDashboard();
+                    } else {
+                        window.location.reload();
+                    }
                 }
             });
         }
@@ -7781,6 +7827,11 @@ const supervisorGroups = new Map();
                 try { Chart.register(...pluginsToRegister); } catch (e) {}
             }
             
+            const isLightMode = document.documentElement.classList.contains('light');
+            const textColor = isLightMode ? '#1e293b' : '#cbd5e1'; // slate-800 vs slate-300
+            const tickColor = isLightMode ? '#475569' : '#94a3b8'; // slate-600 vs slate-400
+            const gridColor = isLightMode ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.05)';
+
             const professionalPalette = ['#14b8a6', '#6366f1', '#ec4899', '#f97316', '#8b5cf6', '#06b6d4', '#f59e0b', '#ef4444', '#22c55e'];
 
             let finalDatasets;
@@ -7790,10 +7841,30 @@ const supervisorGroups = new Map();
                  finalDatasets = [{ data: chartData || [], backgroundColor: canvasId === 'customerStatusChart' ? ['#2dd4bf', '#f59e0b'] : professionalPalette }];
             }
             
-            let baseOptions = { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 25 } }, plugins: { legend: { display: false, labels: {color: '#cbd5e1'} }, datalabels: { display: false } }, scales: { y: { beginAtZero: true, grace: '5%', ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255, 255, 255, 0.05)'} }, x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255, 255, 255, 0.05)'} } } };
+            let baseOptions = { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                layout: { padding: { top: 25 } }, 
+                plugins: { 
+                    legend: { display: false, labels: {color: textColor} }, 
+                    datalabels: { display: false },
+                    tooltip: {
+                        backgroundColor: isLightMode ? '#ffffff' : '#1e293b',
+                        titleColor: isLightMode ? '#0f172a' : '#f1f5f9',
+                        bodyColor: isLightMode ? '#334155' : '#cbd5e1',
+                        borderColor: isLightMode ? '#e2e8f0' : '#334155',
+                        borderWidth: 1,
+                    }
+                }, 
+                scales: { 
+                    y: { beginAtZero: true, grace: '5%', ticks: { color: tickColor }, grid: { color: gridColor} }, 
+                    x: { ticks: { color: tickColor }, grid: { color: gridColor} } 
+                } 
+            };
+            
             let typeDefaults = {};
-            if (type === 'bar') typeDefaults = { layout: { padding: { right: 30, top: 30 } }, plugins: { datalabels: { display: true, anchor: 'end', align: 'end', offset: -4, color: '#cbd5e1', font: { size: 10 }, formatter: (v) => (v > 1000 ? (v/1000).toFixed(1) + 'k' : v.toFixed(0)) } } };
-            if (type === 'doughnut') typeDefaults = { maintainAspectRatio: true, scales: { y: { display: false }, x: { display: false } }, plugins: { legend: { position: 'top', labels: { color: '#cbd5e1' } }, datalabels: { display: true, color: '#fff', font: { size: 11, weight: 'bold' }, formatter: (v, ctx) => { const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0); if(total === 0 || v === 0) return ''; const p = (v / total) * 100; return p > 5 ? p.toFixed(0) + '%' : ''; } } } };
+            if (type === 'bar') typeDefaults = { layout: { padding: { right: 30, top: 30 } }, plugins: { datalabels: { display: true, anchor: 'end', align: 'end', offset: -4, color: textColor, font: { size: 10 }, formatter: (v) => (v > 1000 ? (v/1000).toFixed(1) + 'k' : v.toFixed(0)) } } };
+            if (type === 'doughnut') typeDefaults = { maintainAspectRatio: true, scales: { y: { display: false }, x: { display: false } }, plugins: { legend: { position: 'top', labels: { color: textColor } }, datalabels: { display: true, color: '#fff', font: { size: 11, weight: 'bold' }, formatter: (v, ctx) => { const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0); if(total === 0 || v === 0) return ''; const p = (v / total) * 100; return p > 5 ? p.toFixed(0) + '%' : ''; } } } };
             
             // 1. Sempre construir um objeto de opções novo e limpo
             const options = mergeDeep({}, baseOptions, typeDefaults, optionsOverrides);
