@@ -32,6 +32,7 @@
     :root {
         --bg-main: #0d1126;
         --bg-card: #1d2347;
+        --card-bg: #1d2347; /* Fallback for kpi-glow */
         --bg-header: #1e2a5a;
         --text-primary: #cbd5e1; /* slate-300 */
         --text-heading: #ffffff;
@@ -41,7 +42,8 @@
     html.light {
         --bg-main: #f1f5f9; /* slate-100 */
         --bg-card: #ffffff;
-        --bg-header: #3b82f6; /* blue-500 */
+        --card-bg: #ffffff;
+        --bg-header: #FF9933; /* Orange requested by user */
         --text-primary: #1e293b; /* slate-800 */
         --text-heading: #0f172a; /* slate-900 */
         --border-color: #cbd5e1; /* slate-300 */
@@ -72,12 +74,19 @@
         border: 1px solid #cbd5e1 !important;
     }
     
+    /* Define --card-bg for goal cards based on their background class */
+    .bg-\[\#1e2a5a\] { --card-bg: #1e2a5a; }
+    .bg-\[\#3c2a21\] { --card-bg: #3c2a21; }
+    .bg-\[\#3b0764\] { --card-bg: #3b0764; }
+    .bg-\[\#064e3b\] { --card-bg: #064e3b; }
+    .bg-\[\#713f12\] { --card-bg: #713f12; }
+
     /* Goal Cards - Light Mode Variants */
-    html.light .bg-\[\#1e2a5a\] { background-color: #dbeafe !important; border-color: #bfdbfe !important; } /* blue-100 */
-    html.light .bg-\[\#3c2a21\] { background-color: #ffedd5 !important; border-color: #fed7aa !important; } /* orange-100 */
-    html.light .bg-\[\#3b0764\] { background-color: #f3e8ff !important; border-color: #e9d5ff !important; } /* purple-100 */
-    html.light .bg-\[\#064e3b\] { background-color: #d1fae5 !important; border-color: #a7f3d0 !important; } /* emerald-100 */
-    html.light .bg-\[\#713f12\] { background-color: #fef9c3 !important; border-color: #fde047 !important; } /* yellow-100 */
+    html.light .bg-\[\#1e2a5a\] { --card-bg: #dbeafe; background-color: #dbeafe !important; border-color: #bfdbfe !important; } /* blue-100 */
+    html.light .bg-\[\#3c2a21\] { --card-bg: #ffedd5; background-color: #ffedd5 !important; border-color: #fed7aa !important; } /* orange-100 */
+    html.light .bg-\[\#3b0764\] { --card-bg: #f3e8ff; background-color: #f3e8ff !important; border-color: #e9d5ff !important; } /* purple-100 */
+    html.light .bg-\[\#064e3b\] { --card-bg: #d1fae5; background-color: #d1fae5 !important; border-color: #a7f3d0 !important; } /* emerald-100 */
+    html.light .bg-\[\#713f12\] { --card-bg: #fef9c3; background-color: #fef9c3 !important; border-color: #fde047 !important; } /* yellow-100 */
 
     /* Ensure text within these cards is readable in light mode */
     /* Note: .text-white is already overridden to dark in light mode, so dark text on light bg works. */
@@ -255,6 +264,96 @@
                                 background-image: linear-gradient(var(--card-bg, #1d2347), var(--card-bg, #1d2347)), linear-gradient(135deg, #a855f7, #ec4899); /* Purple to Pink */
                                 box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
                             }
+
+    /* Fix Table Headers in Light Mode */
+    html.light .sticky-header th {
+        background-color: #e2e8f0 !important; /* slate-200 */
+        color: #1e293b !important; /* slate-800 */
+        border-bottom: 2px solid #cbd5e1 !important; /* slate-300 */
+    }
+
+    /* Fix "Total do Mês" row in Weekly View */
+    html.light .bg-slate-700\/50 {
+        background-color: #e2e8f0 !important; /* slate-200 */
+        color: #1e293b !important;
+    }
+
+    /* Fix Buttons (Clear Filters, etc) in Light Mode */
+    html.light button.bg-slate-600 {
+        background-color: #cbd5e1 !important; /* slate-300 */
+        color: #1e293b !important; /* slate-800 */
+        border-color: #94a3b8 !important; /* slate-400 */
+    }
+    html.light button.bg-slate-600:hover {
+        background-color: #94a3b8 !important; /* slate-400 */
+    }
+    
+    /* Fix Hover on Table Rows */
+    html.light .hover\:bg-slate-700:hover {
+        background-color: #e2e8f0 !important; /* slate-200 */
+    }
+    
+    /* Fix Specific Input Backgrounds if missed */
+    html.light input.bg-slate-800, html.light select.bg-slate-800 {
+         background-color: #ffffff !important;
+         color: #1e293b !important;
+         border-color: #cbd5e1 !important;
+    }
+    
+    /* Fix KPI Title Colors in Light Mode */
+    html.light .kpi-card .text-slate-300 {
+        color: #475569 !important; /* slate-600 */
+    }
+    html.light .kpi-card .text-xs.text-slate-300 {
+         color: #64748b !important; /* slate-500 */
+    }
+
+    /* --- GOALS VIEW LIGHT MODE FIXES --- */
+    
+    /* 1. Ensure Header is Orange */
+    html.light header.bg-gradient-to-r {
+        background: #FF9933 !important;
+    }
+
+    /* 2. Fix Text Contrast in Goals View */
+    html.light .text-green-300 { color: #15803d !important; } /* green-700 */
+    html.light .text-teal-400 { color: #0f766e !important; } /* teal-700 */
+    html.light .text-orange-400 { color: #c2410c !important; } /* orange-700 */
+    html.light .text-purple-400 { color: #7e22ce !important; } /* purple-700 */
+    html.light .text-yellow-300 { color: #b45309 !important; } /* amber-700 */
+    html.light .text-blue-300 { color: #1d4ed8 !important; } /* blue-700 */
+    html.light .text-emerald-300 { color: #047857 !important; } /* emerald-700 */
+
+    /* 3. Fix Inactive Tab Buttons (Dark Slate) */
+    html.light .bg-\[\#334155\] { 
+        background-color: #e2e8f0 !important; 
+        color: #475569 !important; 
+        border-color: #cbd5e1 !important; 
+    }
+
+    /* 4. Fix Inputs inside Goal Cards */
+    /* Target inputs that use the dark bg-[#0f172a] specifically */
+    html.light input.bg-\[\#0f172a\] {
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+        border-color: #cbd5e1 !important;
+    }
+
+    /* 5. Fix Borders for Goal Cards (Input containers) */
+    html.light .border-green-900\/50 { border-color: #86efac !important; } /* green-300 */
+    html.light .border-blue-900\/50 { border-color: #93c5fd !important; } /* blue-300 */
+    html.light .border-purple-900\/50 { border-color: #d8b4fe !important; } /* purple-300 */
+    html.light .border-emerald-900\/50 { border-color: #6ee7b7 !important; } /* emerald-300 */
+    html.light .border-yellow-900\/50 { border-color: #fde047 !important; } /* yellow-300 */
+    html.light .border-teal-500\/50 { border-color: #0d9488 !important; } /* teal-600 */
+
+    /* 6. Fix "Rateio Metas" Tab Active State if needed */
+    html.light .border-teal-500.text-teal-500.active {
+        background-color: #ccfbf1 !important; /* teal-50 */
+        border-color: #0d9488 !important;
+        color: #0f766e !important;
+    }
+
     </style>
 
 </head>
@@ -1127,7 +1226,7 @@
                                 <!-- Meta Input Cards -->
                                 <div id="goals-input-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-6 bg-[#161e3d] p-4 rounded-lg border border-slate-700/50">
                                     <!-- Faturamento Card -->
-                                    <div class="bg-[#064e3b] kpi-glow-base kpi-glow-green rounded-lg p-3 relative overflow-hidden group shadow-md" style="--card-bg: #064e3b;">
+                                    <div class="bg-[#064e3b] kpi-glow-base kpi-glow-green rounded-lg p-3 relative overflow-hidden group shadow-md">
                                         <label class="text-[10px] font-bold text-green-300 uppercase tracking-wider mb-1 block">META FATURAMENTO (R$)</label>
                                         <div class="flex gap-2">
                                             <input type="text" id="goal-global-fat" class="w-full bg-[#0f172a] border border-green-900/50 text-white font-bold text-lg p-2 rounded focus:outline-none focus:border-green-500" value="0,00">
@@ -1141,7 +1240,7 @@
                                         </div>
                                     </div>
                                     <!-- Volume Card -->
-                                    <div class="bg-[#1e2a5a] kpi-glow-base kpi-glow-blue rounded-lg p-3 relative overflow-hidden group shadow-md" style="--card-bg: #1e2a5a;">
+                                    <div class="bg-[#1e2a5a] kpi-glow-base kpi-glow-blue rounded-lg p-3 relative overflow-hidden group shadow-md">
                                         <label class="text-[10px] font-bold text-blue-300 uppercase tracking-wider mb-1 block">META VOLUME (KG)</label>
                                         <div class="flex gap-2">
                                             <input type="text" id="goal-global-vol" class="w-full bg-[#0f172a] border border-blue-900/50 text-white font-bold text-lg p-2 rounded focus:outline-none focus:border-blue-500" value="0,000">
@@ -1155,7 +1254,7 @@
                                         </div>
                                     </div>
                                     <!-- Positivação Card -->
-                                    <div class="bg-[#3b0764] kpi-glow-base kpi-glow-purple rounded-lg p-3 relative overflow-hidden group shadow-md" style="--card-bg: #3b0764;">
+                                    <div class="bg-[#3b0764] kpi-glow-base kpi-glow-purple rounded-lg p-3 relative overflow-hidden group shadow-md">
                                         <label class="text-[10px] font-bold text-purple-300 uppercase tracking-wider mb-1 block">META POSITIVAÇÃO</label>
                                         <div class="flex gap-2">
                                             <input type="text" id="goal-global-mix" class="w-full bg-[#0f172a] border border-purple-900/50 text-white font-bold text-lg p-2 rounded focus:outline-none focus:border-purple-500" value="0" readonly>
@@ -1169,7 +1268,7 @@
                                         </div>
                                     </div>
                                     <!-- Mix Salty Card (Hidden by Default) -->
-                                    <div id="card-mix-salty" class="hidden bg-[#064e3b] kpi-glow-base kpi-glow-green rounded-lg p-3 relative overflow-hidden group shadow-md" style="--card-bg: #064e3b;">
+                                    <div id="card-mix-salty" class="hidden bg-[#064e3b] kpi-glow-base kpi-glow-green rounded-lg p-3 relative overflow-hidden group shadow-md">
                                         <label class="text-[10px] font-bold text-emerald-300 uppercase tracking-wider mb-1 block">META MIX SALTY</label>
                                         <div class="flex gap-2">
                                             <input type="text" id="goal-global-mix-salty" class="w-full bg-[#0f172a] border border-emerald-900/50 text-white font-bold text-lg p-2 rounded focus:outline-none focus:border-emerald-500" value="0" readonly>
@@ -1182,7 +1281,7 @@
                                         </div>
                                     </div>
                                     <!-- Mix Foods Card (Hidden by Default) -->
-                                    <div id="card-mix-foods" class="hidden bg-[#713f12] kpi-glow-base kpi-glow-yellow rounded-lg p-3 relative overflow-hidden group shadow-md" style="--card-bg: #713f12;">
+                                    <div id="card-mix-foods" class="hidden bg-[#713f12] kpi-glow-base kpi-glow-yellow rounded-lg p-3 relative overflow-hidden group shadow-md">
                                         <label class="text-[10px] font-bold text-yellow-300 uppercase tracking-wider mb-1 block">META MIX FOODS</label>
                                         <div class="flex gap-2">
                                             <input type="text" id="goal-global-mix-foods" class="w-full bg-[#0f172a] border border-yellow-900/50 text-white font-bold text-lg p-2 rounded focus:outline-none focus:border-yellow-500" value="0" readonly>
