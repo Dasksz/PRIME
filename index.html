@@ -212,11 +212,11 @@
     .hidden { display: none !important; }
     
     /* Gatekeeper Styles */
-    .gatekeeper-card { font-family: 'Inter', sans-serif; padding: 3rem 2.5rem; border-radius: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); max-width: 420px; width: 90%; background: #161e3d; text-align: center; border: 1px solid #2d3748; color: #fff; }
-    .gatekeeper-btn { display: flex; align-items: center; justify-content: center; gap: 0.75rem; background-color: #2d3748; color: #fff; border: none; padding: 14px 24px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; width: 100%; margin-top: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
-    .gatekeeper-btn.primary-orange { background-color: #FF9933; color: #0d1126; }
-    .gatekeeper-btn.primary-orange:hover { background-color: #e68a2e; transform: translateY(-1px); box-shadow: 0 6px 8px rgba(0,0,0,0.3); }
-    .spinner-orange { border: 3px solid rgba(255, 153, 51, 0.3); border-top: 3px solid #FF9933; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
+    .gatekeeper-card { font-family: 'Inter', sans-serif; padding: 3rem 2.5rem; border-radius: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); max-width: 420px; width: 90%; background: #ffffff; text-align: center; border: 1px solid #e2e8f0; color: #1f2937; }
+    .gatekeeper-btn { display: flex; align-items: center; justify-content: center; gap: 0.75rem; background-color: #fff; color: #3c4043; border: 1px solid #dadce0; padding: 12px 24px; border-radius: 9999px; font-size: 16px; font-weight: 500; cursor: pointer; transition: background-color 0.2s ease; width: 100%; margin-top: 1rem; font-family: 'Google Sans', 'Roboto', sans-serif; }
+    .gatekeeper-btn:hover { background-color: #f7f8f8; box-shadow: 0 1px 2px rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15); }
+    .spinner-orange { border: 3px solid #ffe0b2; border-top: 3px solid #FF9933; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
+    .logo-frame { border-radius: 50%; border: 4px solid #f8fafc; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); padding: 4px; background: white; object-fit: contain; }
     
     /* Modal Uploader Styles */
     .bg-modal-content {
@@ -261,40 +261,41 @@
 <body class="bg-[#0d1126] text-slate-300 antialiased">
 
 <!-- Tela de Login -->
-<div id="tela-login" class="flex-center-overlay z-[2000] hidden" style="background-color: #0d1126;">
+<div id="tela-login" class="flex-center-overlay z-[2000] hidden" style="background-color: #ffffff;">
     <div class="gatekeeper-card">
-        <img src="https://socialist-jade-fkfnlwdplz-g2x6g31lg7.edgeone.dev/PRIME%20LOGO.png" alt="Logo" style="width: 120px; height: auto; margin: 0 auto 1.5rem;">
-        <h1 style="margin-top: 0; font-size: 1.8rem; font-weight: 700;">Acesso Restrito</h1>
-        <p style="color: #a0aec0; line-height: 1.6; margin-bottom: 2rem;">Este é um sistema privado.</p>
-        <button id="login-button" class="gatekeeper-btn primary-orange">
+        <img src="https://socialist-jade-fkfnlwdplz-g2x6g31lg7.edgeone.dev/PRIME%20LOGO.png" alt="Logo" class="logo-frame" style="width: 120px; height: 120px; margin: 0 auto 1.5rem;">
+        <h1 style="margin-top: 0; font-size: 1.8rem; font-weight: 700; color: #1f2937;">Acesso Restrito</h1>
+        <p style="color: #64748b; line-height: 1.6; margin-bottom: 2rem;">Este é um sistema privado.</p>
+        <button id="login-button" class="gatekeeper-btn">
+            <svg class="w-5 h-5 mr-3" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
             <span>Entrar com Google</span>
         </button>
     </div>
 </div>
 
 <!-- Tela de Loading -->
-<div id="tela-loading" class="flex-center-overlay z-[2000] hidden" style="background-color: #0d1126;">
+<div id="tela-loading" class="flex-center-overlay z-[2000] hidden" style="background-color: #ffffff;">
    <div class="gatekeeper-card" id="loading-card-content">
         <div class="spinner-orange mb-4 mx-auto"></div>
-        <h2 style="margin-top: 0; font-size: 1.5rem; font-weight: 600;">Carregando...</h2>
-        <p style="color: #a0aec0;">Verificando credenciais.</p>
-        <p style="color: #4a5568; font-size: 0.75rem; margin-top: 1rem;">v5.2.1</p>
+        <h2 style="margin-top: 0; font-size: 1.5rem; font-weight: 600; color: #1f2937;">Carregando...</h2>
+        <p style="color: #64748b;">Verificando credenciais.</p>
+        <p style="color: #94a3b8; font-size: 0.75rem; margin-top: 1rem;">v5.2.1</p>
     </div>
 </div>
 
 <!-- Tela Pendente -->
-<div id="tela-pendente" class="flex-center-overlay z-[2000] hidden" style="background-color: #0d1126;">
+<div id="tela-pendente" class="flex-center-overlay z-[2000] hidden" style="background-color: #ffffff;">
     <div class="gatekeeper-card">
-        <img src="https://socialist-jade-fkfnlwdplz-g2x6g31lg7.edgeone.dev/PRIME%20LOGO.png" alt="Logo" style="width: 120px; height: auto; margin: 0 auto 1.5rem;">
-        <h1 style="margin-top: 0; font-size: 1.8rem; font-weight: 700;">Acesso Restrito</h1>
-        <p style="color: #a0aec0; line-height: 1.6; margin-bottom: 1.5rem;">Este é um sistema privado.</p>
+        <img src="https://socialist-jade-fkfnlwdplz-g2x6g31lg7.edgeone.dev/PRIME%20LOGO.png" alt="Logo" class="logo-frame" style="width: 120px; height: 120px; margin: 0 auto 1.5rem;">
+        <h1 style="margin-top: 0; font-size: 1.8rem; font-weight: 700; color: #1f2937;">Acesso Restrito</h1>
+        <p style="color: #64748b; line-height: 1.6; margin-bottom: 1.5rem;">Este é um sistema privado.</p>
 
         <div class="flex flex-col items-center justify-center mb-6">
             <div class="spinner-orange mb-3"></div>
             <p style="color: #FF9933; font-weight: 600; font-size: 1.1rem;">Aguardando Liberação</p>
         </div>
 
-        <button id="logout-button-pendente" class="text-slate-400 hover:text-white text-sm underline cursor-pointer bg-transparent border-none">Sair</button>
+        <button id="logout-button-pendente" class="text-slate-500 hover:text-slate-800 text-sm underline cursor-pointer bg-transparent border-none">Sair</button>
     </div>
 </div>
 
