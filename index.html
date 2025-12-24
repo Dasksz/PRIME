@@ -2181,9 +2181,21 @@
             // Update Generation Date UI
             const lastUpdateText = document.getElementById('last-update-text');
             if (lastUpdateText) {
-                const dateObj = new Date(lastSale);
-                const formattedDate = dateObj.toLocaleString('pt-BR');
-                lastUpdateText.textContent = `Dados atualizados em: ${formattedDate}`;
+                let displayDate = lastSale;
+
+                // Try to get from metadata first (Actual Upload Time)
+                if (embeddedData.metadata && Array.isArray(embeddedData.metadata)) {
+                    const metaUpdate = embeddedData.metadata.find(m => m.key === 'last_update');
+                    if (metaUpdate && metaUpdate.value) {
+                        displayDate = metaUpdate.value;
+                    }
+                }
+
+                const dateObj = new Date(displayDate);
+                if (!isNaN(dateObj.getTime())) {
+                    const formattedDate = dateObj.toLocaleString('pt-BR');
+                    lastUpdateText.textContent = `Dados atualizados em: ${formattedDate}`;
+                }
             }
 
             window.embeddedData = embeddedData;
