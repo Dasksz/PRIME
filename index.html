@@ -67,6 +67,21 @@
     html.light .bg-slate-700 { background-color: #e2e8f0 !important; color: #1e293b !important; border-color: #cbd5e1 !important; }
     html.light .bg-slate-800 { background-color: #f1f5f9 !important; color: #1e293b !important; border-color: #cbd5e1 !important; }
     
+    /* Fix Active Buttons in Light Mode (Override bg-slate-700 forced light gray) */
+    html.light .metric-btn.active, 
+    html.light .monthly-metric-btn.active, 
+    html.light .fornecedor-btn.active, 
+    html.light .comparison-toggle-btn.active, 
+    html.light .group-btn.active,
+    html.light #main-rede-group-container > div > button.active, 
+    html.light #city-rede-group-container > div > button.active, 
+    html.light #comparison-rede-group-container > div > button.active, 
+    html.light #stock-rede-group-container > div > button.active { 
+        background-color: #FF9933 !important; /* Orange */
+        color: #ffffff !important;
+        border-color: #ea580c !important; /* Darker Orange */
+    }
+
     /* Ensure Inputs inside filters (often slate-700) are readable */
     html.light input.bg-slate-700, html.light select.bg-slate-700, html.light button.bg-slate-700 {
         background-color: #ffffff !important;
@@ -289,15 +304,27 @@
     }
     
     /* Fix Hover on Table Rows - User requested Orange */
-    html.light .hover\:bg-slate-700:hover {
+    /* Includes 700, 700/50, and 800 shades used in different tables */
+    html.light .hover\:bg-slate-700:hover,
+    html.light .hover\:bg-slate-700\/50:hover,
+    html.light .hover\:bg-slate-800:hover {
         background-color: #FF9933 !important;
         color: #ffffff !important;
     }
     
     /* Ensure links inside the hovered orange row are white */
-    html.light .hover\:bg-slate-700:hover a {
+    html.light .hover\:bg-slate-700:hover a,
+    html.light .hover\:bg-slate-700\/50:hover a,
+    html.light .hover\:bg-slate-800:hover a {
         color: #ffffff !important;
         text-decoration-color: #ffffff !important;
+    }
+
+    /* Fix Uploader Modal in Light Mode */
+    html.light .bg-modal-content {
+        background-color: #ffffff !important;
+        color: #1e293b !important; /* dark slate text */
+        border: 1px solid #cbd5e1;
     }
 
     /* Fix Badge Backgrounds for Light Mode */
@@ -745,12 +772,6 @@
     html.light .text-white { color: var(--text-heading) !important; }
     html.light .text-slate-300 { color: var(--text-primary) !important; }
     html.light .text-slate-400 { color: #64748b !important; } /* slate-500 */
-
-    /* PRIME Text in Header - Force White - Specificity Boost */
-    html.light header h1 span.text-yellow-300,
-    html.light header .text-yellow-300 { 
-        color: #ffffff !important; 
-    }
 
     /* Fix Buttons with White Text in Light Mode (Override the global .text-white rule) */
     html.light button.text-white, 
