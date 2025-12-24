@@ -2182,7 +2182,7 @@
             const lastUpdateText = document.getElementById('last-update-text');
             if (lastUpdateText) {
                 const dateObj = new Date(lastSale);
-                const formattedDate = dateObj.toLocaleDateString('pt-BR');
+                const formattedDate = dateObj.toLocaleString('pt-BR');
                 lastUpdateText.textContent = `Dados atualizados em: ${formattedDate}`;
             }
 
