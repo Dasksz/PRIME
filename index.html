@@ -5125,6 +5125,13 @@
                 
                 const target = summaryGoalsSums[key] || { fat: 0, vol: 0 };
                 const metrics = displayMetrics[key] || { avgFat: 0, prevFat: 0 };
+
+                // LOGIC CHANGE: If Distributed Goal is 0, display Previous Month (Suggestion)
+                let displayFat = target.fat;
+                let displayVol = target.vol;
+
+                if (displayFat < 0.01) displayFat = metrics.prevFat;
+                if (displayVol < 0.001) displayVol = metrics.prevVol;
                 
                 let subCategoryAdjustment = 0;
                 if (goalsPosAdjustments[key]) {
@@ -5136,8 +5143,8 @@
                     });
                 }
 
-                totalFat += target.fat;
-                totalVol += target.vol;
+                totalFat += displayFat;
+                totalVol += displayVol;
                 
                 if (metrics.quarterlyPosClientsSet) {
                     metrics.quarterlyPosClientsSet.forEach(clientCode => uniquePosClientsSet.add(clientCode));
@@ -5165,7 +5172,7 @@
                                     <p class="text-xs text-slate-300 uppercase font-semibold">Meta Faturamento</p>
                                 </div>
                                 <p class="text-xl font-bold ${textColor} mb-2">
-                                    ${target.fat.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    ${displayFat.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                 </p>
                                 <div class="flex justify-between text-[10px] text-slate-300 border-t border-slate-700/50 pt-1">
                                     <span>Trim: <span class="text-slate-300">${metrics.avgFat.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></span>
@@ -5178,7 +5185,7 @@
                                     <p class="text-xs text-slate-300 uppercase font-semibold">Meta Volume (Kg)</p>
                                 </div>
                                 <p class="text-xl font-bold ${textColor} mb-2">
-                                    ${target.vol.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
+                                    ${displayVol.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
                                 </p>
                                 <div class="flex justify-between text-[10px] text-slate-300 border-t border-slate-700/50 pt-1">
                                     <span>Trim: <span class="text-slate-300">${metrics.avgVol.toLocaleString('pt-BR', { minimumFractionDigits: 3 })}</span></span>
