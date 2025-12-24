@@ -2891,13 +2891,13 @@
                 }
 
                 if (index < total) {
-                    setTimeout(nextChunk, 0); // Yield to main thread
+                    requestAnimationFrame(nextChunk); // Yield to main thread
                 } else {
                     if(onComplete) onComplete();
                 }
             }
 
-            nextChunk();
+            requestAnimationFrame(nextChunk);
         }
         
         const FORBIDDEN_KEYS = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR', 'PASTA', 'RAMO', 'ATIVIDADE', 'CIDADE', 'MUNICIPIO', 'BAIRRO'];
