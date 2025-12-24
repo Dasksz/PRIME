@@ -12037,7 +12037,15 @@ const supervisorGroups = new Map();
             document.querySelectorAll('.nav-link').forEach(link => {
                 link.addEventListener('click', (e) => {
                     const target = e.currentTarget.dataset.target;
-                    navigateTo(target);
+
+                    if (e.ctrlKey || e.metaKey) {
+                        e.preventDefault();
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('ir_para', target);
+                        window.open(url.toString(), '_blank');
+                    } else {
+                        navigateTo(target);
+                    }
                 });
             });
 
@@ -13595,7 +13603,14 @@ const supervisorGroups = new Map();
         }
         // ----------------------------------------
 
-        navigateTo('dashboard');
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetPage = urlParams.get('ir_para');
+
+        if (targetPage) {
+            navigateTo(targetPage);
+        } else {
+            navigateTo('dashboard');
+        }
         renderTable(aggregatedOrders);
 
 </script>
