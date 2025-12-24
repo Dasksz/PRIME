@@ -11918,8 +11918,23 @@ const supervisorGroups = new Map();
                     await uploadArrayBatch('data_active_products', data.active_products);
                 }
                 if (data.metadata && data.metadata.length > 0) {
+                    // Update last_update timestamp to current time (successful upload time)
+                    const now = new Date();
+                    const lastUpdateIdx = data.metadata.findIndex(m => m.key === 'last_update');
+                    if (lastUpdateIdx !== -1) {
+                        data.metadata[lastUpdateIdx].value = now.toISOString();
+                    } else {
+                        data.metadata.push({ key: 'last_update', value: now.toISOString() });
+                    }
+
                     await clearTable('data_metadata', 'key');
                     await uploadArrayBatch('data_metadata', data.metadata);
+
+                    // Update UI immediately
+                    const lastUpdateText = document.getElementById('last-update-text');
+                    if (lastUpdateText) {
+                        lastUpdateText.textContent = `Dados atualizados em: ${now.toLocaleString('pt-BR')}`;
+                    }
                 }
                 
                 updateStatus('Upload Concluído com Sucesso!', 100);
