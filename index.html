@@ -8477,19 +8477,25 @@ const supervisorGroups = new Map();
                 }
             }
 
-            const detailedDataByClient = new Map(); // Map<CODCLI, { total, pepsico, multimarcas }>
+            const detailedDataByClient = new Map(); // Map<CODCLI, { total, pepsico, multimarcas, maxDate }>
 
             // Pre-aggregate Sales Data for Analysis (Sync)
             salesForAnalysis.forEach(s => {
                 const d = parseDate(s.DTPED);
-                if (d && d.getUTCFullYear() === currentYear && d.getUTCMonth() === currentMonth) {
+                if (d) {
                     if (!detailedDataByClient.has(s.CODCLI)) {
-                        detailedDataByClient.set(s.CODCLI, { total: 0, pepsico: 0, multimarcas: 0 });
+                        detailedDataByClient.set(s.CODCLI, { total: 0, pepsico: 0, multimarcas: 0, maxDate: 0 });
                     }
                     const entry = detailedDataByClient.get(s.CODCLI);
-                    entry.total += s.VLVENDA;
-                    if (s.OBSERVACAOFOR === 'PEPSICO') entry.pepsico += s.VLVENDA;
-                    else if (s.OBSERVACAOFOR === 'MULTIMARCAS') entry.multimarcas += s.VLVENDA;
+                    const ts = d.getTime();
+                    
+                    if (ts > entry.maxDate) entry.maxDate = ts;
+
+                    if (d.getUTCFullYear() === currentYear && d.getUTCMonth() === currentMonth) {
+                        entry.total += s.VLVENDA;
+                        if (s.OBSERVACAOFOR === 'PEPSICO') entry.pepsico += s.VLVENDA;
+                        else if (s.OBSERVACAOFOR === 'MULTIMARCAS') entry.multimarcas += s.VLVENDA;
+                    }
                 }
             });
 
@@ -8531,6 +8537,7 @@ const supervisorGroups = new Map();
                             razaoSocial: client.razaoSocial || client.RAZAOSOCIAL || client.Cliente,
                             cidade: client.cidade || client.CIDADE || client['Nome da Cidade'],
                             bairro: client.bairro || client.BAIRRO || client['Bairro'],
+                            ultimaCompra: details.maxDate || client.ultimaCompra || client['Data da Última Compra'] || client.ULTIMACOMPRA,
                             rcas: client.rcas,
                             isNew: client.isNew,
                             // Metrics
@@ -11446,7 +11453,7 @@ const supervisorGroups = new Map();
             doc.text(`Supervisor: ${supervisor}`, 14, 38); doc.text(`Vendedor: ${vendedor}`, 14, 44);
             doc.text(`Cidade: ${city || 'Todas'}`, 14, 50);
             doc.text(`Data de Emissão: ${generationDate}`, 14, 56);
-            const tableColumn = ["Código", "Cliente", "Bairro", "Cidade", "Últ. Compra", "RCA 1"];
+            const tableColumn = ["Código", "Cliente", "Bairro", "Cidade", "Últ. Compra"];
             if (includeFaturamento) tableColumn.splice(2, 0, "Faturamento");
 
             clientList.sort((a, b) => {
@@ -11471,9 +11478,8 @@ const supervisorGroups = new Map();
                 const bairro = client.bairro || client.BAIRRO || client.Bairro || '';
                 const cidade = client.cidade || client.CIDADE || client.Cidade || client['Nome da Cidade'] || '';
                 const ultCompra = client.ultimaCompra || client['Data da Última Compra'] || client.ULTIMACOMPRA;
-                const rca = client.rca1 || client['RCA 1'] || client.RCA1 || '';
 
-                const clientData = [ client['Código'] || '', nome, bairro, cidade, formatDate(ultCompra) || 'N/A', rca ];
+                const clientData = [ client['Código'] || '', nome, bairro, cidade, formatDate(ultCompra) || 'N/A' ];
                 if (includeFaturamento) {
                     const val = client.total || 0;
                     totalFaturamento += val;
@@ -11486,13 +11492,13 @@ const supervisorGroups = new Map();
                 const footerRow = [
                     { content: 'TOTAL:', colSpan: 2, styles: { halign: 'right', fontStyle: 'bold', fontSize: 10, fillColor: [50, 50, 50], textColor: [255, 255, 255] } },
                     { content: totalFaturamento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), styles: { fontStyle: 'bold', fontSize: 10, fillColor: [50, 50, 50], textColor: [50, 255, 100] } },
-                    { content: '', colSpan: 4, styles: { fillColor: [50, 50, 50] } }
+                    { content: '', colSpan: 3, styles: { fillColor: [50, 50, 50] } }
                 ];
                 tableRows.push(footerRow);
             } else {
                 const footerRow = [
                     { content: 'TOTAL CLIENTES:', colSpan: 2, styles: { halign: 'right', fontStyle: 'bold', fontSize: 10, fillColor: [50, 50, 50], textColor: [255, 255, 255] } },
-                    { content: String(clientList.length), colSpan: 4, styles: { fontStyle: 'bold', fontSize: 10, fillColor: [50, 50, 50], textColor: [255, 255, 255] } }
+                    { content: String(clientList.length), colSpan: 3, styles: { fontStyle: 'bold', fontSize: 10, fillColor: [50, 50, 50], textColor: [255, 255, 255] } }
                 ];
                 tableRows.push(footerRow);
             }
