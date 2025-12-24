@@ -212,9 +212,11 @@
     .hidden { display: none !important; }
     
     /* Gatekeeper Styles */
-    .gatekeeper-card { font-family: 'Inter', sans-serif; padding: 2.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); max-width: 400px; width: 90%; background: #1d2347; text-align: center; border: 1px solid #2d3748; color: #fff; }
-    .gatekeeper-btn { display: flex; align-items: center; justify-content: center; gap: 0.75rem; background-color: #2d3748; color: #fff; border: 1px solid #4a5568; padding: 12px 24px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background-color 0.3s ease; width: 100%; margin-top: 1rem; }
-    .gatekeeper-btn:hover { background-color: #4a5568; }
+    .gatekeeper-card { font-family: 'Inter', sans-serif; padding: 3rem 2.5rem; border-radius: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); max-width: 420px; width: 90%; background: #161e3d; text-align: center; border: 1px solid #2d3748; color: #fff; }
+    .gatekeeper-btn { display: flex; align-items: center; justify-content: center; gap: 0.75rem; background-color: #2d3748; color: #fff; border: none; padding: 14px 24px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; width: 100%; margin-top: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+    .gatekeeper-btn.primary-orange { background-color: #FF9933; color: #0d1126; }
+    .gatekeeper-btn.primary-orange:hover { background-color: #e68a2e; transform: translateY(-1px); box-shadow: 0 6px 8px rgba(0,0,0,0.3); }
+    .spinner-orange { border: 3px solid rgba(255, 153, 51, 0.3); border-top: 3px solid #FF9933; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
     
     /* Modal Uploader Styles */
     .bg-modal-content {
@@ -261,10 +263,10 @@
 <!-- Tela de Login -->
 <div id="tela-login" class="flex-center-overlay z-[2000] hidden" style="background-color: #0d1126;">
     <div class="gatekeeper-card">
-        <img src="https://i.imgur.com/Xv8Tb6d.png" alt="Logo" style="width: 80px; height: 80px; margin: 0 auto 1.5rem; border-radius: 50%;">
+        <img src="https://image2url.com/r2/bucket1/images/1766579837335-6e63e954-e702-477f-b9f7-e38d8d356fc1.png" alt="Logo" style="width: 120px; height: auto; margin: 0 auto 1.5rem;">
         <h1 style="margin-top: 0; font-size: 1.8rem; font-weight: 700;">Acesso Restrito</h1>
-        <p style="color: #a0aec0; line-height: 1.6;">Este é um sistema privado.</p>
-        <button id="login-button" class="gatekeeper-btn">
+        <p style="color: #a0aec0; line-height: 1.6; margin-bottom: 2rem;">Este é um sistema privado.</p>
+        <button id="login-button" class="gatekeeper-btn primary-orange">
             <span>Entrar com Google</span>
         </button>
     </div>
@@ -273,6 +275,7 @@
 <!-- Tela de Loading -->
 <div id="tela-loading" class="flex-center-overlay z-[2000] hidden" style="background-color: #0d1126;">
    <div class="gatekeeper-card" id="loading-card-content">
+        <div class="spinner-orange mb-4 mx-auto"></div>
         <h2 style="margin-top: 0; font-size: 1.5rem; font-weight: 600;">Carregando...</h2>
         <p style="color: #a0aec0;">Verificando credenciais.</p>
         <p style="color: #4a5568; font-size: 0.75rem; margin-top: 1rem;">v5.2.1</p>
@@ -282,9 +285,16 @@
 <!-- Tela Pendente -->
 <div id="tela-pendente" class="flex-center-overlay z-[2000] hidden" style="background-color: #0d1126;">
     <div class="gatekeeper-card">
-        <h2 style="margin-top: 0; font-size: 1.5rem; font-weight: 600;">Aguardando Aprovação</h2>
-        <p style="color: #a0aec0;">Seu acesso está pendente.</p>
-        <button id="logout-button-pendente" class="gatekeeper-btn" style="background-color: #dc3545; border-color: #dc3545;">Sair</button>
+        <img src="https://image2url.com/r2/bucket1/images/1766579837335-6e63e954-e702-477f-b9f7-e38d8d356fc1.png" alt="Logo" style="width: 120px; height: auto; margin: 0 auto 1.5rem;">
+        <h1 style="margin-top: 0; font-size: 1.8rem; font-weight: 700;">Acesso Restrito</h1>
+        <p style="color: #a0aec0; line-height: 1.6; margin-bottom: 1.5rem;">Este é um sistema privado.</p>
+
+        <div class="flex flex-col items-center justify-center mb-6">
+            <div class="spinner-orange mb-3"></div>
+            <p style="color: #FF9933; font-weight: 600; font-size: 1.1rem;">Aguardando Liberação</p>
+        </div>
+
+        <button id="logout-button-pendente" class="text-slate-400 hover:text-white text-sm underline cursor-pointer bg-transparent border-none">Sair</button>
     </div>
 </div>
 
