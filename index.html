@@ -11613,8 +11613,16 @@ const supervisorGroups = new Map();
             const sideMenu = document.getElementById('side-menu');
             const sidebarOverlay = document.getElementById('sidebar-overlay');
 
-            if (sideMenu) sideMenu.classList.toggle('-translate-x-full');
-            if (sidebarOverlay) sidebarOverlay.classList.toggle('hidden');
+            if (sideMenu) {
+                sideMenu.classList.toggle('-translate-x-full');
+                if (sidebarOverlay) {
+                    if (sideMenu.classList.contains('-translate-x-full')) {
+                        sidebarOverlay.classList.add('hidden');
+                    } else {
+                        sidebarOverlay.classList.remove('hidden');
+                    }
+                }
+            }
         }
 
         async function navigateTo(view) {
@@ -14608,3 +14616,4 @@ const supervisorGroups = new Map();
 </script>
 </body>
 </html>
+
