@@ -435,6 +435,44 @@
         color: #475569 !important; /* slate-600 */
     }
 
+    /* Fix Header & Row Backgrounds in Goals Table (Light Mode) */
+    html.light #goals-sv-table-container thead {
+        background-color: #f8fafc !important; /* slate-50 */
+    }
+    html.light #goals-sv-table-container thead tr,
+    html.light #goals-sv-table-container thead th {
+        background-color: #f1f5f9 !important; /* slate-100 */
+        color: #334155 !important; /* slate-700 */
+        border-color: #cbd5e1 !important; /* slate-300 */
+    }
+
+    /* Supervisor Row (was bg-slate-800) */
+    html.light #goals-sv-table-body tr.bg-slate-800 {
+        background-color: #e2e8f0 !important; /* slate-200 */
+        border-color: #cbd5e1 !important;
+    }
+    html.light #goals-sv-table-body tr.bg-slate-800 td {
+        color: #1e293b !important; /* slate-800 */
+    }
+    /* Grand Total Row (was bg-[#0f172a]) */
+    html.light #goals-sv-table-body tr.bg-\[\#0f172a\] {
+        background-color: #cbd5e1 !important; /* slate-300 */
+        color: #0f172a !important; /* dark text */
+    }
+
+    /* Cell specific backgrounds (bg-blue-900/5 etc) */
+    html.light #goals-sv-table-body .bg-blue-900\/5 {
+        background-color: #f8fafc !important; /* very light slate */
+    }
+    html.light #goals-sv-table-body .bg-blue-900\/10 {
+        background-color: #f1f5f9 !important; /* light slate */
+    }
+
+    /* Header specific backgrounds (bg-slate-800/50 etc) */
+    html.light #goals-sv-table-container .bg-slate-800\/50 {
+        background-color: #e2e8f0 !important; /* slate-200 */
+    }
+
     /* 4. Fix Tab Buttons (Rateio Metas / Relatório) */
     html.light #goals-tabs {
         background-color: #e2e8f0 !important;
