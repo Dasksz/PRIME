@@ -2583,7 +2583,12 @@
                     if (typeof updateDashboard === 'function') {
                         updateDashboard();
                     } else {
-                        window.location.reload();
+                        // Tenta atualizar os gráficos diretamente se updateDashboard não estiver acessível
+                        try {
+                            Object.values(charts).forEach(chart => chart.update());
+                        } catch (e) {
+                            console.warn("Could not update charts on theme change", e);
+                        }
                     }
                 }
             });
