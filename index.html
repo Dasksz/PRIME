@@ -10974,7 +10974,7 @@ const supervisorGroups = new Map();
                         const count = productResults[pCode].current.size;
                         const coverage = activeClientsCount > 0 ? (count / activeClientsCount) * 100 : 0;
                         if (coverage > topCoverageItem.coverage) {
-                            topCoverageItem = { name: `(${pCode}) ${product.Produto}`, coverage, clients: count };
+                            topCoverageItem = { name: `(${pCode}) ${product.produto || product.Produto}`, coverage, clients: count };
                         }
                     }
                 });
@@ -11120,7 +11120,7 @@ const supervisorGroups = new Map();
                 
                 categoryData.products.forEach((product) => {
                     const productCode = product.Codigo;
-                    const productName = product.Produto;
+                    const productName = product.produto || product.Produto;
                     const stock = activeStockMap.get(productCode) || 0;
 
                     // Re-calculate per product using the Product Results Sets
