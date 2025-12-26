@@ -458,6 +458,13 @@
     }
     html.light #goals-sv-table-body tr.bg-slate-800 td {
         color: #1e293b !important; /* slate-800 */
+        background-color: #e2e8f0 !important; /* Ensure cells get the light background */
+    }
+
+    /* Fix Adjustment Column Text Color & Background in Light Mode */
+    html.light #goals-sv-table-body .text-yellow-500\/70 {
+        color: #b45309 !important; /* amber-700 - Darker for contrast */
+        background-color: #e2e8f0 !important; /* Ensure background is light */
     }
     /* Grand Total Row (was bg-[#0f172a]) */
     html.light #goals-sv-table-body tr.bg-\[\#0f172a\] {
