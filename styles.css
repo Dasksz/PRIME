@@ -1,0 +1,551 @@
+    .flex-center-overlay {
+        position: fixed;
+        top: 0; right: 0; bottom: 0; left: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    :root {
+        --bg-main: #0d1126;
+        --bg-card: #1d2347;
+        --card-bg: #1d2347; /* Fallback for kpi-glow */
+        --bg-header: #1e2a5a;
+        --text-primary: #cbd5e1; /* slate-300 */
+        --text-heading: #ffffff;
+        --border-color: #334155; /* slate-700 */
+    }
+
+    html.light {
+        --bg-main: #f1f5f9; /* slate-100 */
+        --bg-card: #ffffff;
+        --card-bg: #ffffff;
+        --bg-header: #FF9933; /* Orange requested by user */
+        --text-primary: #1e293b; /* slate-800 */
+        --text-heading: #0f172a; /* slate-900 */
+        --border-color: #cbd5e1; /* slate-300 */
+    }
+
+    body { background-color: var(--bg-main); color: var(--text-primary); transition: background-color 0.3s, color 0.3s; }
+    .kpi-card, .bg-\[\#1d2347\] { background-color: var(--bg-card) !important; border-color: var(--border-color) !important; }
+    .bg-\[\#0d1126\] { background-color: var(--bg-main) !important; }
+    header.bg-gradient-to-r { background: var(--bg-header) !important; }
+
+    /* Light Mode Specific Overrides for Text */
+    html.light .text-white { color: var(--text-heading) !important; }
+    html.light .text-slate-300 { color: var(--text-primary) !important; }
+    html.light .text-slate-400 { color: #64748b !important; } /* slate-500 */
+    html.light .text-green-400 { color: #15803d !important; } /* green-700 */
+    html.light .text-red-400 { color: #b91c1c !important; } /* red-700 */
+    html.light td.text-green-400, html.light td .text-green-400 { font-weight: 800 !important; }
+    html.light td.text-red-400, html.light td .text-red-400 { font-weight: 800 !important; }
+
+    /* Light Mode Overrides for Specific Dark Backgrounds */
+    html.light .bg-\[\#0f172a\] { background-color: #f1f5f9 !important; } /* Light gray instead of very dark blue */
+    html.light .bg-\[\#151c36\] { background-color: #ffffff !important; } /* White instead of dark table body */
+    html.light .bg-\[\#161e3d\] { background-color: #f8fafc !important; } /* Very light gray instead of dark container */
+
+    html.light .bg-slate-700 { background-color: #e2e8f0 !important; color: #1e293b !important; border-color: #cbd5e1 !important; }
+    html.light .bg-slate-800 { background-color: #f1f5f9 !important; color: #1e293b !important; border-color: #cbd5e1 !important; }
+
+    /* Fix Active Buttons in Light Mode (Override bg-slate-700 forced light gray) */
+    html.light .metric-btn.active,
+    html.light .monthly-metric-btn.active,
+    html.light .fornecedor-btn.active,
+    html.light .comparison-toggle-btn.active,
+    html.light .group-btn.active,
+    html.light #main-rede-group-container > div > button.active,
+    html.light #city-rede-group-container > div > button.active,
+    html.light #comparison-rede-group-container > div > button.active,
+    html.light #stock-rede-group-container > div > button.active {
+        background-color: #FF9933 !important; /* Orange */
+        color: #ffffff !important;
+        border-color: #ea580c !important; /* Darker Orange */
+    }
+
+    /* Ensure Inputs inside filters (often slate-700) are readable */
+    html.light input.bg-slate-700, html.light select.bg-slate-700, html.light button.bg-slate-700 {
+        background-color: #ffffff !important;
+        color: #1e293b !important;
+        border: 1px solid #cbd5e1 !important;
+    }
+
+    /* Define --card-bg for goal cards based on their background class */
+    .bg-\[\#1e2a5a\] { --card-bg: #1e2a5a; }
+    .bg-\[\#3c2a21\] { --card-bg: #3c2a21; }
+    .bg-\[\#3b0764\] { --card-bg: #3b0764; }
+    .bg-\[\#064e3b\] { --card-bg: #064e3b; }
+    .bg-\[\#713f12\] { --card-bg: #713f12; }
+
+    /* Goal Cards - Light Mode Variants */
+    html.light .bg-\[\#1e2a5a\] { --card-bg: #fff7ed; background-color: #fff7ed !important; border-color: #fed7aa !important; } /* orange-50 and orange-200 border */
+    html.light .bg-\[\#3c2a21\] { --card-bg: #ffedd5; background-color: #ffedd5 !important; border-color: #fed7aa !important; } /* orange-100 */
+    html.light .bg-\[\#3b0764\] { --card-bg: #f3e8ff; background-color: #f3e8ff !important; border-color: #e9d5ff !important; } /* purple-100 */
+    html.light .bg-\[\#064e3b\] { --card-bg: #d1fae5; background-color: #d1fae5 !important; border-color: #a7f3d0 !important; } /* emerald-100 */
+    html.light .bg-\[\#713f12\] { --card-bg: #fef9c3; background-color: #fef9c3 !important; border-color: #fde047 !important; } /* yellow-100 */
+
+    /* Ensure text within these cards is readable in light mode */
+    /* Note: .text-white is already overridden to dark in light mode, so dark text on light bg works. */
+    /* However, some labels inside cards use specific colors like text-blue-300. We might need to darken them. */
+    html.light .text-blue-300 { color: #1d4ed8 !important; } /* blue-700 */
+    html.light .text-orange-300 { color: #c2410c !important; } /* orange-700 */
+    html.light .text-purple-300 { color: #7e22ce !important; } /* purple-700 */
+    html.light .text-emerald-300 { color: #047857 !important; } /* emerald-700 */
+    html.light .text-yellow-300 { color: #b45309 !important; } /* amber-700 */
+
+    /* Also handle the inner input background in cards which is bg-[#0f172a] */
+    /* This is already handled by the generic override above */
+
+    /* Theme Toggle Switch */
+    .theme-switch-wrapper { display: flex; align-items: center; margin-top: auto; padding: 1rem; border-top: 1px solid var(--border-color); }
+    .theme-switch { display: inline-block; height: 24px; position: relative; width: 48px; margin-right: 10px; }
+    .theme-switch input { display: none; }
+    .slider { background-color: #ccc; bottom: 0; cursor: pointer; left: 0; position: absolute; right: 0; top: 0; transition: .4s; border-radius: 34px; }
+    .slider:before { background-color: #fff; bottom: 4px; content: ""; height: 16px; left: 4px; position: absolute; transition: .4s; width: 16px; border-radius: 50%; }
+    input:checked + .slider { background-color: #38b2ac; }
+    input:checked + .slider:before { transform: translateX(24px); }
+
+
+                            /* Estilo base do tema escuro */
+                            body { font-family: 'Inter', sans-serif; background-color: #0d1126; }
+
+                            /* Scrollbars personalizadas para o tema escuro */
+                            ::-webkit-scrollbar { width: 8px; }
+                            ::-webkit-scrollbar-track { background: #161e3d; } /* Cor de fundo da trilha */
+                            ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 10px; } /* Cor do "polegar" */
+                            ::-webkit-scrollbar-corner { background: #161e3d; }
+
+                            /* Cabeçalhos de tabela fixos (sticky) */
+                            .sticky-header th {
+                                position: sticky;
+                                top: 0;
+                                z-index: 10;
+                                background-color: #161e3d; /* Cor de fundo escura para o cabeçalho */
+                                border-bottom: 2px solid #2d3748; /* Borda escura */
+                            }
+                            .hidden { display: none; }
+
+                            /* Estilo de botões ativos (filtros, toggles) */
+                            .metric-btn.active, .monthly-metric-btn.active, .fornecedor-btn.active, .comparison-toggle-btn.active, .group-btn.active, #main-rede-group-container > div > button.active, #city-rede-group-container > div > button.active, #comparison-rede-group-container > div > button.active, #stock-rede-group-container > div > button.active {
+                                background-color: #38b2ac; /* teal-500 */
+                                color: #FFF;
+                            }
+
+                            /* Overlay do modal */
+                            .modal-overlay {
+                                position: fixed;
+                                top: 0; left: 0; right: 0; bottom: 0;
+                                background: rgba(0,0,0,0.7); /* Overlay mais escuro */
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                z-index: 1000;
+                            }
+
+                            /* Tooltip */
+                            .tooltip { position: relative; display: inline-block; cursor: pointer; }
+                            .tooltip .tooltip-text {
+                                visibility: hidden;
+                                width: auto;
+                                min-width: 80px;
+                                background-color: #1f2937; /* bg-gray-800 */
+                                color: #fff;
+                                text-align: center;
+                                border-radius: 6px;
+                                padding: 5px 8px;
+                                position: absolute;
+                                z-index: 1001;
+                                bottom: 125%;
+                                left: 50%;
+                                transform: translateX(-50%);
+                                opacity: 0;
+                                transition: opacity 0.3s;
+                                pointer-events: none;
+                                white-space: nowrap;
+                            }
+                            .tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
+
+                            /* Scrollbar customizada para elementos internos */
+                            .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+                            .custom-scrollbar::-webkit-scrollbar-track { background: #161e3d; }
+                            .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #4a5568; border-radius: 10px; }
+
+                            /* Estilo dos cartões KPI */
+                            .kpi-card {
+                                background-color: #1d2347; /* Fundo do cartão */
+                                border-radius: 0.5rem;
+                                padding: 1.5rem;
+                                text-align: center;
+                                border: 1px solid #2d3748; /* Borda (slate-700) */
+                                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                            }
+
+                            /* Autofill styles to prevent white background in dark mode */
+                            input:-webkit-autofill,
+                            input:-webkit-autofill:hover,
+                            input:-webkit-autofill:focus,
+                            input:-webkit-autofill:active {
+                                -webkit-box-shadow: 0 0 0 30px #334155 inset !important; /* bg-slate-700 */
+                                -webkit-text-fill-color: white !important;
+                                transition: background-color 5000s ease-in-out 0s;
+                            }
+
+                            html.light input:-webkit-autofill,
+                            html.light input:-webkit-autofill:hover,
+                            html.light input:-webkit-autofill:focus,
+                            html.light input:-webkit-autofill:active {
+                                -webkit-box-shadow: 0 0 0 30px #ffffff inset !important;
+                                -webkit-text-fill-color: #0f172a !important;
+                            }
+
+                            /* Botão de tendência de estoque ativo */
+        .stock-trend-btn.active, .coverage-trend-btn.active {
+                                outline: 2px solid #38b2ac; /* Destaque teal-500 */
+                                outline-offset: 2px;
+                                transform: scale(1.1);
+                            }
+
+                            /* Remove setas de input[type=number] */
+                            input[type=number]::-webkit-inner-spin-button,
+                            input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+                            input[type=number] { -moz-appearance: textfield; }
+
+    /* Additional Styles for Gatekeeper & Modal */
+    #loader { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: #0d1126; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.3s ease-out; }
+    #loader-spinner { border: 4px solid #1d2347; border-top: 4px solid #38b2ac; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .hidden { display: none !important; }
+
+    /* Gatekeeper Styles */
+    .gatekeeper-card { font-family: 'Inter', sans-serif; padding: 3rem 2.5rem; border-radius: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); max-width: 420px; width: 90%; background: #ffffff; text-align: center; border: 1px solid #e2e8f0; color: #1f2937; }
+    .gatekeeper-btn { display: flex; align-items: center; justify-content: center; gap: 0.75rem; background-color: #fff; color: #3c4043; border: 1px solid #dadce0; padding: 12px 24px; border-radius: 9999px; font-size: 16px; font-weight: 500; cursor: pointer; transition: background-color 0.2s ease; width: 100%; margin-top: 1rem; font-family: 'Google Sans', 'Roboto', sans-serif; }
+    .gatekeeper-btn:hover { background-color: #f7f8f8; box-shadow: 0 1px 2px rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15); }
+    .spinner-orange { border: 3px solid #ffe0b2; border-top: 3px solid #FF9933; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
+    .logo-frame { border-radius: 50%; border: 4px solid #f8fafc; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); padding: 4px; background: white; object-fit: contain; }
+
+    /* Modal Uploader Styles */
+    .bg-modal-content {
+        background-color: #1d2347 !important;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    .bg-modal-content::-webkit-scrollbar { width: 8px; }
+    .bg-modal-content::-webkit-scrollbar-track { background: #161e3d; }
+    .bg-modal-content::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 10px; }
+
+                            /* KPI Glow Effects */
+                            .kpi-glow-base {
+                                border: 1px solid transparent !important; /* Override default border */
+                                background-origin: border-box;
+                                background-clip: padding-box, border-box;
+                                position: relative;
+                            }
+
+                            .kpi-glow-blue {
+                                background-image: linear-gradient(var(--card-bg, #1d2347), var(--card-bg, #1d2347)), linear-gradient(135deg, #3b82f6, #06b6d4); /* Blue to Cyan */
+                                box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+                            }
+
+                            .kpi-glow-green {
+                                background-image: linear-gradient(var(--card-bg, #1d2347), var(--card-bg, #1d2347)), linear-gradient(135deg, #22c55e, #10b981); /* Green to Emerald */
+                                box-shadow: 0 0 15px rgba(34, 197, 94, 0.4);
+                            }
+
+                            .kpi-glow-yellow {
+                                background-image: linear-gradient(var(--card-bg, #1d2347), var(--card-bg, #1d2347)), linear-gradient(135deg, #eab308, #f59e0b); /* Yellow to Amber */
+                                box-shadow: 0 0 15px rgba(234, 179, 8, 0.4);
+                            }
+
+                            .kpi-glow-purple {
+                                background-image: linear-gradient(var(--card-bg, #1d2347), var(--card-bg, #1d2347)), linear-gradient(135deg, #a855f7, #ec4899); /* Purple to Pink */
+                                box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
+                            }
+
+    /* Fix Table Headers in Light Mode */
+    html.light .sticky-header th {
+        background-color: #e2e8f0 !important; /* slate-200 */
+        color: #1e293b !important; /* slate-800 */
+        border-bottom: 2px solid #cbd5e1 !important; /* slate-300 */
+    }
+
+    /* Fix "Total do Mês" row in Weekly View */
+    html.light .bg-slate-700\/50 {
+        background-color: #e2e8f0 !important; /* slate-200 */
+        color: #1e293b !important;
+    }
+
+    /* Fix Buttons (Clear Filters, etc) in Light Mode */
+    html.light button.bg-slate-600 {
+        background-color: #cbd5e1 !important; /* slate-300 */
+        color: #1e293b !important; /* slate-800 */
+        border-color: #94a3b8 !important; /* slate-400 */
+    }
+    html.light button.bg-slate-600:hover {
+        background-color: #94a3b8 !important; /* slate-400 */
+    }
+
+    /* Fix Hover on Table Rows - User requested Orange */
+    /* Includes 700, 700/50, and 800 shades used in different tables */
+    html.light .hover\:bg-slate-700:hover,
+    html.light .hover\:bg-slate-700\/50:hover,
+    html.light .hover\:bg-slate-800:hover {
+        background-color: #FF9933 !important;
+        color: #ffffff !important;
+    }
+
+    /* Ensure links inside the hovered orange row are white */
+    html.light .hover\:bg-slate-700:hover a,
+    html.light .hover\:bg-slate-700\/50:hover a,
+    html.light .hover\:bg-slate-800:hover a {
+        color: #ffffff !important;
+        text-decoration-color: #ffffff !important;
+    }
+
+    /* Fix Uploader Modal in Light Mode */
+    html.light .bg-modal-content {
+        background-color: #ffffff !important;
+        color: #1e293b !important; /* dark slate text */
+        border: 1px solid #cbd5e1;
+    }
+
+    /* Fix Badge Backgrounds for Light Mode */
+    html.light .bg-green-500\/20 { background-color: #dcfce7 !important; }
+    html.light .bg-blue-500\/20 { background-color: #dbeafe !important; }
+    html.light .bg-yellow-500\/20 { background-color: #fef9c3 !important; }
+    html.light .bg-slate-500\/20 { background-color: #f1f5f9 !important; }
+
+    /* Fix Pagination Buttons */
+    html.light #table-pagination-controls button {
+        background-color: #FF9933 !important;
+        color: #ffffff !important;
+        border-color: #ea580c !important;
+    }
+    html.light #table-pagination-controls button:disabled {
+        background-color: #cbd5e1 !important;
+        border-color: #94a3b8 !important;
+        cursor: not-allowed;
+    }
+
+    /* Fix Specific Input Backgrounds if missed */
+    html.light input.bg-slate-800, html.light select.bg-slate-800 {
+         background-color: #ffffff !important;
+         color: #1e293b !important;
+         border-color: #cbd5e1 !important;
+    }
+
+    /* Fix KPI Title Colors in Light Mode */
+    html.light .kpi-card .text-slate-300 {
+        color: #475569 !important; /* slate-600 */
+    }
+    html.light .kpi-card .text-xs.text-slate-300 {
+         color: #64748b !important; /* slate-500 */
+    }
+
+    /* Fix Header Title "PRIME" color in Light Mode */
+    html.light header h1 .text-yellow-300 {
+        color: #ffffff !important;
+    }
+
+    /* --- GOALS VIEW LIGHT MODE FIXES --- */
+
+    /* 1. Ensure Header is Orange */
+    html.light header.bg-gradient-to-r {
+        background: #FF9933 !important;
+    }
+
+    /* 2. Fix Text Contrast in Goals View (General) */
+    html.light .text-green-300 { color: #15803d !important; } /* green-700 */
+    html.light .text-teal-400 { color: #0f766e !important; } /* teal-700 */
+    html.light .text-orange-400 { color: #c2410c !important; } /* orange-700 */
+    html.light .text-purple-400 { color: #7e22ce !important; } /* purple-700 */
+    html.light .text-yellow-300 { color: #b45309 !important; } /* amber-700 */
+    html.light .text-yellow-400 { color: #b45309 !important; } /* amber-700 */
+    html.light .text-blue-300 { color: #1d4ed8 !important; } /* blue-700 */
+    html.light .text-emerald-300 { color: #047857 !important; } /* emerald-700 */
+    html.light .text-pink-400 { color: #be185d !important; } /* pink-700 */
+    html.light .text-cyan-400 { color: #0e7490 !important; } /* cyan-700 */
+
+    /* 3. Specific Bold & Darker Colors for SV Report Table in Light Mode */
+    html.light #goals-sv-main-table tbody .text-teal-400,
+    html.light #goals-sv-main-table tbody .text-green-400,
+    html.light #goals-sv-main-table tbody .text-emerald-300 {
+        color: #166534 !important; /* green-800 */
+        font-weight: 800 !important;
+    }
+
+    html.light #goals-sv-main-table tbody .text-orange-400,
+    html.light #goals-sv-main-table tbody .text-red-400 {
+        color: #991b1b !important; /* red-800 */
+        font-weight: 800 !important;
+    }
+
+    html.light #goals-sv-main-table tbody .text-yellow-400,
+    html.light #goals-sv-main-table tbody .text-yellow-300 {
+        color: #92400e !important; /* amber-800 */
+        font-weight: 800 !important;
+    }
+
+    html.light #goals-sv-main-table tbody .text-purple-400 {
+        color: #6b21a8 !important; /* purple-800 */
+        font-weight: 800 !important;
+    }
+
+    html.light #goals-sv-main-table tbody .text-pink-400 {
+        color: #9d174d !important; /* pink-800 */
+        font-weight: 800 !important;
+    }
+
+    /* GERAL column (text-white) needs to be bold dark in light mode */
+    html.light #goals-sv-main-table tbody .text-white {
+        color: #0f172a !important;
+        font-weight: 800 !important;
+    }
+
+    /* Fix Table Container & Body Backgrounds in Light Mode */
+    html.light #goals-sv-table-container {
+        background-color: #ffffff !important;
+        border-color: #e2e8f0 !important;
+    }
+    html.light #goals-sv-main-table tbody {
+        background-color: #ffffff !important;
+    }
+    /* Fix standard text colors in table that are hardcoded slate-300/400 */
+    html.light #goals-sv-main-table tbody .text-slate-300 {
+        color: #334155 !important; /* slate-700 */
+    }
+    html.light #goals-sv-main-table tbody .text-slate-400 {
+        color: #475569 !important; /* slate-600 */
+    }
+
+    /* Fix Header & Row Backgrounds in Goals Table (Light Mode) */
+    html.light #goals-sv-table-container thead {
+        background-color: #f8fafc !important; /* slate-50 */
+    }
+    html.light #goals-sv-table-container thead tr,
+    html.light #goals-sv-table-container thead th {
+        background-color: #f1f5f9 !important; /* slate-100 */
+        color: #334155 !important; /* slate-700 */
+        border-color: #cbd5e1 !important; /* slate-300 */
+    }
+
+    /* Supervisor Row (was bg-slate-800) */
+    html.light #goals-sv-main-table tbody tr.bg-slate-800 {
+        background-color: #e2e8f0 !important; /* slate-200 */
+        border-color: #cbd5e1 !important;
+    }
+    html.light #goals-sv-main-table tbody tr.bg-slate-800 td {
+        color: #1e293b !important; /* slate-800 */
+        background-color: #e2e8f0 !important; /* Ensure cells get the light background */
+    }
+
+    /* Fix Specific Input Cells with Dark Backgrounds in Light Mode */
+    html.light #goals-sv-main-table tbody td.bg-\[\#1e293b\],
+    html.light #goals-sv-main-table tbody td.bg-\[\#151c36\] {
+        background-color: #f8fafc !important; /* slate-50 - Lighter */
+        color: #1e293b !important;
+        border-color: #cbd5e1 !important;
+    }
+
+    /* Force cells to adopt row hover color in Light Mode (Fix Broken Lines) */
+    html.light #goals-sv-main-table tbody tr:hover td.bg-\[\#1e293b\],
+    html.light #goals-sv-main-table tbody tr:hover td.bg-\[\#151c36\] {
+        background-color: transparent !important; /* Let the orange row color show through */
+        color: #ffffff !important;
+    }
+
+    /* Ensure Inputs inside these cells are visible and readable when disabled */
+    html.light #goals-sv-main-table tbody td.bg-\[\#1e293b\] input,
+    html.light #goals-sv-main-table tbody td.bg-\[\#151c36\] input {
+        color: #1e293b !important; /* slate-800 */
+        font-weight: 700 !important;
+        background-color: transparent !important;
+        opacity: 1 !important; /* Force opacity for disabled inputs */
+        -webkit-text-fill-color: #1e293b !important; /* Force text color for Webkit/Chrome */
+    }
+
+    /* Ensure Inputs turn white on hover */
+    html.light #goals-sv-main-table tbody tr:hover td.bg-\[\#1e293b\] input,
+    html.light #goals-sv-main-table tbody tr:hover td.bg-\[\#151c36\] input {
+         color: #ffffff !important;
+         -webkit-text-fill-color: #ffffff !important;
+    }
+
+    /* Fix Adjustment Column Text Color & Background in Light Mode */
+    html.light #goals-sv-main-table tbody .text-yellow-500\/70 {
+        color: #b45309 !important; /* amber-700 - Darker for contrast */
+        background-color: #f8fafc !important; /* Ensure background is light */
+    }
+    html.light #goals-sv-main-table tbody tr:hover .text-yellow-500\/70 {
+        background-color: transparent !important;
+        color: #ffffff !important;
+    }
+    /* Grand Total Row (was bg-[#0f172a]) */
+    html.light #goals-sv-main-table tbody tr.bg-\[\#0f172a\] {
+        background-color: #cbd5e1 !important; /* slate-300 */
+        color: #0f172a !important; /* dark text */
+    }
+
+    /* Cell specific backgrounds (bg-blue-900/5 etc) */
+    html.light #goals-sv-main-table tbody .bg-blue-900\/5 {
+        background-color: #f8fafc !important; /* very light slate */
+    }
+    html.light #goals-sv-main-table tbody .bg-blue-900\/10 {
+        background-color: #f1f5f9 !important; /* light slate */
+    }
+
+    /* Header specific backgrounds (bg-slate-800/50 etc) */
+    html.light #goals-sv-table-container .bg-slate-800\/50 {
+        background-color: #e2e8f0 !important; /* slate-200 */
+    }
+
+    /* 4. Fix Tab Buttons (Rateio Metas / Relatório) */
+    html.light #goals-tabs {
+        background-color: #e2e8f0 !important;
+        border-color: #cbd5e1 !important;
+    }
+    html.light #goals-tabs button.text-slate-400 {
+        color: #64748b !important;
+    }
+    html.light #goals-tabs button.active {
+        background-color: #ffffff !important;
+        border-color: #0f766e !important; /* teal-700 */
+        color: #0f766e !important;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        font-weight: 800 !important;
+    }
+
+    /* 5. Fix Inactive Tab Buttons (Dark Slate) in other places if needed */
+    html.light .bg-\[\#334155\] {
+        background-color: #e2e8f0 !important;
+        color: #475569 !important;
+        border-color: #cbd5e1 !important;
+    }
+
+    /* 3. Fix Inactive Tab Buttons (Dark Slate) */
+    html.light .bg-\[\#334155\] {
+        background-color: #e2e8f0 !important;
+        color: #475569 !important;
+        border-color: #cbd5e1 !important;
+    }
+
+    /* 4. Fix Inputs inside Goal Cards */
+    /* Target inputs that use the dark bg-[#0f172a] specifically */
+    html.light input.bg-\[\#0f172a\] {
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+        border-color: #cbd5e1 !important;
+    }
+
+    /* 5. Fix Borders for Goal Cards (Input containers) */
+    html.light .border-green-900\/50 { border-color: #86efac !important; } /* green-300 */
+    html.light .border-blue-900\/50 { border-color: #93c5fd !important; } /* blue-300 */
+    html.light .border-purple-900\/50 { border-color: #d8b4fe !important; } /* purple-300 */
+    html.light .border-emerald-900\/50 { border-color: #6ee7b7 !important; } /* emerald-300 */
+    html.light .border-yellow-900\/50 { border-color: #fde047 !important; } /* yellow-300 */
+    html.light .border-teal-500\/50 { border-color: #0d9488 !important; } /* teal-600 */
+
+    /* 6. Fix "Rateio Metas" Tab Active State if needed */
+    html.light .border-teal-500.text-teal-500.active {
+        background-color: #ccfbf1 !important; /* teal-50 */
+        border-color: #0d9488 !important;
+        color: #0f766e !important;
+    }
