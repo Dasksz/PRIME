@@ -552,6 +552,19 @@
                     // Profile not approved - Enforce Block
                     telaLoading.classList.add('hidden');
                     telaPendente.classList.remove('hidden');
+
+                    // Update Pending Message based on specific status
+                    const statusMsg = document.getElementById('pendente-status-msg');
+                    if (statusMsg) {
+                        if (profile && profile.status === 'bloqueado') {
+                            statusMsg.textContent = "Acesso Bloqueado pelo Administrador";
+                            statusMsg.style.color = "#e53e3e"; // Red
+                        } else {
+                            statusMsg.textContent = "Aguardando Liberação";
+                            statusMsg.style.color = "#FF9933"; // Orange
+                        }
+                    }
+
                     // Hide dashboard content just in case
                     const contentWrapper = document.getElementById('content-wrapper');
                     if(contentWrapper) contentWrapper.classList.add('hidden');
