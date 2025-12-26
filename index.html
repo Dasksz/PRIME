@@ -376,14 +376,87 @@
         background: #FF9933 !important;
     }
 
-    /* 2. Fix Text Contrast in Goals View */
+    /* 2. Fix Text Contrast in Goals View (General) */
     html.light .text-green-300 { color: #15803d !important; } /* green-700 */
     html.light .text-teal-400 { color: #0f766e !important; } /* teal-700 */
     html.light .text-orange-400 { color: #c2410c !important; } /* orange-700 */
     html.light .text-purple-400 { color: #7e22ce !important; } /* purple-700 */
     html.light .text-yellow-300 { color: #b45309 !important; } /* amber-700 */
+    html.light .text-yellow-400 { color: #b45309 !important; } /* amber-700 */
     html.light .text-blue-300 { color: #1d4ed8 !important; } /* blue-700 */
     html.light .text-emerald-300 { color: #047857 !important; } /* emerald-700 */
+    html.light .text-pink-400 { color: #be185d !important; } /* pink-700 */
+    html.light .text-cyan-400 { color: #0e7490 !important; } /* cyan-700 */
+
+    /* 3. Specific Bold & Darker Colors for SV Report Table in Light Mode */
+    html.light #goals-sv-table-body .text-teal-400,
+    html.light #goals-sv-table-body .text-green-400,
+    html.light #goals-sv-table-body .text-emerald-300 {
+        color: #0f766e !important;
+        font-weight: 800 !important;
+    }
+
+    html.light #goals-sv-table-body .text-orange-400,
+    html.light #goals-sv-table-body .text-red-400 {
+        color: #c2410c !important;
+        font-weight: 800 !important;
+    }
+
+    html.light #goals-sv-table-body .text-yellow-400,
+    html.light #goals-sv-table-body .text-yellow-300 {
+        color: #b45309 !important;
+        font-weight: 800 !important;
+    }
+
+    html.light #goals-sv-table-body .text-purple-400 {
+        color: #7e22ce !important;
+        font-weight: 800 !important;
+    }
+
+    /* GERAL column (text-white) needs to be bold dark in light mode */
+    html.light #goals-sv-table-body .text-white {
+        color: #0f172a !important;
+        font-weight: 800 !important;
+    }
+
+    /* Fix Table Container & Body Backgrounds in Light Mode */
+    html.light #goals-sv-table-container {
+        background-color: #ffffff !important;
+        border-color: #e2e8f0 !important;
+    }
+    html.light #goals-sv-table-body {
+        background-color: #ffffff !important;
+    }
+    /* Fix standard text colors in table that are hardcoded slate-300/400 */
+    html.light #goals-sv-table-body .text-slate-300 {
+        color: #334155 !important; /* slate-700 */
+    }
+    html.light #goals-sv-table-body .text-slate-400 {
+        color: #475569 !important; /* slate-600 */
+    }
+
+    /* 4. Fix Tab Buttons (Rateio Metas / Relatório) */
+    html.light #goals-tabs {
+        background-color: #e2e8f0 !important;
+        border-color: #cbd5e1 !important;
+    }
+    html.light #goals-tabs button.text-slate-400 {
+        color: #64748b !important;
+    }
+    html.light #goals-tabs button.active {
+        background-color: #ffffff !important;
+        border-color: #0f766e !important; /* teal-700 */
+        color: #0f766e !important;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        font-weight: 800 !important;
+    }
+
+    /* 5. Fix Inactive Tab Buttons (Dark Slate) in other places if needed */
+    html.light .bg-\[\#334155\] {
+        background-color: #e2e8f0 !important;
+        color: #475569 !important;
+        border-color: #cbd5e1 !important;
+    }
 
     /* 3. Fix Inactive Tab Buttons (Dark Slate) */
     html.light .bg-\[\#334155\] { 
