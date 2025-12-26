@@ -58,6 +58,10 @@
     html.light .text-white { color: var(--text-heading) !important; }
     html.light .text-slate-300 { color: var(--text-primary) !important; }
     html.light .text-slate-400 { color: #64748b !important; } /* slate-500 */
+    html.light .text-green-400 { color: #15803d !important; } /* green-700 */
+    html.light .text-red-400 { color: #b91c1c !important; } /* red-700 */
+    html.light td.text-green-400, html.light td .text-green-400 { font-weight: 800 !important; }
+    html.light td.text-red-400, html.light td .text-red-400 { font-weight: 800 !important; }
     
     /* Light Mode Overrides for Specific Dark Backgrounds */
     html.light .bg-\[\#0f172a\] { background-color: #f1f5f9 !important; } /* Light gray instead of very dark blue */
@@ -358,6 +362,11 @@
     }
     html.light .kpi-card .text-xs.text-slate-300 {
          color: #64748b !important; /* slate-500 */
+    }
+
+    /* Fix Header Title "PRIME" color in Light Mode */
+    html.light header h1 .text-yellow-300 {
+        color: #ffffff !important;
     }
 
     /* --- GOALS VIEW LIGHT MODE FIXES --- */
