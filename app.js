@@ -9231,8 +9231,30 @@ const supervisorGroups = new Map();
             };
 
             const clearTable = async (table, pkColumn = 'id') => {
-                // Deleta todas as linhas da tabela (onde pkColumn não é nulo)
-                // É mais seguro usar uma condição que sempre é verdadeira se não houver truncate explícito
+                // Tenta limpar usando a função RPC 'truncate_table' (muito mais rápido e sem timeout)
+                // Isso resolve o erro "canceling statement due to statement timeout" em tabelas grandes
+                try {
+                    const rpcResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/truncate_table`, {
+                        method: 'POST',
+                        headers: {
+                            'apikey': apiKeyHeader,
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ table_name: table })
+                    });
+
+                    if (rpcResponse.ok) {
+                        return; // Sucesso com TRUNCATE
+                    } else {
+                        // Se falhar (ex: função não existe), faz fallback para o método antigo
+                        console.warn(`RPC truncate_table falhou para ${table}, tentando DELETE convencional...`, rpcResponse.status);
+                    }
+                } catch (e) {
+                    console.warn(`Erro ao chamar RPC truncate_table para ${table}, tentando DELETE convencional...`, e);
+                }
+
+                // Fallback: Deleta todas as linhas da tabela (onde pkColumn não é nulo)
                 const response = await fetch(`${supabaseUrl}/rest/v1/${table}?${pkColumn}=not.is.null`, {
                     method: 'DELETE',
                     headers: {
