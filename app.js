@@ -6188,7 +6188,7 @@ const supervisorGroups = new Map();
             const weekNumbers = Object.keys(salesByWeekAndDay).sort((a,b) => a - b);
             const professionalPalette = ['#14b8a6', '#6366f1', '#ec4899', '#f97316', '#8b5cf6'];
             const currentMonthDatasets = weekNumbers.map((weekNum, index) => ({ label: `Semana ${weekNum}`, data: weekLabels.map(day => salesByWeekAndDay[weekNum][day] || 0), backgroundColor: professionalPalette[index % professionalPalette.length] }));
-            const supervisorsForHistory = selectedSupervisors.length > 0 ? selectedSupervisors : Object.keys(historicalBests).map(s => s.toLowerCase().replace(/(?:^|\s)\S/g, a => a.toUpperCase()));
+            const supervisorsForHistory = selectedWeeklySupervisors.length > 0 ? selectedWeeklySupervisors : Object.keys(historicalBests).map(s => s.toLowerCase().replace(/(?:^|\s)\S/g, a => a.toUpperCase()));
             const historicalDataForChart = [0, 0, 0, 0, 0];
             supervisorsForHistory.forEach(sup => { const bests = historicalBests[sup.toUpperCase()]; if(bests) { historicalDataForChart[0] += bests[1] || 0; historicalDataForChart[1] += bests[2] || 0; historicalDataForChart[2] += bests[3] || 0; historicalDataForChart[3] += bests[4] || 0; historicalDataForChart[4] += bests[5] || 0; } });
             const historicalDataset = { type: 'line', label: 'Melhor Dia Mês Anterior', data: historicalDataForChart, borderColor: '#f59e0b', backgroundColor: 'transparent', pointBackgroundColor: '#f59e0b', pointRadius: 4, tension: 0.1, borderWidth: 2, yAxisID: 'y', datalabels: { display: false } };
