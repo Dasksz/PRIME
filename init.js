@@ -302,15 +302,21 @@
                 let count = 0;
                 let countError = null;
 
-                // Attempt 1: Exact Count
+                // Optimization: Skip 'exact' count for large tables to avoid 500 errors
+                let countMethod = 'exact';
+                if (table === 'data_history' || table === 'data_detailed') {
+                    countMethod = 'planned';
+                }
+
+                // Attempt 1: Initial Preference
                 ({ count, error: countError } = await supabaseClient
                     .from(table)
-                    .select('*', { count: 'exact', head: true }));
+                    .select('*', { count: countMethod, head: true }));
 
                 if (countError) {
-                    console.warn(`Exact count failed for ${table}, retrying with 'planned'...`, countError);
+                    console.warn(`${countMethod} count failed for ${table}, retrying with 'planned'...`, countError);
 
-                    // Attempt 2: Planned Count (Faster, slightly less accurate)
+                    // Attempt 2: Planned Count (Faster)
                     ({ count, error: countError } = await supabaseClient
                         .from(table)
                         .select('*', { count: 'planned', head: true }));
@@ -318,7 +324,7 @@
                     if (countError) {
                         console.warn(`Planned count failed for ${table}, retrying with 'estimated'...`, countError);
 
-                        // Attempt 3: Estimated Count (Fastest, least accurate)
+                        // Attempt 3: Estimated Count (Fastest)
                         ({ count, error: countError } = await supabaseClient
                             .from(table)
                             .select('*', { count: 'estimated', head: true }));
@@ -328,6 +334,11 @@
                             throw countError;
                         }
                     }
+                }
+
+                // Add buffer for estimated counts to ensure we get everything if estimate is low
+                if (countMethod !== 'exact' || countError) { // If we fell back or started with non-exact
+                     count = Math.ceil(count * 1.10); // +10% safety buffer
                 }
                 
                 if (count === 0) return format === 'columnar' ? { columns: [], values: {}, length: 0 } : [];
