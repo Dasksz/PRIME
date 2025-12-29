@@ -759,7 +759,12 @@
         const cityTipoVendaFilterText = document.getElementById('city-tipo-venda-filter-text');
         const cityTipoVendaFilterDropdown = document.getElementById('city-tipo-venda-filter-dropdown');
 
-        const weeklySupervisorFilter = document.getElementById('weekly-supervisor-filter');
+        const weeklySupervisorFilterBtn = document.getElementById('weekly-supervisor-filter-btn');
+        const weeklySupervisorFilterText = document.getElementById('weekly-supervisor-filter-text');
+        const weeklySupervisorFilterDropdown = document.getElementById('weekly-supervisor-filter-dropdown');
+        const weeklyVendedorFilterBtn = document.getElementById('weekly-vendedor-filter-btn');
+        const weeklyVendedorFilterText = document.getElementById('weekly-vendedor-filter-text');
+        const weeklyVendedorFilterDropdown = document.getElementById('weekly-vendedor-filter-dropdown');
         const clearWeeklyFiltersBtn = document.getElementById('clear-weekly-filters-btn');
         const totalMesSemanalEl = document.getElementById('total-mes-semanal');
         const weeklyFornecedorToggleContainer = document.getElementById('weekly-fornecedor-toggle-container');
@@ -992,6 +997,8 @@
 
         let selectedMainRedes = [];
         let selectedCityRedes = [];
+        let selectedWeeklySupervisors = [];
+        let selectedWeeklySellers = [];
         let selectedComparisonRedes = [];
         let selectedStockRedes = [];
 
@@ -5694,9 +5701,13 @@ const supervisorGroups = new Map();
         }
 
         function resetWeeklyFilters() {
-            weeklySupervisorFilter.querySelectorAll('input:checked').forEach(cb => cb.checked = false);
+            selectedWeeklySupervisors = [];
+            selectedWeeklySellers = [];
             currentWeeklyFornecedor = '';
             document.querySelectorAll('#weekly-fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
+
+            // Re-populate will handle resetting the dropdown UI text and checkboxes based on empty selected arrays
+            populateWeeklyFilters();
             updateWeeklyView();
         }
 
@@ -6146,47 +6157,25 @@ const supervisorGroups = new Map();
         }
 
         function populateWeeklyFilters() {
-            const forbidden = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'SUPERVISOR'];
-            const supervisors = [...new Set(allSalesData.map(item => item.SUPERV).filter(Boolean).filter(sup => sup !== 'BALCAO' && !forbidden.includes(sup.toUpperCase())))].sort();
-            weeklySupervisorFilter.innerHTML = '';
-            supervisors.forEach(sup => { weeklySupervisorFilter.innerHTML += `<div class="flex items-center"><input id="sup-check-${sup.replace(/\s+/g, '-')}" type="checkbox" value="${sup}" class="w-4 h-4 text-teal-600 bg-slate-700 border-slate-600 rounded focus:ring-teal-600 ring-offset-slate-800 focus:ring-2"><label for="sup-check-${sup.replace(/\s+/g, '-')}" class="ml-2 text-sm font-medium text-slate-300">${sup}</label></div>`; });
+            selectedWeeklySupervisors = updateSupervisorFilter(weeklySupervisorFilterDropdown, weeklySupervisorFilterText, selectedWeeklySupervisors, allSalesData);
+            selectedWeeklySellers = updateSellerFilter(selectedWeeklySupervisors, weeklyVendedorFilterDropdown, weeklyVendedorFilterText, selectedWeeklySellers, allSalesData);
         }
 
         function updateWeeklyView() {
-            const selectedSupervisors = Array.from(weeklySupervisorFilter.querySelectorAll('input:checked')).map(cb => cb.value);
-
-            // Optimize using indices
-            const filters = {};
-            if (selectedSupervisors.length > 0) {
-                 // getFilteredDataFromIndices expects 'supervisor' as string, but we have multiple.
-                 // Indices for 'bySupervisor' is a Map<Name, Set<Id>>.
-                 // We can manually intersect or just pass null if complex multiselect logic isn't supported by that helper yet.
-                 // But getFilteredDataFromIndices doesn't support multiple supervisors array directly in 'filters.supervisor'.
-                 // However, we can filter after or adapt.
-                 // Let's manually use the indices here for maximum speed if we want to replace O(N).
-            }
-
-            // Actually, getFilteredDataFromIndices doesn't support multi-supervisor array yet, only single.
-            // Let's stick to a simpler optimization: Use the pasta filter index if available.
-
             let dataForGeneralCharts;
 
-            if (currentWeeklyFornecedor) {
-                 // Use index
-                 if (optimizedData.indices.current.byPasta.has(currentWeeklyFornecedor)) {
-                     const ids = optimizedData.indices.current.byPasta.get(currentWeeklyFornecedor);
-                     dataForGeneralCharts = [];
-                     ids.forEach(id => dataForGeneralCharts.push(optimizedData.salesById.get(id)));
-                 } else {
-                     dataForGeneralCharts = [];
-                 }
+            // Use the generic filtering helper which supports multiple selections
+            const filters = {
+                supervisor: selectedWeeklySupervisors.length > 0 ? new Set(selectedWeeklySupervisors) : null,
+                seller: selectedWeeklySellers.length > 0 ? new Set(selectedWeeklySellers) : null,
+                pasta: currentWeeklyFornecedor || null
+            };
+
+            // If we have filters, use optimized lookup
+            if (filters.supervisor || filters.seller || filters.pasta) {
+                dataForGeneralCharts = getFilteredDataFromIndices(optimizedData.indices.current, optimizedData.salesById, filters);
             } else {
                 dataForGeneralCharts = allSalesData;
-            }
-
-            if (selectedSupervisors.length > 0) {
-                const supSet = new Set(selectedSupervisors);
-                dataForGeneralCharts = dataForGeneralCharts.filter(d => supSet.has(d.SUPERV));
             }
 
             const currentMonth = lastSaleDate.getUTCMonth(); const currentYear = lastSaleDate.getUTCFullYear();
@@ -6212,7 +6201,19 @@ const supervisorGroups = new Map();
                 Object.keys(salesByWeekAndDay).sort((a,b) => parseInt(a) - parseInt(b)).forEach(weekNum => { const weekTotal = Object.values(salesByWeekAndDay[weekNum]).reduce((a, b) => a + b, 0); grandTotal += weekTotal; weeklySummaryTableBody.innerHTML += `<tr class="hover:bg-slate-700"><td class="px-4 py-2">Semana ${weekNum}</td><td class="px-4 py-2 text-right">${weekTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td></tr>`; });
                 weeklySummaryTableBody.innerHTML += `<tr class="font-bold bg-slate-700/50"><td class="px-4 py-2">Total do Mês</td><td class="px-4 py-2 text-right">${grandTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td></tr>`;
             }
-            const dataForRankings = dataForGeneralCharts.filter(d => d.SUPERV !== 'BALCAO');
+            let dataForRankings = dataForGeneralCharts.filter(d => d.SUPERV !== 'BALCAO');
+
+            // --- "AMERICANAS" Exclusion Logic ---
+            // If "AMERICANAS" is NOT explicitly selected in the vendor filter, exclude it from ranking charts.
+            // Assuming "AMERICANAS" appears as a Vendor name in sales data (d.NOME) or Client name?
+            // Usually AMERICANAS is a client, but sometimes mapped as a dummy vendor or huge account.
+            // The prompt says "o vendedor 'AMERICANAS'". So we check d.NOME.
+            const americanasSelected = selectedWeeklySellers.some(s => s.toUpperCase().includes('AMERICANAS'));
+            if (!americanasSelected) {
+                dataForRankings = dataForRankings.filter(d => !d.NOME.toUpperCase().includes('AMERICANAS'));
+            }
+            // ------------------------------------
+
             const positivacao = {}; dataForRankings.forEach(d => { if (!d.NOME || !d.CODCLI) return; if (!positivacao[d.NOME]) positivacao[d.NOME] = new Set(); positivacao[d.NOME].add(d.CODCLI); });
             const positivacaoRank = Object.entries(positivacao).map(([v, c]) => ({ vendedor: v, total: c.size })).sort((a, b) => b.total - a.total).slice(0, 10);
             if (positivacaoRank.length > 0) createChart('positivacaoChart', 'bar', positivacaoRank.map(r => getFirstName(r.vendedor)), positivacaoRank.map(r => r.total));
@@ -9846,7 +9847,34 @@ const supervisorGroups = new Map();
                     updateWeekly();
                 });
             });
-            weeklySupervisorFilter.addEventListener('change', updateWeekly);
+
+            weeklySupervisorFilterBtn.addEventListener('click', () => weeklySupervisorFilterDropdown.classList.toggle('hidden'));
+            weeklySupervisorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedWeeklySupervisors.push(value);
+                    else selectedWeeklySupervisors = selectedWeeklySupervisors.filter(s => s !== value);
+
+                    selectedWeeklySupervisors = updateSupervisorFilter(weeklySupervisorFilterDropdown, weeklySupervisorFilterText, selectedWeeklySupervisors, allSalesData);
+                    selectedWeeklySellers = updateSellerFilter(selectedWeeklySupervisors, weeklyVendedorFilterDropdown, weeklyVendedorFilterText, selectedWeeklySellers, allSalesData);
+                    updateWeekly();
+                }
+            });
+
+            weeklyVendedorFilterBtn.addEventListener('click', () => weeklyVendedorFilterDropdown.classList.toggle('hidden'));
+            weeklyVendedorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) {
+                        if (!selectedWeeklySellers.includes(value)) selectedWeeklySellers.push(value);
+                    } else {
+                        selectedWeeklySellers = selectedWeeklySellers.filter(s => s !== value);
+                    }
+                    updateSellerFilter(selectedWeeklySupervisors, weeklyVendedorFilterDropdown, weeklyVendedorFilterText, selectedWeeklySellers, allSalesData);
+                    updateWeekly();
+                }
+            });
+
             clearWeeklyFiltersBtn.addEventListener('click', () => { resetWeeklyFilters(); markDirty('semanal'); });
 
             // --- Comparison View Filters ---
