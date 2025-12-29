@@ -723,9 +723,9 @@
         const cityVendedorFilterBtn = document.getElementById('city-vendedor-filter-btn');
         const cityVendedorFilterText = document.getElementById('city-vendedor-filter-text');
         const cityVendedorFilterDropdown = document.getElementById('city-vendedor-filter-dropdown');
-            const citySupplierFilterBtn = document.getElementById('city-supplier-filter-btn');
-            const citySupplierFilterText = document.getElementById('city-supplier-filter-text');
-            const citySupplierFilterDropdown = document.getElementById('city-supplier-filter-dropdown');
+        const citySupplierFilterBtn = document.getElementById('city-supplier-filter-btn');
+        const citySupplierFilterText = document.getElementById('city-supplier-filter-text');
+        const citySupplierFilterDropdown = document.getElementById('city-supplier-filter-dropdown');
         const cityNameFilter = document.getElementById('city-name-filter');
         const cityCodCliFilter = document.getElementById('city-codcli-filter');
         const citySuggestions = document.getElementById('city-suggestions');
