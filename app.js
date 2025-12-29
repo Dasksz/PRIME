@@ -956,9 +956,9 @@
         let selectedMainSupervisors = [];
         let selectedMainSuppliers = [];
         let selectedTiposVenda = [];
-        let selectedCitySellers = [];
-        let selectedCitySuppliers = [];
-        let selectedCitySupervisors = [];
+        var selectedCitySellers = [];
+        var selectedCitySuppliers = [];
+        var selectedCitySupervisors = [];
         let selectedComparisonSellers = [];
         let selectedComparisonSupervisors = [];
         let selectedStockSellers = [];
