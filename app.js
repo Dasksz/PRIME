@@ -447,6 +447,9 @@
                 const client = getClient(i); // Hydrate object for processing
                 const codCli = String(client['Código'] || client['codigo_cliente']);
 
+                // Sanitize: Skip header rows if present
+                if (!codCli || codCli === 'Código' || codCli === 'codigo_cliente' || codCli === 'CODCLI' || codCli === 'CODIGO') continue;
+
                 // Normalize keys from Supabase (Upper) or Local/Legacy (Lower/Camel)
                 // mapKeysToUpper might have transformed 'cidade' -> 'CIDADE', 'ramo' -> 'RAMO', etc.
                 client.cidade = client.cidade || client.CIDADE || 'N/A';
@@ -477,7 +480,15 @@
                 clientRamoMap.set(codCli, client.ramo);
 
                 // Handle RCAS array (could be 'rcas' or 'RCAS')
-                const rcas = client.rcas || client.RCAS;
+                let rcas = client.rcas || client.RCAS;
+
+                // Sanitize RCAS: Filter out invalid values like "rcas" (header leak)
+                if (Array.isArray(rcas)) {
+                    rcas = rcas.filter(r => r && String(r).toLowerCase() !== 'rcas');
+                } else if (typeof rcas === 'string' && rcas.toLowerCase() === 'rcas') {
+                    rcas = [];
+                }
+
                 client.rcas = rcas; // Normalize for later use if needed
 
                 if (rcas) {
