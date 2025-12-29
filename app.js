@@ -266,7 +266,7 @@
                     processItemFn(item, index);
                     index++;
 
-                    if (index % 50 === 0 && performance.now() - start >= 12) { // Check budget every 50 items to reduce overhead
+                    if (index % 5 === 0 && performance.now() - start >= 12) { // Check budget frequently to avoid long tasks
                         break;
                     }
                 }
