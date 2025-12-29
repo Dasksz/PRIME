@@ -957,6 +957,7 @@
         let selectedMainSuppliers = [];
         let selectedTiposVenda = [];
         let selectedCitySellers = [];
+        let selectedCitySuppliers = [];
         let selectedCitySupervisors = [];
         let selectedComparisonSellers = [];
         let selectedComparisonSupervisors = [];
