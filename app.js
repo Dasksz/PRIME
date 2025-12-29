@@ -1415,6 +1415,10 @@
                 clients = clients.filter(c => c.rcas.some(r => rcasSet.has(r)));
             }
 
+            if (excludeFilter !== 'supplier' && selectedCitySuppliers.length > 0) {
+                 // No filtering of clients list based on supplier for now.
+            }
+
             if (excludeFilter !== 'city' && city) {
                 clients = clients.filter(c => c.cidade && c.cidade.toLowerCase() === city);
             }
@@ -5656,10 +5660,12 @@ const supervisorGroups = new Map();
             selectedCityRedes = [];
             cityRedeGroupFilter = '';
             selectedCityTiposVenda = [];
+            selectedCitySuppliers = [];
 
             selectedCitySupervisors = updateSupervisorFilter(document.getElementById('city-supervisor-filter-dropdown'), document.getElementById('city-supervisor-filter-text'), selectedCitySupervisors, allSalesData);
             selectedCitySellers = updateSellerFilter(selectedCitySupervisors, cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData);
             selectedCityTiposVenda = updateTipoVendaFilter(cityTipoVendaFilterDropdown, cityTipoVendaFilterText, selectedCityTiposVenda, allSalesData);
+            selectedCitySuppliers = updateSupplierFilter(document.getElementById('city-supplier-filter-dropdown'), document.getElementById('city-supplier-filter-text'), selectedCitySuppliers, [...allSalesData, ...allHistoryData], 'city');
 
             cityRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
             cityRedeGroupContainer.querySelector('button[data-group=""]').classList.add('active');
@@ -5766,6 +5772,10 @@ const supervisorGroups = new Map();
                 clients = clients.filter(c => c.rcas.some(r => rcasSet.has(r)));
             }
 
+            if (excludeFilter !== 'supplier' && selectedCitySuppliers.length > 0) {
+                 // No filtering of clients list based on supplier for now.
+            }
+
             if (excludeFilter !== 'city' && cityInput) {
                 clients = clients.filter(c => (c.cidade || c.CIDADE) && (c.cidade || c.CIDADE).toLowerCase() === cityInput);
             }
@@ -5783,7 +5793,8 @@ const supervisorGroups = new Map();
                 seller: sellersSet,
                 city: cityInput,
                 tipoVenda: tiposVendaSet,
-                clientCodes: clientCodes
+                clientCodes: clientCodes,
+                supplier: new Set(selectedCitySuppliers)
             };
 
             const sales = getFilteredDataFromIndices(optimizedData.indices.current, optimizedData.salesById, filters, excludeFilter);
@@ -5804,6 +5815,9 @@ const supervisorGroups = new Map();
 
             const { sales: salesTV } = getCityFilteredData({ excludeFilter: 'tipoVenda' });
             selectedCityTiposVenda = updateTipoVendaFilter(cityTipoVendaFilterDropdown, cityTipoVendaFilterText, selectedCityTiposVenda, salesTV, skipFilter === 'tipoVenda');
+
+            const { sales: salesSupplier } = getCityFilteredData({ excludeFilter: 'supplier' });
+            selectedCitySuppliers = updateSupplierFilter(document.getElementById('city-supplier-filter-dropdown'), document.getElementById('city-supplier-filter-text'), selectedCitySuppliers, salesSupplier, 'city');
 
             if (skipFilter !== 'rede') {
                  const { clients: clientsRede } = getCityFilteredData({ excludeFilter: 'rede' });
@@ -8859,6 +8873,12 @@ const supervisorGroups = new Map();
             if (includeFaturamento) tableColumn.splice(2, 0, "Faturamento");
 
             clientList.sort((a, b) => {
+                if (includeFaturamento) {
+                    const valA = a.total || 0;
+                    const valB = b.total || 0;
+                    if (valB !== valA) return valB - valA;
+                }
+
                 const cidadeA = a.cidade || a.CIDADE || a['Nome da Cidade'] || '';
                 const cidadeB = b.cidade || b.CIDADE || b['Nome da Cidade'] || '';
                 const bairroA = a.bairro || a.BAIRRO || '';
@@ -9628,6 +9648,19 @@ const supervisorGroups = new Map();
                 }
             });
 
+            citySupplierFilterBtn.addEventListener('click', () => citySupplierFilterDropdown.classList.toggle('hidden'));
+            citySupplierFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox' && e.target.dataset.filterType === 'city') {
+                    const { value, checked } = e.target;
+                    if (checked) {
+                        if (!selectedCitySuppliers.includes(value)) selectedCitySuppliers.push(value);
+                    } else {
+                        selectedCitySuppliers = selectedCitySuppliers.filter(s => s !== value);
+                    }
+                    handleCityFilterChange({ skipFilter: 'supplier' });
+                }
+            });
+
             cityTipoVendaFilterBtn.addEventListener('click', () => cityTipoVendaFilterDropdown.classList.toggle('hidden'));
             cityTipoVendaFilterDropdown.addEventListener('change', (e) => {
                 if (e.target.type === 'checkbox') {
@@ -9704,6 +9737,7 @@ const supervisorGroups = new Map();
 
                 if (!citySupervisorFilterBtn.contains(e.target) && !citySupervisorFilterDropdown.contains(e.target)) citySupervisorFilterDropdown.classList.add('hidden');
                 if (!cityVendedorFilterBtn.contains(e.target) && !cityVendedorFilterDropdown.contains(e.target)) cityVendedorFilterDropdown.classList.add('hidden');
+                if (!citySupplierFilterBtn.contains(e.target) && !citySupplierFilterDropdown.contains(e.target)) citySupplierFilterDropdown.classList.add('hidden');
                 if (!cityTipoVendaFilterBtn.contains(e.target) && !cityTipoVendaFilterDropdown.contains(e.target)) cityTipoVendaFilterDropdown.classList.add('hidden');
                 if (!cityComRedeBtn.contains(e.target) && !cityRedeFilterDropdown.contains(e.target)) cityRedeFilterDropdown.classList.add('hidden');
                 if (!mainComRedeBtn.contains(e.target) && !mainRedeFilterDropdown.contains(e.target)) mainRedeFilterDropdown.classList.add('hidden');
