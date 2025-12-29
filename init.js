@@ -580,7 +580,7 @@
 
             // Inject Logic
             const scriptEl = document.createElement('script');
-            scriptEl.src = 'app.js';
+            scriptEl.src = 'app.js?v=' + Date.now();
             scriptEl.onload = () => {
                 loader.classList.add('hidden');
                 document.getElementById('content-wrapper').classList.remove('hidden');
