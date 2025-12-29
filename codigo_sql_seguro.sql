@@ -1,283 +1,40 @@
--- Enable UUID extension
-create extension if not exists "uuid-ossp";
+-- Fix for "Function Search Path Mutable" warnings
+-- This script dynamically sets the search_path to 'public' for specific functions identified in the security report.
+-- It handles overloaded functions by querying the system catalog for the correct argument signatures.
 
--- 1. Tabela de Vendas Detalhadas (Mês Atual)
-create table if not exists public.data_detailed (
-  id uuid default uuid_generate_v4 () primary key,
-  pedido text,
-  nome text, -- Vendedor
-  superv text, -- Supervisor
-  produto text,
-  descricao text,
-  fornecedor text,
-  observacaofor text, -- Pasta
-  codfor text,
-  codusur text,
-  codcli text,
-  qtvenda numeric,
-  codsupervisor text,
-  vlvenda numeric,
-  vlbonific numeric,
-  totpesoliq numeric,
-  dtped timestamp with time zone,
-  dtsaida timestamp with time zone,
-  posicao text,
-  estoqueunit numeric,
-  qtvenda_embalagem_master numeric,
-  tipovenda text,
-  filial text,
-  cliente_nome text, -- Otimização: Desnormalizado para reduzir lookups no front
-  cidade text,
-  bairro text
-);
-
-alter table public.data_detailed add column if not exists observacaofor text;
-
--- 2. Tabela de Histórico de Vendas (Trimestre)
-create table if not exists public.data_history (
-  id uuid default uuid_generate_v4 () primary key,
-  pedido text,
-  nome text,
-  superv text,
-  produto text,
-  descricao text,
-  fornecedor text,
-  observacaofor text,
-  codfor text,
-  codusur text,
-  codcli text,
-  qtvenda numeric,
-  codsupervisor text,
-  vlvenda numeric,
-  vlbonific numeric,
-  totpesoliq numeric,
-  dtped timestamp with time zone,
-  dtsaida timestamp with time zone,
-  posicao text,
-  estoqueunit numeric,
-  qtvenda_embalagem_master numeric,
-  tipovenda text,
-  filial text
-);
-
-alter table public.data_history add column if not exists observacaofor text;
-
--- 3. Tabela de Clientes
-create table if not exists public.data_clients (
-  id uuid default uuid_generate_v4 () primary key,
-  codigo_cliente text unique,
-  rca1 text,
-  rca2 text,
-  rcas text[], -- Array de RCAs
-  cidade text,
-  nomecliente text,
-  bairro text,
-  razaosocial text,
-  fantasia text,
-  cnpj_cpf text,
-  endereco text,
-  numero text,
-  cep text,
-  telefone text,
-  email text,
-  ramo text,
-  ultimacompra timestamp with time zone,
-  datacadastro timestamp with time zone,
-  bloqueio text,
-  inscricaoestadual text
-);
-
--- 4. Tabela de Pedidos Agregados
-create table if not exists public.data_orders (
-  id uuid default uuid_generate_v4 () primary key,
-  pedido text unique,
-  codcli text,
-  cliente_nome text,
-  cidade text,
-  nome text, -- Vendedor
-  superv text, -- Supervisor
-  fornecedores_str text,
-  dtped timestamp with time zone,
-  dtsaida timestamp with time zone,
-  posicao text,
-  vlvenda numeric,
-  totpesoliq numeric,
-  filial text,
-  tipovenda text,
-  fornecedores_list text[],
-  codfors_list text[]
-);
-
-alter table public.data_orders add column if not exists tipovenda text;
-alter table public.data_orders add column if not exists fornecedores_list text[];
-alter table public.data_orders add column if not exists codfors_list text[];
-
--- 5. Tabela de Detalhes de Produtos
-create table if not exists public.data_product_details (
-  code text primary key,
-  descricao text,
-  fornecedor text,
-  codfor text,
-  dtcadastro timestamp with time zone,
-  pasta text
-);
-
-alter table public.data_product_details add column if not exists pasta text;
-
--- 6. Tabela de Produtos Ativos
-create table if not exists public.data_active_products (code text primary key);
-
--- 7. Tabela de Estoque
-create table if not exists public.data_stock (
-  id uuid default uuid_generate_v4 () primary key,
-  product_code text,
-  filial text,
-  stock_qty numeric
-);
-
--- 8. Tabela de Inovações
-create table if not exists public.data_innovations (
-  id uuid default uuid_generate_v4 () primary key,
-  codigo text,
-  produto text,
-  inovacoes text
-);
-
--- 9. Tabela de Metadados
-create table if not exists public.data_metadata (key text primary key, value text);
-
--- 10. Tabela para Salvar Metas
-create table if not exists public.goals_distribution (
-  id uuid default uuid_generate_v4 () primary key,
-  month_key text not null,
-  supplier text not null,
-  brand text default 'GENERAL',
-  goals_data jsonb not null,
-  updated_at timestamp with time zone default now(),
-  updated_by text
-);
-
-create unique index if not exists idx_goals_unique on public.goals_distribution (month_key, supplier, brand);
-
--- 11. Tabela de Perfis de Usuário
-create table if not exists public.profiles (
-  id uuid references auth.users on delete cascade not null primary key,
-  email text,
-  status text default 'pendente', -- pendente, aprovado, bloqueado
-  role text default 'user',
-  created_at timestamp with time zone default now(),
-  updated_at timestamp with time zone default now()
-);
-
--- RLS Enable
-alter table public.data_detailed enable row level security;
-alter table public.data_history enable row level security;
-alter table public.data_clients enable row level security;
-alter table public.data_orders enable row level security;
-alter table public.data_product_details enable row level security;
-alter table public.data_active_products enable row level security;
-alter table public.data_stock enable row level security;
-alter table public.data_innovations enable row level security;
-alter table public.data_metadata enable row level security;
-alter table public.goals_distribution enable row level security;
-alter table public.profiles enable row level security;
-
--- --- POLÍTICAS DE SEGURANÇA (RLS) ---
--- Apenas usuários autenticados E com status 'aprovado' na tabela profiles podem ler os dados.
-
--- Função auxiliar para verificar se o usuário está aprovado
-create or replace function public.is_approved()
-returns boolean as $$
-begin
-  return exists (
-    select 1 from public.profiles
-    where id = auth.uid()
-    and status = 'aprovado'
-  );
-end;
-$$ language plpgsql security definer;
-
--- Aplicando políticas
-
--- Data Detailed
-drop policy if exists "Enable read access for all users" on public.data_detailed;
-create policy "Acesso leitura aprovados" on public.data_detailed for select
-using (auth.role() = 'authenticated' and public.is_approved());
-
--- Data History
-drop policy if exists "Enable read access for all users" on public.data_history;
-create policy "Acesso leitura aprovados" on public.data_history for select
-using (auth.role() = 'authenticated' and public.is_approved());
-
--- Data Clients
-drop policy if exists "Enable read access for all users" on public.data_clients;
-create policy "Acesso leitura aprovados" on public.data_clients for select
-using (auth.role() = 'authenticated' and public.is_approved());
-
--- Data Orders
-drop policy if exists "Enable read access for all users" on public.data_orders;
-create policy "Acesso leitura aprovados" on public.data_orders for select
-using (auth.role() = 'authenticated' and public.is_approved());
-
--- Product Details
-drop policy if exists "Enable read access for all users" on public.data_product_details;
-create policy "Acesso leitura aprovados" on public.data_product_details for select
-using (auth.role() = 'authenticated' and public.is_approved());
-
--- Active Products
-drop policy if exists "Enable read access for all users" on public.data_active_products;
-create policy "Acesso leitura aprovados" on public.data_active_products for select
-using (auth.role() = 'authenticated' and public.is_approved());
-
--- Stock
-drop policy if exists "Enable read access for all users" on public.data_stock;
-create policy "Acesso leitura aprovados" on public.data_stock for select
-using (auth.role() = 'authenticated' and public.is_approved());
-
--- Innovations
-drop policy if exists "Enable read access for all users" on public.data_innovations;
-create policy "Acesso leitura aprovados" on public.data_innovations for select
-using (auth.role() = 'authenticated' and public.is_approved());
-
--- Metadata
-drop policy if exists "Enable read access for all users" on public.data_metadata;
-create policy "Acesso leitura aprovados" on public.data_metadata for select
-using (auth.role() = 'authenticated' and public.is_approved());
-
--- Goals Distribution
--- Permite leitura para aprovados
-drop policy if exists "Enable read access for all users" on public.goals_distribution;
-create policy "Acesso leitura aprovados" on public.goals_distribution for select
-using (auth.role() = 'authenticated' and public.is_approved());
-
--- Permite escrita (insert/update) apenas para aprovados (ou pode restringir a admins se tiver role)
-drop policy if exists "Enable insert/update for goals" on public.goals_distribution;
-create policy "Acesso escrita aprovados" on public.goals_distribution for all
-using (auth.role() = 'authenticated' and public.is_approved())
-with check (auth.role() = 'authenticated' and public.is_approved());
-
-
--- Profiles Policies (Mantidas padrão)
-drop policy if exists "Users can view own profile" on public.profiles;
-create policy "Users can view own profile" on public.profiles for select
-using (auth.uid() = id);
-
-drop policy if exists "Users can update own profile" on public.profiles;
-create policy "Users can update own profile" on public.profiles for update
-using (auth.uid() = id);
-
-
--- Trigger para criar profile ao cadastrar (Mantido)
-create or replace function public.handle_new_user () returns trigger language plpgsql security definer
-set search_path = public as $$
-begin
-  insert into public.profiles (id, email, status)
-  values (new.id, new.email, 'pendente');
-  return new;
-end;
-$$;
-
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-after insert on auth.users for each row
-execute procedure public.handle_new_user ();
+DO $$
+DECLARE
+    func_record RECORD;
+BEGIN
+    FOR func_record IN
+        SELECT
+            n.nspname AS schema_name,
+            p.proname AS function_name,
+            pg_get_function_identity_arguments(p.oid) AS args
+        FROM pg_proc p
+        JOIN pg_namespace n ON p.pronamespace = n.oid
+        WHERE n.nspname = 'public'
+          AND p.proname IN (
+              'get_initial_dashboard_data',
+              'get_comparison_data',
+              'get_filtered_client_base',
+              'get_city_view_data',
+              'get_comparison_view_data',
+              'get_orders_view_data',
+              'get_main_charts_data',
+              'get_detailed_orders_data',
+              'get_innovations_data_v2',
+              'get_weekly_view_data',
+              'get_innovations_view_data',
+              'get_detailed_orders',
+              'get_coverage_view_data',
+              'get_filtered_client_base_json',
+              'get_stock_view_data',
+              'is_approved'
+          )
+    LOOP
+        RAISE NOTICE 'Securing function: %.%(%)', func_record.schema_name, func_record.function_name, func_record.args;
+        EXECUTE format('ALTER FUNCTION %I.%I(%s) SET search_path = public',
+                       func_record.schema_name, func_record.function_name, func_record.args);
+    END LOOP;
+END $$;
