@@ -294,28 +294,15 @@
                 return columnar;
             };
 
-            const fetchAll = async (table, columns = null, type = null, format = 'object') => {
+            const fetchAll = async (table, columns = null, type = null, format = 'object', pkCol = 'id') => {
                 // Config
-                // Reduce CSV page size to 2500 to prevent 500 errors (timeout/memory)
+                // Keyset Pagination for reliability
                 const pageSize = 20000;
-                const CONCURRENCY_LIMIT = 4; // Reduced from 3 to improve stability
-
-                // Initial Count (Only for UI progress estimation, not for termination)
-                // We use 'estimated' which is fast but can be inaccurate.
-                let estimatedTotal = 100000;
-                // Removed HEAD request to prevent 500 errors and delays on large tables.
-                // The progress bar will just rely on chunks downloaded.
-
-                // Queue State
-                let pageIndex = 0;
-                let activeRequests = 0;
-                let hasMore = true;
-
-                // Reorder Buffer State
-                let nextExpectedPage = 0;
-                const bufferedPages = new Map(); // Map<pageIndex, data>
                 
                 let result = format === 'columnar' ? { columns: [], values: {}, length: 0 } : [];
+                let hasMore = true;
+                let lastId = null;
+                let pageIndex = 0;
 
                 // Track progress for UI
                 const reportProgress = () => {
@@ -324,108 +311,134 @@
                 };
 
                 return new Promise((resolve, reject) => {
-                    const processQueue = () => {
-                        // If no more pages to fetch, no active requests, and buffer empty, we are done.
-                        if (!hasMore && activeRequests === 0 && bufferedPages.size === 0) {
-                            resolve(result);
-                            return;
-                        }
+                    const processNextPage = async () => {
+                        const fetchWithRetry = async (attempt = 1) => {
+                            try {
+                                const query = supabaseClient.from(table).select(columns || '*').order(pkCol, { ascending: true }).limit(pageSize);
+                                if (lastId !== null) {
+                                    query.gt(pkCol, lastId);
+                                }
 
-                        // Launch workers until concurrency limit or stop signal
-                        while (hasMore && activeRequests < CONCURRENCY_LIMIT) {
-                            const currentPage = pageIndex++;
-                            activeRequests++;
+                                const promise = columns ? query.csv() : query;
 
-                            const from = currentPage * pageSize;
-                            const to = (currentPage + 1) * pageSize - 1;
+                                // Timeout wrapper (30 seconds)
+                                const timeoutPromise = new Promise((_, reject) =>
+                                    setTimeout(() => reject(new Error('Request timed out')), 30000)
+                                );
 
-                            const fetchWithRetry = async (attempt = 1) => {
-                                try {
-                                    const query = supabaseClient.from(table).select(columns || '*');
-                                    const promise = columns ? query.range(from, to).csv() : query.range(from, to);
+                                const response = await Promise.race([promise, timeoutPromise]);
 
-                                    // Timeout wrapper (30 seconds)
-                                    const timeoutPromise = new Promise((_, reject) =>
-                                        setTimeout(() => reject(new Error('Request timed out')), 30000)
-                                    );
+                                if (response.error) throw response.error;
+                                return response.data;
+                            } catch (err) {
+                                if (attempt < 4) { // Retry up to 3 times (1+3=4 total attempts)
+                                    const delay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+                                    console.warn(`Retrying page ${pageIndex} of ${table} (Attempt ${attempt})... Error: ${err.message}`);
+                                    await new Promise(r => setTimeout(r, delay));
+                                    return fetchWithRetry(attempt + 1);
+                                }
+                                throw err;
+                            }
+                        };
 
-                                    const response = await Promise.race([promise, timeoutPromise]);
+                        try {
+                            const data = await fetchWithRetry();
+                            let chunkLength = 0;
+                            let newObjects = [];
+                            let newColumnar = null;
 
-                                    if (response.error) throw response.error;
-                                    return response.data;
-                                } catch (err) {
-                                    if (attempt < 4) { // Retry up to 3 times (1+3=4 total attempts)
-                                        const delay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
-                                        console.warn(`Retrying page ${currentPage} of ${table} (Attempt ${attempt})... Error: ${err.message}`);
-                                        await new Promise(r => setTimeout(r, delay));
-                                        return fetchWithRetry(attempt + 1);
+                            if (columns) {
+                                if (!data || data.length < 5) {
+                                    hasMore = false; // CSV string empty or just header
+                                } else {
+                                    if (format === 'columnar') {
+                                        const preLen = result.length;
+                                        result = parseCSVToColumnar(data, type, result);
+                                        chunkLength = result.length - preLen;
+                                        if (chunkLength === 0) hasMore = false;
+                                    } else {
+                                        newObjects = parseCSVToObjects(data, type);
+                                        chunkLength = newObjects.length;
+                                        result = result.concat(newObjects);
+                                        if (chunkLength === 0) hasMore = false;
                                     }
-                                    throw err;
                                 }
-                            };
-
-                            fetchWithRetry().then((data) => {
-                                activeRequests--;
-
-                                // Determine if page is empty
-                                let isEmpty = false;
-                                let chunkLength = 0;
-
-                                if (columns) {
-                                    if (!data || data.length < 5) isEmpty = true;
-                                } else {
-                                    if (!data || data.length === 0) isEmpty = true;
-                                    chunkLength = data ? data.length : 0;
-                                }
-
-                                if (isEmpty) {
+                            } else {
+                                if (!data || data.length === 0) {
                                     hasMore = false;
-                                    bufferedPages.set(currentPage, null);
                                 } else {
-                                    bufferedPages.set(currentPage, data);
-                                    if (!columns && chunkLength < pageSize) hasMore = false;
+                                    chunkLength = data.length;
+                                    result = result.concat(data);
                                 }
+                            }
 
-                                // Process Buffer Sequentially
-                                while (bufferedPages.has(nextExpectedPage)) {
-                                    const chunkData = bufferedPages.get(nextExpectedPage);
-                                    bufferedPages.delete(nextExpectedPage);
-                                    nextExpectedPage++;
+                            if (chunkLength < pageSize) {
+                                hasMore = false;
+                            }
 
-                                    if (chunkData) {
-                                        if (columns) {
-                                            if (format === 'columnar') {
-                                                const preLen = result.length;
-                                                result = parseCSVToColumnar(chunkData, type, result);
-                                                const added = result.length - preLen;
-                                                if (added === 0) hasMore = false;
-                                            } else {
-                                                const objects = parseCSVToObjects(chunkData, type);
-                                                result = result.concat(objects);
-                                                if (objects.length === 0) hasMore = false;
-                                            }
+                            // Extract lastId for next cursor
+                            if (hasMore) {
+                                if (columns) {
+                                    // Need to find the ID in the processed result
+                                    // Note: parseCSVToColumnar/Objects uppercases keys.
+                                    // We need to look for 'ID' or 'CODE' or whatever pkCol corresponds to
+                                    // But pkCol is raw DB column name (lowercase).
+                                    // CSV header is uppercase.
+                                    // Mapped keys might be different (e.g. clients).
+                                    // Best bet: use the raw PK column name uppercase, unless mapped.
+
+                                    let lookupKey = pkCol.toUpperCase();
+                                    // Handle Client Map special cases if ID was mapped? No, ID is usually ID.
+                                    // Check init.js clientMap: no ID mapping there.
+
+                                    if (format === 'columnar') {
+                                        const colData = result.values[lookupKey];
+                                        if (colData && colData.length > 0) {
+                                            lastId = colData[colData.length - 1];
                                         } else {
-                                            result = result.concat(chunkData);
+                                            // Fallback: maybe it wasn't uppercased?
+                                            // Or maybe it's missing. If missing, we can't continue safely.
+                                            console.warn(`Could not find PK column ${lookupKey} in columnar data. Stopping.`);
+                                            hasMore = false;
+                                        }
+                                    } else {
+                                        // Object format
+                                        const lastItem = result[result.length - 1];
+                                        if (lastItem && lastItem[lookupKey] !== undefined) {
+                                            lastId = lastItem[lookupKey];
+                                        } else {
+                                            // Try lowercase
+                                            if (lastItem && lastItem[pkCol] !== undefined) {
+                                                 lastId = lastItem[pkCol];
+                                            } else {
+                                                console.warn(`Could not find PK column ${lookupKey} in object data. Stopping.`);
+                                                hasMore = false;
+                                            }
                                         }
                                     }
+                                } else {
+                                    // JSON response
+                                    const lastItem = result[result.length - 1];
+                                    lastId = lastItem[pkCol];
                                 }
+                            }
 
-                                // Continue processing queue
-                                processQueue();
+                            pageIndex++;
+                            reportProgress();
 
-                            }).catch(err => {
-                                console.error(`Failed to fetch page ${currentPage} of ${table} after retries:`, err);
-                                activeRequests--;
-                                hasMore = false;
-                                // Unblock sequence
-                                bufferedPages.set(currentPage, null);
-                                processQueue();
-                            });
+                            if (hasMore) {
+                                processNextPage();
+                            } else {
+                                resolve(result);
+                            }
+
+                        } catch (err) {
+                            console.error(`Failed to fetch page ${pageIndex} of ${table}:`, err);
+                            resolve(result); // Return partial result
                         }
                     };
 
-                    // Start
-                    processQueue();
+                    processNextPage();
                 });
             };
 
@@ -444,21 +457,21 @@
                 metadata = cachedData.metadata;
                 orders = cachedData.orders;
             } else {
-                const colsDetailed = 'pedido,codcli,nome,superv,codsupervisor,produto,descricao,fornecedor,observacaofor,codfor,codusur,qtvenda,vlvenda,vlbonific,totpesoliq,dtped,dtsaida,posicao,estoqueunit,tipovenda,filial,qtvenda_embalagem_master';
-                const colsClients = 'codigo_cliente,rca1,rca2,rcas,cidade,nomecliente,bairro,razaosocial,fantasia,cnpj_cpf,endereco,numero,cep,telefone,email,ramo,ultimacompra,datacadastro,bloqueio,inscricaoestadual';
-                const colsStock = 'product_code,filial,stock_qty';
-                const colsOrders = 'pedido,codcli,cliente_nome,cidade,nome,superv,fornecedores_str,dtped,dtsaida,posicao,vlvenda,totpesoliq,filial,tipovenda,fornecedores_list,codfors_list';
+                const colsDetailed = 'id,pedido,codcli,nome,superv,codsupervisor,produto,descricao,fornecedor,observacaofor,codfor,codusur,qtvenda,vlvenda,vlbonific,totpesoliq,dtped,dtsaida,posicao,estoqueunit,tipovenda,filial,qtvenda_embalagem_master';
+                const colsClients = 'id,codigo_cliente,rca1,rca2,rcas,cidade,nomecliente,bairro,razaosocial,fantasia,cnpj_cpf,endereco,numero,cep,telefone,email,ramo,ultimacompra,datacadastro,bloqueio,inscricaoestadual';
+                const colsStock = 'id,product_code,filial,stock_qty';
+                const colsOrders = 'id,pedido,codcli,cliente_nome,cidade,nome,superv,fornecedores_str,dtped,dtsaida,posicao,vlvenda,totpesoliq,filial,tipovenda,fornecedores_list,codfors_list';
 
                 const [detailedUpper, historyUpper, clientsUpper, productsFetched, activeProdsFetched, stockFetched, innovationsFetched, metadataFetched, ordersUpper] = await Promise.all([
-                    fetchAll('data_detailed', colsDetailed, 'sales', 'columnar'),
-                    fetchAll('data_history', colsDetailed, 'history', 'columnar'),
-                    fetchAll('data_clients', colsClients, 'clients', 'columnar'),
-                    fetchAll('data_product_details'),
-                    fetchAll('data_active_products'),
-                    fetchAll('data_stock', colsStock, 'stock', 'columnar'),
-                    fetchAll('data_innovations'),
-                    fetchAll('data_metadata'),
-                    fetchAll('data_orders', colsOrders, 'orders', 'object')
+                    fetchAll('data_detailed', colsDetailed, 'sales', 'columnar', 'id'),
+                    fetchAll('data_history', colsDetailed, 'history', 'columnar', 'id'),
+                    fetchAll('data_clients', colsClients, 'clients', 'columnar', 'id'),
+                    fetchAll('data_product_details', null, null, 'object', 'code'),
+                    fetchAll('data_active_products', null, null, 'object', 'code'),
+                    fetchAll('data_stock', colsStock, 'stock', 'columnar', 'id'),
+                    fetchAll('data_innovations', null, null, 'object', 'id'),
+                    fetchAll('data_metadata', null, null, 'object', 'key'),
+                    fetchAll('data_orders', colsOrders, 'orders', 'object', 'id')
                 ]);
 
                 detailed = detailedUpper;
