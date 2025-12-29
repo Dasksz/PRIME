@@ -8,7 +8,8 @@ set search_path = public
 as $$
 begin
   -- Check if user is approved (same logic as RLS)
-  if not public.is_approved() then
+  -- Allow service_role to bypass approval check
+  if auth.role() <> 'service_role' and not public.is_approved() then
     raise exception 'Access denied: User not approved.';
   end if;
 
