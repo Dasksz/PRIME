@@ -261,10 +261,14 @@
                 if (isCancelled && isCancelled()) return;
 
                 const start = performance.now();
-                while (index < total && performance.now() - start < 12) { // 12ms budget per frame (60fps target is 16ms)
+                while (index < total) {
                     const item = isColumnar ? items.get(index) : items[index];
                     processItemFn(item, index);
                     index++;
+
+                    if (index % 50 === 0 && performance.now() - start >= 12) { // Check budget every 50 items to reduce overhead
+                        break;
+                    }
                 }
 
                 if (index < total) {
@@ -5842,21 +5846,45 @@ const supervisorGroups = new Map();
         function updateCitySuggestions(filterInput, suggestionsContainer, dataSource) {
             const forbidden = ['CIDADE', 'MUNICIPIO', 'CIDADE_CLIENTE', 'NOME DA CIDADE', 'CITY'];
             const inputValue = filterInput.value.toLowerCase();
-            // Optimized: Handle datasource which might be Sales (no CIDADE) or Clients (has cidade)
-            const allAvailableCities = [...new Set(dataSource.map(item => {
-                if (item.CIDADE) return item.CIDADE; // Legacy / Aggregated
-                if (item.cidade || item.CIDADE) return item.cidade || item.CIDADE; // Client Object with fallback
-                // Lookup if sales object
-                if (item.CODCLI) {
-                    const c = clientMapForKPIs.get(String(item.CODCLI));
-                    if (c) return c.cidade || c.CIDADE || c['Nome da Cidade'];
-                }
-                return 'N/A';
-            }).filter(c => c && c !== 'N/A' && !forbidden.includes(c.toUpperCase())))].sort();
-            const filteredCities = inputValue ? allAvailableCities.filter(c => c.toLowerCase().includes(inputValue)) : allAvailableCities;
 
-            if (filteredCities.length > 0 && (document.activeElement === filterInput || !suggestionsContainer.classList.contains('manual-hide'))) {
-                suggestionsContainer.innerHTML = filteredCities.map(c => `<div class="p-2 hover:bg-slate-600 cursor-pointer">${c}</div>`).join('');
+            if (!inputValue) {
+                suggestionsContainer.classList.add('hidden');
+                return;
+            }
+
+            const uniqueCities = new Set();
+            const suggestionsFragment = document.createDocumentFragment();
+            let count = 0;
+            const LIMIT = 50;
+
+            for (let i = 0; i < dataSource.length; i++) {
+                if (count >= LIMIT) break;
+
+                const item = dataSource instanceof ColumnarDataset ? dataSource.get(i) : dataSource[i];
+                let city = 'N/A';
+
+                if (item.CIDADE) city = item.CIDADE;
+                else if (item.cidade || item.CIDADE) city = item.cidade || item.CIDADE;
+                else if (item.CODCLI) {
+                    const c = clientMapForKPIs.get(String(item.CODCLI));
+                    if (c) city = c.cidade || c.CIDADE || c['Nome da Cidade'];
+                }
+
+                if (city && city !== 'N/A' && !forbidden.includes(city.toUpperCase()) && city.toLowerCase().includes(inputValue)) {
+                    if (!uniqueCities.has(city)) {
+                        uniqueCities.add(city);
+                        const div = document.createElement('div');
+                        div.className = 'p-2 hover:bg-slate-600 cursor-pointer';
+                        div.textContent = city;
+                        suggestionsFragment.appendChild(div);
+                        count++;
+                    }
+                }
+            }
+
+            if (uniqueCities.size > 0 && (document.activeElement === filterInput || !suggestionsContainer.classList.contains('manual-hide'))) {
+                suggestionsContainer.innerHTML = '';
+                suggestionsContainer.appendChild(suggestionsFragment);
                 suggestionsContainer.classList.remove('hidden');
             } else {
                 suggestionsContainer.classList.add('hidden');
@@ -9714,10 +9742,14 @@ const supervisorGroups = new Map();
                 debouncedUpdateCity();
             });
 
-            cityNameFilter.addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/[0-9]/g, '');
+            const debouncedCitySearch = debounce(() => {
                 const { clients } = getCityFilteredData({ excludeFilter: 'city' });
                 updateCitySuggestions(cityNameFilter, citySuggestions, clients);
+            }, 300);
+
+            cityNameFilter.addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/[0-9]/g, '');
+                debouncedCitySearch();
             });
             cityNameFilter.addEventListener('focus', () => {
                 const { clients } = getCityFilteredData({ excludeFilter: 'city' });
