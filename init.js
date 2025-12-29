@@ -298,7 +298,7 @@
                 // Config
                 // Reduce CSV page size to 2500 to prevent 500 errors (timeout/memory)
                 const pageSize = 1000;
-                const CONCURRENCY_LIMIT = 3;
+                const CONCURRENCY_LIMIT = 2; // Reduced from 3 to improve stability
 
                 // Initial Count (Only for UI progress estimation, not for termination)
                 // We use 'estimated' which is fast but can be inaccurate.
@@ -320,8 +320,7 @@
                 // Track progress for UI
                 const reportProgress = () => {
                     const fetched = format === 'columnar' ? result.length : result.length;
-                    // Log progress if needed, or update a UI element
-                    // For now silent or console
+                    console.log(`[${table}] Fetched rows: ${fetched}`);
                 };
 
                 return new Promise((resolve, reject) => {
@@ -344,7 +343,13 @@
                                 try {
                                     const query = supabaseClient.from(table).select(columns || '*');
                                     const promise = columns ? query.range(from, to).csv() : query.range(from, to);
-                                    const response = await promise;
+
+                                    // Timeout wrapper (30 seconds)
+                                    const timeoutPromise = new Promise((_, reject) =>
+                                        setTimeout(() => reject(new Error('Request timed out')), 30000)
+                                    );
+
+                                    const response = await Promise.race([promise, timeoutPromise]);
 
                                     if (response.error) throw response.error;
                                     return response.data;
