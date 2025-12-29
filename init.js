@@ -297,7 +297,7 @@
             const fetchAll = async (table, columns = null, type = null, format = 'object', pkCol = 'id') => {
                 // Config
                 // Keyset Pagination for reliability
-                const pageSize = 20000;
+                const pageSize = 40000;
                 
                 let result = format === 'columnar' ? { columns: [], values: {}, length: 0 } : [];
                 let hasMore = true;
@@ -321,9 +321,9 @@
 
                                 const promise = columns ? query.csv() : query;
 
-                                // Timeout wrapper (30 seconds)
+                                // Timeout wrapper (20 seconds)
                                 const timeoutPromise = new Promise((_, reject) =>
-                                    setTimeout(() => reject(new Error('Request timed out')), 30000)
+                                    setTimeout(() => reject(new Error('Request timed out')), 20000)
                                 );
 
                                 const response = await Promise.race([promise, timeoutPromise]);
