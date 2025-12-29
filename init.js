@@ -302,13 +302,9 @@
 
                 // Initial Count (Only for UI progress estimation, not for termination)
                 // We use 'estimated' which is fast but can be inaccurate.
-                let estimatedTotal = 0;
-                try {
-                    const { count } = await supabaseClient.from(table).select('*', { count: 'estimated', head: true });
-                    estimatedTotal = count || 100000; // Default fallback if 0
-                } catch(e) {
-                    estimatedTotal = 100000;
-                }
+                let estimatedTotal = 100000;
+                // Removed HEAD request to prevent 500 errors and delays on large tables.
+                // The progress bar will just rely on chunks downloaded.
 
                 // Queue State
                 let pageIndex = 0;
