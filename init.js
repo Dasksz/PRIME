@@ -296,7 +296,8 @@
 
             const fetchAll = async (table, columns = null, type = null, format = 'object') => {
                 // Config
-                const pageSize = columns ? 10000 : 2500; // Larger pages for CSV
+                // Reduce CSV page size to 2500 to prevent 500 errors (timeout/memory)
+                const pageSize = 2500;
                 const CONCURRENCY_LIMIT = 6;
 
                 // Initial Count (Only for UI progress estimation, not for termination)
@@ -317,9 +318,9 @@
                 // Reorder Buffer State
                 let nextExpectedPage = 0;
                 const bufferedPages = new Map(); // Map<pageIndex, data>
-
-                let result = format === 'columnar' ? { columns: [], values: {}, length: 0 } : [];
                 
+                let result = format === 'columnar' ? { columns: [], values: {}, length: 0 } : [];
+
                 // Track progress for UI
                 const reportProgress = () => {
                     const fetched = format === 'columnar' ? result.length : result.length;
@@ -343,43 +344,45 @@
                             const from = currentPage * pageSize;
                             const to = (currentPage + 1) * pageSize - 1;
 
-                            const query = supabaseClient.from(table).select(columns || '*');
-                            const promise = columns ? query.range(from, to).csv() : query.range(from, to);
+                            const fetchWithRetry = async (attempt = 1) => {
+                                try {
+                                    const query = supabaseClient.from(table).select(columns || '*');
+                                    const promise = columns ? query.range(from, to).csv() : query.range(from, to);
+                                    const response = await promise;
 
-                            promise.then(({ data, error }) => {
+                                    if (response.error) throw response.error;
+                                    return response.data;
+                                } catch (err) {
+                                    if (attempt < 4) { // Retry up to 3 times (1+3=4 total attempts)
+                                        const delay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+                                        console.warn(`Retrying page ${currentPage} of ${table} (Attempt ${attempt})... Error: ${err.message}`);
+                                        await new Promise(r => setTimeout(r, delay));
+                                        return fetchWithRetry(attempt + 1);
+                                    }
+                                    throw err;
+                                }
+                            };
+
+                            fetchWithRetry().then((data) => {
                                 activeRequests--;
 
-                                if (error) {
-                                    console.error(`Erro ao baixar página ${currentPage} de ${table}:`, error);
-                                    hasMore = false;
-                                    // If we failed, we might block the sequence.
-                                    // We must ensure nextExpectedPage advances or we fail gracefully.
-                                    // For now, stopping ensures we resolve what we have or fail.
-                                    // But we should probably verify if we can recover.
-                                    // For safety, let's treat error as end of stream to unblock.
+                                // Determine if page is empty
+                                let isEmpty = false;
+                                let chunkLength = 0;
+
+                                if (columns) {
+                                    if (!data || data.length < 5) isEmpty = true;
                                 } else {
-                                    // Determine if page is empty
-                                    let isEmpty = false;
-                                    let chunkLength = 0;
+                                    if (!data || data.length === 0) isEmpty = true;
+                                    chunkLength = data ? data.length : 0;
+                                }
 
-                                    if (columns) {
-                                        if (!data || data.length < 5) isEmpty = true;
-                                    } else {
-                                        if (!data || data.length === 0) isEmpty = true;
-                                        chunkLength = data ? data.length : 0;
-                                    }
-
-                                    if (isEmpty) {
-                                        hasMore = false;
-                                        // Even if empty, we might need to "fill the gap" if this was expected?
-                                        // If currentPage > nextExpectedPage, it will sit in buffer?
-                                        // No, empty page means end. We store it as empty to unblock sequence.
-                                        bufferedPages.set(currentPage, null);
-                                    } else {
-                                        // Store in buffer to process in order
-                                        bufferedPages.set(currentPage, data);
-                                        if (!columns && chunkLength < pageSize) hasMore = false;
-                                    }
+                                if (isEmpty) {
+                                    hasMore = false;
+                                    bufferedPages.set(currentPage, null);
+                                } else {
+                                    bufferedPages.set(currentPage, data);
+                                    if (!columns && chunkLength < pageSize) hasMore = false;
                                 }
 
                                 // Process Buffer Sequentially
@@ -410,7 +413,7 @@
                                 processQueue();
 
                             }).catch(err => {
-                                console.error(`Exception page ${currentPage}:`, err);
+                                console.error(`Failed to fetch page ${currentPage} of ${table} after retries:`, err);
                                 activeRequests--;
                                 hasMore = false;
                                 // Unblock sequence
