@@ -205,57 +205,68 @@ $$;
 
 -- Data Detailed
 drop policy if exists "Enable read access for all users" on public.data_detailed;
+drop policy if exists "Acesso leitura aprovados" on public.data_detailed;
 create policy "Acesso leitura aprovados" on public.data_detailed for select
 using (auth.role() = 'authenticated' and public.is_approved());
 
 -- Data History
 drop policy if exists "Enable read access for all users" on public.data_history;
+drop policy if exists "Acesso leitura aprovados" on public.data_history;
 create policy "Acesso leitura aprovados" on public.data_history for select
 using (auth.role() = 'authenticated' and public.is_approved());
 
 -- Data Clients
 drop policy if exists "Enable read access for all users" on public.data_clients;
+drop policy if exists "Acesso leitura aprovados" on public.data_clients;
 create policy "Acesso leitura aprovados" on public.data_clients for select
 using (auth.role() = 'authenticated' and public.is_approved());
 
 -- Data Orders
 drop policy if exists "Enable read access for all users" on public.data_orders;
+drop policy if exists "Acesso leitura aprovados" on public.data_orders;
 create policy "Acesso leitura aprovados" on public.data_orders for select
 using (auth.role() = 'authenticated' and public.is_approved());
 
 -- Product Details
 drop policy if exists "Enable read access for all users" on public.data_product_details;
+drop policy if exists "Acesso leitura aprovados" on public.data_product_details;
 create policy "Acesso leitura aprovados" on public.data_product_details for select
 using (auth.role() = 'authenticated' and public.is_approved());
 
 -- Active Products
 drop policy if exists "Enable read access for all users" on public.data_active_products;
+drop policy if exists "Acesso leitura aprovados" on public.data_active_products;
 create policy "Acesso leitura aprovados" on public.data_active_products for select
 using (auth.role() = 'authenticated' and public.is_approved());
 
 -- Stock
 drop policy if exists "Enable read access for all users" on public.data_stock;
+drop policy if exists "Acesso leitura aprovados" on public.data_stock;
 create policy "Acesso leitura aprovados" on public.data_stock for select
 using (auth.role() = 'authenticated' and public.is_approved());
 
 -- Innovations
 drop policy if exists "Enable read access for all users" on public.data_innovations;
+drop policy if exists "Acesso leitura aprovados" on public.data_innovations;
 create policy "Acesso leitura aprovados" on public.data_innovations for select
 using (auth.role() = 'authenticated' and public.is_approved());
 
 -- Metadata
 drop policy if exists "Enable read access for all users" on public.data_metadata;
+drop policy if exists "Acesso leitura aprovados" on public.data_metadata;
 create policy "Acesso leitura aprovados" on public.data_metadata for select
 using (auth.role() = 'authenticated' and public.is_approved());
 
 -- Goals Distribution
 -- Permite leitura para aprovados
 drop policy if exists "Enable read access for all users" on public.goals_distribution;
+drop policy if exists "Acesso leitura aprovados" on public.goals_distribution;
 create policy "Acesso leitura aprovados" on public.goals_distribution for select
 using (auth.role() = 'authenticated' and public.is_approved());
 
 -- Permite escrita (insert/update) apenas para aprovados (ou pode restringir a admins se tiver role)
 drop policy if exists "Enable insert/update for goals" on public.goals_distribution;
+drop policy if exists "Acesso escrita aprovados" on public.goals_distribution;
 create policy "Acesso escrita aprovados" on public.goals_distribution for all
 using (auth.role() = 'authenticated' and public.is_approved())
 with check (auth.role() = 'authenticated' and public.is_approved());
