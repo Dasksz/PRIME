@@ -7,6 +7,11 @@ security definer
 set search_path = public
 as $$
 begin
+  -- Check if user is approved (same logic as RLS)
+  if not public.is_approved() then
+    raise exception 'Access denied: User not approved.';
+  end if;
+
   -- Validate table name to prevent SQL injection (allow-list)
   if table_name not in ('data_detailed', 'data_history', 'data_orders', 'data_clients', 'data_stock', 'data_innovations', 'data_product_details', 'data_active_products', 'data_metadata', 'goals_distribution') then
     raise exception 'Invalid table name';
