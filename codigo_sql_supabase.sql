@@ -189,6 +189,11 @@ alter table public.profiles enable row level security;
 create or replace function public.is_approved()
 returns boolean as $$
 begin
+  -- Allow service_role to bypass approval check
+  if auth.role() = 'service_role' then
+    return true;
+  end if;
+
   return exists (
     select 1 from public.profiles
     where id = auth.uid()
