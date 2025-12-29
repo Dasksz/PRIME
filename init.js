@@ -208,16 +208,25 @@
 
             const parseCSVToColumnar = (text, type, existingColumnar = null) => {
                 const columnar = existingColumnar || { columns: [], values: {}, length: 0 };
-                let headers = columnar.columns.length > 0 ? columnar.columns : null;
+                const hasExistingColumns = columnar.columns.length > 0;
+                let headers = hasExistingColumns ? columnar.columns : null;
+                
                 let currentVal = '';
                 let currentLine = [];
                 let inQuote = false;
-                let isHeader = !headers;
+                
+                // If we already have columns, the first line of this chunk is a repeated header, so we skip it.
+                // If we don't, the first line IS the header.
+                let skipFirstLine = hasExistingColumns;
+                let isFirstLine = true;
 
                 const pushLine = (lineValues) => {
                     if (lineValues.length === 0 || (lineValues.length === 1 && lineValues[0] === '')) return;
 
-                    if (isHeader) {
+                    if (isFirstLine) {
+                        isFirstLine = false;
+                        if (skipFirstLine) return; // Skip repeated header
+
                         headers = lineValues.map(h => {
                             let header = h.trim().toUpperCase();
                             if (type === 'clients' && clientMap[header]) header = clientMap[header];
@@ -225,7 +234,6 @@
                         });
                         columnar.columns = headers;
                         headers.forEach(h => { if (!columnar.values[h]) columnar.values[h] = []; });
-                        isHeader = false;
                         return;
                     }
 
@@ -287,38 +295,82 @@
             };
 
             const fetchAll = async (table, columns = null, type = null, format = 'object') => {
-                let result = format === 'columnar' ? null : [];
-                let page = 0;
-                let pageSize = 2000;
+                // Optimized Fetch: Parallel Downloads with Count First
+                let pageSize = columns ? 10000 : 2500; // Larger pages for CSV, smaller for JSON
 
-                while(true) {
-                    let query = supabaseClient.from(table).select(columns || '*', { count: 'exact', head: false });
+                // 1. Get Total Count
+                const { count, error: countError } = await supabaseClient
+                    .from(table)
+                    .select('*', { count: 'exact', head: true });
+                
+                if (countError) {
+                    console.error(`Erro ao contar ${table}:`, countError);
+                    throw countError;
+                }
+                
+                if (count === 0) return format === 'columnar' ? { columns: [], values: {}, length: 0 } : [];
+
+                const totalPages = Math.ceil(count / pageSize);
+                const results = new Array(totalPages);
+                
+                // Concurrency Control (Max 6 parallel requests)
+                const CONCURRENCY_LIMIT = 6; 
+                let nextPageIndex = 0;
+
+                const fetchWorker = async () => {
+                    while (nextPageIndex < totalPages) {
+                        const page = nextPageIndex++;
+                        const from = page * pageSize;
+                        const to = (page + 1) * pageSize - 1;
+
+                        try {
+                            const query = supabaseClient.from(table).select(columns || '*');
+                            
+                            if (columns) {
+                                // CSV Mode
+                                const { data, error } = await query.range(from, to).csv();
+                                if (error) throw error;
+                                results[page] = data;
+                            } else {
+                                // JSON Mode
+                                const { data, error } = await query.range(from, to);
+                                if (error) throw error;
+                                results[page] = data;
+                            }
+                        } catch (err) {
+                            console.error(`Erro ao baixar página ${page} de ${table}:`, err);
+                            throw err;
+                        }
+                    }
+                };
+
+                const workers = [];
+                for (let i = 0; i < Math.min(totalPages, CONCURRENCY_LIMIT); i++) {
+                    workers.push(fetchWorker());
+                }
+                
+                await Promise.all(workers);
+
+                // Process Results sequentially to maintain order and integrity
+                let result = format === 'columnar' ? null : [];
+
+                for (const data of results) {
+                    if (!data) continue;
 
                     if (columns) {
-                        // Fetch CSV
-                        const { data, error } = await query.range(page*pageSize, (page+1)*pageSize-1).csv();
-                        if (error) throw error;
-                        if (!data || data.length === 0) break;
-
+                        // CSV Processing
                         if (format === 'columnar') {
                             result = parseCSVToColumnar(data, type, result);
                         } else {
                             const objects = parseCSVToObjects(data, type);
                             result = result.concat(objects);
                         }
-
-                        const newlines = (data.match(/\n/g) || []).length;
-                        if (newlines < pageSize && data.length > 0) break;
                     } else {
-                        // Fetch JSON (standard)
-                        const { data, error } = await query.range(page*pageSize, (page+1)*pageSize-1);
-                        if (error) throw error;
-                        if (!data || data.length === 0) break;
+                        // JSON Processing
                         result = result.concat(data);
-                        if (data.length < pageSize) break;
                     }
-                    page++;
                 }
+
                 return result;
             };
 
