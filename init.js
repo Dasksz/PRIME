@@ -338,7 +338,7 @@
 
                 // Add buffer for estimated counts to ensure we get everything if estimate is low
                 if (countMethod !== 'exact' || countError) { // If we fell back or started with non-exact
-                     count = Math.ceil(count * 1.10); // +10% safety buffer
+                     count = Math.ceil(count * 5.0); // +400% safety buffer (Estimate can be extremely off for 2.6M rows)
                 }
                 
                 if (count === 0) return format === 'columnar' ? { columns: [], values: {}, length: 0 } : [];
