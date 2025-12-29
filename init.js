@@ -297,8 +297,8 @@
             const fetchAll = async (table, columns = null, type = null, format = 'object') => {
                 // Config
                 // Reduce CSV page size to 2500 to prevent 500 errors (timeout/memory)
-                const pageSize = 2500;
-                const CONCURRENCY_LIMIT = 6;
+                const pageSize = 1000;
+                const CONCURRENCY_LIMIT = 3;
 
                 // Initial Count (Only for UI progress estimation, not for termination)
                 // We use 'estimated' which is fast but can be inaccurate.
