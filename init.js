@@ -298,14 +298,36 @@
                 // Optimized Fetch: Parallel Downloads with Count First
                 let pageSize = columns ? 10000 : 2500; // Larger pages for CSV, smaller for JSON
 
-                // 1. Get Total Count
-                const { count, error: countError } = await supabaseClient
+                // 1. Get Total Count with Fallback Strategy
+                let count = 0;
+                let countError = null;
+
+                // Attempt 1: Exact Count
+                ({ count, error: countError } = await supabaseClient
                     .from(table)
-                    .select('*', { count: 'exact', head: true });
-                
+                    .select('*', { count: 'exact', head: true }));
+
                 if (countError) {
-                    console.error(`Erro ao contar ${table}:`, countError);
-                    throw countError;
+                    console.warn(`Exact count failed for ${table}, retrying with 'planned'...`, countError);
+
+                    // Attempt 2: Planned Count (Faster, slightly less accurate)
+                    ({ count, error: countError } = await supabaseClient
+                        .from(table)
+                        .select('*', { count: 'planned', head: true }));
+
+                    if (countError) {
+                        console.warn(`Planned count failed for ${table}, retrying with 'estimated'...`, countError);
+
+                        // Attempt 3: Estimated Count (Fastest, least accurate)
+                        ({ count, error: countError } = await supabaseClient
+                            .from(table)
+                            .select('*', { count: 'estimated', head: true }));
+
+                        if (countError) {
+                            console.error(`All count attempts failed for ${table}:`, countError);
+                            throw countError;
+                        }
+                    }
                 }
                 
                 if (count === 0) return format === 'columnar' ? { columns: [], values: {}, length: 0 } : [];

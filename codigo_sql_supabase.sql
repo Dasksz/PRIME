@@ -187,7 +187,11 @@ alter table public.profiles enable row level security;
 
 -- Função auxiliar para verificar se o usuário está aprovado
 create or replace function public.is_approved()
-returns boolean as $$
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
 begin
   return exists (
     select 1 from public.profiles
@@ -195,7 +199,7 @@ begin
     and status = 'aprovado'
   );
 end;
-$$ language plpgsql security definer;
+$$;
 
 -- Aplicando políticas
 

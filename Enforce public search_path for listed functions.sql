@@ -29,7 +29,8 @@ BEGIN
               'get_detailed_orders',
               'get_coverage_view_data',
               'get_filtered_client_base_json',
-              'get_stock_view_data'
+              'get_stock_view_data',
+              'is_approved'
           )
     LOOP
         RAISE NOTICE 'Securing function: %.%(%)', func_record.schema_name, func_record.function_name, func_record.args;
