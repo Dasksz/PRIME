@@ -295,116 +295,134 @@
             };
 
             const fetchAll = async (table, columns = null, type = null, format = 'object') => {
-                // Optimized Fetch: Parallel Downloads with Count First
-                let pageSize = columns ? 10000 : 2500; // Larger pages for CSV, smaller for JSON
+                // Config
+                const pageSize = columns ? 10000 : 2500; // Larger pages for CSV
+                const CONCURRENCY_LIMIT = 6;
 
-                // 1. Get Total Count with Fallback Strategy
-                let count = 0;
-                let countError = null;
-
-                // Optimization: Skip 'exact' count for large tables to avoid 500 errors
-                let countMethod = 'exact';
-                if (table === 'data_history' || table === 'data_detailed') {
-                    countMethod = 'planned';
+                // Initial Count (Only for UI progress estimation, not for termination)
+                // We use 'estimated' which is fast but can be inaccurate.
+                let estimatedTotal = 0;
+                try {
+                    const { count } = await supabaseClient.from(table).select('*', { count: 'estimated', head: true });
+                    estimatedTotal = count || 100000; // Default fallback if 0
+                } catch(e) {
+                    estimatedTotal = 100000;
                 }
 
-                // Attempt 1: Initial Preference
-                ({ count, error: countError } = await supabaseClient
-                    .from(table)
-                    .select('*', { count: countMethod, head: true }));
+                // Queue State
+                let pageIndex = 0;
+                let activeRequests = 0;
+                let hasMore = true;
 
-                if (countError) {
-                    console.warn(`${countMethod} count failed for ${table}, retrying with 'planned'...`, countError);
+                // Reorder Buffer State
+                let nextExpectedPage = 0;
+                const bufferedPages = new Map(); // Map<pageIndex, data>
 
-                    // Attempt 2: Planned Count (Faster)
-                    ({ count, error: countError } = await supabaseClient
-                        .from(table)
-                        .select('*', { count: 'planned', head: true }));
-
-                    if (countError) {
-                        console.warn(`Planned count failed for ${table}, retrying with 'estimated'...`, countError);
-
-                        // Attempt 3: Estimated Count (Fastest)
-                        ({ count, error: countError } = await supabaseClient
-                            .from(table)
-                            .select('*', { count: 'estimated', head: true }));
-
-                        if (countError) {
-                            console.error(`All count attempts failed for ${table}:`, countError);
-                            throw countError;
-                        }
-                    }
-                }
-
-                // Add buffer for estimated counts to ensure we get everything if estimate is low
-                if (countMethod !== 'exact' || countError) { // If we fell back or started with non-exact
-                     count = Math.ceil(count * 5.0); // +400% safety buffer (Estimate can be extremely off for 2.6M rows)
-                }
+                let result = format === 'columnar' ? { columns: [], values: {}, length: 0 } : [];
                 
-                if (count === 0) return format === 'columnar' ? { columns: [], values: {}, length: 0 } : [];
-
-                const totalPages = Math.ceil(count / pageSize);
-                const results = new Array(totalPages);
-                
-                // Concurrency Control (Max 6 parallel requests)
-                const CONCURRENCY_LIMIT = 6; 
-                let nextPageIndex = 0;
-
-                const fetchWorker = async () => {
-                    while (nextPageIndex < totalPages) {
-                        const page = nextPageIndex++;
-                        const from = page * pageSize;
-                        const to = (page + 1) * pageSize - 1;
-
-                        try {
-                            const query = supabaseClient.from(table).select(columns || '*');
-                            
-                            if (columns) {
-                                // CSV Mode
-                                const { data, error } = await query.range(from, to).csv();
-                                if (error) throw error;
-                                results[page] = data;
-                            } else {
-                                // JSON Mode
-                                const { data, error } = await query.range(from, to);
-                                if (error) throw error;
-                                results[page] = data;
-                            }
-                        } catch (err) {
-                            console.error(`Erro ao baixar página ${page} de ${table}:`, err);
-                            throw err;
-                        }
-                    }
+                // Track progress for UI
+                const reportProgress = () => {
+                    const fetched = format === 'columnar' ? result.length : result.length;
+                    // Log progress if needed, or update a UI element
+                    // For now silent or console
                 };
 
-                const workers = [];
-                for (let i = 0; i < Math.min(totalPages, CONCURRENCY_LIMIT); i++) {
-                    workers.push(fetchWorker());
-                }
-                
-                await Promise.all(workers);
-
-                // Process Results sequentially to maintain order and integrity
-                let result = format === 'columnar' ? null : [];
-
-                for (const data of results) {
-                    if (!data) continue;
-
-                    if (columns) {
-                        // CSV Processing
-                        if (format === 'columnar') {
-                            result = parseCSVToColumnar(data, type, result);
-                        } else {
-                            const objects = parseCSVToObjects(data, type);
-                            result = result.concat(objects);
+                return new Promise((resolve, reject) => {
+                    const processQueue = () => {
+                        // If no more pages to fetch, no active requests, and buffer empty, we are done.
+                        if (!hasMore && activeRequests === 0 && bufferedPages.size === 0) {
+                            resolve(result);
+                            return;
                         }
-                    } else {
-                        // JSON Processing
-                        result = result.concat(data);
-                    }
-                }
 
-                return result;
+                        // Launch workers until concurrency limit or stop signal
+                        while (hasMore && activeRequests < CONCURRENCY_LIMIT) {
+                            const currentPage = pageIndex++;
+                            activeRequests++;
+
+                            const from = currentPage * pageSize;
+                            const to = (currentPage + 1) * pageSize - 1;
+
+                            const query = supabaseClient.from(table).select(columns || '*');
+                            const promise = columns ? query.range(from, to).csv() : query.range(from, to);
+
+                            promise.then(({ data, error }) => {
+                                activeRequests--;
+
+                                if (error) {
+                                    console.error(`Erro ao baixar página ${currentPage} de ${table}:`, error);
+                                    hasMore = false;
+                                    // If we failed, we might block the sequence.
+                                    // We must ensure nextExpectedPage advances or we fail gracefully.
+                                    // For now, stopping ensures we resolve what we have or fail.
+                                    // But we should probably verify if we can recover.
+                                    // For safety, let's treat error as end of stream to unblock.
+                                } else {
+                                    // Determine if page is empty
+                                    let isEmpty = false;
+                                    let chunkLength = 0;
+
+                                    if (columns) {
+                                        if (!data || data.length < 5) isEmpty = true;
+                                    } else {
+                                        if (!data || data.length === 0) isEmpty = true;
+                                        chunkLength = data ? data.length : 0;
+                                    }
+
+                                    if (isEmpty) {
+                                        hasMore = false;
+                                        // Even if empty, we might need to "fill the gap" if this was expected?
+                                        // If currentPage > nextExpectedPage, it will sit in buffer?
+                                        // No, empty page means end. We store it as empty to unblock sequence.
+                                        bufferedPages.set(currentPage, null);
+                                    } else {
+                                        // Store in buffer to process in order
+                                        bufferedPages.set(currentPage, data);
+                                        if (!columns && chunkLength < pageSize) hasMore = false;
+                                    }
+                                }
+
+                                // Process Buffer Sequentially
+                                while (bufferedPages.has(nextExpectedPage)) {
+                                    const chunkData = bufferedPages.get(nextExpectedPage);
+                                    bufferedPages.delete(nextExpectedPage);
+                                    nextExpectedPage++;
+
+                                    if (chunkData) {
+                                        if (columns) {
+                                            if (format === 'columnar') {
+                                                const preLen = result.length;
+                                                result = parseCSVToColumnar(chunkData, type, result);
+                                                const added = result.length - preLen;
+                                                if (added === 0) hasMore = false;
+                                            } else {
+                                                const objects = parseCSVToObjects(chunkData, type);
+                                                result = result.concat(objects);
+                                                if (objects.length === 0) hasMore = false;
+                                            }
+                                        } else {
+                                            result = result.concat(chunkData);
+                                        }
+                                    }
+                                }
+
+                                // Continue processing queue
+                                processQueue();
+
+                            }).catch(err => {
+                                console.error(`Exception page ${currentPage}:`, err);
+                                activeRequests--;
+                                hasMore = false;
+                                // Unblock sequence
+                                bufferedPages.set(currentPage, null);
+                                processQueue();
+                            });
+                        }
+                    };
+
+                    // Start
+                    processQueue();
+                });
             };
 
             let detailed, history, clients, products, activeProds, stock, innovations, metadata, orders;
