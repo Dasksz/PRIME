@@ -82,11 +82,6 @@
                     <label for="supabase-url" class="block text-sm font-medium mb-2">URL do Projeto Supabase</label>
                     <input type="text" id="supabase-url" placeholder="https://[seu-id].supabase.co" autocomplete="new-password" class="w-full text-sm p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-slate-700 border-slate-600 text-white" value="https://dhozwhfmrwiumwpcqabi.supabase.co">
                 </div>
-                <div>
-                    <label for="supabase-key" class="block text-sm font-medium mb-2">Chave Secreta (service_role) 🤫</label>
-                    <input type="password" id="supabase-key" placeholder="Cole sua chave secreta aqui..." autocomplete="new-password" class="w-full text-sm p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-slate-700 border-slate-600 text-white">
-                    <p class="text-xs mt-1">Esta chave NUNCA é salva. Você deve digitá-la toda vez que for usar.</p>
-                </div>
             </div>
 
             <div class="space-y-4 mb-6 border-t border-primary pt-6 text-left">
@@ -1521,17 +1516,6 @@
                         </div> <!-- End content-wrapper -->
                         
                         
-<div id="master-key-modal" class="modal-overlay hidden">
-    <div class="bg-[#1d2347] rounded-lg shadow-2xl max-w-sm w-full m-4 border border-slate-700 p-6 text-center">
-        <h2 class="text-xl font-bold text-white mb-4">Autorização Necessária</h2>
-        <p class="text-slate-400 mb-6">Digite a Chave Secreta (service_role) para salvar as metas.</p>
-        <input type="password" id="master-key-input" class="w-full bg-[#0f172a] border border-slate-600 text-white rounded-lg p-2 mb-4 focus:outline-none focus:border-teal-500" placeholder="Cole sua chave secreta aqui...">
-        <div class="flex justify-end gap-3">
-            <button id="master-key-cancel" class="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg">Cancelar</button>
-            <button id="master-key-confirm" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Confirmar</button>
-        </div>
-    </div>
-</div>
 
 </div>
 

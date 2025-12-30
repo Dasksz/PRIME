@@ -1520,6 +1520,16 @@
             updateMixView();
         }
 
+        function escapeHtml(text) {
+            if (text === null || text === undefined) return '';
+            return String(text)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
         function updateMixView() {
             mixRenderId++;
             const currentRenderId = mixRenderId;
@@ -1723,10 +1733,10 @@
 
                     return `
                     <tr class="hover:bg-slate-700/50 border-b border-slate-500 last:border-0">
-                        <td class="px-2 py-2 font-medium text-slate-300 text-xs">${row.codcli}</td>
-                        <td class="px-2 py-2 text-xs truncate max-w-[150px]" title="${row.name}">${row.name}</td>
-                        <td class="px-2 py-2 text-xs text-slate-300 truncate max-w-[100px]">${row.city}</td>
-                        <td class="px-2 py-2 text-xs text-slate-400 truncate max-w-[100px]">${getFirstName(row.vendedor)}</td>
+                        <td class="px-2 py-2 font-medium text-slate-300 text-xs">${escapeHtml(row.codcli)}</td>
+                        <td class="px-2 py-2 text-xs truncate max-w-[150px]" title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</td>
+                        <td class="px-2 py-2 text-xs text-slate-300 truncate max-w-[100px]">${escapeHtml(row.city)}</td>
+                        <td class="px-2 py-2 text-xs text-slate-400 truncate max-w-[100px]">${escapeHtml(getFirstName(row.vendedor))}</td>
                         ${saltyCols}
                         ${foodsCols}
                     </tr>
@@ -5200,8 +5210,8 @@ const supervisorGroups = new Map();
                     const a = document.createElement('a');
                     a.href = "#";
                     a.className = "text-teal-400 hover:underline";
-                    a.dataset[dataAttr] = dataVal;
-                    a.textContent = text;
+                    a.dataset[dataAttr] = escapeHtml(dataVal);
+                    a.textContent = text; // textContent automatically escapes
                     return a;
                 };
 
@@ -5217,12 +5227,12 @@ const supervisorGroups = new Map();
 
                 const tdVendedor = document.createElement('td');
                 tdVendedor.className = "px-4 py-2";
-                tdVendedor.textContent = getFirstName(row.NOME);
+                tdVendedor.textContent = getFirstName(row.NOME); // textContent escapes
                 tr.appendChild(tdVendedor);
 
                 const tdForn = document.createElement('td');
                 tdForn.className = "px-4 py-2";
-                tdForn.textContent = row.FORNECEDORES_STR || '';
+                tdForn.textContent = row.FORNECEDORES_STR || ''; // textContent escapes
                 tr.appendChild(tdForn);
 
                 const tdDtPed = document.createElement('td');
@@ -5248,7 +5258,7 @@ const supervisorGroups = new Map();
                 const tdPosicao = document.createElement('td');
                 tdPosicao.className = "px-4 py-2 text-center";
                 const badge = getPosicaoBadge(row.POSICAO);
-                if (typeof badge === 'string') tdPosicao.innerHTML = badge;
+                if (typeof badge === 'string') tdPosicao.textContent = badge; // Change innerHTML to textContent if string
                 else tdPosicao.appendChild(badge);
                 tr.appendChild(tdPosicao);
 
@@ -9271,40 +9281,19 @@ const supervisorGroups = new Map();
 
         async function enviarDadosParaSupabase(data) {
             const supabaseUrl = document.getElementById('supabase-url').value;
-            const supabaseKeyInput = document.getElementById('supabase-key').value.trim();
 
             // Tentamos obter a sessão atual do usuário
             const { data: { session } } = await supabaseClient.auth.getSession();
 
             // Definição da chave de autenticação (Token)
-            // Prioridade: Chave fornecida manualmente (Service Role) > Token da sessão do usuário logado
-            // Isso permite que o usuário use a chave secreta para upload (bypass RLS) mesmo estando logado com um usuário sem permissão.
-            const authToken = supabaseKeyInput || session?.access_token;
-
-            // --- VALIDAÇÃO DA CHAVE SECRETA ---
-            if (supabaseKeyInput) {
-                if (supabaseKeyInput.startsWith('sb_secret')) {
-                    alert("A chave 'sb_secret' não é suportada diretamente pelo Uploader. Por favor, utilize a chave **service_role** do tipo JWT (que começa com 'ey...') disponível em Project Settings > API no Dashboard do Supabase.");
-                    throw new Error("Formato de chave inválido (sb_secret detectado). Use o JWT service_role.");
-                }
-                if (supabaseKeyInput.startsWith('sb_publishable')) {
-                    alert("Você inseriu a chave PÚBLICA (sb_publishable) no campo de senha. Esta chave não tem permissão para gravar dados. Por favor, insira a chave SECRETA (service_role) que começa com 'ey...'.");
-                    throw new Error("Chave pública inserida no lugar da secreta.");
-                }
-                if (!supabaseKeyInput.includes('.')) {
-                    alert("O formato da chave secreta parece inválido. O sistema espera um Token JWT (que contém pontos separando as partes) e geralmente começa com 'ey...'. Verifique se copiou a chave 'service_role' (secret) correta.");
-                    throw new Error("Formato de chave inválido (JWT esperado).");
-                }
-            }
-            // ----------------------------------
+            // Agora usa estritamente o token de sessão do usuário logado
+            const authToken = session?.access_token;
 
             // Definição da API Key (Header 'apikey')
-            // O Supabase exige que o header 'apikey' contenha a chave ANÔNIMA para passar pelo Gateway sem erro de "Forbidden use of secret key".
-            // O header 'Authorization' carrega o token real (Sessão ou Chave Secreta).
-            const apiKeyHeader = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : supabaseKeyInput;
+            const apiKeyHeader = SUPABASE_ANON_KEY;
 
             if (!supabaseUrl || !authToken) {
-                alert("Por favor, preencha a URL e certifique-se de estar logado ou forneça a Chave Secreta.");
+                alert("Você precisa estar logado como Administrador para enviar dados.");
                 return;
             }
 
