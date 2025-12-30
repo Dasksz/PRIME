@@ -6189,10 +6189,55 @@ const supervisorGroups = new Map();
             const weekNumbers = Object.keys(salesByWeekAndDay).sort((a,b) => a - b);
             const professionalPalette = ['#14b8a6', '#6366f1', '#ec4899', '#f97316', '#8b5cf6'];
             const currentMonthDatasets = weekNumbers.map((weekNum, index) => ({ label: `Semana ${weekNum}`, data: weekLabels.map(day => salesByWeekAndDay[weekNum][day] || 0), backgroundColor: professionalPalette[index % professionalPalette.length] }));
-            // Note: Use selectedWeeklySupervisors to filter history based on current selection
-            const supervisorsForHistory = selectedWeeklySupervisors.length > 0 ? selectedWeeklySupervisors : Object.keys(historicalBests).map(s => s.toLowerCase().replace(/(?:^|\s)\S/g, a => a.toUpperCase()));
+            // Note: Calculate "Melhor Dia Mês Anterior" dynamically based on current filters
             const historicalDataForChart = [0, 0, 0, 0, 0];
-            supervisorsForHistory.forEach(sup => { const bests = historicalBests[sup.toUpperCase()]; if(bests) { historicalDataForChart[0] += bests[1] || 0; historicalDataForChart[1] += bests[2] || 0; historicalDataForChart[2] += bests[3] || 0; historicalDataForChart[3] += bests[4] || 0; historicalDataForChart[4] += bests[5] || 0; } });
+            
+            // 1. Get Filtered History Data
+            let historyDataForCalculation;
+            if (filters.supervisor || filters.seller || filters.pasta) {
+                historyDataForCalculation = getFilteredDataFromIndices(optimizedData.indices.history, optimizedData.historyById, filters);
+            } else {
+                historyDataForCalculation = allHistoryData;
+            }
+
+            // 2. Determine Previous Month Range
+            let prevMonth = currentMonth - 1;
+            let prevYear = currentYear;
+            if (prevMonth < 0) { prevMonth = 11; prevYear--; }
+
+            // 3. Aggregate Sales by Date for the Previous Month
+            const prevMonthSalesByDate = {}; // 'YYYY-MM-DD' -> Total
+            
+            // Optimize iteration if it's a columnar dataset proxy (although array methods work)
+            for (let i = 0; i < historyDataForCalculation.length; i++) {
+                const sale = historyDataForCalculation instanceof ColumnarDataset ? historyDataForCalculation.get(i) : historyDataForCalculation[i];
+                const d = parseDate(sale.DTPED);
+                if (d && d.getUTCMonth() === prevMonth && d.getUTCFullYear() === prevYear) {
+                    const dateStr = d.toISOString().split('T')[0];
+                    if (!prevMonthSalesByDate[dateStr]) prevMonthSalesByDate[dateStr] = 0;
+                    prevMonthSalesByDate[dateStr] += (sale.VLVENDA || 0);
+                }
+            }
+
+            // 4. Find Best Total for Each Weekday
+            const bestsByWeekday = {}; // 1..5 -> maxTotal
+            for (const dateStr in prevMonthSalesByDate) {
+                const d = new Date(dateStr + 'T00:00:00Z'); // Ensure UTC parsing
+                const dayOfWeek = d.getUTCDay();
+                if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                    const total = prevMonthSalesByDate[dateStr];
+                    if (!bestsByWeekday[dayOfWeek] || total > bestsByWeekday[dayOfWeek]) {
+                        bestsByWeekday[dayOfWeek] = total;
+                    }
+                }
+            }
+
+            // 5. Populate Chart Data
+            historicalDataForChart[0] = bestsByWeekday[1] || 0; // Mon
+            historicalDataForChart[1] = bestsByWeekday[2] || 0; // Tue
+            historicalDataForChart[2] = bestsByWeekday[3] || 0; // Wed
+            historicalDataForChart[3] = bestsByWeekday[4] || 0; // Thu
+            historicalDataForChart[4] = bestsByWeekday[5] || 0; // Fri
             const historicalDataset = { type: 'line', label: 'Melhor Dia Mês Anterior', data: historicalDataForChart, borderColor: '#f59e0b', backgroundColor: 'transparent', pointBackgroundColor: '#f59e0b', pointRadius: 4, tension: 0.1, borderWidth: 2, yAxisID: 'y', datalabels: { display: false } };
             const finalDatasets = [...currentMonthDatasets, historicalDataset];
             const weeklyChartOptions = { plugins: { legend: { display: true, onClick: (e, legendItem, legend) => { const index = legendItem.datasetIndex; const ci = legend.chart; if (ci.isDatasetVisible(index)) { ci.hide(index); legendItem.hidden = true; } else { ci.show(index); legendItem.hidden = false; } let newTotal = 0; ci.data.datasets.forEach((dataset, i) => { if (ci.isDatasetVisible(i) && dataset.type !== 'line') newTotal += dataset.data.reduce((acc, val) => acc + val, 0); }); totalMesSemanalEl.textContent = newTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); } } } };
@@ -10883,6 +10928,9 @@ const supervisorGroups = new Map();
                 if (!document.getElementById('mix-vendedor-filter-btn').contains(e.target) && !document.getElementById('mix-vendedor-filter-dropdown').contains(e.target)) document.getElementById('mix-vendedor-filter-dropdown').classList.add('hidden');
                 if (!document.getElementById('mix-tipo-venda-filter-btn').contains(e.target) && !document.getElementById('mix-tipo-venda-filter-dropdown').contains(e.target)) document.getElementById('mix-tipo-venda-filter-dropdown').classList.add('hidden');
                 if (!document.getElementById('mix-com-rede-btn').contains(e.target) && !document.getElementById('mix-rede-filter-dropdown').contains(e.target)) document.getElementById('mix-rede-filter-dropdown').classList.add('hidden');
+
+                if (!document.getElementById('weekly-supervisor-filter-btn').contains(e.target) && !document.getElementById('weekly-supervisor-filter-dropdown').contains(e.target)) document.getElementById('weekly-supervisor-filter-dropdown').classList.add('hidden');
+                if (!document.getElementById('weekly-vendedor-filter-btn').contains(e.target) && !document.getElementById('weekly-vendedor-filter-dropdown').contains(e.target)) document.getElementById('weekly-vendedor-filter-dropdown').classList.add('hidden');
             });
 
             // --- Coverage View Filters ---
