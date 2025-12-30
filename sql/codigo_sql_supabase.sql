@@ -411,3 +411,8 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
 after insert on auth.users for each row
 execute procedure public.handle_new_user ();
+-- Add Indexes to improve RLS performance (Fix timeouts)
+create index if not exists idx_data_detailed_codusur on public.data_detailed (codusur);
+create index if not exists idx_data_history_codusur on public.data_history (codusur);
+create index if not exists idx_data_orders_codusur on public.data_orders (codusur);
+create index if not exists idx_profiles_status on public.profiles (status);
