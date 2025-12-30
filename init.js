@@ -294,10 +294,10 @@
                 return columnar;
             };
 
-            const fetchAll = async (table, columns = null, type = null, format = 'object', pkCol = 'id', customPageSize = 10000) => {
+            const fetchAll = async (table, columns = null, type = null, format = 'object', pkCol = 'id') => {
                 // Config
                 // Keyset Pagination for reliability
-                const pageSize = customPageSize;
+                const pageSize = 40000;
                 
                 let result = format === 'columnar' ? { columns: [], values: {}, length: 0 } : [];
                 let hasMore = true;
@@ -321,9 +321,9 @@
                                 
                                 const promise = columns ? query.csv() : query;
 
-                                // Timeout wrapper
+                                // Timeout wrapper (20 seconds)
                                 const timeoutPromise = new Promise((_, reject) =>
-                                    setTimeout(() => reject(new Error('Request timed out')), 45000)
+                                    setTimeout(() => reject(new Error('Request timed out')), 30000)
                                 );
 
                                 const response = await Promise.race([promise, timeoutPromise]);
@@ -462,34 +462,17 @@
                 const colsStock = 'id,product_code,filial,stock_qty';
                 const colsOrders = 'id,pedido,codcli,cliente_nome,cidade,nome,superv,fornecedores_str,dtped,dtsaida,posicao,vlvenda,totpesoliq,filial,tipovenda,fornecedores_list,codfors_list';
 
-                // --- SERIALIZED FETCHING GROUPS ---
-
-                // Group 1: Lightweight Metadata & Reference
-                const [metadataFetched, activeProdsFetched, innovationsFetched] = await Promise.all([
-                    fetchAll('data_metadata', null, null, 'object', 'key'),
-                    fetchAll('data_active_products', null, null, 'object', 'code'),
-                    fetchAll('data_innovations', null, null, 'object', 'id')
-                ]);
-
-                // Group 2: Medium Reference
-                const [clientsUpper, productsFetched] = await Promise.all([
+                const [detailedUpper, historyUpper, clientsUpper, productsFetched, activeProdsFetched, stockFetched, innovationsFetched, metadataFetched, ordersUpper] = await Promise.all([
+                    fetchAll('data_detailed', colsDetailed, 'sales', 'columnar', 'id'),
+                    fetchAll('data_history', colsDetailed, 'history', 'columnar', 'id'),
                     fetchAll('data_clients', colsClients, 'clients', 'columnar', 'id'),
-                    fetchAll('data_product_details', null, null, 'object', 'code')
+                    fetchAll('data_product_details', null, null, 'object', 'code'),
+                    fetchAll('data_active_products', null, null, 'object', 'code'),
+                    fetchAll('data_stock', colsStock, 'stock', 'columnar', 'id'),
+                    fetchAll('data_innovations', null, null, 'object', 'id'),
+                    fetchAll('data_metadata', null, null, 'object', 'key'),
+                    fetchAll('data_orders', colsOrders, 'orders', 'object', 'id')
                 ]);
-
-                // Group 3: Heavy Transactional
-                const [ordersUpper, stockFetched] = await Promise.all([
-                    fetchAll('data_orders', colsOrders, 'orders', 'object', 'id'),
-                    fetchAll('data_stock', colsStock, 'stock', 'columnar', 'id')
-                ]);
-
-                // Group 4: Very Heavy (Detailed)
-                // Use default 10k page size
-                const detailedUpper = await fetchAll('data_detailed', colsDetailed, 'sales', 'columnar', 'id');
-
-                // Group 5: Massive (History)
-                // Use default 10k page size as requested, relying on backend index optimization
-                const historyUpper = await fetchAll('data_history', colsDetailed, 'history', 'columnar', 'id', 10000);
 
                 detailed = detailedUpper;
                 history = historyUpper;
@@ -856,17 +839,29 @@
         });
 
         masterKeyConfirm.addEventListener('click', async () => {
-            // Obtém a sessão atual do usuário
+            const keyInput = masterKeyInput.value.trim();
+
+            // Tentamos obter a sessão atual do usuário
             const { data: { session } } = await supabaseClient.auth.getSession();
-            const authToken = session?.access_token;
+
+            // Prioridade: Chave fornecida manualmente (pode ser a service_role) OU Token da sessão
+            const authToken = keyInput || session?.access_token;
 
             if (!authToken) {
-                alert('Sessão expirada. Por favor, faça login novamente.');
-                window.location.reload();
+                alert('Por favor, faça login ou insira a Chave Secreta (service_role).');
                 return;
             }
 
+            // Validação básica da chave se fornecida
+            if (keyInput) {
+                if (keyInput.startsWith('sb_publishable')) {
+                    alert("Você inseriu a chave PÚBLICA (sb_publishable). Esta chave não tem permissão de escrita. Por favor, insira a chave SECRETA (service_role) que começa com 'ey...'.");
+                    return;
+                }
+            }
+
             masterKeyModal.classList.add('hidden');
+            masterKeyInput.value = '';
 
             // Dispatch based on pendingAction
             if (pendingAction === 'save') {
@@ -885,6 +880,8 @@
                     statusText.innerHTML = originalText;
                 }
             } else if (pendingAction === 'clear') {
+                // Call clearGoalsFromSupabase
+                // Note: clearGoalsFromSupabase handles its own button state
                 try {
                     await clearGoalsFromSupabase(authToken);
                 } catch (error) {
