@@ -839,17 +839,29 @@
         });
 
         masterKeyConfirm.addEventListener('click', async () => {
-            // Obtém a sessão atual do usuário
+            const keyInput = masterKeyInput.value.trim();
+
+            // Tentamos obter a sessão atual do usuário
             const { data: { session } } = await supabaseClient.auth.getSession();
-            const authToken = session?.access_token;
+
+            // Prioridade: Chave fornecida manualmente (pode ser a service_role) OU Token da sessão
+            const authToken = keyInput || session?.access_token;
 
             if (!authToken) {
-                alert('Sessão expirada. Por favor, faça login novamente.');
-                window.location.reload();
+                alert('Por favor, faça login ou insira a Chave Secreta (service_role).');
                 return;
             }
 
+            // Validação básica da chave se fornecida
+            if (keyInput) {
+                if (keyInput.startsWith('sb_publishable')) {
+                    alert("Você inseriu a chave PÚBLICA (sb_publishable). Esta chave não tem permissão de escrita. Por favor, insira a chave SECRETA (service_role) que começa com 'ey...'.");
+                    return;
+                }
+            }
+
             masterKeyModal.classList.add('hidden');
+            masterKeyInput.value = '';
 
             // Dispatch based on pendingAction
             if (pendingAction === 'save') {
@@ -868,6 +880,8 @@
                     statusText.innerHTML = originalText;
                 }
             } else if (pendingAction === 'clear') {
+                // Call clearGoalsFromSupabase
+                // Note: clearGoalsFromSupabase handles its own button state
                 try {
                     await clearGoalsFromSupabase(authToken);
                 } catch (error) {
