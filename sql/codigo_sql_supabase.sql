@@ -259,16 +259,14 @@ create policy "Acesso leitura aprovados" on public.data_metadata for select
 using (auth.role() = 'authenticated' and public.is_approved());
 
 -- Goals Distribution
--- Permite leitura para aprovados
+-- Permite leitura e escrita para aprovados e admins
+-- Combinando políticas para evitar avisos de "Multiple Permissive Policies"
 drop policy if exists "Enable read access for all users" on public.goals_distribution;
 drop policy if exists "Acesso leitura aprovados" on public.goals_distribution;
-create policy "Acesso leitura aprovados" on public.goals_distribution for select
-using (auth.role() = 'authenticated' and public.is_approved());
-
--- Permite escrita (insert/update) apenas para aprovados (ou pode restringir a admins se tiver role)
 drop policy if exists "Enable insert/update for goals" on public.goals_distribution;
 drop policy if exists "Acesso escrita aprovados" on public.goals_distribution;
-create policy "Acesso escrita aprovados" on public.goals_distribution for all
+
+create policy "Acesso Total Aprovados" on public.goals_distribution for all
 using (auth.role() = 'authenticated' and public.is_approved())
 with check (auth.role() = 'authenticated' and public.is_approved());
 
