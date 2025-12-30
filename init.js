@@ -297,7 +297,7 @@
             const fetchAll = async (table, columns = null, type = null, format = 'object', pkCol = 'id') => {
                 // Config
                 // Keyset Pagination for reliability
-                const pageSize = 40000;
+                const pageSize = 10000;
                 
                 let result = format === 'columnar' ? { columns: [], values: {}, length: 0 } : [];
                 let hasMore = true;

@@ -205,7 +205,7 @@ begin
     and status = 'aprovado'
   );
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql stable security definer;
 
 -- Função auxiliar para verificar se o usuário é ADMIN
 create or replace function public.is_admin()
@@ -223,7 +223,7 @@ begin
     and role = 'adm'
   );
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql stable security definer;
 
 -- Função auxiliar para obter os RCAs do usuário
 create or replace function public.get_user_rcas()
@@ -237,7 +237,7 @@ begin
 
   return coalesce(user_rcas, array[]::text[]);
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql stable security definer;
 
 -- Aplicando políticas
 
