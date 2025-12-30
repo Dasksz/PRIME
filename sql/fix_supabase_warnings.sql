@@ -1,12 +1,11 @@
 -- Correção de Avisos de Performance e Segurança do Supabase
--- Atualizado para cobrir todas as tabelas e otimizar chamadas auth.*
+-- Versão Idempotente: Pode ser rodada múltiplas vezes sem erro.
 
 -- 1. Remover índices duplicados
 DROP INDEX IF EXISTS public.idx_detailed_codusur;
 DROP INDEX IF EXISTS public.idx_history_codusur;
 
 -- 2. Função auxiliar para verificar admin
--- Otimizada para evitar reavaliação desnecessária se possível, mas mantendo logicamente simples.
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean AS $$
 BEGIN
@@ -15,7 +14,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Função auxiliar para verificar aprovado (Atualizada com otimização auth)
+-- Função auxiliar para verificar aprovado
 CREATE OR REPLACE FUNCTION public.is_approved()
 RETURNS boolean AS $$
 BEGIN
@@ -29,16 +28,20 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
--- MACRO: Procedimento para limpar e recriar políticas unificadas
--- Para evitar repetição de código SQL excessiva, definimos o padrão aqui aplicado a cada tabela.
-
 -- ==============================================================================
 -- Tabela: data_detailed
 -- ==============================================================================
+-- Dropar políticas antigas
 DROP POLICY IF EXISTS "Acesso escrita admin" ON public.data_detailed;
 DROP POLICY IF EXISTS "Acesso leitura seguro" ON public.data_detailed;
 DROP POLICY IF EXISTS "Acesso leitura aprovados" ON public.data_detailed;
 DROP POLICY IF EXISTS "Enable read access for all users" ON public.data_detailed;
+
+-- Dropar novas políticas (para garantir idempotência)
+DROP POLICY IF EXISTS "Acesso Leitura Unificado" ON public.data_detailed;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Insert)" ON public.data_detailed;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Update)" ON public.data_detailed;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Delete)" ON public.data_detailed;
 
 CREATE POLICY "Acesso Leitura Unificado" ON public.data_detailed
 FOR SELECT TO authenticated
@@ -66,6 +69,11 @@ DROP POLICY IF EXISTS "Acesso leitura seguro" ON public.data_history;
 DROP POLICY IF EXISTS "Acesso leitura aprovados" ON public.data_history;
 DROP POLICY IF EXISTS "Enable read access for all users" ON public.data_history;
 
+DROP POLICY IF EXISTS "Acesso Leitura Unificado" ON public.data_history;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Insert)" ON public.data_history;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Update)" ON public.data_history;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Delete)" ON public.data_history;
+
 CREATE POLICY "Acesso Leitura Unificado" ON public.data_history
 FOR SELECT TO authenticated
 USING (public.is_admin() OR public.is_approved());
@@ -91,6 +99,11 @@ DROP POLICY IF EXISTS "Acesso escrita admin" ON public.data_clients;
 DROP POLICY IF EXISTS "Acesso leitura seguro" ON public.data_clients;
 DROP POLICY IF EXISTS "Acesso leitura aprovados" ON public.data_clients;
 DROP POLICY IF EXISTS "Enable read access for all users" ON public.data_clients;
+
+DROP POLICY IF EXISTS "Acesso Leitura Unificado" ON public.data_clients;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Insert)" ON public.data_clients;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Update)" ON public.data_clients;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Delete)" ON public.data_clients;
 
 CREATE POLICY "Acesso Leitura Unificado" ON public.data_clients
 FOR SELECT TO authenticated
@@ -118,6 +131,11 @@ DROP POLICY IF EXISTS "Acesso leitura seguro" ON public.data_orders;
 DROP POLICY IF EXISTS "Acesso leitura aprovados" ON public.data_orders;
 DROP POLICY IF EXISTS "Enable read access for all users" ON public.data_orders;
 
+DROP POLICY IF EXISTS "Acesso Leitura Unificado" ON public.data_orders;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Insert)" ON public.data_orders;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Update)" ON public.data_orders;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Delete)" ON public.data_orders;
+
 CREATE POLICY "Acesso Leitura Unificado" ON public.data_orders
 FOR SELECT TO authenticated
 USING (public.is_admin() OR public.is_approved());
@@ -143,7 +161,11 @@ DROP POLICY IF EXISTS "Acesso escrita admin" ON public.data_product_details;
 DROP POLICY IF EXISTS "Acesso leitura seguro" ON public.data_product_details;
 DROP POLICY IF EXISTS "Acesso leitura aprovados" ON public.data_product_details;
 DROP POLICY IF EXISTS "Enable read access for all users" ON public.data_product_details;
-DROP POLICY IF EXISTS "Acesso Leitura Unificado" ON public.data_product_details; -- Dropping previous attempt to ensure clean slate
+
+DROP POLICY IF EXISTS "Acesso Leitura Unificado" ON public.data_product_details;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Insert)" ON public.data_product_details;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Update)" ON public.data_product_details;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Delete)" ON public.data_product_details;
 
 CREATE POLICY "Acesso Leitura Unificado" ON public.data_product_details
 FOR SELECT TO authenticated
@@ -171,6 +193,11 @@ DROP POLICY IF EXISTS "Acesso leitura seguro" ON public.data_active_products;
 DROP POLICY IF EXISTS "Acesso leitura aprovados" ON public.data_active_products;
 DROP POLICY IF EXISTS "Enable read access for all users" ON public.data_active_products;
 
+DROP POLICY IF EXISTS "Acesso Leitura Unificado" ON public.data_active_products;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Insert)" ON public.data_active_products;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Update)" ON public.data_active_products;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Delete)" ON public.data_active_products;
+
 CREATE POLICY "Acesso Leitura Unificado" ON public.data_active_products
 FOR SELECT TO authenticated
 USING (public.is_admin() OR public.is_approved());
@@ -196,7 +223,11 @@ DROP POLICY IF EXISTS "Acesso escrita admin" ON public.data_stock;
 DROP POLICY IF EXISTS "Acesso leitura seguro" ON public.data_stock;
 DROP POLICY IF EXISTS "Acesso leitura aprovados" ON public.data_stock;
 DROP POLICY IF EXISTS "Enable read access for all users" ON public.data_stock;
+
 DROP POLICY IF EXISTS "Acesso Leitura Unificado" ON public.data_stock;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Insert)" ON public.data_stock;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Update)" ON public.data_stock;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Delete)" ON public.data_stock;
 
 CREATE POLICY "Acesso Leitura Unificado" ON public.data_stock
 FOR SELECT TO authenticated
@@ -224,6 +255,11 @@ DROP POLICY IF EXISTS "Acesso leitura seguro" ON public.data_innovations;
 DROP POLICY IF EXISTS "Acesso leitura aprovados" ON public.data_innovations;
 DROP POLICY IF EXISTS "Enable read access for all users" ON public.data_innovations;
 
+DROP POLICY IF EXISTS "Acesso Leitura Unificado" ON public.data_innovations;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Insert)" ON public.data_innovations;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Update)" ON public.data_innovations;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Delete)" ON public.data_innovations;
+
 CREATE POLICY "Acesso Leitura Unificado" ON public.data_innovations
 FOR SELECT TO authenticated
 USING (public.is_admin() OR public.is_approved());
@@ -250,6 +286,11 @@ DROP POLICY IF EXISTS "Acesso leitura seguro" ON public.data_metadata;
 DROP POLICY IF EXISTS "Acesso leitura aprovados" ON public.data_metadata;
 DROP POLICY IF EXISTS "Enable read access for all users" ON public.data_metadata;
 
+DROP POLICY IF EXISTS "Acesso Leitura Unificado" ON public.data_metadata;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Insert)" ON public.data_metadata;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Update)" ON public.data_metadata;
+DROP POLICY IF EXISTS "Acesso Escrita Admin (Delete)" ON public.data_metadata;
+
 CREATE POLICY "Acesso Leitura Unificado" ON public.data_metadata
 FOR SELECT TO authenticated
 USING (public.is_admin() OR public.is_approved());
@@ -271,7 +312,6 @@ USING (public.is_admin());
 -- ==============================================================================
 -- Tabela: goals_distribution
 -- ==============================================================================
--- Consolidando TODAS as políticas numa só, e removendo duplicatas antigas
 DROP POLICY IF EXISTS "Acesso escrita admin" ON public.goals_distribution;
 DROP POLICY IF EXISTS "Acesso leitura seguro" ON public.goals_distribution;
 DROP POLICY IF EXISTS "Acesso leitura aprovados" ON public.goals_distribution;
@@ -281,8 +321,8 @@ DROP POLICY IF EXISTS "Enable insert/update for goals" ON public.goals_distribut
 DROP POLICY IF EXISTS "Acesso Total Aprovados" ON public.goals_distribution;
 DROP POLICY IF EXISTS "Acesso Total Aprovados e Admin" ON public.goals_distribution;
 
--- Política Única para Leitura e Escrita
--- Usa (select auth.role()) implicitamente através das funções is_admin/is_approved otimizadas
+DROP POLICY IF EXISTS "Acesso Total Unificado" ON public.goals_distribution;
+
 CREATE POLICY "Acesso Total Unificado" ON public.goals_distribution
 FOR ALL TO authenticated
 USING (public.is_admin() OR public.is_approved())
