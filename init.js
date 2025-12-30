@@ -294,10 +294,10 @@
                 return columnar;
             };
 
-            const fetchAll = async (table, columns = null, type = null, format = 'object', pkCol = 'id') => {
+            const fetchAll = async (table, columns = null, type = null, format = 'object', pkCol = 'id', customPageSize = 10000) => {
                 // Config
                 // Keyset Pagination for reliability
-                const pageSize = 10000;
+                const pageSize = customPageSize;
                 
                 let result = format === 'columnar' ? { columns: [], values: {}, length: 0 } : [];
                 let hasMore = true;
@@ -321,7 +321,8 @@
                                 
                                 const promise = columns ? query.csv() : query;
 
-                                // Timeout wrapper (20 seconds)
+                                // Timeout wrapper (increase for history if needed, but smaller pages help more)
+                                // 30 seconds default
                                 const timeoutPromise = new Promise((_, reject) =>
                                     setTimeout(() => reject(new Error('Request timed out')), 30000)
                                 );
@@ -462,17 +463,34 @@
                 const colsStock = 'id,product_code,filial,stock_qty';
                 const colsOrders = 'id,pedido,codcli,cliente_nome,cidade,nome,superv,fornecedores_str,dtped,dtsaida,posicao,vlvenda,totpesoliq,filial,tipovenda,fornecedores_list,codfors_list';
 
-                const [detailedUpper, historyUpper, clientsUpper, productsFetched, activeProdsFetched, stockFetched, innovationsFetched, metadataFetched, ordersUpper] = await Promise.all([
-                    fetchAll('data_detailed', colsDetailed, 'sales', 'columnar', 'id'),
-                    fetchAll('data_history', colsDetailed, 'history', 'columnar', 'id'),
-                    fetchAll('data_clients', colsClients, 'clients', 'columnar', 'id'),
-                    fetchAll('data_product_details', null, null, 'object', 'code'),
-                    fetchAll('data_active_products', null, null, 'object', 'code'),
-                    fetchAll('data_stock', colsStock, 'stock', 'columnar', 'id'),
-                    fetchAll('data_innovations', null, null, 'object', 'id'),
+                // --- SERIALIZED FETCHING GROUPS ---
+
+                // Group 1: Lightweight Metadata & Reference
+                const [metadataFetched, activeProdsFetched, innovationsFetched] = await Promise.all([
                     fetchAll('data_metadata', null, null, 'object', 'key'),
-                    fetchAll('data_orders', colsOrders, 'orders', 'object', 'id')
+                    fetchAll('data_active_products', null, null, 'object', 'code'),
+                    fetchAll('data_innovations', null, null, 'object', 'id')
                 ]);
+
+                // Group 2: Medium Reference
+                const [clientsUpper, productsFetched] = await Promise.all([
+                    fetchAll('data_clients', colsClients, 'clients', 'columnar', 'id'),
+                    fetchAll('data_product_details', null, null, 'object', 'code')
+                ]);
+
+                // Group 3: Heavy Transactional
+                const [ordersUpper, stockFetched] = await Promise.all([
+                    fetchAll('data_orders', colsOrders, 'orders', 'object', 'id'),
+                    fetchAll('data_stock', colsStock, 'stock', 'columnar', 'id')
+                ]);
+
+                // Group 4: Very Heavy (Detailed)
+                // Use default 10k page size
+                const detailedUpper = await fetchAll('data_detailed', colsDetailed, 'sales', 'columnar', 'id');
+
+                // Group 5: Massive (History)
+                // Use smaller page size to prevent RLS timeouts (e.g., 2500)
+                const historyUpper = await fetchAll('data_history', colsDetailed, 'history', 'columnar', 'id', 2500);
 
                 detailed = detailedUpper;
                 history = historyUpper;
