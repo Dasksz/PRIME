@@ -505,7 +505,7 @@
 
                 // Group 5: Massive (History)
                 // Use smaller page size to prevent RLS timeouts (e.g., 1000) and Apply Explicit Filter
-                const historyUpper = await fetchAll('data_history', colsDetailed, 'history', 'columnar', 'id', 1000, filterRCAs);
+                const historyUpper = await fetchAll('data_history', colsDetailed, 'history', 'columnar', 'id', 10000, filterRCAs);
 
                 detailed = detailedUpper;
                 history = historyUpper;
