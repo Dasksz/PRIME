@@ -811,67 +811,20 @@
         // Save Goals Logic
         const saveBtn = document.getElementById('save-goals-btn');
         const clearBtn = document.getElementById('clear-goals-btn');
-        const masterKeyModal = document.getElementById('master-key-modal');
-        const masterKeyInput = document.getElementById('master-key-input');
-        const masterKeyConfirm = document.getElementById('master-key-confirm');
-        const masterKeyCancel = document.getElementById('master-key-cancel');
-
-        // State to know if we are saving or clearing
-        let pendingAction = null; // 'save' or 'clear'
 
         if (saveBtn) {
-            saveBtn.addEventListener('click', () => {
-                pendingAction = 'save';
-                masterKeyModal.classList.remove('hidden');
-            });
-        }
-
-        if (clearBtn) {
-            clearBtn.addEventListener('click', () => {
-                pendingAction = 'clear';
-                masterKeyModal.classList.remove('hidden');
-            });
-        }
-
-        masterKeyCancel.addEventListener('click', () => {
-            masterKeyModal.classList.add('hidden');
-            masterKeyInput.value = '';
-        });
-
-        masterKeyConfirm.addEventListener('click', async () => {
-            const keyInput = masterKeyInput.value.trim();
-
-            // Tentamos obter a sessão atual do usuário
-            const { data: { session } } = await supabaseClient.auth.getSession();
-
-            // Prioridade: Chave fornecida manualmente (pode ser a service_role) OU Token da sessão
-            const authToken = keyInput || session?.access_token;
-
-            if (!authToken) {
-                alert('Por favor, faça login ou insira a Chave Secreta (service_role).');
-                return;
-            }
-
-            // Validação básica da chave se fornecida
-            if (keyInput) {
-                if (keyInput.startsWith('sb_publishable')) {
-                    alert("Você inseriu a chave PÚBLICA (sb_publishable). Esta chave não tem permissão de escrita. Por favor, insira a chave SECRETA (service_role) que começa com 'ey...'.");
-                    return;
-                }
-            }
-
-            masterKeyModal.classList.add('hidden');
-            masterKeyInput.value = '';
-
-            // Dispatch based on pendingAction
-            if (pendingAction === 'save') {
+            saveBtn.addEventListener('click', async () => {
                 const statusText = document.getElementById('save-goals-btn');
                 const originalText = statusText.innerHTML;
                 statusText.disabled = true;
                 statusText.innerHTML = 'Salvando...';
 
                 try {
-                    await saveGoalsToSupabase(authToken);
+                    const { data: { session } } = await supabaseClient.auth.getSession();
+                    if (!session) {
+                        throw new Error('Usuário não autenticado.');
+                    }
+                    await saveGoalsToSupabase(session.access_token);
                 } catch (error) {
                     console.error(error);
                     alert('Erro ao salvar metas: ' + error.message);
@@ -879,19 +832,23 @@
                     statusText.disabled = false;
                     statusText.innerHTML = originalText;
                 }
-            } else if (pendingAction === 'clear') {
-                // Call clearGoalsFromSupabase
-                // Note: clearGoalsFromSupabase handles its own button state
+            });
+        }
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', async () => {
                 try {
-                    await clearGoalsFromSupabase(authToken);
+                    const { data: { session } } = await supabaseClient.auth.getSession();
+                    if (!session) {
+                        throw new Error('Usuário não autenticado.');
+                    }
+                    await clearGoalsFromSupabase(session.access_token);
                 } catch (error) {
                     console.error(error);
                     alert('Erro ao limpar metas: ' + error.message);
                 }
-            }
-
-            pendingAction = null;
-        });
+            });
+        }
 
         async function saveGoalsToSupabase(authToken) {
             // Collect Goals Data
