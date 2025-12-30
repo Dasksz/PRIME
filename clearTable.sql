@@ -7,10 +7,10 @@ security definer
 set search_path = public
 as $$
 begin
-  -- Check if user is approved (same logic as RLS)
-  -- Allow service_role to bypass approval check
-  if auth.role() <> 'service_role' and not public.is_approved() then
-    raise exception 'Access denied: User not approved.';
+  -- Check if user is ADMIN (role='adm')
+  -- Allow service_role to bypass check
+  if auth.role() <> 'service_role' and not public.is_admin() then
+    raise exception 'Access denied: Only Admins can truncate tables.';
   end if;
 
   -- Validate table name to prevent SQL injection (allow-list)
