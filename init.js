@@ -294,7 +294,7 @@
                 return columnar;
             };
 
-            const fetchAll = async (table, columns = null, type = null, format = 'object', pkCol = 'id', customPageSize = 10000) => {
+            const fetchAll = async (table, columns = null, type = null, format = 'object', pkCol = 'id', customPageSize = 20000) => {
                 // Config
                 // Keyset Pagination for reliability
                 const pageSize = customPageSize;
@@ -489,7 +489,7 @@
 
                 // Group 5: Massive (History)
                 // Use default 10k page size as requested, relying on backend index optimization
-                const historyUpper = await fetchAll('data_history', colsDetailed, 'history', 'columnar', 'id', 10000);
+                const historyUpper = await fetchAll('data_history', colsDetailed, 'history', 'columnar', 'id', 20000);
 
                 detailed = detailedUpper;
                 history = historyUpper;
