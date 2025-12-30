@@ -682,16 +682,6 @@
             return dateB - dateA;
         });
 
-        function escapeHTML(str) {
-            if (!str) return '';
-            return String(str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        }
-
         Chart.register(ChartDataLabels);
 
         const mainDashboard = document.getElementById('main-dashboard');
@@ -1733,10 +1723,10 @@
 
                     return `
                     <tr class="hover:bg-slate-700/50 border-b border-slate-500 last:border-0">
-                        <td class="px-2 py-2 font-medium text-slate-300 text-xs">${escapeHTML(row.codcli)}</td>
-                        <td class="px-2 py-2 text-xs truncate max-w-[150px]" title="${escapeHTML(row.name)}">${escapeHTML(row.name)}</td>
-                        <td class="px-2 py-2 text-xs text-slate-300 truncate max-w-[100px]">${escapeHTML(row.city)}</td>
-                        <td class="px-2 py-2 text-xs text-slate-400 truncate max-w-[100px]">${escapeHTML(getFirstName(row.vendedor))}</td>
+                        <td class="px-2 py-2 font-medium text-slate-300 text-xs">${row.codcli}</td>
+                        <td class="px-2 py-2 text-xs truncate max-w-[150px]" title="${row.name}">${row.name}</td>
+                        <td class="px-2 py-2 text-xs text-slate-300 truncate max-w-[100px]">${row.city}</td>
+                        <td class="px-2 py-2 text-xs text-slate-400 truncate max-w-[100px]">${getFirstName(row.vendedor)}</td>
                         ${saltyCols}
                         ${foodsCols}
                     </tr>
@@ -4866,7 +4856,7 @@ const supervisorGroups = new Map();
 
                     return `
                         <tr class="hover:bg-slate-700/50">
-                            <td class="px-2 py-1.5 text-xs">${escapeHTML(item.descricao)}</td>
+                            <td class="px-2 py-1.5 text-xs">${item.descricao}</td>
                             <td class="px-2 py-1.5 text-xs text-right">${item.stockQty.toLocaleString('pt-BR')}</td>
                             <td class="px-2 py-1.5 text-xs text-right">${item.boxesSoldPreviousMonth.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
                             <td class="px-2 py-1.5 text-xs text-right">${item.boxesSoldCurrentMonth.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
@@ -6064,7 +6054,7 @@ const supervisorGroups = new Map();
                     const cidade = data.cidade || data.CIDADE || data['Nome da Cidade'] || 'N/A';
                     const bairro = data.bairro || data.BAIRRO || 'N/A';
 
-                    return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${escapeHTML(String(data['Código']))}">${escapeHTML(String(data['Código']))}</a></td><td class="px-4 py-2 flex items-center">${escapeHTML(nome)}${novoLabel}</td><td class="px-4 py-2 text-right"><div class="tooltip">${data.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">${tooltipText}</span></div></td><td class="px-4 py-2">${escapeHTML(cidade)}</td><td class="px-4 py-2">${escapeHTML(bairro)}</td><td class="px-4 py-2 text-center">${escapeHTML(formatDate(data.ultimaCompra))}</td><td class="px-4 py-2">${escapeHTML(String(rcaVal))}</td></tr>`
+                    return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${data['Código']}">${data['Código']}</a></td><td class="px-4 py-2 flex items-center">${nome}${novoLabel}</td><td class="px-4 py-2 text-right"><div class="tooltip">${data.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">${tooltipText}</span></div></td><td class="px-4 py-2">${cidade}</td><td class="px-4 py-2">${bairro}</td><td class="px-4 py-2 text-center">${formatDate(data.ultimaCompra)}</td><td class="px-4 py-2">${rcaVal}</td></tr>`
                 }).join('');
 
                 inactiveClientsList.sort((a, b) => {
@@ -6087,7 +6077,7 @@ const supervisorGroups = new Map();
                     const bairro = client.bairro || client.BAIRRO || 'N/A';
                     const ultCompra = client.ultimaCompra || client['Data da Última Compra'] || client.ULTIMACOMPRA;
 
-                    return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${escapeHTML(String(client['Código']))}">${escapeHTML(String(client['Código']))}</a></td><td class="px-4 py-2 flex items-center">${escapeHTML(nome)}${novoLabel}${devolucaoLabel}</td><td class="px-4 py-2">${escapeHTML(cidade)}</td><td class="px-4 py-2">${escapeHTML(bairro)}</td><td class="px-4 py-2 text-center">${escapeHTML(formatDate(ultCompra))}</td><td class="px-4 py-2">${escapeHTML(String(rcaVal))}</td></tr>`
+                    return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${client['Código']}">${client['Código']}</a></td><td class="px-4 py-2 flex items-center">${nome}${novoLabel}${devolucaoLabel}</td><td class="px-4 py-2">${cidade}</td><td class="px-4 py-2">${bairro}</td><td class="px-4 py-2 text-center">${formatDate(ultCompra)}</td><td class="px-4 py-2">${rcaVal}</td></tr>`
                 }).join('');
 
                 const cityChartTitleEl = document.getElementById('city-chart-title');
@@ -8917,9 +8907,9 @@ const supervisorGroups = new Map();
             const orderInfo = aggregatedOrders.find(order => order.PEDIDO == pedidoId);
             const itemsDoPedido = allSalesData.filter(item => item.PEDIDO == pedidoId);
             if (!orderInfo) return;
-            modalPedidoId.textContent = escapeHTML(orderId);
-            modalHeaderInfo.innerHTML = `<div><p class="font-bold">Cód. Cliente:</p><p>${escapeHTML(orderInfo.CODCLI || 'N/A')}</p></div><div><p class="font-bold">Cliente:</p><p>${escapeHTML(orderInfo.CLIENTE_NOME || 'N/A')}</p></div><div><p class="font-bold">Vendedor:</p><p>${escapeHTML(orderInfo.NOME || 'N/A')}</p></div><div><p class="font-bold">Data Pedido:</p><p>${escapeHTML(formatDate(orderInfo.DTPED))}</p></div><div><p class="font-bold">Data Faturamento:</p><p>${escapeHTML(formatDate(orderInfo.DTSAIDA))}</p></div><div><p class="font-bold">Cidade:</p><p>${escapeHTML(orderInfo.CIDADE || 'N/A')}</p></div>`;
-            modalTableBody.innerHTML = itemsDoPedido.map(item => { const unitPrice = (item.QTVENDA > 0) ? (item.VLVENDA / item.QTVENDA) : 0; return `<tr class="hover:bg-slate-700"><td class="px-4 py-2">(${escapeHTML(item.PRODUTO)}) ${escapeHTML(item.DESCRICAO)}</td><td class="px-4 py-2 text-right">${item.QTVENDA}</td><td class="px-4 py-2 text-right">${item.TOTPESOLIQ.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Kg</td><td class="px-4 py-2 text-right"><div class="tooltip">${unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">Subtotal: ${item.VLVENDA.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div></td></tr>`; }).join('');
+            modalPedidoId.textContent = pedidoId;
+            modalHeaderInfo.innerHTML = `<div><p class="font-bold">Cód. Cliente:</p><p>${orderInfo.CODCLI || 'N/A'}</p></div><div><p class="font-bold">Cliente:</p><p>${orderInfo.CLIENTE_NOME || 'N/A'}</p></div><div><p class="font-bold">Vendedor:</p><p>${orderInfo.NOME || 'N/A'}</p></div><div><p class="font-bold">Data Pedido:</p><p>${formatDate(orderInfo.DTPED)}</p></div><div><p class="font-bold">Data Faturamento:</p><p>${formatDate(orderInfo.DTSAIDA)}</p></div><div><p class="font-bold">Cidade:</p><p>${orderInfo.CIDADE || 'N/A'}</p></div>`;
+            modalTableBody.innerHTML = itemsDoPedido.map(item => { const unitPrice = (item.QTVENDA > 0) ? (item.VLVENDA / item.QTVENDA) : 0; return `<tr class="hover:bg-slate-700"><td class="px-4 py-2">(${item.PRODUTO}) ${item.DESCRICAO}</td><td class="px-4 py-2 text-right">${item.QTVENDA}</td><td class="px-4 py-2 text-right">${item.TOTPESOLIQ.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Kg</td><td class="px-4 py-2 text-right"><div class="tooltip">${unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">Subtotal: ${item.VLVENDA.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div></td></tr>`; }).join('');
             modalFooterTotal.innerHTML = `<p class="text-lg font-bold text-teal-400">Mix de Produtos: ${itemsDoPedido.length}</p><p class="text-lg font-bold text-emerald-400">Total do Pedido: ${orderInfo.VLVENDA.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>`;
             modal.classList.remove('hidden');
         }
@@ -8952,7 +8942,7 @@ const supervisorGroups = new Map();
             const ramo = getVal(clientData, ['Descricao', 'ramo', 'DESCRICAO', 'Descricao']) || 'N/A';
             const ultimaCompra = getVal(clientData, ['Data da Última Compra', 'ultimaCompra', 'ULTIMACOMPRA']);
 
-            clientModalContent.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"><div><p class="font-bold text-slate-400">Código:</p><p>${escapeHTML(clientData['Código'] || 'N/A')}</p></div><div><p class="font-bold text-slate-400">CNPJ/CPF:</p><p>${escapeHTML(cnpj)}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Insc. Est. / Produtor:</p><p>${escapeHTML(insc)}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Razão Social:</p><p>${escapeHTML(razao)}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Nome Fantasia:</p><p>${escapeHTML(fantasia)}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Endereço:</p><p>${escapeHTML(finalAddress)}</p></div><div><p class="font-bold text-slate-400">Bairro:</p><p>${escapeHTML(bairro)}</p></div><div><p class="font-bold text-slate-400">Cidade:</p><p>${escapeHTML(cidade)}</p></div><div><p class="font-bold text-slate-400">CEP:</p><p>${escapeHTML(cep)}</p></div><div><p class="font-bold text-slate-400">Telefone:</p><p>${escapeHTML(telefone)}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">E-mail:</p><p>${escapeHTML(email)}</p></div><div><p class="font-bold text-slate-400">Ramo de Atividade:</p><p>${escapeHTML(ramo)}</p></div><div><p class="font-bold text-slate-400">Última Compra:</p><p>${escapeHTML(formatDate(ultimaCompra))}</p></div></div>`;
+            clientModalContent.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"><div><p class="font-bold text-slate-400">Código:</p><p>${clientData['Código'] || 'N/A'}</p></div><div><p class="font-bold text-slate-400">CNPJ/CPF:</p><p>${cnpj}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Insc. Est. / Produtor:</p><p>${insc}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Razão Social:</p><p>${razao}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Nome Fantasia:</p><p>${fantasia}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Endereço:</p><p>${finalAddress}</p></div><div><p class="font-bold text-slate-400">Bairro:</p><p>${bairro}</p></div><div><p class="font-bold text-slate-400">Cidade:</p><p>${cidade}</p></div><div><p class="font-bold text-slate-400">CEP:</p><p>${cep}</p></div><div><p class="font-bold text-slate-400">Telefone:</p><p>${telefone}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">E-mail:</p><p>${email}</p></div><div><p class="font-bold text-slate-400">Ramo de Atividade:</p><p>${ramo}</p></div><div><p class="font-bold text-slate-400">Última Compra:</p><p>${formatDate(ultimaCompra)}</p></div></div>`;
             clientModal.classList.remove('hidden');
         }
 
@@ -9281,16 +9271,40 @@ const supervisorGroups = new Map();
 
         async function enviarDadosParaSupabase(data) {
             const supabaseUrl = document.getElementById('supabase-url').value;
+            const supabaseKeyInput = document.getElementById('supabase-key').value.trim();
 
             // Tentamos obter a sessão atual do usuário
             const { data: { session } } = await supabaseClient.auth.getSession();
-            const authToken = session?.access_token;
+
+            // Definição da chave de autenticação (Token)
+            // Prioridade: Chave fornecida manualmente (Service Role) > Token da sessão do usuário logado
+            // Isso permite que o usuário use a chave secreta para upload (bypass RLS) mesmo estando logado com um usuário sem permissão.
+            const authToken = supabaseKeyInput || session?.access_token;
+
+            // --- VALIDAÇÃO DA CHAVE SECRETA ---
+            if (supabaseKeyInput) {
+                if (supabaseKeyInput.startsWith('sb_secret')) {
+                    alert("A chave 'sb_secret' não é suportada diretamente pelo Uploader. Por favor, utilize a chave **service_role** do tipo JWT (que começa com 'ey...') disponível em Project Settings > API no Dashboard do Supabase.");
+                    throw new Error("Formato de chave inválido (sb_secret detectado). Use o JWT service_role.");
+                }
+                if (supabaseKeyInput.startsWith('sb_publishable')) {
+                    alert("Você inseriu a chave PÚBLICA (sb_publishable) no campo de senha. Esta chave não tem permissão para gravar dados. Por favor, insira a chave SECRETA (service_role) que começa com 'ey...'.");
+                    throw new Error("Chave pública inserida no lugar da secreta.");
+                }
+                if (!supabaseKeyInput.includes('.')) {
+                    alert("O formato da chave secreta parece inválido. O sistema espera um Token JWT (que contém pontos separando as partes) e geralmente começa com 'ey...'. Verifique se copiou a chave 'service_role' (secret) correta.");
+                    throw new Error("Formato de chave inválido (JWT esperado).");
+                }
+            }
+            // ----------------------------------
 
             // Definição da API Key (Header 'apikey')
-            const apiKeyHeader = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : '';
+            // O Supabase exige que o header 'apikey' contenha a chave ANÔNIMA para passar pelo Gateway sem erro de "Forbidden use of secret key".
+            // O header 'Authorization' carrega o token real (Sessão ou Chave Secreta).
+            const apiKeyHeader = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : supabaseKeyInput;
 
             if (!supabaseUrl || !authToken) {
-                alert("Por favor, faça login para continuar. Sua sessão pode ter expirado.");
+                alert("Por favor, preencha a URL e certifique-se de estar logado ou forneça a Chave Secreta.");
                 return;
             }
 
