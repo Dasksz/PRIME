@@ -392,6 +392,7 @@ using (auth.role() = 'authenticated' and public.is_approved());
 -- Permite escrita (insert/update) APENAS para ADMINS (role='adm')
 drop policy if exists "Enable insert/update for goals" on public.goals_distribution;
 drop policy if exists "Acesso escrita aprovados" on public.goals_distribution;
+drop policy if exists "Acesso escrita admin" on public.goals_distribution; -- ADDED
 create policy "Acesso escrita admin" on public.goals_distribution for all
 using (auth.role() = 'authenticated' and public.is_admin())
 with check (auth.role() = 'authenticated' and public.is_admin());
