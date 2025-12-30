@@ -50,11 +50,20 @@
         });
     }
 
-    async function carregarDadosDoSupabase(supabaseClient) {
+    async function carregarDadosDoSupabase(supabaseClient, userProfile) {
         isAppReady = true;
         const loader = document.getElementById('loader');
         const loaderText = document.getElementById('loader-text');
         const dashboardView = document.getElementById('main-dashboard');
+
+        // Determine Filtering Strategy
+        // If user is NOT admin, we explicitly filter by their RCAs to optimize DB performance
+        // This avoids RLS "scan-all-rows" performance penalties.
+        let filterRCAs = null;
+        if (userProfile && userProfile.role !== 'adm' && userProfile.rcas && userProfile.rcas.length > 0) {
+            filterRCAs = userProfile.rcas;
+            console.log("Aplicando filtro explícito de RCAs:", filterRCAs);
+        }
 
         try {
             loader.classList.remove('hidden');
@@ -294,7 +303,7 @@
                 return columnar;
             };
 
-            const fetchAll = async (table, columns = null, type = null, format = 'object', pkCol = 'id', customPageSize = 10000) => {
+            const fetchAll = async (table, columns = null, type = null, format = 'object', pkCol = 'id', customPageSize = 10000, rcasToFilter = null) => {
                 // Config
                 // Keyset Pagination for reliability
                 const pageSize = customPageSize;
@@ -319,12 +328,18 @@
                                     query.gt(pkCol, lastId);
                                 }
                                 
+                                // Explicit Filtering for performance (utilizing indices)
+                                // Only applies to tables with 'codusur' column
+                                if (rcasToFilter && (table === 'data_detailed' || table === 'data_history' || table === 'data_orders')) {
+                                    query.in('codusur', rcasToFilter);
+                                }
+
                                 const promise = columns ? query.csv() : query;
 
                                 // Timeout wrapper (increase for history if needed, but smaller pages help more)
-                                // 30 seconds default
+                                // 45 seconds default for stability
                                 const timeoutPromise = new Promise((_, reject) =>
-                                    setTimeout(() => reject(new Error('Request timed out')), 30000)
+                                    setTimeout(() => reject(new Error('Request timed out')), 45000)
                                 );
 
                                 const response = await Promise.race([promise, timeoutPromise]);
@@ -480,17 +495,17 @@
 
                 // Group 3: Heavy Transactional
                 const [ordersUpper, stockFetched] = await Promise.all([
-                    fetchAll('data_orders', colsOrders, 'orders', 'object', 'id'),
+                    fetchAll('data_orders', colsOrders, 'orders', 'object', 'id', 10000, filterRCAs),
                     fetchAll('data_stock', colsStock, 'stock', 'columnar', 'id')
                 ]);
 
                 // Group 4: Very Heavy (Detailed)
                 // Use default 10k page size
-                const detailedUpper = await fetchAll('data_detailed', colsDetailed, 'sales', 'columnar', 'id');
+                const detailedUpper = await fetchAll('data_detailed', colsDetailed, 'sales', 'columnar', 'id', 10000, filterRCAs);
 
                 // Group 5: Massive (History)
-                // Use smaller page size to prevent RLS timeouts (e.g., 2500)
-                const historyUpper = await fetchAll('data_history', colsDetailed, 'history', 'columnar', 'id', 2500);
+                // Use smaller page size to prevent RLS timeouts (e.g., 1000) and Apply Explicit Filter
+                const historyUpper = await fetchAll('data_history', colsDetailed, 'history', 'columnar', 'id', 1000, filterRCAs);
 
                 detailed = detailedUpper;
                 history = historyUpper;
@@ -683,7 +698,7 @@
                 if (profile && profile.status === 'aprovado') {
                     if (!isAppReady) {
                         telaLoading.classList.add('hidden');
-                        carregarDadosDoSupabase(supabaseClient);
+                        carregarDadosDoSupabase(supabaseClient, profile); // Pass Profile to Loader
                     }
                     // If App is Ready, we do nothing - keep dashboard active.
                 } else {
