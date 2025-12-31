@@ -9348,7 +9348,8 @@ const supervisorGroups = new Map();
                         return; // Sucesso com TRUNCATE
                     } else {
                         // Se falhar (ex: função não existe), faz fallback para o método antigo
-                        console.warn(`RPC truncate_table falhou para ${table}, tentando DELETE convencional...`, rpcResponse.status);
+                        const errorText = await rpcResponse.text();
+                        console.warn(`RPC truncate_table falhou para ${table} (Status: ${rpcResponse.status}). Msg: ${errorText}. Tentando DELETE convencional...`);
                     }
                 } catch (e) {
                     console.warn(`Erro ao chamar RPC truncate_table para ${table}, tentando DELETE convencional...`, e);
@@ -9494,8 +9495,13 @@ const supervisorGroups = new Map();
 
             } catch (error) {
                 console.error(error);
-                updateStatus('Erro: ' + error.message, 0);
-                alert('Erro durante o upload: ' + error.message);
+                let msg = error.message;
+                // Detecta erros de permissão comuns
+                if (msg.includes('403') || msg.includes('row-level security') || msg.includes('violates row-level security policy') || msg.includes('Access denied')) {
+                     msg = "Permissão negada. Verifique se seu usuário tem permissão de 'admin' no Supabase. " + msg;
+                }
+                updateStatus('Erro: ' + msg, 0);
+                alert('Erro durante o upload: ' + msg);
             }
         }
 
