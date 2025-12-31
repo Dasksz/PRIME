@@ -1,5 +1,5 @@
 -- Fix for Supabase Performance Warnings: Multiple Permissive Policies
--- Consolidates RLS policies for public.goals_distribution and public.profiles
+-- Consolidates RLS policies for public.goals_distribution, public.profiles, and data tables.
 
 -- ==============================================================================
 -- Tabela: goals_distribution
@@ -8,7 +8,7 @@
 DROP POLICY IF EXISTS "Goals Write Admin" ON public.goals_distribution;
 DROP POLICY IF EXISTS "Goals Read Approved" ON public.goals_distribution;
 
--- Ensure the unified policy exists (it should already be there from politicas_unificadas.sql, but we can recreate to be sure)
+-- Ensure the unified policy exists
 DROP POLICY IF EXISTS "Acesso Total Unificado" ON public.goals_distribution;
 
 CREATE POLICY "Acesso Total Unificado" ON public.goals_distribution
@@ -53,3 +53,35 @@ WITH CHECK (public.is_admin());
 CREATE POLICY "Profiles Unified Delete" ON public.profiles
 FOR DELETE TO authenticated
 USING (public.is_admin());
+
+
+-- ==============================================================================
+-- Data Tables Cleanup
+-- Drop policies from security_fix.sql that conflict with politicas_unificadas.sql
+-- ==============================================================================
+
+DO $$
+DECLARE
+    t text;
+BEGIN
+    FOR t IN
+        SELECT table_name FROM information_schema.tables
+        WHERE table_schema = 'public'
+        AND table_name IN (
+            'data_active_products',
+            'data_clients',
+            'data_detailed',
+            'data_history',
+            'data_innovations',
+            'data_metadata',
+            'data_orders',
+            'data_product_details',
+            'data_stock'
+        )
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS "Read Access Approved" ON public.%I;', t);
+        EXECUTE format('DROP POLICY IF EXISTS "Write Access Admin" ON public.%I;', t);
+        EXECUTE format('DROP POLICY IF EXISTS "Update Access Admin" ON public.%I;', t);
+        EXECUTE format('DROP POLICY IF EXISTS "Delete Access Admin" ON public.%I;', t);
+    END LOOP;
+END $$;
