@@ -6,7 +6,7 @@
 -- 3. Execute o script.
 
 UPDATE public.profiles
-SET role = 'admin', status = 'aprovado'
+SET role = 'adm', status = 'aprovado'
 WHERE email = 'seu_email@exemplo.com';
 
 -- Verifica se a atualização funcionou (retorna o usuário atualizado)
