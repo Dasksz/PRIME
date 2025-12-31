@@ -190,7 +190,7 @@ CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean AS $$
 BEGIN
   IF (select auth.role()) = 'service_role' THEN RETURN true; END IF;
-  RETURN EXISTS (SELECT 1 FROM public.profiles WHERE id = (select auth.uid()) AND role = 'admin');
+  RETURN EXISTS (SELECT 1 FROM public.profiles WHERE id = (select auth.uid()) AND role = 'adm');
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
