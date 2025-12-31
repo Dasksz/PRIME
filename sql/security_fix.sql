@@ -10,11 +10,11 @@ RETURNS boolean AS $$
 BEGIN
   -- Service Role sempre é admin (para manutenção via servidor, se necessário)
   IF (select auth.role()) = 'service_role' THEN RETURN true; END IF;
-
+  
   -- Verifica tabela de perfis
   RETURN EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE id = (select auth.uid())
+    SELECT 1 FROM public.profiles 
+    WHERE id = (select auth.uid()) 
     AND role = 'admin'
   );
 END;
@@ -27,8 +27,8 @@ BEGIN
   IF (select auth.role()) = 'service_role' THEN RETURN true; END IF;
 
   RETURN EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE id = (select auth.uid())
+    SELECT 1 FROM public.profiles 
+    WHERE id = (select auth.uid()) 
     AND status = 'aprovado'
   );
 END;
@@ -56,7 +56,7 @@ CREATE POLICY "Admin Manage Profiles" ON public.profiles FOR ALL
 USING (public.is_admin())
 WITH CHECK (public.is_admin());
 
--- Auto-Update (Opcional): Usuário pode editar dados inócuos (email, nome) se houver colunas,
+-- Auto-Update (Opcional): Usuário pode editar dados inócuos (email, nome) se houver colunas, 
 -- mas NÃO status ou role. Como aqui não temos colunas "seguras" separadas, restringimos a Admin.
 
 -- ==============================================================================
@@ -67,13 +67,13 @@ DO $$
 DECLARE
     t text;
 BEGIN
-    FOR t IN
-        SELECT table_name FROM information_schema.tables
-        WHERE table_schema = 'public'
+    FOR t IN 
+        SELECT table_name FROM information_schema.tables 
+        WHERE table_schema = 'public' 
         AND table_name LIKE 'data_%' -- Alvo: data_detailed, data_clients, etc.
     LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', t);
-
+        
         -- Remove permissões públicas inseguras (Anon não pode fazer nada)
         EXECUTE format('REVOKE ALL ON public.%I FROM anon;', t);
         EXECUTE format('REVOKE ALL ON public.%I FROM authenticated;', t);
@@ -131,8 +131,8 @@ BEGIN
 
   -- Lista branca de tabelas permitidas para evitar SQL Injection
   IF table_name NOT IN (
-    'data_detailed', 'data_history', 'data_clients', 'data_orders',
-    'data_product_details', 'data_active_products', 'data_stock',
+    'data_detailed', 'data_history', 'data_clients', 'data_orders', 
+    'data_product_details', 'data_active_products', 'data_stock', 
     'data_innovations', 'data_metadata', 'goals_distribution'
   ) THEN
     RAISE EXCEPTION 'Tabela não permitida.';
@@ -145,4 +145,4 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Permite RPC apenas para autenticados (RLS/Security Definer checa admin internamente)
 REVOKE EXECUTE ON FUNCTION public.truncate_table(text) FROM public;
 REVOKE EXECUTE ON FUNCTION public.truncate_table(text) FROM anon;
-GRANT EXECUTE ON FUNCTION public.truncate_table(text) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.truncate_table(text) TO authenticated;
