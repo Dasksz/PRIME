@@ -799,16 +799,10 @@
         }
 
 
-        // Admin Modal Logic
+        // Admin Modal Logic (Moved to app.js to handle access control)
         const adminBtn = document.getElementById('open-admin-btn');
-        const adminModal = document.getElementById('admin-uploader-modal');
-        if (adminBtn && adminModal) {
-            adminBtn.addEventListener('click', () => {
-                adminModal.classList.remove('hidden');
-                // Close sidebar on mobile if open
-                document.getElementById('side-menu').classList.remove('translate-x-0');
-                document.getElementById('sidebar-overlay').classList.add('hidden');
-            });
+        if (adminBtn) {
+            // Logic moved to app.js
         }
 
         // Save Goals Logic
