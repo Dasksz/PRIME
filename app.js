@@ -9507,6 +9507,10 @@ const supervisorGroups = new Map();
 
             if (openAdminBtn) {
                 openAdminBtn.addEventListener('click', () => {
+                    if (window.userRole !== 'adm') {
+                        alert('Apenas usuários com permissão "adm" podem acessar o Uploader.');
+                        return;
+                    }
                     adminModal.classList.remove('hidden');
                 });
             }

@@ -663,6 +663,9 @@
                 }
 
                 if (profile && profile.status === 'aprovado') {
+                    // Store user role globally
+                    window.userRole = profile.role;
+
                     if (!isAppReady) {
                         telaLoading.classList.add('hidden');
                         carregarDadosDoSupabase(supabaseClient);
@@ -814,6 +817,11 @@
 
         if (saveBtn) {
             saveBtn.addEventListener('click', async () => {
+                if (window.userRole !== 'adm') {
+                    alert('Apenas usuários com permissão "adm" podem salvar metas.');
+                    return;
+                }
+
                 const statusText = document.getElementById('save-goals-btn');
                 const originalText = statusText.innerHTML;
                 statusText.disabled = true;
@@ -837,6 +845,11 @@
 
         if (clearBtn) {
             clearBtn.addEventListener('click', async () => {
+                if (window.userRole !== 'adm') {
+                    alert('Apenas usuários com permissão "adm" podem apagar metas.');
+                    return;
+                }
+
                 try {
                     const { data: { session } } = await supabaseClient.auth.getSession();
                     if (!session) {
