@@ -27,6 +27,12 @@ DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 
 -- Create unified policies for profiles
+-- Ensure we drop them first to allow re-running the script
+DROP POLICY IF EXISTS "Profiles Unified Select" ON public.profiles;
+DROP POLICY IF EXISTS "Profiles Unified Update" ON public.profiles;
+DROP POLICY IF EXISTS "Profiles Unified Insert" ON public.profiles;
+DROP POLICY IF EXISTS "Profiles Unified Delete" ON public.profiles;
+
 -- 1. SELECT: Users see their own, Admins see all.
 CREATE POLICY "Profiles Unified Select" ON public.profiles
 FOR SELECT TO authenticated
