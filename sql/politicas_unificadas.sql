@@ -5,6 +5,33 @@
 DROP INDEX IF EXISTS public.idx_detailed_codusur;
 DROP INDEX IF EXISTS public.idx_history_codusur;
 
+-- 1.1 Limpeza de políticas antigas/redundantes em massa (Data Tables)
+DO $$
+DECLARE
+    t text;
+BEGIN
+    FOR t IN 
+        SELECT table_name FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name IN (
+            'data_active_products',
+            'data_clients',
+            'data_detailed',
+            'data_history',
+            'data_innovations',
+            'data_metadata',
+            'data_orders',
+            'data_product_details',
+            'data_stock'
+        )
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS "Read Access Approved" ON public.%I;', t);
+        EXECUTE format('DROP POLICY IF EXISTS "Write Access Admin" ON public.%I;', t);
+        EXECUTE format('DROP POLICY IF EXISTS "Update Access Admin" ON public.%I;', t);
+        EXECUTE format('DROP POLICY IF EXISTS "Delete Access Admin" ON public.%I;', t);
+    END LOOP;
+END $$;
+
 -- 2. Função auxiliar para verificar admin
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean AS $$
