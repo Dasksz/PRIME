@@ -145,4 +145,4 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Permite RPC apenas para autenticados (RLS/Security Definer checa admin internamente)
 REVOKE EXECUTE ON FUNCTION public.truncate_table(text) FROM public;
 REVOKE EXECUTE ON FUNCTION public.truncate_table(text) FROM anon;
-GRANT EXECUTE ON FUNCTION public.truncate_table(text) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.truncate_table(text) TO authenticated;
