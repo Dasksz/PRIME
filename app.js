@@ -9498,7 +9498,7 @@ const supervisorGroups = new Map();
                 let msg = error.message;
                 // Detecta erros de permissão comuns
                 if (msg.includes('403') || msg.includes('row-level security') || msg.includes('violates row-level security policy') || msg.includes('Access denied')) {
-                     msg = "Permissão negada. Verifique se seu usuário tem permissão de 'admin' no Supabase. " + msg;
+                     msg = "Permissão negada. Verifique se seu usuário tem permissão de 'adm' no Supabase. " + msg;
                 }
                 updateStatus('Erro: ' + msg, 0);
                 alert('Erro durante o upload: ' + msg);
