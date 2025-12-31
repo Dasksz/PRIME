@@ -9512,6 +9512,14 @@ const supervisorGroups = new Map();
                         return;
                     }
                     adminModal.classList.remove('hidden');
+                    // Close sidebar on mobile if open
+                    const sideMenu = document.getElementById('side-menu');
+                    const sidebarOverlay = document.getElementById('sidebar-overlay');
+                    if (sideMenu) {
+                        sideMenu.classList.remove('translate-x-0'); 
+                        sideMenu.classList.add('-translate-x-full');
+                    }
+                    if (sidebarOverlay) sidebarOverlay.classList.add('hidden');
                 });
             }
             if (adminCloseBtn) {
