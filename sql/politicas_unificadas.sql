@@ -321,6 +321,10 @@ DROP POLICY IF EXISTS "Enable insert/update for goals" ON public.goals_distribut
 DROP POLICY IF EXISTS "Acesso Total Aprovados" ON public.goals_distribution;
 DROP POLICY IF EXISTS "Acesso Total Aprovados e Admin" ON public.goals_distribution;
 
+-- Drop políticas conflitantes de security_fix.sql
+DROP POLICY IF EXISTS "Goals Write Admin" ON public.goals_distribution;
+DROP POLICY IF EXISTS "Goals Read Approved" ON public.goals_distribution;
+
 DROP POLICY IF EXISTS "Acesso Total Unificado" ON public.goals_distribution;
 
 CREATE POLICY "Acesso Total Unificado" ON public.goals_distribution
@@ -332,10 +336,34 @@ WITH CHECK (public.is_admin() OR public.is_approved());
 -- ==============================================================================
 -- Tabela: profiles
 -- ==============================================================================
+-- Drop políticas antigas e conflitantes
+DROP POLICY IF EXISTS "Admin Manage Profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Profiles Visibility" ON public.profiles;
 DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
-CREATE POLICY "Users can view own profile" ON public.profiles
-FOR SELECT USING ((select auth.uid()) = id);
-
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
-CREATE POLICY "Users can update own profile" ON public.profiles
-FOR UPDATE USING ((select auth.uid()) = id);
+DROP POLICY IF EXISTS "Profiles Unified Select" ON public.profiles;
+DROP POLICY IF EXISTS "Profiles Unified Update" ON public.profiles;
+DROP POLICY IF EXISTS "Profiles Unified Insert" ON public.profiles;
+DROP POLICY IF EXISTS "Profiles Unified Delete" ON public.profiles;
+
+-- Create unified policies for profiles
+-- 1. SELECT: Users see their own, Admins see all.
+CREATE POLICY "Profiles Unified Select" ON public.profiles
+FOR SELECT TO authenticated
+USING ((select auth.uid()) = id OR public.is_admin());
+
+-- 2. UPDATE: Users update their own, Admins update all.
+CREATE POLICY "Profiles Unified Update" ON public.profiles
+FOR UPDATE TO authenticated
+USING ((select auth.uid()) = id OR public.is_admin())
+WITH CHECK ((select auth.uid()) = id OR public.is_admin());
+
+-- 3. INSERT: Admins only (Users created via trigger)
+CREATE POLICY "Profiles Unified Insert" ON public.profiles
+FOR INSERT TO authenticated
+WITH CHECK (public.is_admin());
+
+-- 4. DELETE: Admins only
+CREATE POLICY "Profiles Unified Delete" ON public.profiles
+FOR DELETE TO authenticated
+USING (public.is_admin());
