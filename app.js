@@ -1245,11 +1245,11 @@
                 // Check thresholds for this client
                 for (const key in clientTotals) {
                     const t = clientTotals[key];
-                    if (t.prevFat > 1) {
+                    if (t.prevFat >= 1) {
                         globalGoalsMetrics[key].prevClientsSet.add(codCli);
                     }
                     t.monthlyFat.forEach((val, mKey) => {
-                        if (val > 1) {
+                        if (val >= 1) {
                             if (!globalGoalsMetrics[key].monthlyClientsSets.has(mKey)) {
                                 globalGoalsMetrics[key].monthlyClientsSets.set(mKey, new Set());
                             }
@@ -1568,7 +1568,7 @@
                 const positivatedCats = new Set();
 
                 productsMap.forEach((netValue, prodCode) => {
-                    if (netValue > 1) {
+                    if (netValue >= 1) {
                         const desc = normalize(clientProductDesc.get(prodCode) || '');
 
                         // Checar Salty
@@ -2426,15 +2426,15 @@
 
                     // Calculate Total Quarter Fat for this client/key to determine Meta Pos
                     // MODIFIED: Use globalFat (Sum of ALL sales, including invalid dates) to match PEPSICO Logic
-                    if (t.globalFat > 1) {
+                    if (t.globalFat >= 1) {
                         metricsMap[key].quarterlyPosClientsSet.add(codCli);
                     }
 
-                    if (t.prevFat > 1) {
+                    if (t.prevFat >= 1) {
                         metricsMap[key].prevClientsSet.add(codCli);
                     }
                     t.monthlyFat.forEach((val, mKey) => {
-                        if (val > 1) {
+                        if (val >= 1) {
                             if (!metricsMap[key].monthlyClientsSets.has(mKey)) {
                                 metricsMap[key].monthlyClientsSets.set(mKey, new Set());
                             }
@@ -2766,7 +2766,7 @@
                     }
                 }
 
-                if (totalFat > 1) {
+                if (totalFat >= 1) {
                     naturalCount++;
                 }
             }
@@ -2923,9 +2923,9 @@
                 const avgVol = sumVol / QUARTERLY_DIVISOR; // Kg (No / 1000)
 
                 let activeMonthsCount = 0;
-                monthlyActivity.forEach(val => { if(val > 1) activeMonthsCount++; });
+                monthlyActivity.forEach(val => { if(val >= 1) activeMonthsCount++; });
 
-                const isActivePrevMonth = prevFat > 1 ? 1 : 0;
+                const isActivePrevMonth = prevFat >= 1 ? 1 : 0;
 
                 let sellerName = 'N/A';
                 const rcaCode = client.rcas[0];
@@ -2963,7 +2963,7 @@
                     }
                 }
 
-                const metaPos = (sumFat > 1 && avgFat > 0) ? 1 : 0; // Positivado se venda > 1 (threshold padrão)
+                const metaPos = (sumFat >= 1 && avgFat > 0) ? 1 : 0; // Positivado se venda >= 1 (threshold padrão)
 
                 clientMetrics.push({
                     cod: codCli,
@@ -3185,7 +3185,7 @@
                         }
                     });
                 }
-                if (sumFat > 1) naturalCount++;
+                if (sumFat >= 1) naturalCount++;
             });
 
             // Check if seller has specific adjustment for ELMA_ALL (Meta Pos)
@@ -3411,11 +3411,11 @@
                 }
 
                 let activeMonthsCount = 0;
-                monthlyActivity.forEach(val => { if(val > 1) activeMonthsCount++; });
+                monthlyActivity.forEach(val => { if(val >= 1) activeMonthsCount++; });
                 const divisor = QUARTERLY_DIVISOR;
                 const avgFat = cSumFat / divisor;
                 const avgVol = cSumVol / divisor;
-                const isActivePrevMonth = cPrevFat > 1 ? 1 : 0;
+                const isActivePrevMonth = cPrevFat >= 1 ? 1 : 0;
 
                 let sellerName = 'N/A';
                 const rcaCode = client.rcas[0];
@@ -3440,7 +3440,7 @@
                     }
                 }
 
-                const metaPos = cSumFat > 1 ? 1 : 0;
+                const metaPos = cSumFat >= 1 ? 1 : 0;
 
                 const metric = {
                     cod: codCli, name: client.nomeCliente || client.fantasia || client.razaoSocial || 'Cliente Sem Nome', seller: sellerName,
@@ -3985,7 +3985,7 @@
 
                     const avgFat = t.fat / QUARTERLY_DIVISOR;
                     const avgVol = t.vol / QUARTERLY_DIVISOR;
-                    const metaPos = t.fat > 1 ? 1 : 0;
+                    const metaPos = t.fat >= 1 ? 1 : 0;
 
                     // Fetch Stored Goal
                     let metaFat = 0; let metaVol = 0;
@@ -4010,10 +4010,10 @@
 
                 // Calculate Aggregate Positivation for Client (Unique Client Count)
                 let clientElmaFat = (clientCatTotals['707']?.fat || 0) + (clientCatTotals['708']?.fat || 0) + (clientCatTotals['752']?.fat || 0);
-                if (clientElmaFat > 1) sellerObj.elmaPos++;
+                if (clientElmaFat >= 1) sellerObj.elmaPos++;
 
                 let clientFoodsFat = (clientCatTotals['1119_TODDYNHO']?.fat || 0) + (clientCatTotals['1119_TODDY']?.fat || 0) + (clientCatTotals['1119_QUAKER_KEROCOCO']?.fat || 0);
-                if (clientFoodsFat > 1) sellerObj.foodsPos++;
+                if (clientFoodsFat >= 1) sellerObj.foodsPos++;
 
             }, () => {
                 if (currentRenderId !== goalsSvRenderId) return;
@@ -4072,7 +4072,7 @@
                                 }
                             }
                         }
-                        if (totalFat > 1) activeClientsCount++;
+                        if (totalFat >= 1) activeClientsCount++;
                     });
 
                     // Mix Calc (re-implement or optimize?)
@@ -4089,7 +4089,7 @@
                         const cMap = monthlyData.get(mKey);
                         if (!cMap.has(sale.CODCLI)) cMap.set(sale.CODCLI, { salty: new Set(), foods: new Set() });
                         const cData = cMap.get(sale.CODCLI);
-                        if (sale.VLVENDA > 1) {
+                        if (sale.VLVENDA >= 1) {
                             const desc = norm(sale.DESCRICAO);
                             MIX_SALTY_CATEGORIES.forEach(cat => { if (desc.includes(cat)) cData.salty.add(cat); });
                             MIX_FOODS_CATEGORIES.forEach(cat => { if (desc.includes(cat)) cData.foods.add(cat); });
@@ -6499,7 +6499,7 @@ const supervisorGroups = new Map();
             for (const products of clientProductNetValue.values()) {
                 let positiveProductCount = 0;
                 for (const netValue of products.values()) {
-                    if (netValue > 1) {
+                    if (netValue >= 1) {
                         positiveProductCount++;
                     }
                 }
@@ -6538,7 +6538,7 @@ const supervisorGroups = new Map();
 
             for (const [codcli, products] of clientProductNetSales.entries()) {
                 for (const data of products.values()) {
-                    if (data.netValue > 1) {
+                    if (data.netValue >= 1) {
                         const normalizedDescription = normalize(data.description);
                         for (const category of normalizedCategories) {
                             if (normalizedDescription.includes(category)) {
@@ -6672,7 +6672,7 @@ const supervisorGroups = new Map();
 
             // Calculate Current KPIs from Maps
             let currentPositiveClients = 0;
-            currentClientsSet.forEach(val => { if (val > 1) currentPositiveClients++; });
+            currentClientsSet.forEach(val => { if (val >= 1) currentPositiveClients++; });
             metrics.current.clients = currentPositiveClients;
 
             // Mix/Positivacao Current
@@ -6688,7 +6688,7 @@ const supervisorGroups = new Map();
                 const boughtCatsFoods = new Set();
 
                 prods.forEach(pData => {
-                    if (pData.val > 1) {
+                    if (pData.val >= 1) {
                         if (pepsicoCodfors.has(pData.codfor)) pepsicoCount++;
 
                         const desc = norm(pData.desc);
@@ -6805,7 +6805,7 @@ const supervisorGroups = new Map();
 
                 // Clients
                 let posClients = 0;
-                mData.clients.forEach(v => { if(v > 1) posClients++; });
+                mData.clients.forEach(v => { if(v >= 1) posClients++; });
                 sumClients += posClients;
 
                 // Mix
@@ -6820,7 +6820,7 @@ const supervisorGroups = new Map();
                     const boughtCatsFoods = new Set();
 
                     prods.forEach(pData => {
-                        if (pData.val > 1) {
+                        if (pData.val >= 1) {
                             if (pepsicoCodfors.has(pData.codfor)) pepsicoCount++;
                             const desc = norm(pData.desc);
                             saltyCategories.forEach(cat => { if (desc.includes(cat)) boughtCatsSalty.add(cat); });
@@ -7451,7 +7451,7 @@ const supervisorGroups = new Map();
             }, () => {
                 // 1.1 Finalize Current KPIs
                 let currentPositiveClients = 0;
-                currentClientsSet.forEach(val => { if (val > 1) currentPositiveClients++; });
+                currentClientsSet.forEach(val => { if (val >= 1) currentPositiveClients++; });
                 metrics.current.clients = currentPositiveClients;
 
                 let sumMix = 0; let countMixClients = 0; let countSalty = 0; let countFoods = 0;
@@ -7460,7 +7460,7 @@ const supervisorGroups = new Map();
                     const boughtCatsSalty = new Set();
                     const boughtCatsFoods = new Set();
                     prods.forEach(pData => {
-                        if (pData.val > 1) {
+                        if (pData.val >= 1) {
                             if (pepsicoCodfors.has(pData.codfor)) pepsicoCount++;
                             const desc = norm(pData.desc);
                             saltyCategories.forEach(cat => { if (desc.includes(cat)) boughtCatsSalty.add(cat); });
@@ -7544,7 +7544,7 @@ const supervisorGroups = new Map();
                     sortedMonths.forEach(mKey => {
                         const mData = historyMonths.get(mKey);
                         let posClients = 0;
-                        mData.clients.forEach(v => { if(v > 1) posClients++; });
+                        mData.clients.forEach(v => { if(v >= 1) posClients++; });
                         sumClients += posClients;
 
                         let mSumMix = 0; let mCountMixClients = 0; let mCountSalty = 0; let mCountFoods = 0;
@@ -7553,7 +7553,7 @@ const supervisorGroups = new Map();
                             const boughtCatsSalty = new Set();
                             const boughtCatsFoods = new Set();
                             prods.forEach(pData => {
-                                if (pData.val > 1) {
+                                if (pData.val >= 1) {
                                     if (pepsicoCodfors.has(pData.codfor)) pepsicoCount++;
                                     const desc = norm(pData.desc);
                                     saltyCategories.forEach(cat => { if (desc.includes(cat)) boughtCatsSalty.add(cat); });
