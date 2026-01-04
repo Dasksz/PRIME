@@ -4621,8 +4621,8 @@ const supervisorGroups = new Map();
             }
 
             const tableData = [];
-            const clientsWhoGotSelectionCurrent = new Set();
-            const clientsWhoGotSelectionPrevious = new Set();
+            const clientSelectionValueCurrent = new Map(); // Map<CODCLI, Value>
+            const clientSelectionValuePrevious = new Map(); // Map<CODCLI, Value>
             let topCoverageItem = { name: '-', coverage: 0, clients: 0 };
             const activeStockMap = getActiveStockMap(coverageFilialFilter.value);
 
@@ -4643,8 +4643,8 @@ const supervisorGroups = new Map();
 
             // Process Current Sales (O(N))
             // --- OTIMIZAÇÃO: Mapa invertido para performance O(1) no cálculo de cobertura ---
-            const productClientsCurrent = new Map(); // Map<PRODUTO, Set<CODCLI>>
-            const productClientsPrevious = new Map(); // Map<PRODUTO, Set<CODCLI>>
+            const productClientsCurrent = new Map(); // Map<PRODUTO, Map<CODCLI, Value>>
+            const productClientsPrevious = new Map(); // Map<PRODUTO, Map<CODCLI, Value>>
 
             // Use synchronous loops for initial map building as iterating sales (linear) is generally fast enough
             // (e.g. 50k sales ~ 50ms). Splitting this would require complex state management.
@@ -4652,8 +4652,9 @@ const supervisorGroups = new Map();
 
             sales.forEach(s => {
                 // Coverage Map (Inverted for Performance)
-                if (!productClientsCurrent.has(s.PRODUTO)) productClientsCurrent.set(s.PRODUTO, new Set());
-                productClientsCurrent.get(s.PRODUTO).add(s.CODCLI);
+                if (!productClientsCurrent.has(s.PRODUTO)) productClientsCurrent.set(s.PRODUTO, new Map());
+                const clientMap = productClientsCurrent.get(s.PRODUTO);
+                clientMap.set(s.CODCLI, (clientMap.get(s.CODCLI) || 0) + s.VLVENDA);
 
                 // Box Quantity Map
                 boxesSoldCurrentMap.set(s.PRODUTO, (boxesSoldCurrentMap.get(s.PRODUTO) || 0) + s.QTVENDA_EMBALAGEM_MASTER);
@@ -4671,8 +4672,9 @@ const supervisorGroups = new Map();
                 // Coverage Map (only if prev month)
                 if (isPrevMonth) {
                     // Coverage Map (Inverted for Performance)
-                    if (!productClientsPrevious.has(s.PRODUTO)) productClientsPrevious.set(s.PRODUTO, new Set());
-                    productClientsPrevious.get(s.PRODUTO).add(s.CODCLI);
+                    if (!productClientsPrevious.has(s.PRODUTO)) productClientsPrevious.set(s.PRODUTO, new Map());
+                    const clientMap = productClientsPrevious.get(s.PRODUTO);
+                    clientMap.set(s.CODCLI, (clientMap.get(s.CODCLI) || 0) + s.VLVENDA);
 
                     // Box Quantity Map (only if prev month)
                     boxesSoldPreviousMap.set(s.PRODUTO, (boxesSoldPreviousMap.get(s.PRODUTO) || 0) + s.QTVENDA_EMBALAGEM_MASTER);
@@ -4696,23 +4698,23 @@ const supervisorGroups = new Map();
                 // --- OTIMIZAÇÃO CRÍTICA: Iterar apenas os compradores do produto em vez de todos os clientes ativos ---
 
                 // Check Current
-                const buyersCurrent = productClientsCurrent.get(productCode);
-                if (buyersCurrent) {
-                    buyersCurrent.forEach(buyer => {
+                const buyersCurrentMap = productClientsCurrent.get(productCode);
+                if (buyersCurrentMap) {
+                    buyersCurrentMap.forEach((val, buyer) => {
                         if (activeClientCodes.has(buyer)) {
-                            clientsWhoGotProductCurrent++;
-                            clientsWhoGotSelectionCurrent.add(buyer);
+                            if (val >= 1) clientsWhoGotProductCurrent++;
+                            clientSelectionValueCurrent.set(buyer, (clientSelectionValueCurrent.get(buyer) || 0) + val);
                         }
                     });
                 }
 
                 // Check Previous
-                const buyersPrevious = productClientsPrevious.get(productCode);
-                if (buyersPrevious) {
-                    buyersPrevious.forEach(buyer => {
+                const buyersPreviousMap = productClientsPrevious.get(productCode);
+                if (buyersPreviousMap) {
+                    buyersPreviousMap.forEach((val, buyer) => {
                         if (activeClientCodes.has(buyer)) {
-                            clientsWhoGotProductPrevious++;
-                            clientsWhoGotSelectionPrevious.add(buyer);
+                            if (val >= 1) clientsWhoGotProductPrevious++;
+                            clientSelectionValuePrevious.set(buyer, (clientSelectionValuePrevious.get(buyer) || 0) + val);
                         }
                     });
                 }
@@ -4810,12 +4812,14 @@ const supervisorGroups = new Map();
                 coverageTopCoverageProductKpi.textContent = topCoverageItem.name;
                 coverageTopCoverageProductKpi.title = topCoverageItem.name;
 
-                const selectionCoveredCountCurrent = clientsWhoGotSelectionCurrent.size;
+                let selectionCoveredCountCurrent = 0;
+                clientSelectionValueCurrent.forEach(val => { if (val >= 1) selectionCoveredCountCurrent++; });
                 const selectionCoveragePercentCurrent = activeClientsCount > 0 ? (selectionCoveredCountCurrent / activeClientsCount) * 100 : 0;
                 coverageSelectionCoverageValueKpi.textContent = `${selectionCoveragePercentCurrent.toFixed(2)}%`;
                 coverageSelectionCoverageCountKpi.textContent = `${selectionCoveredCountCurrent.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
 
-                const selectionCoveredCountPrevious = clientsWhoGotSelectionPrevious.size;
+                let selectionCoveredCountPrevious = 0;
+                clientSelectionValuePrevious.forEach(val => { if (val >= 1) selectionCoveredCountPrevious++; });
                 const selectionCoveragePercentPrevious = activeClientsCount > 0 ? (selectionCoveredCountPrevious / activeClientsCount) * 100 : 0;
                 coverageSelectionCoverageValueKpiPrevious.textContent = `${selectionCoveragePercentPrevious.toFixed(2)}%`;
                 coverageSelectionCoverageCountKpiPrevious.textContent = `${selectionCoveredCountPrevious.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
@@ -6023,12 +6027,12 @@ const supervisorGroups = new Map();
 
                 const totalFaturamentoMes = clientTotalsThisMonth.get(codcli) || 0;
 
-                if (totalFaturamentoMes > 0) {
+                if (totalFaturamentoMes >= 1) {
                     activeClientsList.push(client);
 
                     // Detailed Data check
                     const details = detailedDataByClient.get(codcli);
-                    if (details && details.total > 0) {
+                    if (details && details.total >= 1) {
                         const outrosTotal = details.total - details.pepsico - details.multimarcas;
                         salesByActiveClient[codcli] = {
                             // Explicit copy to avoid Spread issues with Proxy
