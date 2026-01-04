@@ -4990,16 +4990,35 @@ const supervisorGroups = new Map();
             const positiveClients = new Set();
             const clientUniqueSkus = new Map(); // Map<CodCli, Set<Produto>>
 
-            data.forEach(sale => {
-                // Se o cliente teve Venda (VLVENDA > 0) OU Bonificação (VLBONIFIC > 0), ele é considerado positivado.
-                if (sale.CODCLI && (sale.VLVENDA > 0 || sale.VLBONIFIC > 0)) {
-                    positiveClients.add(sale.CODCLI);
+            // 1. Lógica de Positivação (Cobertura) - Alinhada com Comparativo
+            // Agrega valor total por cliente para verificar threshold >= 1
+            const clientTotalSales = new Map();
 
-                    // Rastrear SKUs únicos por cliente para o cálculo correto de SKU/PDV (Mix)
+            data.forEach(sale => {
+                if (sale.CODCLI) {
+                    const currentVal = clientTotalSales.get(sale.CODCLI) || 0;
+                    // Considera apenas VLVENDA para consistência com o KPI "Clientes Atendidos" do Comparativo
+                    // Se a regra de bonificação mudar lá, deve mudar aqui também.
+                    // Atualmente Comparativo usa: (s.TIPOVENDA === '1' || s.TIPOVENDA === '9') -> VLVENDA
+                    // Note que 'data' aqui já vem filtrado, mas precisamos checar se o valor agregado passa do threshold
+                    clientTotalSales.set(sale.CODCLI, currentVal + (Number(sale.VLVENDA) || 0));
+
+                    // Rastrear SKUs únicos (mantendo lógica existente para SKU/PDV)
+                    // Mas apenas se o cliente for considerado "positivo" no final?
+                    // Não, SKU/PDV geralmente considera tudo que foi movimentado.
+                    // Porém, para consistência, se o cliente não conta como "Atendido", seus SKUs deveriam contar?
+                    // Normalmente SKU/PDV é (Total SKUs Movimentados) / (Total Clientes Atendidos).
+                    // Vamos manter o rastreamento aqui, mas usar o denominador corrigido.
                     if (!clientUniqueSkus.has(sale.CODCLI)) {
                         clientUniqueSkus.set(sale.CODCLI, new Set());
                     }
                     clientUniqueSkus.get(sale.CODCLI).add(sale.PRODUTO);
+                }
+            });
+
+            clientTotalSales.forEach((total, codCli) => {
+                if (total >= 1) {
+                    positiveClients.add(codCli);
                 }
             });
             summary.positivacaoCount = positiveClients.size;
