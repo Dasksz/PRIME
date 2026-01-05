@@ -419,6 +419,9 @@
         let clientCoordinatesMap = new Map(); // Map<ClientCode, {lat, lng, address}>
         let nominatimQueue = [];
         let isProcessingQueue = false;
+        let currentFilteredClients = [];
+        let currentFilteredSalesMap = new Map();
+        let areMarkersGenerated = false;
 
         // Load cached coordinates from embeddedData
         if (embeddedData.clientCoordinates) {
@@ -458,18 +461,9 @@
 
             // Initialize Markers Layer (Hidden by default, shown on zoom)
             clientMarkersLayer = L.layerGroup();
-            
+
             leafletMap.on('zoomend', () => {
-                const zoom = leafletMap.getZoom();
-                if (zoom >= 14) { // Show tooltips only when zoomed in (Detail View)
-                    if (!leafletMap.hasLayer(clientMarkersLayer)) {
-                        leafletMap.addLayer(clientMarkersLayer);
-                    }
-                } else {
-                    if (leafletMap.hasLayer(clientMarkersLayer)) {
-                        leafletMap.removeLayer(clientMarkersLayer);
-                    }
-                }
+                updateMarkersVisibility();
             });
         }
 
@@ -479,13 +473,13 @@
             try {
                 const { error } = await window.supabaseClient
                     .from('data_client_coordinates')
-                    .upsert({ 
-                        client_code: String(clientCode), 
-                        lat: lat, 
-                        lng: lng, 
-                        address: address 
+                    .upsert({
+                        client_code: String(clientCode),
+                        lat: lat,
+                        lng: lng,
+                        address: address
                     });
-                
+
                 if (error) console.error("Error saving coordinate:", error);
                 else {
                     clientCoordinatesMap.set(String(clientCode), { lat, lng, address });
@@ -502,32 +496,33 @@
 
             // Removed Blocking Overlay logic for Background Processing
             const loadingText = document.getElementById('map-loading-text');
-            
+
             const processNext = async () => {
                 if (nominatimQueue.length === 0) {
                     isProcessingQueue = false;
+                    console.log("[GeoSync] Fila de download finalizada.");
                     return;
                 }
 
                 const { client, address } = nominatimQueue.shift();
-                
-                // Only update text if overlay happens to be visible (manual check?) 
-                // or just log to console.
-                // console.log(`Buscando: ${client.nomeCliente}... (${nominatimQueue.length} restantes)`);
+                console.log(`[GeoSync] Baixando coordenadas: ${client.nomeCliente} (${nominatimQueue.length} restantes)...`);
 
                 try {
                     const result = await geocodeAddressNominatim(address);
                     if (result) {
+                        console.log(`[GeoSync] Sucesso: ${client.nomeCliente} -> Salvo.`);
                         const codCli = String(client['Código'] || client['codigo_cliente']);
                         await saveCoordinateToSupabase(codCli, result.lat, result.lng, result.formatted_address);
-                        
+
                         // Add point directly to current heatmap data if visible
                         if (heatLayer) {
                             heatLayer.addLatLng([result.lat, result.lng, 1]); // intensity 1
                         }
+                    } else {
+                        console.log(`[GeoSync] Falha (Não encontrado): ${client.nomeCliente}`);
                     }
                 } catch (e) {
-                    console.error("Nominatim error:", e);
+                    console.error(`[GeoSync] Erro API: ${client.nomeCliente}`, e);
                 }
 
                 // Respect Rate Limit: 1200ms
@@ -538,7 +533,12 @@
         }
 
         async function syncGlobalCoordinates() {
-            if (window.userRole !== 'adm') return;
+            if (window.userRole !== 'adm') {
+                console.log("[GeoSync] Sincronização em segundo plano ignorada (Requer permissão 'adm').");
+                return;
+            }
+
+            console.log("[GeoSync] Iniciando verificação de coordenadas em segundo plano...");
 
             // 1. Cleanup Orphans
             const orphanedCodes = [];
@@ -555,7 +555,7 @@
                     .from('data_client_coordinates')
                     .delete()
                     .in('client_code', orphanedCodes);
-                
+
                 if (!error) {
                     orphanedCodes.forEach(c => clientCoordinatesMap.delete(c));
                 }
@@ -587,15 +587,17 @@
             }
 
             if (queuedCount > 0) {
-                console.log(`Queued ${queuedCount} clients for geocoding.`);
+                console.log(`[GeoSync] Identificados ${queuedCount} clientes sem coordenadas. Iniciando download...`);
                 processNominatimQueue();
+            } else {
+                console.log("[GeoSync] Todos os clientes ativos já possuem coordenadas.");
             }
         }
 
         async function geocodeAddressNominatim(address) {
             if (!address) return null;
             const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`;
-            
+
             try {
                 const response = await fetch(url, {
                     headers: { 'User-Agent': 'PrimeDashboardApp/1.0' }
@@ -622,56 +624,33 @@
             const { clients, sales } = getCityFilteredData();
             if (!clients || clients.length === 0) return;
 
-            const heatData = [];
-            const missingCoordsClients = [];
-            const validBounds = [];
-            
-            // Clear existing markers
+            // Cache for Async Marker Generation
+            currentFilteredClients = clients;
+            areMarkersGenerated = false;
             if (clientMarkersLayer) clientMarkersLayer.clearLayers();
 
-            // Aggregate sales for tooltips (optimization)
-            const clientSalesMap = new Map();
+            // Cache Sales
+            currentFilteredSalesMap.clear();
             if (sales) {
                 sales.forEach(s => {
                     const cod = s.CODCLI;
                     const val = Number(s.VLVENDA) || 0;
-                    clientSalesMap.set(cod, (clientSalesMap.get(cod) || 0) + val);
+                    currentFilteredSalesMap.set(cod, (currentFilteredSalesMap.get(cod) || 0) + val);
                 });
             }
 
+            const heatData = [];
+            const missingCoordsClients = [];
+            const validBounds = [];
+
+            // Heatmap Loop (Sync - Fast)
             clients.forEach(client => {
                 const codCli = String(client['Código'] || client['codigo_cliente']);
                 const coords = clientCoordinatesMap.get(codCli);
 
                 if (coords) {
-                    // [lat, lng, intensity]
-                    heatData.push([coords.lat, coords.lng, 1.0]); 
+                    heatData.push([coords.lat, coords.lng, 1.0]);
                     validBounds.push([coords.lat, coords.lng]);
-
-                    // Add Tooltip Marker (Invisible)
-                    if (clientMarkersLayer) {
-                        const val = clientSalesMap.get(codCli) || 0;
-                        const formattedVal = val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                        const tooltipContent = `
-                            <div class="text-xs">
-                                <b>${codCli} - ${client.nomeCliente || 'Cliente'}</b><br>
-                                <span class="text-green-600 font-bold">Venda: ${formattedVal}</span><br>
-                                ${client.bairro || ''}, ${client.cidade || ''}
-                            </div>
-                        `;
-
-                        const marker = L.circleMarker([coords.lat, coords.lng], {
-                            radius: 10, // Larger radius to make hovering easier
-                            color: 'transparent',
-                            fillColor: 'transparent',
-                            fillOpacity: 0,
-                            opacity: 0
-                        });
-                        
-                        marker.bindTooltip(tooltipContent, { direction: 'top', offset: [0, -5] });
-                        clientMarkersLayer.addLayer(marker);
-                    }
-
                 } else {
                     missingCoordsClients.push(client);
                 }
@@ -687,6 +666,66 @@
                 leafletMap.fitBounds(validBounds);
             }
 
+            // Trigger Marker Logic
+            updateMarkersVisibility();
+        }
+
+        function updateMarkersVisibility() {
+            if (!leafletMap || !clientMarkersLayer) return;
+            const zoom = leafletMap.getZoom();
+
+            if (zoom >= 14) {
+                if (!areMarkersGenerated) {
+                    generateMarkersAsync();
+                } else {
+                    if (!leafletMap.hasLayer(clientMarkersLayer)) leafletMap.addLayer(clientMarkersLayer);
+                }
+            } else {
+                if (leafletMap.hasLayer(clientMarkersLayer)) leafletMap.removeLayer(clientMarkersLayer);
+            }
+        }
+
+        function generateMarkersAsync() {
+            if (areMarkersGenerated) return;
+
+            // Use local reference to avoid race conditions if filter changes mid-process
+            const clientsToProcess = currentFilteredClients;
+
+            runAsyncChunked(clientsToProcess, (client) => {
+                const codCli = String(client['Código'] || client['codigo_cliente']);
+                const coords = clientCoordinatesMap.get(codCli);
+
+                if (coords) {
+                    const val = currentFilteredSalesMap.get(codCli) || 0;
+                    const formattedVal = val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+                    const rcaCode = client.rca1 || 'N/A';
+                    const rcaName = (optimizedData.rcaNameByCode && optimizedData.rcaNameByCode.get(rcaCode)) || rcaCode;
+
+                    const tooltipContent = `
+                        <div class="text-xs">
+                            <b>${codCli} - ${client.nomeCliente || 'Cliente'}</b><br>
+                            <span class="text-blue-500 font-semibold">RCA: ${rcaName}</span><br>
+                            <span class="text-green-600 font-bold">Venda: ${formattedVal}</span><br>
+                            ${client.bairro || ''}, ${client.cidade || ''}
+                        </div>
+                    `;
+
+                    const marker = L.circleMarker([coords.lat, coords.lng], {
+                        radius: 10,
+                        color: 'transparent',
+                        fillColor: 'transparent',
+                        fillOpacity: 0,
+                        opacity: 0
+                    });
+
+                    marker.bindTooltip(tooltipContent, { direction: 'top', offset: [0, -5] });
+                    clientMarkersLayer.addLayer(marker);
+                }
+            }, () => {
+                areMarkersGenerated = true;
+                updateMarkersVisibility();
+            });
         }
 
         function initializeOptimizedDataStructures() {
@@ -10125,7 +10164,7 @@ const supervisorGroups = new Map();
                     if (!cityMapContainer) return;
 
                     const isHidden = cityMapContainer.classList.contains('hidden');
-                    
+
                     if (isHidden) {
                         // Show Map
                         cityMapContainer.classList.remove('hidden');
@@ -10133,18 +10172,18 @@ const supervisorGroups = new Map();
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>
                             Ocultar Mapa
                         `;
-                        
+
                         // Initialize or Refresh Leaflet
                         if (!leafletMap) {
                             initLeafletMap();
                         }
-                        
+
                         // Important: Invalidate size after removing 'hidden' so Leaflet calculates dimensions correctly
                         setTimeout(() => {
                             if (leafletMap) leafletMap.invalidateSize();
                             updateCityMap();
                         }, 100);
-                        
+
                     } else {
                         // Hide Map
                         cityMapContainer.classList.add('hidden');
