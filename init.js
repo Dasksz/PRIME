@@ -444,6 +444,8 @@
 
             let detailed, history, clients, products, activeProds, stock, innovations, metadata, orders;
 
+            let clientCoordinates;
+
             if (useCache) {
                 // Se usamos cache, os dados já foram carregados do IndexedDB na variável cachedData
                 // Precisamos extraí-los para as variáveis que o resto do script espera
@@ -456,13 +458,14 @@
                 innovations = cachedData.innovations;
                 metadata = cachedData.metadata;
                 orders = cachedData.orders;
+                clientCoordinates = cachedData.clientCoordinates || [];
             } else {
                 const colsDetailed = 'id,pedido,codcli,nome,superv,codsupervisor,produto,descricao,fornecedor,observacaofor,codfor,codusur,qtvenda,vlvenda,vlbonific,totpesoliq,dtped,dtsaida,posicao,estoqueunit,tipovenda,filial,qtvenda_embalagem_master';
                 const colsClients = 'id,codigo_cliente,rca1,rca2,rcas,cidade,nomecliente,bairro,razaosocial,fantasia,cnpj_cpf,endereco,numero,cep,telefone,email,ramo,ultimacompra,datacadastro,bloqueio,inscricaoestadual';
                 const colsStock = 'id,product_code,filial,stock_qty';
                 const colsOrders = 'id,pedido,codcli,cliente_nome,cidade,nome,superv,fornecedores_str,dtped,dtsaida,posicao,vlvenda,totpesoliq,filial,tipovenda,fornecedores_list,codfors_list';
 
-                const [detailedUpper, historyUpper, clientsUpper, productsFetched, activeProdsFetched, stockFetched, innovationsFetched, metadataFetched, ordersUpper] = await Promise.all([
+                const [detailedUpper, historyUpper, clientsUpper, productsFetched, activeProdsFetched, stockFetched, innovationsFetched, metadataFetched, ordersUpper, clientCoordinatesFetched] = await Promise.all([
                     fetchAll('data_detailed', colsDetailed, 'sales', 'columnar', 'id'),
                     fetchAll('data_history', colsDetailed, 'history', 'columnar', 'id'),
                     fetchAll('data_clients', colsClients, 'clients', 'columnar', 'id'),
@@ -471,7 +474,8 @@
                     fetchAll('data_stock', colsStock, 'stock', 'columnar', 'id'),
                     fetchAll('data_innovations', null, null, 'object', 'id'),
                     fetchAll('data_metadata', null, null, 'object', 'key'),
-                    fetchAll('data_orders', colsOrders, 'orders', 'object', 'id')
+                    fetchAll('data_orders', colsOrders, 'orders', 'object', 'id'),
+                    fetchAll('data_client_coordinates', null, null, 'object', 'client_code')
                 ]);
 
                 detailed = detailedUpper;
@@ -483,10 +487,11 @@
                 innovations = innovationsFetched;
                 metadata = metadataFetched;
                 orders = ordersUpper;
+                clientCoordinates = clientCoordinatesFetched;
 
                 // Salvar no Cache
                 const dataToCache = {
-                    detailed, history, clients, products, activeProds, stock, innovations, metadata, orders
+                    detailed, history, clients, products, activeProds, stock, innovations, metadata, orders, clientCoordinates
                 };
 
                 // Salvar de forma assíncrona sem travar UI
@@ -551,6 +556,7 @@
                 activeProductCodes: activeProductCodes,
                 productDetails: productDetailsMap,
                 metadata: metadata,
+                clientCoordinates: clientCoordinates,
                 passedWorkingDaysCurrentMonth: 1,
                 isColumnar: true
             };

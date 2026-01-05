@@ -20,6 +20,9 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js" defer></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -431,6 +434,13 @@
                             </header>
                             <div id="city-view-content">
                                 <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
+                                    <div class="flex justify-between items-center mb-4">
+                                        <h3 class="text-white font-semibold">Filtros</h3>
+                                        <button id="toggle-city-map-btn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg text-sm flex items-center gap-2">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
+                                            Ver Mapa
+                                        </button>
+                                    </div>
                                     <div class="flex flex-wrap gap-4 items-end">
                                         <!-- Filtro de Rede (Cidades) -->
                                         <div id="city-rede-filter-wrapper" class="relative flex-1 min-w-[200px]">
@@ -473,6 +483,16 @@
                                         <button id="clear-city-filters-btn" class="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg">Limpar Filtros</button>
                                     </div>
                                 </div>
+
+                                <!-- Mapa (Cidades) -->
+                                <div id="city-map-container" class="hidden bg-[#1d2347] p-4 rounded-lg shadow-sm border border-slate-700 mb-6 h-96 relative z-0">
+                                    <div id="leaflet-map" class="w-full h-full rounded-lg z-0"></div>
+                                    <div id="map-loading-overlay" class="absolute inset-0 bg-black/50 flex flex-col items-center justify-center rounded-lg hidden z-[1000]">
+                                        <div class="spinner-orange mb-2"></div>
+                                        <div class="text-white font-bold" id="map-loading-text">Carregando coordenadas...</div>
+                                    </div>
+                                </div>
+
                                 <!-- Gráficos (Cidades) -->
                                 <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
                                     <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
