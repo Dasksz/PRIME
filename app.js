@@ -456,6 +456,7 @@
                 blur: 15,
                 maxZoom: 10,
                 minOpacity: 0.2, // More transparent
+                max: 2.0, // Reduce max intensity to allow seeing text underneath
                 gradient: {0.2: 'blue', 0.5: 'lime', 1: 'red'}
             }).addTo(leafletMap);
 
@@ -540,10 +541,13 @@
 
             console.log("[GeoSync] Iniciando verificação de coordenadas em segundo plano...");
 
-            // 1. Cleanup Orphans
+            const activeClientsList = getActiveClientsData();
+            const activeClientCodes = new Set(activeClientsList.map(c => String(c['Código'] || c['codigo_cliente'])));
+
+            // 1. Cleanup Orphans (Clients in DB but NOT in active list)
             const orphanedCodes = [];
             for (const [code, coord] of clientCoordinatesMap) {
-                if (!clientMapForKPIs.has(code)) {
+                if (!activeClientCodes.has(code)) {
                     orphanedCodes.push(code);
                 }
             }
@@ -561,11 +565,12 @@
                 }
             }
 
-            // 2. Queue All Missing
+            // 2. Queue All Missing (Active clients without coordinates)
             let queuedCount = 0;
-            // Iterate all clients (using the map is easier/faster)
-            for (const [code, client] of clientMapForKPIs) {
-                if (clientCoordinatesMap.has(code)) continue;
+            // Iterate all ACTIVE clients
+            activeClientsList.forEach(client => {
+                const code = String(client['Código'] || client['codigo_cliente']);
+                if (clientCoordinatesMap.has(code)) return; // Already has coord
 
                 // Check address validity
                 const addressParts = [
@@ -584,7 +589,7 @@
                         queuedCount++;
                     }
                 }
-            }
+            });
 
             if (queuedCount > 0) {
                 console.log(`[GeoSync] Identificados ${queuedCount} clientes sem coordenadas. Iniciando download...`);
@@ -1058,6 +1063,16 @@
         const citySupplierFilterText = document.getElementById('city-supplier-filter-text');
         const citySupplierFilterDropdown = document.getElementById('city-supplier-filter-dropdown');
         const cityNameFilter = document.getElementById('city-name-filter');
+        function getActiveClientsData() {
+            return allClientsData.filter(c => {
+                const codcli = String(c['Código'] || c['codigo_cliente']);
+                const rca1 = String(c.rca1 || '').trim();
+                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
+
+                // Logic identical to 'updateCoverageView' active clients KPI
+                return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(codcli));
+            });
+        }
         const cityCodCliFilter = document.getElementById('city-codcli-filter');
         const citySuggestions = document.getElementById('city-suggestions');
         const clearCityFiltersBtn = document.getElementById('clear-city-filters-btn');
@@ -4783,9 +4798,9 @@ const supervisorGroups = new Map();
             const tiposVendaSet = new Set(selectedCoverageTiposVenda);
 
             // --- Client Filtering (Universe for KPIs) ---
-            // This part still filters all clients, but it's necessary for the KPI denominator.
-            // The main optimization is ensuring the sales data filtering is fast.
-            let clients = allClientsData;
+            // Use active clients data defined by coverage logic
+            let clients = getActiveClientsData();
+
             if (filial !== 'ambas' || supervisorsSet.size > 0 || sellersNameSet.size > 0 || city) {
                 const rcasOfSupervisor = new Set();
                 if (!isExcluded('supervisor') && supervisorsSet.size > 0) {
@@ -4800,7 +4815,7 @@ const supervisorGroups = new Map();
                         if (rcaCode) rcasOfSellers.add(rcaCode);
                     });
                 }
-                clients = allClientsData.filter(c => {
+                clients = clients.filter(c => {
                     if (filial !== 'ambas' && clientLastBranch.get(c['Código']) !== filial) return false;
                     const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
                     if (rcasOfSupervisor.size > 0 && !clientRcas.some(rca => rcasOfSupervisor.has(rca))) return false;
