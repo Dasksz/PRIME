@@ -415,6 +415,7 @@
         // --- Geolocation Logic (Leaflet + Heatmap + Nominatim) ---
         let leafletMap = null;
         let heatLayer = null;
+        let clientMarkersLayer = null;
         let clientCoordinatesMap = new Map(); // Map<ClientCode, {lat, lng, address}>
         let nominatimQueue = [];
         let isProcessingQueue = false;
@@ -446,14 +447,30 @@
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             }).addTo(leafletMap);
 
-            // Initialize empty heat layer
+            // Initialize empty heat layer with increased transparency
             heatLayer = L.heatLayer([], {
                 radius: 25,
                 blur: 15,
                 maxZoom: 10,
-                minOpacity: 0.4,
-                gradient: {0.4: 'blue', 0.65: 'lime', 1: 'red'}
+                minOpacity: 0.2, // More transparent
+                gradient: {0.2: 'blue', 0.5: 'lime', 1: 'red'}
             }).addTo(leafletMap);
+
+            // Initialize Markers Layer (Hidden by default, shown on zoom)
+            clientMarkersLayer = L.layerGroup();
+
+            leafletMap.on('zoomend', () => {
+                const zoom = leafletMap.getZoom();
+                if (zoom >= 14) { // Show tooltips only when zoomed in (Detail View)
+                    if (!leafletMap.hasLayer(clientMarkersLayer)) {
+                        leafletMap.addLayer(clientMarkersLayer);
+                    }
+                } else {
+                    if (leafletMap.hasLayer(clientMarkersLayer)) {
+                        leafletMap.removeLayer(clientMarkersLayer);
+                    }
+                }
+            });
         }
 
         async function saveCoordinateToSupabase(clientCode, lat, lng, address) {
@@ -602,12 +619,25 @@
             const cityMapContainer = document.getElementById('city-map-container');
             if (!leafletMap || (cityMapContainer && cityMapContainer.classList.contains('hidden'))) return;
 
-            const { clients } = getCityFilteredData();
+            const { clients, sales } = getCityFilteredData();
             if (!clients || clients.length === 0) return;
 
             const heatData = [];
             const missingCoordsClients = [];
             const validBounds = [];
+
+            // Clear existing markers
+            if (clientMarkersLayer) clientMarkersLayer.clearLayers();
+
+            // Aggregate sales for tooltips (optimization)
+            const clientSalesMap = new Map();
+            if (sales) {
+                sales.forEach(s => {
+                    const cod = s.CODCLI;
+                    const val = Number(s.VLVENDA) || 0;
+                    clientSalesMap.set(cod, (clientSalesMap.get(cod) || 0) + val);
+                });
+            }
 
             clients.forEach(client => {
                 const codCli = String(client['Código'] || client['codigo_cliente']);
@@ -617,6 +647,31 @@
                     // [lat, lng, intensity]
                     heatData.push([coords.lat, coords.lng, 1.0]);
                     validBounds.push([coords.lat, coords.lng]);
+
+                    // Add Tooltip Marker (Invisible)
+                    if (clientMarkersLayer) {
+                        const val = clientSalesMap.get(codCli) || 0;
+                        const formattedVal = val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                        const tooltipContent = `
+                            <div class="text-xs">
+                                <b>${codCli} - ${client.nomeCliente || 'Cliente'}</b><br>
+                                <span class="text-green-600 font-bold">Venda: ${formattedVal}</span><br>
+                                ${client.bairro || ''}, ${client.cidade || ''}
+                            </div>
+                        `;
+
+                        const marker = L.circleMarker([coords.lat, coords.lng], {
+                            radius: 10, // Larger radius to make hovering easier
+                            color: 'transparent',
+                            fillColor: 'transparent',
+                            fillOpacity: 0,
+                            opacity: 0
+                        });
+
+                        marker.bindTooltip(tooltipContent, { direction: 'top', offset: [0, -5] });
+                        clientMarkersLayer.addLayer(marker);
+                    }
+
                 } else {
                     missingCoordsClients.push(client);
                 }
