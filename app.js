@@ -567,6 +567,13 @@
             for (const [code, client] of clientMapForKPIs) {
                 if (clientCoordinatesMap.has(code)) continue;
 
+                // SPECIAL RULE: RCA 53 (Balcão) - Only queue if active sales in current month
+                const rca = String(client.rca1 || client['RCA 1'] || client.RCA1 || '').trim();
+                // Check both String and Number variants of code in the set to be safe
+                if ((rca === '53' || rca === '053') && !clientsWithSalesThisMonth.has(code) && !clientsWithSalesThisMonth.has(Number(code))) {
+                    continue;
+                }
+
                 // Check address validity
                 const addressParts = [
                     client.endereco || client.ENDERECO,
