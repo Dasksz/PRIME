@@ -483,19 +483,20 @@
             if (isProcessingQueue || nominatimQueue.length === 0) return;
             isProcessingQueue = true;
 
-            const loadingOverlay = document.getElementById('map-loading-overlay');
+            // Removed Blocking Overlay logic for Background Processing
             const loadingText = document.getElementById('map-loading-text');
-            if (loadingOverlay) loadingOverlay.classList.remove('hidden');
 
             const processNext = async () => {
                 if (nominatimQueue.length === 0) {
                     isProcessingQueue = false;
-                    if (loadingOverlay) loadingOverlay.classList.add('hidden');
                     return;
                 }
 
                 const { client, address } = nominatimQueue.shift();
-                if (loadingText) loadingText.textContent = `Buscando: ${client.nomeCliente}... (${nominatimQueue.length} restantes)`;
+
+                // Only update text if overlay happens to be visible (manual check?)
+                // or just log to console.
+                // console.log(`Buscando: ${client.nomeCliente}... (${nominatimQueue.length} restantes)`);
 
                 try {
                     const result = await geocodeAddressNominatim(address);
@@ -517,6 +518,61 @@
             };
 
             processNext();
+        }
+
+        async function syncGlobalCoordinates() {
+            if (window.userRole !== 'adm') return;
+
+            // 1. Cleanup Orphans
+            const orphanedCodes = [];
+            for (const [code, coord] of clientCoordinatesMap) {
+                if (!clientMapForKPIs.has(code)) {
+                    orphanedCodes.push(code);
+                }
+            }
+
+            if (orphanedCodes.length > 0) {
+                console.log(`Cleaning up ${orphanedCodes.length} orphaned coordinates...`);
+                // Batch delete from Supabase
+                const { error } = await window.supabaseClient
+                    .from('data_client_coordinates')
+                    .delete()
+                    .in('client_code', orphanedCodes);
+
+                if (!error) {
+                    orphanedCodes.forEach(c => clientCoordinatesMap.delete(c));
+                }
+            }
+
+            // 2. Queue All Missing
+            let queuedCount = 0;
+            // Iterate all clients (using the map is easier/faster)
+            for (const [code, client] of clientMapForKPIs) {
+                if (clientCoordinatesMap.has(code)) continue;
+
+                // Check address validity
+                const addressParts = [
+                    client.endereco || client.ENDERECO,
+                    client.numero || client.NUMERO,
+                    client.bairro || client.BAIRRO,
+                    client.cidade || client.CIDADE,
+                    "Bahia",
+                    "Brasil"
+                ].filter(p => p && p !== 'N/A').join(', ');
+
+                if (addressParts.length > 15) {
+                    // Avoid duplicates in queue
+                    if (!nominatimQueue.some(item => String(item.client['Código'] || item.client['codigo_cliente']) === code)) {
+                        nominatimQueue.push({ client, address: addressParts });
+                        queuedCount++;
+                    }
+                }
+            }
+
+            if (queuedCount > 0) {
+                console.log(`Queued ${queuedCount} clients for geocoding.`);
+                processNominatimQueue();
+            }
         }
 
         async function geocodeAddressNominatim(address) {
@@ -576,37 +632,6 @@
                 leafletMap.fitBounds(validBounds);
             }
 
-            // --- Auto-Geocoding (Admin Only) ---
-            if (window.userRole === 'adm' && missingCoordsClients.length > 0) {
-                // Filter out those already in queue to avoid duplicates
-                // Limit the number of enqueued items per view update to avoid infinite queue growth
-                let addedCount = 0;
-                const MAX_ENQUEUE = 10;
-
-                for (const client of missingCoordsClients) {
-                    if (addedCount >= MAX_ENQUEUE) break;
-
-                    // Simple check if already queued? (Optional optimization)
-
-                    const addressParts = [
-                        client.endereco || client.ENDERECO,
-                        client.numero || client.NUMERO,
-                        client.bairro || client.BAIRRO,
-                        client.cidade || client.CIDADE,
-                        "Bahia", // Optimization: bias to state
-                        "Brasil"
-                    ].filter(p => p && p !== 'N/A').join(', ');
-
-                    if (addressParts.length > 15) {
-                        nominatimQueue.push({ client, address: addressParts });
-                        addedCount++;
-                    }
-                }
-
-                if (nominatimQueue.length > 0) {
-                    processNominatimQueue();
-                }
-            }
         }
 
         function initializeOptimizedDataStructures() {
@@ -9467,6 +9492,8 @@ const supervisorGroups = new Map();
                         break;
                     case 'cidades':
                         cityView.classList.remove('hidden');
+                        // Always trigger background sync if admin
+                        syncGlobalCoordinates();
                         if (viewState.cidades.dirty) {
                             updateAllCityFilters();
                             updateCityView();
