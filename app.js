@@ -462,13 +462,13 @@
             try {
                 const { error } = await window.supabaseClient
                     .from('data_client_coordinates')
-                    .upsert({
-                        client_code: String(clientCode),
-                        lat: lat,
-                        lng: lng,
-                        address: address
+                    .upsert({ 
+                        client_code: String(clientCode), 
+                        lat: lat, 
+                        lng: lng, 
+                        address: address 
                     });
-
+                
                 if (error) console.error("Error saving coordinate:", error);
                 else {
                     clientCoordinatesMap.set(String(clientCode), { lat, lng, address });
@@ -502,7 +502,7 @@
                     if (result) {
                         const codCli = String(client['Código'] || client['codigo_cliente']);
                         await saveCoordinateToSupabase(codCli, result.lat, result.lng, result.formatted_address);
-
+                        
                         // Add point directly to current heatmap data if visible
                         if (heatLayer) {
                             heatLayer.addLatLng([result.lat, result.lng, 1]); // intensity 1
@@ -522,7 +522,7 @@
         async function geocodeAddressNominatim(address) {
             if (!address) return null;
             const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`;
-
+            
             try {
                 const response = await fetch(url, {
                     headers: { 'User-Agent': 'PrimeDashboardApp/1.0' }
@@ -559,7 +559,7 @@
 
                 if (coords) {
                     // [lat, lng, intensity]
-                    heatData.push([coords.lat, coords.lng, 1.0]);
+                    heatData.push([coords.lat, coords.lng, 1.0]); 
                     validBounds.push([coords.lat, coords.lng]);
                 } else {
                     missingCoordsClients.push(client);
@@ -581,13 +581,13 @@
                 // Filter out those already in queue to avoid duplicates
                 // Limit the number of enqueued items per view update to avoid infinite queue growth
                 let addedCount = 0;
-                const MAX_ENQUEUE = 10;
+                const MAX_ENQUEUE = 10; 
 
                 for (const client of missingCoordsClients) {
                     if (addedCount >= MAX_ENQUEUE) break;
-
+                    
                     // Simple check if already queued? (Optional optimization)
-
+                    
                     const addressParts = [
                         client.endereco || client.ENDERECO,
                         client.numero || client.NUMERO,
@@ -10035,6 +10035,44 @@ const supervisorGroups = new Map();
                     handleCityFilterChange({ skipFilter: 'rede' });
                 }
             });
+
+            const toggleCityMapBtn = document.getElementById('toggle-city-map-btn');
+            if (toggleCityMapBtn) {
+                toggleCityMapBtn.addEventListener('click', () => {
+                    const cityMapContainer = document.getElementById('city-map-container');
+                    if (!cityMapContainer) return;
+
+                    const isHidden = cityMapContainer.classList.contains('hidden');
+                    
+                    if (isHidden) {
+                        // Show Map
+                        cityMapContainer.classList.remove('hidden');
+                        toggleCityMapBtn.innerHTML = `
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>
+                            Ocultar Mapa
+                        `;
+                        
+                        // Initialize or Refresh Leaflet
+                        if (!leafletMap) {
+                            initLeafletMap();
+                        }
+                        
+                        // Important: Invalidate size after removing 'hidden' so Leaflet calculates dimensions correctly
+                        setTimeout(() => {
+                            if (leafletMap) leafletMap.invalidateSize();
+                            updateCityMap();
+                        }, 100);
+                        
+                    } else {
+                        // Hide Map
+                        cityMapContainer.classList.add('hidden');
+                        toggleCityMapBtn.innerHTML = `
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
+                            Ver Mapa
+                        `;
+                    }
+                });
+            }
 
             clearCityFiltersBtn.addEventListener('click', () => { resetCityFilters(); markDirty('cidades'); });
             const debouncedUpdateCity = debounce(updateCity, 400);
