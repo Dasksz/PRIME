@@ -458,7 +458,25 @@
                 innovations = cachedData.innovations;
                 metadata = cachedData.metadata;
                 orders = cachedData.orders;
-                clientCoordinates = cachedData.clientCoordinates || [];
+
+                // Refresh Coordinates specifically (Background Update for Cache)
+                // This ensures that even if main data is cached, we get the latest geocoding results
+                try {
+                    const freshCoords = await fetchAll('data_client_coordinates', null, null, 'object', 'client_code');
+                    if (freshCoords && freshCoords.length > 0) {
+                        clientCoordinates = freshCoords;
+                        // Update the cache object for next time
+                        cachedData.clientCoordinates = freshCoords;
+                        // Fire-and-forget save
+                        saveToCache('dashboardData', cachedData).catch(e => console.warn("Background cache save failed", e));
+                        console.log(`[Cache] Coordenadas atualizadas: ${freshCoords.length}`);
+                    } else {
+                        clientCoordinates = cachedData.clientCoordinates || [];
+                    }
+                } catch (e) {
+                    console.warn("[Cache] Falha ao atualizar coordenadas:", e);
+                    clientCoordinates = cachedData.clientCoordinates || [];
+                }
             } else {
                 const colsDetailed = 'id,pedido,codcli,nome,superv,codsupervisor,produto,descricao,fornecedor,observacaofor,codfor,codusur,qtvenda,vlvenda,vlbonific,totpesoliq,dtped,dtsaida,posicao,estoqueunit,tipovenda,filial,qtvenda_embalagem_master';
                 const colsClients = 'id,codigo_cliente,rca1,rca2,rcas,cidade,nomecliente,bairro,razaosocial,fantasia,cnpj_cpf,endereco,numero,cep,telefone,email,ramo,ultimacompra,datacadastro,bloqueio,inscricaoestadual';
