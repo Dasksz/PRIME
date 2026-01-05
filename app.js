@@ -6294,8 +6294,22 @@ const supervisorGroups = new Map();
             }
             // ------------------------------------
 
-            const positivacao = {}; dataForRankings.forEach(d => { if (!d.NOME || !d.CODCLI) return; if (!positivacao[d.NOME]) positivacao[d.NOME] = new Set(); positivacao[d.NOME].add(d.CODCLI); });
-            const positivacaoRank = Object.entries(positivacao).map(([v, c]) => ({ vendedor: v, total: c.size })).sort((a, b) => b.total - a.total).slice(0, 10);
+            const positivacaoMap = new Map(); // Map<Seller, Map<Client, Value>>
+            dataForRankings.forEach(d => {
+                if (!d.NOME || !d.CODCLI) return;
+                if (!positivacaoMap.has(d.NOME)) positivacaoMap.set(d.NOME, new Map());
+                const clientMap = positivacaoMap.get(d.NOME);
+                clientMap.set(d.CODCLI, (clientMap.get(d.CODCLI) || 0) + d.VLVENDA);
+            });
+
+            const positivacaoRank = [];
+            positivacaoMap.forEach((clientMap, seller) => {
+                let activeCount = 0;
+                clientMap.forEach(val => { if (val >= 1) activeCount++; });
+                positivacaoRank.push({ vendedor: seller, total: activeCount });
+            });
+            positivacaoRank.sort((a, b) => b.total - a.total).splice(10); // Keep top 10
+
             if (positivacaoRank.length > 0) createChart('positivacaoChart', 'bar', positivacaoRank.map(r => getFirstName(r.vendedor)), positivacaoRank.map(r => r.total));
             else showNoDataMessage('positivacaoChart', 'Sem dados para o ranking.');
             const salesBySeller = {}; dataForRankings.forEach(d => { if (!d.NOME) return; salesBySeller[d.NOME] = (salesBySeller[d.NOME] || 0) + d.VLVENDA; });
@@ -6303,35 +6317,34 @@ const supervisorGroups = new Map();
             if (topSellersRank.length > 0) createChart('topSellersChart', 'bar', topSellersRank.map(r => getFirstName(r[0])), topSellersRank.map(r => r[1]));
             else showNoDataMessage('topSellersChart', 'Sem dados para o ranking.');
             // --- OPTIMIZATION: Mix Rank Calculation ---
-            // Calculate mix map in a single pass: Map<Seller, Map<Client, Set<Description>>>
+            // Calculate mix map: Map<Seller, Map<Client, Map<Description, Value>>>
             const sellerClientMixMap = new Map();
-            const targetSuppliers = new Set(['707', '708']);
+            const targetSuppliers = new Set(['707', '708']); // Aligned with Comparison Page
 
             dataForRankings.forEach(d => {
                 const vendedor = d.NOME;
                 if (!vendedor || vendedor === 'VD HIAGO') return;
 
-                // Rule: If Supervisor is OSVALDO NUNES O, count all products.
-                // Otherwise, only count products from target suppliers (707, 708).
-                const supervisor = d.SUPERV;
-                if (supervisor !== 'OSVALDO NUNES O' && !targetSuppliers.has(String(d.CODFOR))) {
-                    return;
-                }
+                // Rule: Aligned with Comparison Page (Strict Pepsico)
+                if (!targetSuppliers.has(String(d.CODFOR))) return;
 
                 if (!d.CODCLI || !d.DESCRICAO) return;
 
                 if (!sellerClientMixMap.has(vendedor)) sellerClientMixMap.set(vendedor, new Map());
                 const clientMap = sellerClientMixMap.get(vendedor);
 
-                if (!clientMap.has(d.CODCLI)) clientMap.set(d.CODCLI, new Set());
-                clientMap.get(d.CODCLI).add(d.DESCRICAO);
+                if (!clientMap.has(d.CODCLI)) clientMap.set(d.CODCLI, new Map());
+                const prodMap = clientMap.get(d.CODCLI);
+                prodMap.set(d.DESCRICAO, (prodMap.get(d.DESCRICAO) || 0) + d.VLVENDA);
             });
 
             const mixRank = [];
             for (const [vendedor, clientMap] of sellerClientMixMap.entries()) {
                 const mixValues = [];
-                for (const productSet of clientMap.values()) {
-                    mixValues.push(productSet.size);
+                for (const prodMap of clientMap.values()) {
+                    let positiveProducts = 0;
+                    prodMap.forEach(val => { if (val >= 1) positiveProducts++; });
+                    if (positiveProducts > 0) mixValues.push(positiveProducts);
                 }
 
                 if (mixValues.length > 0) {
