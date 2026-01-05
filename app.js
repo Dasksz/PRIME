@@ -412,6 +412,203 @@
         let sortedWorkingDays = [];
         let customWorkingDaysStock = 0;
 
+        // --- Geolocation Logic (Leaflet + Heatmap + Nominatim) ---
+        let leafletMap = null;
+        let heatLayer = null;
+        let clientCoordinatesMap = new Map(); // Map<ClientCode, {lat, lng, address}>
+        let nominatimQueue = [];
+        let isProcessingQueue = false;
+
+        // Load cached coordinates from embeddedData
+        if (embeddedData.clientCoordinates) {
+            // Robust check: Handle both Array and Object (if keys are used)
+            const coords = Array.isArray(embeddedData.clientCoordinates) ? embeddedData.clientCoordinates : Object.values(embeddedData.clientCoordinates);
+            coords.forEach(c => {
+                clientCoordinatesMap.set(String(c.client_code), {
+                    lat: parseFloat(c.lat),
+                    lng: parseFloat(c.lng),
+                    address: c.address
+                });
+            });
+        }
+
+        function initLeafletMap() {
+            if (leafletMap) return;
+            const mapContainer = document.getElementById('leaflet-map');
+            if (!mapContainer) return;
+
+            // Default center (Bahia/Salvador approx)
+            const defaultCenter = [-12.9714, -38.5014];
+
+            leafletMap = L.map(mapContainer).setView(defaultCenter, 7);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(leafletMap);
+
+            // Initialize empty heat layer
+            heatLayer = L.heatLayer([], {
+                radius: 25,
+                blur: 15,
+                maxZoom: 10,
+                minOpacity: 0.4,
+                gradient: {0.4: 'blue', 0.65: 'lime', 1: 'red'}
+            }).addTo(leafletMap);
+        }
+
+        async function saveCoordinateToSupabase(clientCode, lat, lng, address) {
+            if (window.userRole !== 'adm') return;
+
+            try {
+                const { error } = await window.supabaseClient
+                    .from('data_client_coordinates')
+                    .upsert({
+                        client_code: String(clientCode),
+                        lat: lat,
+                        lng: lng,
+                        address: address
+                    });
+
+                if (error) console.error("Error saving coordinate:", error);
+                else {
+                    clientCoordinatesMap.set(String(clientCode), { lat, lng, address });
+                }
+            } catch (e) {
+                console.error("Error saving coordinate:", e);
+            }
+        }
+
+        // Rate-limited Queue Processor for Nominatim (1 req/1.2s)
+        async function processNominatimQueue() {
+            if (isProcessingQueue || nominatimQueue.length === 0) return;
+            isProcessingQueue = true;
+
+            const loadingOverlay = document.getElementById('map-loading-overlay');
+            const loadingText = document.getElementById('map-loading-text');
+            if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+
+            const processNext = async () => {
+                if (nominatimQueue.length === 0) {
+                    isProcessingQueue = false;
+                    if (loadingOverlay) loadingOverlay.classList.add('hidden');
+                    return;
+                }
+
+                const { client, address } = nominatimQueue.shift();
+                if (loadingText) loadingText.textContent = `Buscando: ${client.nomeCliente}... (${nominatimQueue.length} restantes)`;
+
+                try {
+                    const result = await geocodeAddressNominatim(address);
+                    if (result) {
+                        const codCli = String(client['Código'] || client['codigo_cliente']);
+                        await saveCoordinateToSupabase(codCli, result.lat, result.lng, result.formatted_address);
+
+                        // Add point directly to current heatmap data if visible
+                        if (heatLayer) {
+                            heatLayer.addLatLng([result.lat, result.lng, 1]); // intensity 1
+                        }
+                    }
+                } catch (e) {
+                    console.error("Nominatim error:", e);
+                }
+
+                // Respect Rate Limit: 1200ms
+                setTimeout(processNext, 1200);
+            };
+
+            processNext();
+        }
+
+        async function geocodeAddressNominatim(address) {
+            if (!address) return null;
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`;
+
+            try {
+                const response = await fetch(url, {
+                    headers: { 'User-Agent': 'PrimeDashboardApp/1.0' }
+                });
+                if (!response.ok) return null;
+                const data = await response.json();
+                if (data && data.length > 0) {
+                    return {
+                        lat: parseFloat(data[0].lat),
+                        lng: parseFloat(data[0].lon),
+                        formatted_address: data[0].display_name
+                    };
+                }
+            } catch (e) {
+                console.warn("Nominatim fetch failed:", e);
+            }
+            return null;
+        }
+
+        async function updateCityMap() {
+            const cityMapContainer = document.getElementById('city-map-container');
+            if (!leafletMap || (cityMapContainer && cityMapContainer.classList.contains('hidden'))) return;
+
+            const { clients } = getCityFilteredData();
+            if (!clients || clients.length === 0) return;
+
+            const heatData = [];
+            const missingCoordsClients = [];
+            const validBounds = [];
+
+            clients.forEach(client => {
+                const codCli = String(client['Código'] || client['codigo_cliente']);
+                const coords = clientCoordinatesMap.get(codCli);
+
+                if (coords) {
+                    // [lat, lng, intensity]
+                    heatData.push([coords.lat, coords.lng, 1.0]);
+                    validBounds.push([coords.lat, coords.lng]);
+                } else {
+                    missingCoordsClients.push(client);
+                }
+            });
+
+            // Update Heatmap
+            if (heatLayer) {
+                heatLayer.setLatLngs(heatData);
+            }
+
+            // Fit Bounds
+            if (validBounds.length > 0) {
+                leafletMap.fitBounds(validBounds);
+            }
+
+            // --- Auto-Geocoding (Admin Only) ---
+            if (window.userRole === 'adm' && missingCoordsClients.length > 0) {
+                // Filter out those already in queue to avoid duplicates
+                // Limit the number of enqueued items per view update to avoid infinite queue growth
+                let addedCount = 0;
+                const MAX_ENQUEUE = 10;
+
+                for (const client of missingCoordsClients) {
+                    if (addedCount >= MAX_ENQUEUE) break;
+
+                    // Simple check if already queued? (Optional optimization)
+
+                    const addressParts = [
+                        client.endereco || client.ENDERECO,
+                        client.numero || client.NUMERO,
+                        client.bairro || client.BAIRRO,
+                        client.cidade || client.CIDADE,
+                        "Bahia", // Optimization: bias to state
+                        "Brasil"
+                    ].filter(p => p && p !== 'N/A').join(', ');
+
+                    if (addressParts.length > 15) {
+                        nominatimQueue.push({ client, address: addressParts });
+                        addedCount++;
+                    }
+                }
+
+                if (nominatimQueue.length > 0) {
+                    processNominatimQueue();
+                }
+            }
+        }
+
         function initializeOptimizedDataStructures() {
             const sellerDetailsMap = new Map();
             const sellerLastSaleDateMap = new Map(); // Track latest date per seller
@@ -5958,6 +6155,8 @@ const supervisorGroups = new Map();
         function updateCityView() {
             cityRenderId++;
             const currentRenderId = cityRenderId;
+
+            updateCityMap();
 
             let { clients: clientsForAnalysis, sales: salesForAnalysis } = getCityFilteredData();
             const cidadeFiltro = cityNameFilter.value.trim();
