@@ -422,7 +422,11 @@
         let currentFilteredClients = [];
         let currentFilteredSalesMap = new Map();
         let currentClientMixStatus = new Map(); // Map<ClientCode, {elma: bool, foods: bool}>
-        let areMarkersGenerated = false;
+
+        // Optimization: Prepared Marker Data & Icons
+        let preparedMarkersData = []; // Array of { lat, lng, iconKey, tooltipContent }
+        let markerIcons = {}; // Cache for L.divIcon instances
+        let isMarkersDataReady = false;
 
         // Load cached coordinates from embeddedData
         if (embeddedData.clientCoordinates) {
@@ -441,6 +445,26 @@
             if (leafletMap) return;
             const mapContainer = document.getElementById('leaflet-map');
             if (!mapContainer) return;
+
+            // Initialize Shared Icons
+            const createPinIcon = (color) => L.divIcon({
+                className: 'bg-transparent border-0',
+                html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="30" height="40" fill="${color}" stroke="white" stroke-width="1.5" style="filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.3));">
+                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+                        <circle cx="12" cy="9" r="2.5" fill="white"/>
+                       </svg>`,
+                iconSize: [30, 40],
+                iconAnchor: [15, 40],
+                tooltipAnchor: [0, -35]
+            });
+
+            markerIcons = {
+                red: createPinIcon('#ef4444'),
+                blue: createPinIcon('#3b82f6'),
+                green: createPinIcon('#22c55e'),
+                yellow: createPinIcon('#eab308'),
+                gray: createPinIcon('#9ca3af')
+            };
 
             // Default center (Bahia/Salvador approx)
             const defaultCenter = [-12.9714, -38.5014];
@@ -507,6 +531,13 @@
                 }
 
                 updateMarkersVisibility();
+            });
+
+            // Optimization: Re-render visible markers on pan (moveend includes zoomend + pan)
+            leafletMap.on('moveend', () => {
+                if (leafletMap.getZoom() >= 14) {
+                    renderVisibleMarkers();
+                }
             });
         }
 
@@ -750,7 +781,7 @@
 
             // Cache for Async Marker Generation
             currentFilteredClients = clients;
-            areMarkersGenerated = false;
+            isMarkersDataReady = false;
             if (clientMarkersLayer) clientMarkersLayer.clearLayers();
 
             // Cache Sales & Mix Status
@@ -808,8 +839,8 @@
                 leafletMap.fitBounds(validBounds);
             }
 
-            // Trigger Marker Logic
-            updateMarkersVisibility();
+            // Trigger Marker Preparation (Async) but don't wait for it to show heatmap
+            prepareMarkersDataAsync();
         }
 
         function updateMarkersVisibility() {
@@ -817,22 +848,27 @@
             const zoom = leafletMap.getZoom();
 
             if (zoom >= 14) {
-                if (!areMarkersGenerated) {
-                    generateMarkersAsync();
+                // Ensure data is ready or being prepared
+                if (!isMarkersDataReady) {
+                    prepareMarkersDataAsync();
                 } else {
                     if (!leafletMap.hasLayer(clientMarkersLayer)) leafletMap.addLayer(clientMarkersLayer);
+                    renderVisibleMarkers();
                 }
             } else {
                 if (leafletMap.hasLayer(clientMarkersLayer)) leafletMap.removeLayer(clientMarkersLayer);
             }
         }
 
-        function generateMarkersAsync() {
-            if (areMarkersGenerated) return;
+        function prepareMarkersDataAsync() {
+            if (isMarkersDataReady) return;
 
-            // Use local reference to avoid race conditions if filter changes mid-process
+            // Clear previous data
+            preparedMarkersData = [];
+
             const clientsToProcess = currentFilteredClients;
 
+            // Process data to create lightweight objects
             runAsyncChunked(clientsToProcess, (client) => {
                 const codCli = String(client['Código'] || client['codigo_cliente']);
                 const coords = clientCoordinatesMap.get(codCli);
@@ -844,24 +880,28 @@
                     const rcaCode = client.rca1 || 'N/A';
                     const rcaName = (optimizedData.rcaNameByCode && optimizedData.rcaNameByCode.get(rcaCode)) || rcaCode;
 
-                    // Color Logic
-                    // Default: Red (No purchase or <= 0)
-                    let markerColor = '#ef4444'; // red-500
+                    // Color Logic & Icon Selection
+                    let iconKey = 'red';
+                    let statusColor = '#ef4444';
                     let statusText = 'Não comprou';
 
                     if (val > 0) {
                         const mix = currentClientMixStatus.get(codCli) || { elma: false, foods: false };
                         if (mix.elma && mix.foods) {
-                            markerColor = '#3b82f6'; // blue-500 (Elma & Foods)
+                            iconKey = 'blue';
+                            statusColor = '#3b82f6';
                             statusText = 'Comprou Elma e Foods';
                         } else if (mix.elma) {
-                            markerColor = '#22c55e'; // green-500 (Only Elma)
+                            iconKey = 'green';
+                            statusColor = '#22c55e';
                             statusText = 'Apenas Elma';
                         } else if (mix.foods) {
-                            markerColor = '#eab308'; // yellow-500 (Only Foods)
+                            iconKey = 'yellow';
+                            statusColor = '#eab308';
                             statusText = 'Apenas Foods';
                         } else {
-                            markerColor = '#9ca3af'; // gray-400 (Other/Unknown)
+                            iconKey = 'gray';
+                            statusColor = '#9ca3af';
                             statusText = 'Outros';
                         }
                     }
@@ -871,35 +911,56 @@
                             <b>${codCli} - ${client.nomeCliente || 'Cliente'}</b><br>
                             <span class="text-blue-500 font-semibold">RCA: ${rcaName}</span><br>
                             <span class="text-green-600 font-bold">Venda: ${formattedVal}</span><br>
-                            <span style="color: ${markerColor}; font-weight: bold;">Status: ${statusText}</span><br>
+                            <span style="color: ${statusColor}; font-weight: bold;">Status: ${statusText}</span><br>
                             ${client.bairro || ''}, ${client.cidade || ''}
                         </div>
                     `;
 
-                    // SVG Pin Icon
-                    const svgIcon = L.divIcon({
-                        className: 'bg-transparent border-0', // Remove default styles
-                        html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="30" height="40" fill="${markerColor}" stroke="white" stroke-width="1.5" style="filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.3));">
-                                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
-                                <circle cx="12" cy="9" r="2.5" fill="white"/>
-                               </svg>`,
-                        iconSize: [30, 40],
-                        iconAnchor: [15, 40],
-                        tooltipAnchor: [0, -35]
+                    preparedMarkersData.push({
+                        lat: coords.lat,
+                        lng: coords.lng,
+                        iconKey: iconKey,
+                        tooltip: tooltipContent
                     });
-
-                    const marker = L.marker([coords.lat, coords.lng], {
-                        icon: svgIcon,
-                        opacity: 1
-                    });
-
-                    marker.bindTooltip(tooltipContent, { direction: 'top', offset: [0, 0] });
-                    clientMarkersLayer.addLayer(marker);
                 }
             }, () => {
-                areMarkersGenerated = true;
-                updateMarkersVisibility();
+                isMarkersDataReady = true;
+                // If we are already at high zoom, render now
+                if (leafletMap && leafletMap.getZoom() >= 14) {
+                    if (!leafletMap.hasLayer(clientMarkersLayer)) leafletMap.addLayer(clientMarkersLayer);
+                    renderVisibleMarkers();
+                }
             });
+        }
+
+        // Optimization: Only render markers that are currently visible in the Viewport
+        function renderVisibleMarkers() {
+            if (!leafletMap || !clientMarkersLayer || !isMarkersDataReady) return;
+
+            const bounds = leafletMap.getBounds();
+            // Add a small buffer to avoid popping at edges (0.1 degree is roughly 11km)
+            const pad = 0.05;
+            const north = bounds.getNorth() + pad;
+            const south = bounds.getSouth() - pad;
+            const east = bounds.getEast() + pad;
+            const west = bounds.getWest() - pad;
+
+            clientMarkersLayer.clearLayers();
+
+            const visibleMarkers = [];
+
+            // Fast iteration
+            for (let i = 0; i < preparedMarkersData.length; i++) {
+                const m = preparedMarkersData[i];
+                if (m.lat <= north && m.lat >= south && m.lng <= east && m.lng >= west) {
+                    const marker = L.marker([m.lat, m.lng], {
+                        icon: markerIcons[m.iconKey],
+                        opacity: 1
+                    });
+                    marker.bindTooltip(m.tooltip, { direction: 'top', offset: [0, 0] });
+                    clientMarkersLayer.addLayer(marker);
+                }
+            }
         }
 
         function initializeOptimizedDataStructures() {
