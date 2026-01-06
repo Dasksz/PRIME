@@ -535,40 +535,43 @@
             const numero = client.numero || client.NUMERO || '';
             const bairro = client.bairro || client.BAIRRO || '';
             const cidade = client.cidade || client.CIDADE || '';
-            const cep = client.cep || client.CEP || '';
+            const nome = client.nomeCliente || client.nome || '';
 
             const parts = [];
             const isValid = (s) => s && s !== 'N/A' && s !== '0' && String(s).toUpperCase() !== 'S/N' && String(s).trim() !== '';
 
-            // Clean CEP (Keep digits only)
-            const cleanCep = (cep) ? String(cep).replace(/\D/g, '') : '';
-
-            if (level === 0) { // Full Address + CEP
+            // Level 0 (POI - Business Name): Name + Bairro + City
+            if (level === 0) {
+                if(isValid(nome)) parts.push(nome);
+                if(isValid(bairro)) parts.push(bairro);
+                if(isValid(cidade)) parts.push(cidade);
+            }
+            // Level 1 (Address Full - Street + Number): Street + Number + Bairro + City
+            else if (level === 1) {
                 if(isValid(endereco)) parts.push(endereco);
                 if(isValid(numero)) parts.push(numero);
                 if(isValid(bairro)) parts.push(bairro);
                 if(isValid(cidade)) parts.push(cidade);
-                if(cleanCep.length >= 8) parts.push(cleanCep);
-            } else if (level === 1) { // No Number + CEP
+            }
+            // Level 2 (Street): Street + Bairro + City
+            else if (level === 2) {
                 if(isValid(endereco)) parts.push(endereco);
                 if(isValid(bairro)) parts.push(bairro);
                 if(isValid(cidade)) parts.push(cidade);
-                if(cleanCep.length >= 8) parts.push(cleanCep);
-            } else if (level === 2) { // CEP Only (Strong Fallback)
-                if (cleanCep.length >= 8) {
-                    return `${cleanCep}, Brasil`;
-                }
-                return null; // Skip if no valid CEP
-            } else if (level === 3) { // Neighborhood + City
+            }
+            // Level 3 (Neighborhood): Bairro + City
+            else if (level === 3) {
                 if(isValid(bairro)) parts.push(bairro);
                 if(isValid(cidade)) parts.push(cidade);
-            } else if (level === 4) { // City Only
+            }
+            // Level 4 (City): City only
+            else if (level === 4) {
                 if(isValid(cidade)) parts.push(cidade);
             }
 
             if (parts.length === 0) return null;
 
-            // Append Context if not CEP only
+            // Append Context if not CEP only - Enforce Bahia
             parts.push("Bahia");
             parts.push("Brasil");
             return parts.join(', ');
@@ -596,7 +599,7 @@
                 if (!address) {
                     address = buildAddress(client, level);
 
-                    // If address is null (e.g. skipped level due to missing CEP), auto-advance
+                    // If address is null (e.g. invalid level data), auto-advance
                     if (!address && level < 4) {
                         nominatimQueue.unshift({ client, level: level + 1 });
                         setTimeout(processNext, 0);
@@ -682,6 +685,18 @@
 
                 // Validate minimal info (City)
                 const cidade = client.cidade || client.CIDADE || '';
+                const cep = client.cep || client.CEP || '';
+
+                // CEP Validation: Must be Bahia (40xxx to 48xxx)
+                const cleanCep = cep.replace(/\D/g, '');
+                const cepVal = parseInt(cleanCep);
+                const isBahia = !isNaN(cepVal) && cepVal >= 40000000 && cepVal <= 48999999;
+
+                if (!isBahia) {
+                    // console.log(`[GeoSync] Ignorado: CEP fora da Bahia (${cep}) - ${client.nomeCliente}`);
+                    return;
+                }
+
                 if (cidade && cidade !== 'N/A') {
                     // Check for duplicates
                     if (!nominatimQueue.some(item => String(item.client['Código'] || item.client['codigo_cliente']) === code)) {
