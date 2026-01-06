@@ -500,28 +500,40 @@
             const numero = client.numero || client.NUMERO || '';
             const bairro = client.bairro || client.BAIRRO || '';
             const cidade = client.cidade || client.CIDADE || '';
+            const cep = client.cep || client.CEP || '';
 
             const parts = [];
             const isValid = (s) => s && s !== 'N/A' && s !== '0' && String(s).toUpperCase() !== 'S/N' && String(s).trim() !== '';
 
-            if (level === 0) { // Full Address
+            // Clean CEP (Keep digits only)
+            const cleanCep = (cep) ? String(cep).replace(/\D/g, '') : '';
+
+            if (level === 0) { // Full Address + CEP
                 if(isValid(endereco)) parts.push(endereco);
                 if(isValid(numero)) parts.push(numero);
                 if(isValid(bairro)) parts.push(bairro);
                 if(isValid(cidade)) parts.push(cidade);
-            } else if (level === 1) { // No Number
+                if(cleanCep.length >= 8) parts.push(cleanCep);
+            } else if (level === 1) { // No Number + CEP
                 if(isValid(endereco)) parts.push(endereco);
                 if(isValid(bairro)) parts.push(bairro);
                 if(isValid(cidade)) parts.push(cidade);
-            } else if (level === 2) { // Neighborhood + City
+                if(cleanCep.length >= 8) parts.push(cleanCep);
+            } else if (level === 2) { // CEP Only (Strong Fallback)
+                if (cleanCep.length >= 8) {
+                    return `${cleanCep}, Brasil`;
+                }
+                return null; // Skip if no valid CEP
+            } else if (level === 3) { // Neighborhood + City
                 if(isValid(bairro)) parts.push(bairro);
                 if(isValid(cidade)) parts.push(cidade);
-            } else if (level === 3) { // City Only
+            } else if (level === 4) { // City Only
                 if(isValid(cidade)) parts.push(cidade);
             }
 
             if (parts.length === 0) return null;
 
+            // Append Context if not CEP only
             parts.push("Bahia");
             parts.push("Brasil");
             return parts.join(', ');
@@ -548,10 +560,17 @@
                 let address = item.address;
                 if (!address) {
                     address = buildAddress(client, level);
+
+                    // If address is null (e.g. skipped level due to missing CEP), auto-advance
+                    if (!address && level < 4) {
+                        nominatimQueue.unshift({ client, level: level + 1 });
+                        setTimeout(processNext, 0);
+                        return;
+                    }
                 }
 
                 if (!address) {
-                     console.log(`[GeoSync] Endereço inválido para ${client.nomeCliente}, pulando.`);
+                     console.log(`[GeoSync] Endereço inválido para ${client.nomeCliente} (L${level}), falha definitiva.`);
                      setTimeout(processNext, 100);
                      return;
                 }
@@ -570,7 +589,7 @@
                         }
                     } else {
                         // Retry Logic: If failed, try next level of fallback
-                        if (level < 3) {
+                        if (level < 4) {
                              console.log(`[GeoSync] Falha L${level} para ${client.nomeCliente}. Tentando nível ${level+1}...`);
                              // Push back to front with incremented level
                              nominatimQueue.unshift({ client, level: level + 1 });
