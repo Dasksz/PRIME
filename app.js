@@ -421,6 +421,7 @@
         let isProcessingQueue = false;
         let currentFilteredClients = [];
         let currentFilteredSalesMap = new Map();
+        let currentClientMixStatus = new Map(); // Map<ClientCode, {elma: bool, foods: bool}>
         let areMarkersGenerated = false;
 
         // Load cached coordinates from embeddedData
@@ -475,12 +476,12 @@
                     let newOptions = {};
 
                     if (zoom >= 14) {
-                        // High Zoom: Individual points visible, smaller, opaque
+                        // High Zoom: Reduce heatmap opacity to let markers shine
                         newOptions = {
                             radius: 10,
                             blur: 10,
-                            max: 1.0,        // Standard max intensity (1 point = full color)
-                            minOpacity: 0.5  // Ensure visibility of single points
+                            max: 0.5,
+                            minOpacity: 0.1
                         };
                     } else if (zoom >= 12) {
                         // Transition Zoom
@@ -750,13 +751,31 @@
             areMarkersGenerated = false;
             if (clientMarkersLayer) clientMarkersLayer.clearLayers();
 
-            // Cache Sales
+            // Cache Sales & Mix Status
             currentFilteredSalesMap.clear();
+            currentClientMixStatus.clear();
             if (sales) {
                 sales.forEach(s => {
                     const cod = s.CODCLI;
                     const val = Number(s.VLVENDA) || 0;
                     currentFilteredSalesMap.set(cod, (currentFilteredSalesMap.get(cod) || 0) + val);
+
+                    // Mix Logic
+                    let mix = currentClientMixStatus.get(cod);
+                    if (!mix) {
+                        mix = { elma: false, foods: false };
+                        currentClientMixStatus.set(cod, mix);
+                    }
+
+                    const codFor = String(s.CODFOR);
+                    // Elma: 707, 708, 752
+                    if (codFor === '707' || codFor === '708' || codFor === '752') {
+                        mix.elma = true;
+                    }
+                    // Foods: 1119
+                    else if (codFor === '1119') {
+                        mix.foods = true;
+                    }
                 });
             }
 
@@ -823,21 +842,45 @@
                     const rcaCode = client.rca1 || 'N/A';
                     const rcaName = (optimizedData.rcaNameByCode && optimizedData.rcaNameByCode.get(rcaCode)) || rcaCode;
 
+                    // Color Logic
+                    // Default: Red (No purchase or <= 0)
+                    let markerColor = '#ef4444'; // red-500
+                    let statusText = 'Não comprou';
+
+                    if (val > 0) {
+                        const mix = currentClientMixStatus.get(codCli) || { elma: false, foods: false };
+                        if (mix.elma && mix.foods) {
+                            markerColor = '#3b82f6'; // blue-500 (Elma & Foods)
+                            statusText = 'Mix Completo';
+                        } else if (mix.elma) {
+                            markerColor = '#22c55e'; // green-500 (Only Elma)
+                            statusText = 'Apenas Elma';
+                        } else if (mix.foods) {
+                            markerColor = '#eab308'; // yellow-500 (Only Foods)
+                            statusText = 'Apenas Foods';
+                        } else {
+                            markerColor = '#9ca3af'; // gray-400 (Other/Unknown)
+                            statusText = 'Outros';
+                        }
+                    }
+
                     const tooltipContent = `
                         <div class="text-xs">
                             <b>${codCli} - ${client.nomeCliente || 'Cliente'}</b><br>
                             <span class="text-blue-500 font-semibold">RCA: ${rcaName}</span><br>
                             <span class="text-green-600 font-bold">Venda: ${formattedVal}</span><br>
+                            <span style="color: ${markerColor}; font-weight: bold;">Status: ${statusText}</span><br>
                             ${client.bairro || ''}, ${client.cidade || ''}
                         </div>
                     `;
 
                     const marker = L.circleMarker([coords.lat, coords.lng], {
-                        radius: 10,
-                        color: 'transparent',
-                        fillColor: 'transparent',
-                        fillOpacity: 0,
-                        opacity: 0
+                        radius: 8,
+                        color: 'white',
+                        weight: 1,
+                        fillColor: markerColor,
+                        fillOpacity: 0.8,
+                        opacity: 1
                     });
 
                     marker.bindTooltip(tooltipContent, { direction: 'top', offset: [0, -5] });
