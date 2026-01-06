@@ -455,9 +455,13 @@
                 radius: 25,
                 blur: 15,
                 maxZoom: 10,
-                minOpacity: 0.2, // More transparent
-                max: 2.0, // Reduce max intensity to allow seeing text underneath
-                gradient: {0.2: 'blue', 0.5: 'lime', 1: 'red'}
+                minOpacity: 0.05, // More transparent
+                max: 20.0, // Increased max to prevent saturation and allow transparency
+                gradient: {
+                    0.2: 'rgba(0, 0, 255, 0.35)',
+                    0.5: 'rgba(0, 255, 0, 0.35)',
+                    1.0: 'rgba(255, 0, 0, 0.35)'
+                }
             }).addTo(leafletMap);
 
             // Initialize Markers Layer (Hidden by default, shown on zoom)
