@@ -622,7 +622,8 @@
                         const codCli = String(client['Código'] || client['codigo_cliente']);
                         await saveCoordinateToSupabase(codCli, result.lat, result.lng, result.formatted_address);
 
-                        if (heatLayer) {
+                        const cityMapContainer = document.getElementById('city-map-container');
+                        if (heatLayer && cityMapContainer && !cityMapContainer.classList.contains('hidden')) {
                             heatLayer.addLatLng([result.lat, result.lng, 1]);
                         }
                     } else {
