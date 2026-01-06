@@ -452,7 +452,7 @@
 
             // Initialize empty heat layer with increased transparency
             heatLayer = L.heatLayer([], {
-                radius: 25,
+                radius: 15,
                 blur: 15,
                 maxZoom: 10,
                 minOpacity: 0.05, // More transparent
@@ -494,13 +494,55 @@
             }
         }
 
+        function buildAddress(client, level) {
+            // Priority: Key 'Endereço Comercial' (from init.js map) > lowercase > UPPERCASE
+            const endereco = client['Endereço Comercial'] || client.endereco || client.ENDERECO || '';
+            const numero = client.numero || client.NUMERO || '';
+            const bairro = client.bairro || client.BAIRRO || '';
+            const cidade = client.cidade || client.CIDADE || '';
+            const cep = client.cep || client.CEP || '';
+            
+            const parts = [];
+            const isValid = (s) => s && s !== 'N/A' && s !== '0' && String(s).toUpperCase() !== 'S/N' && String(s).trim() !== '';
+            
+            // Clean CEP (Keep digits only)
+            const cleanCep = (cep) ? String(cep).replace(/\D/g, '') : '';
+
+            if (level === 0) { // Full Address + CEP
+                if(isValid(endereco)) parts.push(endereco);
+                if(isValid(numero)) parts.push(numero);
+                if(isValid(bairro)) parts.push(bairro);
+                if(isValid(cidade)) parts.push(cidade);
+                if(cleanCep.length >= 8) parts.push(cleanCep);
+            } else if (level === 1) { // No Number + CEP
+                if(isValid(endereco)) parts.push(endereco);
+                if(isValid(bairro)) parts.push(bairro);
+                if(isValid(cidade)) parts.push(cidade);
+                if(cleanCep.length >= 8) parts.push(cleanCep);
+            } else if (level === 2) { // CEP Only (Strong Fallback)
+                if (cleanCep.length >= 8) {
+                    return `${cleanCep}, Brasil`;
+                }
+                return null; // Skip if no valid CEP
+            } else if (level === 3) { // Neighborhood + City
+                if(isValid(bairro)) parts.push(bairro);
+                if(isValid(cidade)) parts.push(cidade);
+            } else if (level === 4) { // City Only
+                if(isValid(cidade)) parts.push(cidade);
+            }
+            
+            if (parts.length === 0) return null;
+            
+            // Append Context if not CEP only
+            parts.push("Bahia");
+            parts.push("Brasil");
+            return parts.join(', ');
+        }
+
         // Rate-limited Queue Processor for Nominatim (1 req/1.2s)
         async function processNominatimQueue() {
             if (isProcessingQueue || nominatimQueue.length === 0) return;
             isProcessingQueue = true;
-
-            // Removed Blocking Overlay logic for Background Processing
-            const loadingText = document.getElementById('map-loading-text');
 
             const processNext = async () => {
                 if (nominatimQueue.length === 0) {
@@ -509,8 +551,31 @@
                     return;
                 }
 
-                const { client, address } = nominatimQueue.shift();
-                console.log(`[GeoSync] Baixando coordenadas: ${client.nomeCliente} (${nominatimQueue.length} restantes)...`);
+                const item = nominatimQueue.shift();
+                const client = item.client;
+                // Determine level (default 0)
+                let level = item.level !== undefined ? item.level : 0;
+                
+                // Construct address or use legacy
+                let address = item.address;
+                if (!address) {
+                    address = buildAddress(client, level);
+                    
+                    // If address is null (e.g. skipped level due to missing CEP), auto-advance
+                    if (!address && level < 4) {
+                        nominatimQueue.unshift({ client, level: level + 1 });
+                        setTimeout(processNext, 0);
+                        return;
+                    }
+                }
+
+                if (!address) {
+                     console.log(`[GeoSync] Endereço inválido para ${client.nomeCliente} (L${level}), falha definitiva.`);
+                     setTimeout(processNext, 100);
+                     return;
+                }
+
+                console.log(`[GeoSync] Baixando (L${level}): ${client.nomeCliente} [${address}] (${nominatimQueue.length} restantes)...`);
 
                 try {
                     const result = await geocodeAddressNominatim(address);
@@ -519,12 +584,18 @@
                         const codCli = String(client['Código'] || client['codigo_cliente']);
                         await saveCoordinateToSupabase(codCli, result.lat, result.lng, result.formatted_address);
 
-                        // Add point directly to current heatmap data if visible
                         if (heatLayer) {
-                            heatLayer.addLatLng([result.lat, result.lng, 1]); // intensity 1
+                            heatLayer.addLatLng([result.lat, result.lng, 1]);
                         }
                     } else {
-                        console.log(`[GeoSync] Falha (Não encontrado): ${client.nomeCliente}`);
+                        // Retry Logic: If failed, try next level of fallback
+                        if (level < 4) {
+                             console.log(`[GeoSync] Falha L${level} para ${client.nomeCliente}. Tentando nível ${level+1}...`);
+                             // Push back to front with incremented level
+                             nominatimQueue.unshift({ client, level: level + 1 });
+                        } else {
+                             console.log(`[GeoSync] Falha Definitiva (Não encontrado): ${client.nomeCliente}`);
+                        }
                     }
                 } catch (e) {
                     console.error(`[GeoSync] Erro API: ${client.nomeCliente}`, e);
@@ -548,7 +619,7 @@
             const activeClientsList = getActiveClientsData();
             const activeClientCodes = new Set(activeClientsList.map(c => String(c['Código'] || c['codigo_cliente'])));
 
-            // 1. Cleanup Orphans (Clients in DB but NOT in active list)
+            // 1. Cleanup Orphans
             const orphanedCodes = [];
             for (const [code, coord] of clientCoordinatesMap) {
                 if (!activeClientCodes.has(code)) {
@@ -558,7 +629,6 @@
 
             if (orphanedCodes.length > 0) {
                 console.log(`Cleaning up ${orphanedCodes.length} orphaned coordinates...`);
-                // Batch delete from Supabase
                 const { error } = await window.supabaseClient
                     .from('data_client_coordinates')
                     .delete()
@@ -569,27 +639,18 @@
                 }
             }
 
-            // 2. Queue All Missing (Active clients without coordinates)
+            // 2. Queue All Missing
             let queuedCount = 0;
-            // Iterate all ACTIVE clients
             activeClientsList.forEach(client => {
                 const code = String(client['Código'] || client['codigo_cliente']);
-                if (clientCoordinatesMap.has(code)) return; // Already has coord
+                if (clientCoordinatesMap.has(code)) return;
 
-                // Check address validity
-                const addressParts = [
-                    client.endereco || client.ENDERECO,
-                    client.numero || client.NUMERO,
-                    client.bairro || client.BAIRRO,
-                    client.cidade || client.CIDADE,
-                    "Bahia",
-                    "Brasil"
-                ].filter(p => p && p !== 'N/A').join(', ');
-
-                if (addressParts.length > 15) {
-                    // Avoid duplicates in queue
+                // Validate minimal info (City)
+                const cidade = client.cidade || client.CIDADE || '';
+                if (cidade && cidade !== 'N/A') {
+                    // Check for duplicates
                     if (!nominatimQueue.some(item => String(item.client['Código'] || item.client['codigo_cliente']) === code)) {
-                        nominatimQueue.push({ client, address: addressParts });
+                        nominatimQueue.push({ client, level: 0 });
                         queuedCount++;
                     }
                 }
