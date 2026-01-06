@@ -376,13 +376,27 @@
                 const codUsurVendaCheck = String(rawRow['CODUSUR'] || '').trim();
                 const tipoVendaCheck = String(rawRow['TIPOVENDA'] || 'N/A').trim();
 
+                // Lógica para preservar RCA original em vendas do mês atual
+                const isCurrentSales = stockLinesCollector !== null;
+                const clientExists = clientMap.has(codCliStr);
+                const rca1Cliente = (clientInfo.rca1 || '').trim();
+                const isClientMissingOrRca53 = (!clientExists || rca1Cliente === '53' || rca1Cliente === '053');
+
+                // Se for venda atual E (cliente não existe OU cliente é RCA 53), preserva o RCA original da venda
+                const shouldPreserveOriginalRca = isCurrentSales && isClientMissingOrRca53;
+
                 // Normalize CodCli for 9569 check as well
                 if (!isAmericanas && !(codCliStr === '9569' && (codUsurVendaCheck === '53' || codUsurVendaCheck === '053') && (tipoVendaCheck === '1' || tipoVendaCheck === '9'))) {
-                    const rca1Cliente = (clientInfo.rca1 || '').trim();
                     const codUsurVenda = codUsur; // Guarda o CODUSUR original da linha de venda
 
-                    // Prioriza o RCA 1 do cadastro de clientes. Se não tiver, usa o RCA da linha de venda.
-                    const codUsurParaBusca = rca1Cliente || codUsurVenda;
+                    // Prioriza o RCA 1 do cadastro de clientes. Se não tiver (ou se deve preservar original), usa o RCA da linha de venda.
+                    let codUsurParaBusca;
+
+                    if (shouldPreserveOriginalRca) {
+                        codUsurParaBusca = codUsurVenda;
+                    } else {
+                        codUsurParaBusca = rca1Cliente || codUsurVenda;
+                    }
 
                     const rcaInfo = newRcaSupervisorMap.get(codUsurParaBusca);
 
@@ -393,8 +407,9 @@
                         codSupervisor = rcaInfo.CODSUPERVISOR;
                         codUsur = codUsurParaBusca; // Define o CODUSUR final
                     }
-                    else if (rca1Cliente && rca1Cliente !== codUsurVenda) {
+                    else if (rca1Cliente && rca1Cliente !== codUsurVenda && !shouldPreserveOriginalRca) {
                         // Usou o RCA1 do cliente, não achou. Tenta um fallback com o RCA da linha de venda.
+                        // Mas apenas se não estamos forçando a preservação do original (embora se shouldPreserveOriginalRca fosse true, rca1Cliente seria ignorado acima)
                         const fallbackInfo = newRcaSupervisorMap.get(codUsurVenda);
                         if (fallbackInfo) {
                             vendorName = fallbackInfo.NOME;
@@ -419,7 +434,8 @@
                 // --- INICIO DA MODIFICAÇÃO: REGRA INATIVOS ---
                 // Se o cliente não tiver RCA1 cadastrado na planilha de clientes, rotular como INATIVOS
                 // (Isso substitui o vendedor original da venda, pois a carteira está 'sem dono')
-                if (!isAmericanas && (!clientInfo || !clientInfo.rca1 || clientInfo.rca1.trim() === '')) {
+                // EXCEÇÃO: Se deve preservar original (venda atual de cliente sem cadastro/RCA 53), não aplica INATIVOS.
+                if (!shouldPreserveOriginalRca && !isAmericanas && (!clientInfo || !clientInfo.rca1 || clientInfo.rca1.trim() === '')) {
                     vendorName = 'INATIVOS';
                     supervisorName = 'INATIVOS'; // Alterado de BALCAO para INATIVOS
                     codSupervisor = '99'; // Alterado de 8 para 99 para separar do Balcão
