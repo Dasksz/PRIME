@@ -851,7 +851,7 @@
                         const mix = currentClientMixStatus.get(codCli) || { elma: false, foods: false };
                         if (mix.elma && mix.foods) {
                             markerColor = '#3b82f6'; // blue-500 (Elma & Foods)
-                            statusText = 'Mix Completo';
+                            statusText = 'Comprou Elma e Foods';
                         } else if (mix.elma) {
                             markerColor = '#22c55e'; // green-500 (Only Elma)
                             statusText = 'Apenas Elma';
@@ -874,16 +874,24 @@
                         </div>
                     `;
 
-                    const marker = L.circleMarker([coords.lat, coords.lng], {
-                        radius: 8,
-                        color: 'white',
-                        weight: 1,
-                        fillColor: markerColor,
-                        fillOpacity: 0.8,
+                    // SVG Pin Icon
+                    const svgIcon = L.divIcon({
+                        className: 'bg-transparent border-0', // Remove default styles
+                        html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="30" height="40" fill="${markerColor}" stroke="white" stroke-width="1.5" style="filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.3));">
+                                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+                                <circle cx="12" cy="9" r="2.5" fill="white"/>
+                               </svg>`,
+                        iconSize: [30, 40],
+                        iconAnchor: [15, 40],
+                        tooltipAnchor: [0, -35]
+                    });
+
+                    const marker = L.marker([coords.lat, coords.lng], {
+                        icon: svgIcon,
                         opacity: 1
                     });
 
-                    marker.bindTooltip(tooltipContent, { direction: 'top', offset: [0, -5] });
+                    marker.bindTooltip(tooltipContent, { direction: 'top', offset: [0, 0] });
                     clientMarkersLayer.addLayer(marker);
                 }
             }, () => {
@@ -7601,7 +7609,11 @@ const supervisorGroups = new Map();
             } else if (filters.clientCodes) {
                  const allData = [];
                  // Use iteration if values() unavailable
-                 if (dataset.values && typeof dataset.values === 'function') {
+                 if (Array.isArray(dataset)) {
+                     for(let i=0; i<dataset.length; i++) {
+                         if(filters.clientCodes.has(dataset[i].CODCLI)) allData.push(dataset[i]);
+                     }
+                 } else if (dataset.values && typeof dataset.values === 'function') {
                      const vals = dataset.values();
                      for(let i=0; i<vals.length; i++) if(filters.clientCodes.has(vals[i].CODCLI)) allData.push(vals[i]);
                  } else {
