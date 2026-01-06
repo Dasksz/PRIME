@@ -468,6 +468,41 @@
             clientMarkersLayer = L.layerGroup();
 
             leafletMap.on('zoomend', () => {
+                const zoom = leafletMap.getZoom();
+
+                // Dynamic Heatmap Settings based on Zoom
+                if (heatLayer) {
+                    let newOptions = {};
+
+                    if (zoom >= 14) {
+                        // High Zoom: Individual points visible, smaller, opaque
+                        newOptions = {
+                            radius: 10,
+                            blur: 10,
+                            max: 1.0,        // Standard max intensity (1 point = full color)
+                            minOpacity: 0.5  // Ensure visibility of single points
+                        };
+                    } else if (zoom >= 12) {
+                        // Transition Zoom
+                        newOptions = {
+                            radius: 12,
+                            blur: 12,
+                            max: 5.0,
+                            minOpacity: 0.2
+                        };
+                    } else {
+                        // Low Zoom: Heatmap clouds (Current settings for density)
+                        newOptions = {
+                            radius: 15,
+                            blur: 15,
+                            max: 20.0, // High max to prevent saturation in clusters
+                            minOpacity: 0.05
+                        };
+                    }
+
+                    heatLayer.setOptions(newOptions);
+                }
+
                 updateMarkersVisibility();
             });
         }
