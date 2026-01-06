@@ -473,35 +473,37 @@
 
                 // Dynamic Heatmap Settings based on Zoom
                 if (heatLayer) {
-                    let newOptions = {};
-
                     if (zoom >= 14) {
-                        // High Zoom: Reduce heatmap opacity to let markers shine
-                        newOptions = {
-                            radius: 10,
-                            blur: 10,
-                            max: 0.5,        
-                            minOpacity: 0.1  
-                        };
-                    } else if (zoom >= 12) {
-                        // Transition Zoom
-                        newOptions = {
-                            radius: 12,
-                            blur: 12,
-                            max: 5.0,
-                            minOpacity: 0.2
-                        };
+                        // High Zoom: Hide Heatmap completely, show Markers
+                        if (leafletMap.hasLayer(heatLayer)) {
+                            leafletMap.removeLayer(heatLayer);
+                        }
                     } else {
-                        // Low Zoom: Heatmap clouds (Current settings for density)
-                        newOptions = {
-                            radius: 15,
-                            blur: 15,
-                            max: 20.0, // High max to prevent saturation in clusters
-                            minOpacity: 0.05
-                        };
-                    }
+                        // Low/Mid Zoom: Show Heatmap, Hide Markers (handled by updateMarkersVisibility)
+                        if (!leafletMap.hasLayer(heatLayer)) {
+                            leafletMap.addLayer(heatLayer);
+                        }
 
-                    heatLayer.setOptions(newOptions);
+                        let newOptions = {};
+                        if (zoom >= 12) {
+                            // Transition Zoom
+                            newOptions = {
+                                radius: 12,
+                                blur: 12,
+                                max: 5.0,
+                                minOpacity: 0.2
+                            };
+                        } else {
+                            // Low Zoom: Heatmap clouds (Current settings for density)
+                            newOptions = {
+                                radius: 15,
+                                blur: 15,
+                                max: 20.0, // High max to prevent saturation in clusters
+                                minOpacity: 0.05
+                            };
+                        }
+                        heatLayer.setOptions(newOptions);
+                    }
                 }
 
                 updateMarkersVisibility();
