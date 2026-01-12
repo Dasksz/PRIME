@@ -1449,7 +1449,8 @@
             semanal: { dirty: true },
             inovacoes: { dirty: true, cache: null, lastTypesKey: '' },
             mix: { dirty: true },
-            goals: { dirty: true }
+            goals: { dirty: true },
+            metaRealizado: { dirty: true }
         };
 
         // Render IDs for Race Condition Guard
@@ -1809,6 +1810,11 @@
         let selectedGoalsGvSellers = [];
         let selectedGoalsSvSupervisors = [];
         let selectedGoalsSummarySupervisors = [];
+
+        let selectedMetaRealizadoSupervisors = [];
+        let selectedMetaRealizadoSellers = [];
+        let selectedMetaRealizadoSuppliers = [];
+        let currentMetaRealizadoPasta = 'PEPSICO'; // Default
 
         // let innovationsIncludeBonus = true; // REMOVED
         // let innovationsMonthIncludeBonus = true; // REMOVED
@@ -2814,6 +2820,413 @@
             if (!el) return 0;
             let val = el.value.replace(/\./g, '').replace(',', '.');
             return parseFloat(val) || 0;
+        }
+
+        function getMonthWeeksDistribution(date) {
+            const year = date.getUTCFullYear();
+            const month = date.getUTCMonth();
+
+            // Start of Month
+            const startDate = new Date(Date.UTC(year, month, 1));
+            // End of Month
+            const endDate = new Date(Date.UTC(year, month + 1, 0));
+            const totalDays = endDate.getUTCDate();
+
+            let currentWeekStart = new Date(startDate);
+            const weeks = [];
+            let totalWorkingDays = 0;
+
+            // Loop through weeks
+            while (currentWeekStart <= endDate) {
+                // Get end of this week (Sunday or End of Month)
+                // getUTCDay: 0 (Sun) to 6 (Sat).
+                // We want weeks to be Calendar Weeks (Mon-Sun or Sun-Sat).
+                // Standard: ISO weeks start on Monday. But JS getDay 0 is Sunday.
+                // Let's assume standard calendar week view where Sunday breaks the week.
+                // However, user said "reconhecer as semanas pelo calendário... De segunda a sexta".
+                // Let's define week chunks.
+                // Logic: A week ends on Saturday (or Sunday).
+
+                // Find next Sunday (or End of Month)
+                let dayOfWeek = currentWeekStart.getUTCDay(); // 0=Sun, 1=Mon...
+                let daysToSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+
+                let currentWeekEnd = new Date(currentWeekStart);
+                currentWeekEnd.setUTCDate(currentWeekStart.getUTCDate() + daysToSunday);
+
+                if (currentWeekEnd > endDate) currentWeekEnd = new Date(endDate);
+
+                // Count Working Days in this chunk
+                let workingDaysInWeek = 0;
+                let tempDate = new Date(currentWeekStart);
+                while (tempDate <= currentWeekEnd) {
+                    const dow = tempDate.getUTCDay();
+                    if (dow >= 1 && dow <= 5) {
+                        workingDaysInWeek++;
+                        totalWorkingDays++;
+                    }
+                    tempDate.setUTCDate(tempDate.getUTCDate() + 1);
+                }
+
+                if (workingDaysInWeek > 0 || weeks.length === 0 || currentWeekStart <= endDate) {
+                     // Only push if valid week or just start
+                     weeks.push({
+                         start: new Date(currentWeekStart),
+                         end: new Date(currentWeekEnd),
+                         workingDays: workingDaysInWeek
+                     });
+                }
+
+                // Next week starts day after currentWeekEnd
+                currentWeekStart = new Date(currentWeekEnd);
+                currentWeekStart.setUTCDate(currentWeekStart.getUTCDate() + 1);
+            }
+
+            return { weeks, totalWorkingDays };
+        }
+
+        function getMetaRealizadoFilteredData() {
+            const supervisorsSet = new Set(selectedMetaRealizadoSupervisors);
+            const sellersSet = new Set(selectedMetaRealizadoSellers);
+            const suppliersSet = new Set(selectedMetaRealizadoSuppliers);
+            const pasta = currentMetaRealizadoPasta;
+
+            // 1. Clients Filter
+            let clients = allClientsData.filter(c => {
+                const rca1 = String(c.rca1 || '').trim();
+                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
+                // Same active logic as Goals
+                if (isAmericanas) return true;
+                if (rca1 === '53') return false;
+                if (rca1 === '') return false;
+                return true;
+            });
+
+            if (supervisorsSet.size > 0) {
+                const rcasSet = new Set();
+                supervisorsSet.forEach(sup => {
+                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
+                });
+                clients = clients.filter(c => {
+                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
+                    return clientRcas.some(r => rcasSet.has(r));
+                });
+            }
+
+            if (sellersSet.size > 0) {
+                const rcasSet = new Set();
+                sellersSet.forEach(name => {
+                    const code = optimizedData.rcaCodeByName.get(name);
+                    if (code) rcasSet.add(code);
+                });
+                clients = clients.filter(c => {
+                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
+                    return clientRcas.some(r => rcasSet.has(r));
+                });
+            }
+
+            const filteredClientCodes = new Set(clients.map(c => String(c['Código'] || c['codigo_cliente'])));
+
+            // 2. Goals Aggregation (By Seller)
+            // Structure: Map<SellerName, TotalGoal>
+            const goalsBySeller = new Map();
+
+            clients.forEach(client => {
+                const codCli = String(client['Código'] || client['codigo_cliente']);
+                const rcaCode = String(client.rca1 || '');
+                const rcaName = optimizedData.rcaNameByCode.get(rcaCode) || rcaCode; // Map code to name for grouping
+
+                if (!rcaName || rcaName === 'INATIVOS') return;
+
+                // Determine Goal Keys based on Pasta
+                let goalKeys = [];
+                if (pasta === 'PEPSICO') {
+                    // Include all Pepsico keys
+                    goalKeys = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+                } else if (pasta === 'MULTIMARCAS') {
+                    // Assuming no explicit keys for Multimarcas in current Goals structure, or maybe they exist?
+                    // If globalClientGoals has keys other than Pepsico ones?
+                    // For now, if Multimarcas, we might return 0 or look for other keys.
+                    // Let's assume we scan all keys and exclude Pepsico ones?
+                    // Or just return 0 as Goals feature is mainly Pepsico?
+                    // User said: "Meta... buscar as metas que estiverem inseridas no banco de dados".
+                    // Let's stick to Pepsico keys for PEPSICO filter.
+                    // If MULTIMARCAS, we might need to verify if data exists.
+                    // I will leave empty for MULTIMARCAS unless I find data.
+                }
+
+                if (globalClientGoals.has(codCli)) {
+                    const clientGoals = globalClientGoals.get(codCli);
+                    let clientTotalGoal = 0;
+                    goalKeys.forEach(k => {
+                        if (clientGoals.has(k)) {
+                            clientTotalGoal += (clientGoals.get(k).fat || 0);
+                        }
+                    });
+
+                    if (clientTotalGoal > 0) {
+                        goalsBySeller.set(rcaName, (goalsBySeller.get(rcaName) || 0) + clientTotalGoal);
+                    }
+                }
+            });
+
+            // 3. Sales Aggregation (By Seller & Week)
+            // Structure: Map<SellerName, { total: 0, weeks: [0, 0, 0, 0, 0] }>
+            const salesBySeller = new Map();
+            const { weeks } = getMonthWeeksDistribution(lastSaleDate); // Use current global date context
+
+            // Helper to find week index
+            const getWeekIndex = (date) => {
+                const d = typeof date === 'number' ? new Date(date) : parseDate(date);
+                if (!d) return -1;
+                // Check against ranges
+                for(let i=0; i<weeks.length; i++) {
+                    // Week range is inclusive start, inclusive end
+                    if (d >= weeks[i].start && d <= weeks[i].end) return i;
+                }
+                return -1;
+            };
+
+            // Iterate Sales
+            // Optimized: Use indices if needed, or simple iteration.
+            // Filter: Month, Types != 5,11, Pasta, Supervisor/Seller/Supplier
+            const currentMonthIndex = lastSaleDate.getUTCMonth();
+            const currentYear = lastSaleDate.getUTCFullYear();
+
+            for(let i=0; i<allSalesData.length; i++) {
+                const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
+
+                // Date Filter
+                const d = typeof s.DTPED === 'number' ? new Date(s.DTPED) : parseDate(s.DTPED);
+                if (!d || d.getUTCMonth() !== currentMonthIndex || d.getUTCFullYear() !== currentYear) continue;
+
+                // Type Filter
+                const tipo = String(s.TIPOVENDA);
+                if (tipo === '5' || tipo === '11') continue;
+
+                // Pasta Filter (OBSERVACAOFOR)
+                let rowPasta = s.OBSERVACAOFOR;
+                if (!rowPasta || rowPasta === '0' || rowPasta === '00' || rowPasta === 'N/A') {
+                     const rawFornecedor = String(s.FORNECEDOR || '').toUpperCase();
+                     rowPasta = rawFornecedor.includes('PEPSICO') ? 'PEPSICO' : 'MULTIMARCAS';
+                }
+                if (pasta && rowPasta !== pasta) continue;
+
+                // Client Filter (Must be in the filtered list of clients? Or just match filters?)
+                // If we filtered clients by Supervisor/Seller, we should only count sales for those clients?
+                // Or sales where the sale's Supervisor/Seller matches?
+                // Usually Sales view filters by Sale attributes. Goals view filters by Client attributes.
+                // "Meta Vs Realizado" implies comparing the same entity.
+                // If I filter Supervisor "X", I show Seller Goals for X and Seller Sales for X.
+                // Let's use the standard filter logic:
+
+                if (supervisorsSet.size > 0 && !supervisorsSet.has(s.SUPERV)) continue;
+                if (sellersSet.size > 0 && !sellersSet.has(s.NOME)) continue;
+                if (suppliersSet.size > 0 && !suppliersSet.has(s.CODFOR)) continue;
+
+                const sellerName = s.NOME;
+                const val = Number(s.VLVENDA) || 0;
+                const weekIdx = getWeekIndex(d);
+
+                if (!salesBySeller.has(sellerName)) {
+                    salesBySeller.set(sellerName, { total: 0, weeks: new Array(weeks.length).fill(0) });
+                }
+                const entry = salesBySeller.get(sellerName);
+                entry.total += val;
+                if (weekIdx !== -1) {
+                    entry.weeks[weekIdx] += val;
+                }
+            }
+
+            return { goalsBySeller, salesBySeller, weeks };
+        }
+
+        function renderMetaRealizadoTable(data, weeks, totalWorkingDays) {
+            const tableHead = document.getElementById('meta-realizado-table-head');
+            const tableBody = document.getElementById('meta-realizado-table-body');
+
+            // Build Headers
+            let headerHTML = `
+                <tr>
+                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-left border-r border-b border-slate-700 w-48 sticky left-0 z-20">Vendedor</th>
+                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-center border-r border-b border-slate-700 w-32">Meta Total</th>
+                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-center border-r border-b border-slate-700 w-32">Realizado Total</th>
+            `;
+
+            // Week Headers (Top Row)
+            weeks.forEach((week, i) => {
+                headerHTML += `<th colspan="2" class="px-2 py-2 bg-slate-800 text-center border-r border-b border-slate-700">Semana ${i + 1} (${week.workingDays}d)</th>`;
+            });
+            headerHTML += `</tr><tr>`;
+
+            // Week Sub-headers (Bottom Row)
+            weeks.forEach(() => {
+                headerHTML += `
+                    <th class="px-2 py-2 bg-slate-800/80 text-center border-r border-b border-slate-700 text-[10px] text-slate-400 w-24">Meta</th>
+                    <th class="px-2 py-2 bg-slate-800/80 text-center border-r border-b border-slate-700 text-[10px] text-slate-400 w-24">Realizado</th>
+                `;
+            });
+            headerHTML += `</tr>`;
+
+            tableHead.innerHTML = headerHTML;
+
+            // Build Body
+            // data is Array of { name, metaTotal, realTotal, weeks: [{meta, real}] }
+            const rowsHTML = data.map(row => {
+                const metaTotalStr = row.metaTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                const realTotalStr = row.realTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+                // Colorize Total Difference? Maybe later.
+
+                let cells = `
+                    <td class="px-4 py-3 font-medium text-slate-200 border-r border-b border-slate-700 sticky left-0 bg-[#1d2347] z-10 truncate" title="${row.name}">${getFirstName(row.name)}</td>
+                    <td class="px-4 py-3 text-right text-teal-400 font-bold border-r border-b border-slate-700">${metaTotalStr}</td>
+                    <td class="px-4 py-3 text-right text-yellow-400 font-bold border-r border-b border-slate-700">${realTotalStr}</td>
+                `;
+
+                row.weekData.forEach(w => {
+                    const wMetaStr = w.meta.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                    const wRealStr = w.real.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+                    // Simple logic: Green if Real >= Meta, Red if Real < Meta (only if week has passed? Or always?)
+                    // Let's keep it neutral for now or simple colors.
+                    const realClass = w.real >= w.meta ? 'text-green-400' : 'text-slate-300';
+
+                    cells += `
+                        <td class="px-2 py-3 text-right text-slate-400 text-xs border-r border-b border-slate-700">${wMetaStr}</td>
+                        <td class="px-2 py-3 text-right ${realClass} text-xs font-medium border-r border-b border-slate-700">${wRealStr}</td>
+                    `;
+                });
+
+                return `<tr class="hover:bg-slate-700/30 transition-colors">${cells}</tr>`;
+            }).join('');
+
+            tableBody.innerHTML = rowsHTML;
+        }
+
+        function renderMetaRealizadoChart(data) {
+            const ctx = document.getElementById('metaRealizadoChartContainer');
+            if (!ctx) return;
+
+            // Destroy previous chart if exists (assume we store it in charts object)
+            // Wait, createChart helper handles destruction if we pass ID. But here we have container ID.
+            // Let's use a canvas inside the container.
+
+            let canvas = ctx.querySelector('canvas');
+            if (!canvas) {
+                canvas = document.createElement('canvas');
+                ctx.appendChild(canvas);
+            }
+
+            const chartId = 'metaRealizadoChartInstance';
+            if (charts[chartId]) {
+                charts[chartId].destroy();
+            }
+
+            const labels = data.map(d => getFirstName(d.name));
+            const metaValues = data.map(d => d.metaTotal);
+            const realValues = data.map(d => d.realTotal);
+
+            charts[chartId] = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Meta',
+                            data: metaValues,
+                            backgroundColor: '#14b8a6', // Teal
+                            barPercentage: 0.6,
+                            categoryPercentage: 0.8
+                        },
+                        {
+                            label: 'Realizado',
+                            data: realValues,
+                            backgroundColor: '#f59e0b', // Amber/Yellow
+                            barPercentage: 0.6,
+                            categoryPercentage: 0.8
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top', labels: { color: '#cbd5e1' } },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += context.parsed.y.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                                    }
+                                    return label;
+                                }
+                            }
+                        },
+                        datalabels: {
+                            display: false // Too crowded usually
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#334155' },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#94a3b8' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateMetaRealizadoView() {
+            // 1. Get Data
+            const { goalsBySeller, salesBySeller, weeks } = getMetaRealizadoFilteredData();
+
+            // Re-calculate Total Working Days from the calculated weeks structure to be consistent
+            let totalWorkingDays = 0;
+            weeks.forEach(w => totalWorkingDays += w.workingDays);
+
+            if (totalWorkingDays === 0) totalWorkingDays = 1; // Prevent div/0
+
+            // 2. Combine Data for Rendering
+            // We need a list of ALL sellers present in either Goals OR Sales
+            const allSellers = new Set([...goalsBySeller.keys(), ...salesBySeller.keys()]);
+            const rowData = [];
+
+            allSellers.forEach(sellerName => {
+                const totalGoal = goalsBySeller.get(sellerName) || 0;
+                const salesData = salesBySeller.get(sellerName) || { total: 0, weeks: [] };
+
+                const dailyGoal = totalGoal / totalWorkingDays;
+
+                const weekData = weeks.map((w, i) => {
+                    const wMeta = dailyGoal * w.workingDays;
+                    const wReal = salesData.weeks[i] || 0;
+                    return { meta: wMeta, real: wReal };
+                });
+
+                rowData.push({
+                    name: sellerName,
+                    metaTotal: totalGoal,
+                    realTotal: salesData.total,
+                    weekData: weekData
+                });
+            });
+
+            // Sort by Meta Total Descending
+            rowData.sort((a, b) => b.metaTotal - a.metaTotal);
+
+            // 3. Render
+            renderMetaRealizadoTable(rowData, weeks, totalWorkingDays);
+            renderMetaRealizadoChart(rowData);
         }
 
         function getMetricsForSupervisors(supervisorsList) {
@@ -9703,7 +10116,8 @@ const supervisorGroups = new Map();
                 cidades: 'Cidades',
                 semanal: 'Semanal',
                 'inovacoes-mes': 'Inovações',
-                mix: 'Mix'
+                mix: 'Mix',
+                'meta-realizado': 'Meta Vs. Realizado'
             };
             const friendlyName = viewNameMap[view] || 'a página';
 
@@ -9711,7 +10125,7 @@ const supervisorGroups = new Map();
 
             // This function now runs after the loader is visible
             const updateContent = () => {
-                [mainDashboard, cityView, weeklyView, comparisonView, stockView, innovationsMonthView, coverageView, document.getElementById('mix-view'), goalsView].forEach(el => {
+                [mainDashboard, cityView, weeklyView, comparisonView, stockView, innovationsMonthView, coverageView, document.getElementById('mix-view'), goalsView, document.getElementById('meta-realizado-view')].forEach(el => {
                     if(el) el.classList.add('hidden');
                 });
 
@@ -9813,6 +10227,17 @@ const supervisorGroups = new Map();
                         if (viewState.goals.dirty) {
                             updateGoalsView();
                             viewState.goals.dirty = false;
+                        }
+                        break;
+                    case 'meta-realizado':
+                        document.getElementById('meta-realizado-view').classList.remove('hidden');
+                        if (viewState.metaRealizado.dirty) {
+                            // Initial filter logic if needed, similar to other views
+                            selectedMetaRealizadoSupervisors = updateSupervisorFilter(document.getElementById('meta-realizado-supervisor-filter-dropdown'), document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
+                            selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, allSalesData);
+
+                            updateMetaRealizadoView();
+                            viewState.metaRealizado.dirty = false;
                         }
                         break;
                 }
@@ -11382,6 +11807,136 @@ const supervisorGroups = new Map();
                 }
             });
 
+            // --- Meta Vs Realizado Listeners ---
+            const updateMetaRealizado = () => {
+                markDirty('metaRealizado');
+                updateMetaRealizadoView();
+            };
+
+            const debouncedUpdateMetaRealizado = debounce(updateMetaRealizado, 400);
+
+            // Supervisor Filter
+            const metaRealizadoSupervisorFilterBtn = document.getElementById('meta-realizado-supervisor-filter-btn');
+            const metaRealizadoSupervisorFilterDropdown = document.getElementById('meta-realizado-supervisor-filter-dropdown');
+            metaRealizadoSupervisorFilterBtn.addEventListener('click', () => metaRealizadoSupervisorFilterDropdown.classList.toggle('hidden'));
+            metaRealizadoSupervisorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedMetaRealizadoSupervisors.push(value);
+                    else selectedMetaRealizadoSupervisors = selectedMetaRealizadoSupervisors.filter(s => s !== value);
+
+                    selectedMetaRealizadoSupervisors = updateSupervisorFilter(metaRealizadoSupervisorFilterDropdown, document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
+
+                    // Reset or Filter Sellers
+                    selectedMetaRealizadoSellers = [];
+                    selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, allSalesData);
+
+                    debouncedUpdateMetaRealizado();
+                }
+            });
+
+            // Seller Filter
+            const metaRealizadoSellerFilterBtn = document.getElementById('meta-realizado-vendedor-filter-btn');
+            const metaRealizadoSellerFilterDropdown = document.getElementById('meta-realizado-vendedor-filter-dropdown');
+            metaRealizadoSellerFilterBtn.addEventListener('click', () => metaRealizadoSellerFilterDropdown.classList.toggle('hidden'));
+            metaRealizadoSellerFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) {
+                        if (!selectedMetaRealizadoSellers.includes(value)) selectedMetaRealizadoSellers.push(value);
+                    } else {
+                        selectedMetaRealizadoSellers = selectedMetaRealizadoSellers.filter(s => s !== value);
+                    }
+                    debouncedUpdateMetaRealizado();
+                }
+            });
+
+            // Supplier Filter
+            const metaRealizadoSupplierFilterBtn = document.getElementById('meta-realizado-supplier-filter-btn');
+            const metaRealizadoSupplierFilterDropdown = document.getElementById('meta-realizado-supplier-filter-dropdown');
+            metaRealizadoSupplierFilterBtn.addEventListener('click', () => metaRealizadoSupplierFilterDropdown.classList.toggle('hidden'));
+            metaRealizadoSupplierFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) {
+                        if (!selectedMetaRealizadoSuppliers.includes(value)) selectedMetaRealizadoSuppliers.push(value);
+                    } else {
+                        selectedMetaRealizadoSuppliers = selectedMetaRealizadoSuppliers.filter(s => s !== value);
+                    }
+                    debouncedUpdateMetaRealizado();
+                }
+            });
+
+            // Pasta Filter
+            const metaRealizadoPastaContainer = document.getElementById('meta-realizado-pasta-toggle-container');
+            if (metaRealizadoPastaContainer) {
+                metaRealizadoPastaContainer.addEventListener('click', (e) => {
+                    if (e.target.tagName === 'BUTTON') {
+                        const pasta = e.target.dataset.pasta;
+                        if (currentMetaRealizadoPasta !== pasta) {
+                            currentMetaRealizadoPasta = pasta;
+                            metaRealizadoPastaContainer.querySelectorAll('.pasta-btn').forEach(b => b.classList.remove('active', 'bg-slate-500')); // Adjust active style removal
+                            // Standardize toggle logic:
+                            metaRealizadoPastaContainer.querySelectorAll('.pasta-btn').forEach(b => {
+                                if (b.dataset.pasta === pasta) {
+                                    b.classList.remove('bg-slate-700');
+                                    b.classList.add('bg-teal-600', 'hover:bg-teal-500'); // Active State
+                                } else {
+                                    b.classList.add('bg-slate-700');
+                                    b.classList.remove('bg-teal-600', 'hover:bg-teal-500');
+                                }
+                            });
+                            debouncedUpdateMetaRealizado();
+                        }
+                    }
+                });
+
+                // Initialize default active button style
+                metaRealizadoPastaContainer.querySelectorAll('.pasta-btn').forEach(b => {
+                    if (b.dataset.pasta === currentMetaRealizadoPasta) {
+                        b.classList.remove('bg-slate-700');
+                        b.classList.add('bg-teal-600', 'hover:bg-teal-500');
+                    }
+                });
+            }
+
+            // Clear Filters
+            document.getElementById('clear-meta-realizado-filters-btn').addEventListener('click', () => {
+                selectedMetaRealizadoSupervisors = [];
+                selectedMetaRealizadoSellers = [];
+                selectedMetaRealizadoSuppliers = [];
+                currentMetaRealizadoPasta = 'PEPSICO'; // Reset to default
+
+                // Reset UI
+                updateSupervisorFilter(metaRealizadoSupervisorFilterDropdown, document.getElementById('meta-realizado-supervisor-filter-text'), [], allSalesData);
+                updateSellerFilter([], metaRealizadoSellerFilterDropdown, document.getElementById('meta-realizado-vendedor-filter-text'), [], allSalesData);
+
+                // Reset Supplier UI (Need generic function or manual)
+                // Assuming generic `updateSupplierFilter` usage pattern if available or just reset text
+                document.getElementById('meta-realizado-supplier-filter-text').textContent = 'Todos';
+                metaRealizadoSupplierFilterDropdown.querySelectorAll('input').forEach(cb => cb.checked = false);
+
+                // Reset Pasta UI
+                metaRealizadoPastaContainer.querySelectorAll('.pasta-btn').forEach(b => {
+                    if (b.dataset.pasta === 'PEPSICO') {
+                        b.classList.remove('bg-slate-700');
+                        b.classList.add('bg-teal-600', 'hover:bg-teal-500');
+                    } else {
+                        b.classList.add('bg-slate-700');
+                        b.classList.remove('bg-teal-600', 'hover:bg-teal-500');
+                    }
+                });
+
+                debouncedUpdateMetaRealizado();
+            });
+
+            // Close Dropdowns on Click Outside
+            document.addEventListener('click', (e) => {
+                if (!metaRealizadoSupervisorFilterBtn.contains(e.target) && !metaRealizadoSupervisorFilterDropdown.contains(e.target)) metaRealizadoSupervisorFilterDropdown.classList.add('hidden');
+                if (!metaRealizadoSellerFilterBtn.contains(e.target) && !metaRealizadoSellerFilterDropdown.contains(e.target)) metaRealizadoSellerFilterDropdown.classList.add('hidden');
+                if (!metaRealizadoSupplierFilterBtn.contains(e.target) && !metaRealizadoSupplierFilterDropdown.contains(e.target)) metaRealizadoSupplierFilterDropdown.classList.add('hidden');
+            });
+
 
             const updateMix = () => {
                 markDirty('mix');
@@ -11739,6 +12294,10 @@ const supervisorGroups = new Map();
             selectedGoalsSummarySupervisors = updateSupervisorFilter(document.getElementById('goals-summary-supervisor-filter-dropdown'), document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, allSalesData);
         }
 
+        // Initialize Meta Vs Realizado Filters
+        selectedMetaRealizadoSupervisors = updateSupervisorFilter(document.getElementById('meta-realizado-supervisor-filter-dropdown'), document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
+        updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, allSalesData);
+        selectedMetaRealizadoSuppliers = updateSupplierFilter(document.getElementById('meta-realizado-supplier-filter-dropdown'), document.getElementById('meta-realizado-supplier-filter-text'), selectedMetaRealizadoSuppliers, [...allSalesData, ...allHistoryData], 'metaRealizado');
 
         updateAllComparisonFilters();
 
