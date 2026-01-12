@@ -11886,21 +11886,27 @@ const supervisorGroups = new Map();
                 metaRealizadoPastaContainer.addEventListener('click', (e) => {
                     if (e.target.tagName === 'BUTTON') {
                         const pasta = e.target.dataset.pasta;
-                        if (currentMetaRealizadoPasta !== pasta) {
+                        
+                        // Toggle logic: If clicking active button, deselect (revert to PEPSICO/All).
+                        // If clicking inactive, select it.
+                        if (currentMetaRealizadoPasta === pasta) {
+                            currentMetaRealizadoPasta = 'PEPSICO'; // Revert to default
+                        } else {
                             currentMetaRealizadoPasta = pasta;
-                            metaRealizadoPastaContainer.querySelectorAll('.pasta-btn').forEach(b => b.classList.remove('active', 'bg-slate-500')); // Adjust active style removal
-                            // Standardize toggle logic: 
-                            metaRealizadoPastaContainer.querySelectorAll('.pasta-btn').forEach(b => {
-                                if (b.dataset.pasta === pasta) {
-                                    b.classList.remove('bg-slate-700');
-                                    b.classList.add('bg-teal-600', 'hover:bg-teal-500'); // Active State
-                                } else {
-                                    b.classList.add('bg-slate-700');
-                                    b.classList.remove('bg-teal-600', 'hover:bg-teal-500');
-                                }
-                            });
-                            debouncedUpdateMetaRealizado();
                         }
+
+                        // Update UI
+                        metaRealizadoPastaContainer.querySelectorAll('.pasta-btn').forEach(b => {
+                            if (b.dataset.pasta === currentMetaRealizadoPasta) {
+                                b.classList.remove('bg-slate-700');
+                                b.classList.add('bg-teal-600', 'hover:bg-teal-500'); // Active State
+                            } else {
+                                b.classList.add('bg-slate-700');
+                                b.classList.remove('bg-teal-600', 'hover:bg-teal-500');
+                            }
+                        });
+                        
+                        debouncedUpdateMetaRealizado();
                     }
                 });
                 
@@ -11924,20 +11930,14 @@ const supervisorGroups = new Map();
                 updateSupervisorFilter(metaRealizadoSupervisorFilterDropdown, document.getElementById('meta-realizado-supervisor-filter-text'), [], allSalesData);
                 updateSellerFilter([], metaRealizadoSellerFilterDropdown, document.getElementById('meta-realizado-vendedor-filter-text'), [], allSalesData);
                 
-                // Reset Supplier UI (Need generic function or manual)
-                // Assuming generic `updateSupplierFilter` usage pattern if available or just reset text
+                // Reset Supplier UI
                 document.getElementById('meta-realizado-supplier-filter-text').textContent = 'Todos';
                 metaRealizadoSupplierFilterDropdown.querySelectorAll('input').forEach(cb => cb.checked = false);
 
-                // Reset Pasta UI
+                // Reset Pasta UI (Deactivate all, since PEPSICO button is gone)
                 metaRealizadoPastaContainer.querySelectorAll('.pasta-btn').forEach(b => {
-                    if (b.dataset.pasta === 'PEPSICO') {
-                        b.classList.remove('bg-slate-700');
-                        b.classList.add('bg-teal-600', 'hover:bg-teal-500');
-                    } else {
-                        b.classList.add('bg-slate-700');
-                        b.classList.remove('bg-teal-600', 'hover:bg-teal-500');
-                    }
+                    b.classList.add('bg-slate-700');
+                    b.classList.remove('bg-teal-600', 'hover:bg-teal-500');
                 });
 
                 debouncedUpdateMetaRealizado();
