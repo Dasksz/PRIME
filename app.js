@@ -2943,16 +2943,10 @@
                 if (pasta === 'PEPSICO') {
                     // Include all Pepsico keys
                     goalKeys = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
-                } else if (pasta === 'MULTIMARCAS') {
-                    // Assuming no explicit keys for Multimarcas in current Goals structure, or maybe they exist?
-                    // If globalClientGoals has keys other than Pepsico ones?
-                    // For now, if Multimarcas, we might return 0 or look for other keys.
-                    // Let's assume we scan all keys and exclude Pepsico ones?
-                    // Or just return 0 as Goals feature is mainly Pepsico?
-                    // User said: "Meta... buscar as metas que estiverem inseridas no banco de dados".
-                    // Let's stick to Pepsico keys for PEPSICO filter.
-                    // If MULTIMARCAS, we might need to verify if data exists.
-                    // I will leave empty for MULTIMARCAS unless I find data.
+                } else if (pasta === 'ELMA') {
+                    goalKeys = ['707', '708', '752'];
+                } else if (pasta === 'FOODS') {
+                    goalKeys = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
                 }
 
                 if (globalClientGoals.has(codCli)) {
@@ -3004,13 +2998,29 @@
                 const tipo = String(s.TIPOVENDA);
                 if (tipo === '5' || tipo === '11') continue;
 
-                // Pasta Filter (OBSERVACAOFOR)
+                // Pasta Filter (OBSERVACAOFOR) logic for Pepsico/Elma/Foods
+                // 1. Determine if row is PEPSICO/MULTIMARCAS
                 let rowPasta = s.OBSERVACAOFOR;
                 if (!rowPasta || rowPasta === '0' || rowPasta === '00' || rowPasta === 'N/A') {
                      const rawFornecedor = String(s.FORNECEDOR || '').toUpperCase();
                      rowPasta = rawFornecedor.includes('PEPSICO') ? 'PEPSICO' : 'MULTIMARCAS';
                 }
-                if (pasta && rowPasta !== pasta) continue;
+
+                // "Meta Vs. Realizado" only cares about PEPSICO data
+                if (rowPasta !== 'PEPSICO') continue;
+
+                // 2. Check Sub-pasta logic (ELMA vs FOODS) based on CODFOR
+                // If filter is PEPSICO, we include everything (since we already filtered for PEPSICO above)
+                // If filter is ELMA, we check CODFOR 707, 708, 752
+                // If filter is FOODS, we check CODFOR 1119 (or specific sub-brands if needed, but usually 1119 is Foods)
+                
+                const codFor = String(s.CODFOR);
+                if (pasta === 'ELMA') {
+                    if (!['707', '708', '752'].includes(codFor)) continue;
+                } else if (pasta === 'FOODS') {
+                    if (codFor !== '1119') continue;
+                }
+                // If pasta === 'PEPSICO', we include all (already filtered for PEPSICO rowPasta)
 
                 // Client Filter (Must be in the filtered list of clients? Or just match filters?)
                 // If we filtered clients by Supervisor/Seller, we should only count sales for those clients?
