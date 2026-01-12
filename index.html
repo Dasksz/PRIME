@@ -1435,7 +1435,7 @@
                             </div>
 
                             <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                <h2 class="text-lg font-semibold text-white mb-4 text-center">Detalhamento Semanal</h2>
+                                <h2 class="text-lg font-semibold text-white mb-4 text-center">Detalhamento Semanal (Vendedores)</h2>
                                 <div id="metaRealizadoTableContainer" class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
                                     <table class="min-w-full text-sm text-left text-slate-300 border-collapse">
                                         <thead id="meta-realizado-table-head" class="text-xs text-slate-400 uppercase sticky top-0 z-40 bg-[#161e3d] shadow-md">
@@ -1443,6 +1443,24 @@
                                         </thead>
                                         <tbody id="meta-realizado-table-body" class="divide-y divide-slate-700"></tbody>
                                     </table>
+                                </div>
+                            </div>
+
+                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm mt-6">
+                                <h2 class="text-lg font-semibold text-white mb-4 text-center">Detalhamento por Cliente</h2>
+                                <div id="metaRealizadoClientsTableContainer" class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
+                                    <table class="min-w-full text-sm text-left text-slate-300 border-collapse">
+                                        <thead id="meta-realizado-clients-table-head" class="text-xs text-slate-400 uppercase sticky top-0 z-40 bg-[#161e3d] shadow-md">
+                                            <!-- Headers populated dynamically -->
+                                        </thead>
+                                        <tbody id="meta-realizado-clients-table-body" class="divide-y divide-slate-700"></tbody>
+                                    </table>
+                                </div>
+                                <!-- Paginação da Tabela Clientes Meta Realizado -->
+                                <div id="meta-realizado-clients-pagination-controls" class="hidden mt-4 flex justify-between items-center">
+                                    <button id="meta-realizado-clients-prev-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Anterior</button>
+                                    <span id="meta-realizado-clients-page-info-text" class="text-slate-400">Página 1 de 1</span>
+                                    <button id="meta-realizado-clients-next-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Próxima</button>
                                 </div>
                             </div>
                         </div>

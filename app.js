@@ -3200,18 +3200,22 @@
             });
         }
 
+        let metaRealizadoClientsTableState = {
+            currentPage: 1,
+            itemsPerPage: 50,
+            filteredData: [],
+            totalPages: 1
+        };
+
         function updateMetaRealizadoView() {
             // 1. Get Data
             const { goalsBySeller, salesBySeller, weeks } = getMetaRealizadoFilteredData();
             
-            // Re-calculate Total Working Days from the calculated weeks structure to be consistent
-            let totalWorkingDays = 0;
-            weeks.forEach(w => totalWorkingDays += w.workingDays);
+            // Re-calculate Total Working Days
+            let totalWorkingDays = weeks.reduce((sum, w) => sum + w.workingDays, 0);
+            if (totalWorkingDays === 0) totalWorkingDays = 1;
 
-            if (totalWorkingDays === 0) totalWorkingDays = 1; // Prevent div/0
-
-            // 2. Combine Data for Rendering
-            // We need a list of ALL sellers present in either Goals OR Sales
+            // 2. Combine Data for Rendering (Sellers)
             const allSellers = new Set([...goalsBySeller.keys(), ...salesBySeller.keys()]);
             const rowData = [];
 
@@ -3219,11 +3223,14 @@
                 const totalGoal = goalsBySeller.get(sellerName) || 0;
                 const salesData = salesBySeller.get(sellerName) || { total: 0, weeks: [] };
                 
-                const dailyGoal = totalGoal / totalWorkingDays;
-                
+                // Calculate Dynamic Weekly Goals
+                // We need realized by week array. salesData.weeks might be sparse or undefined.
+                const realizedByWeek = salesData.weeks || [];
+                const adjustedGoals = calculateAdjustedWeeklyGoals(totalGoal, realizedByWeek, weeks);
+
                 const weekData = weeks.map((w, i) => {
-                    const wMeta = dailyGoal * w.workingDays;
-                    const wReal = salesData.weeks[i] || 0;
+                    const wMeta = adjustedGoals[i];
+                    const wReal = realizedByWeek[i] || 0;
                     return { meta: wMeta, real: wReal };
                 });
 
@@ -3238,9 +3245,287 @@
             // Sort by Meta Total Descending
             rowData.sort((a, b) => b.metaTotal - a.metaTotal);
 
-            // 3. Render
+            // 3. Render Sellers Table & Chart
             renderMetaRealizadoTable(rowData, weeks, totalWorkingDays);
             renderMetaRealizadoChart(rowData);
+
+            // 4. Clients Table Processing
+            const clientsData = getMetaRealizadoClientsData(weeks);
+
+            metaRealizadoClientsTableState.filteredData = clientsData;
+            metaRealizadoClientsTableState.totalPages = Math.ceil(clientsData.length / metaRealizadoClientsTableState.itemsPerPage);
+
+            // Validate Current Page
+            if (metaRealizadoClientsTableState.currentPage > metaRealizadoClientsTableState.totalPages) {
+                metaRealizadoClientsTableState.currentPage = metaRealizadoClientsTableState.totalPages > 0 ? metaRealizadoClientsTableState.totalPages : 1;
+            }
+            if (metaRealizadoClientsTableState.totalPages === 0) metaRealizadoClientsTableState.currentPage = 1;
+
+            renderMetaRealizadoClientsTable(clientsData, weeks);
+        }
+
+        function getMetaRealizadoClientsData(weeks) {
+            const supervisorsSet = new Set(selectedMetaRealizadoSupervisors);
+            const sellersSet = new Set(selectedMetaRealizadoSellers);
+            // Suppliers already filtered in getMetaRealizadoFilteredData logic for Sellers,
+            // but we need to re-apply logic for Client List generation.
+            // Actually, we can reuse similar filtering logic.
+            const suppliersSet = new Set(selectedMetaRealizadoSuppliers);
+            const pasta = currentMetaRealizadoPasta;
+
+            // 1. Identify Target Clients (Active/Americanas/etc + Filtered)
+            let clients = allClientsData.filter(c => {
+                const rca1 = String(c.rca1 || '').trim();
+                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
+                if (isAmericanas) return true;
+                if (rca1 === '53') return false;
+                if (rca1 === '') return false;
+                return true;
+            });
+
+            // Apply Filters (Supervisor/Seller)
+            if (supervisorsSet.size > 0) {
+                const rcasSet = new Set();
+                supervisorsSet.forEach(sup => {
+                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
+                });
+                clients = clients.filter(c => {
+                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
+                    return clientRcas.some(r => rcasSet.has(r));
+                });
+            }
+
+            if (sellersSet.size > 0) {
+                const rcasSet = new Set();
+                sellersSet.forEach(name => {
+                    const code = optimizedData.rcaCodeByName.get(name);
+                    if (code) rcasSet.add(code);
+                });
+                clients = clients.filter(c => {
+                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
+                    return clientRcas.some(r => rcasSet.has(r));
+                });
+            }
+
+            // Optimization: Create Set of Client Codes
+            const allowedClientCodes = new Set(clients.map(c => String(c['Código'] || c['codigo_cliente'])));
+
+            // 2. Aggregate Data per Client
+            const clientMap = new Map(); // Map<CodCli, { clientObj, goal: 0, salesTotal: 0, salesWeeks: [] }>
+
+            // Determine Goal Keys based on Pasta (Copy logic)
+            let goalKeys = [];
+            if (pasta === 'PEPSICO') goalKeys = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+            else if (pasta === 'ELMA') goalKeys = ['707', '708', '752'];
+            else if (pasta === 'FOODS') goalKeys = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+
+            // A. Populate Goals
+            clients.forEach(client => {
+                const codCli = String(client['Código'] || client['codigo_cliente']);
+                if (!clientMap.has(codCli)) {
+                    clientMap.set(codCli, { clientObj: client, goal: 0, salesTotal: 0, salesWeeks: new Array(weeks.length).fill(0) });
+                }
+                const entry = clientMap.get(codCli);
+
+                if (globalClientGoals.has(codCli)) {
+                    const cGoals = globalClientGoals.get(codCli);
+                    goalKeys.forEach(k => {
+                        if (cGoals.has(k)) entry.goal += (cGoals.get(k).fat || 0);
+                    });
+                }
+            });
+
+            // B. Populate Sales (Iterate ALL Sales to catch those without Meta)
+            // Filter Logic matches 'getMetaRealizadoFilteredData'
+            const currentMonthIndex = lastSaleDate.getUTCMonth();
+            const currentYear = lastSaleDate.getUTCFullYear();
+
+            // Helper for week index (Copied from getMetaRealizadoFilteredData scope, need to redefine or reuse)
+            const getWeekIndex = (date) => {
+                const d = typeof date === 'number' ? new Date(date) : parseDate(date);
+                if (!d) return -1;
+                for(let i=0; i<weeks.length; i++) {
+                    if (d >= weeks[i].start && d <= weeks[i].end) return i;
+                }
+                return -1;
+            };
+
+            for(let i=0; i<allSalesData.length; i++) {
+                const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
+                const d = typeof s.DTPED === 'number' ? new Date(s.DTPED) : parseDate(s.DTPED);
+
+                // Basic Filters
+                if (!d || d.getUTCMonth() !== currentMonthIndex || d.getUTCFullYear() !== currentYear) continue;
+                const tipo = String(s.TIPOVENDA);
+                if (tipo === '5' || tipo === '11') continue;
+
+                // Pasta Filter
+                let rowPasta = s.OBSERVACAOFOR;
+                if (!rowPasta || rowPasta === '0' || rowPasta === '00' || rowPasta === 'N/A') {
+                     const rawFornecedor = String(s.FORNECEDOR || '').toUpperCase();
+                     rowPasta = rawFornecedor.includes('PEPSICO') ? 'PEPSICO' : 'MULTIMARCAS';
+                }
+                if (rowPasta !== 'PEPSICO') continue;
+
+                const codFor = String(s.CODFOR);
+                if (pasta === 'ELMA' && !['707', '708', '752'].includes(codFor)) continue;
+                if (pasta === 'FOODS' && codFor !== '1119') continue;
+
+                // Supervisor/Seller/Supplier Filter on SALE row
+                if (supervisorsSet.size > 0 && !supervisorsSet.has(s.SUPERV)) continue;
+                if (sellersSet.size > 0 && !sellersSet.has(s.NOME)) continue;
+                if (suppliersSet.size > 0 && !suppliersSet.has(s.CODFOR)) continue;
+
+                const codCli = String(s.CODCLI);
+                // Check if client is in allowed list (Active/Filtered)
+                // Note: User said "todos os clientes que possuírem metas OU vendas".
+                // If a client has sales but was filtered out by "Active" check (e.g. Inactive RCA), should they appear?
+                // Usually yes, sales override status.
+                // However, we are filtering by Supervisor/Seller above.
+
+                // Logic: If I filtered by Supervisor X, and Sale is by Supervisor X, I include it.
+                // But do I include the Client Object?
+                // If the client wasn't in 'clients' array (e.g. RCA 53?), we might miss metadata.
+                // We should fetch client metadata from allClientsData map if missing.
+
+                if (!clientMap.has(codCli)) {
+                    // Try to find client object
+                    const clientObj = clientMapForKPIs.get(codCli) || { 'Código': codCli, nomeCliente: 'DESCONHECIDO', cidade: 'N/A', rca1: 'N/A' };
+                    // If we apply STRICT Supervisor/Seller filter, we should check if this sale matches.
+                    // We already checked sale attributes above. So this sale is valid for the view.
+                    clientMap.set(codCli, { clientObj: clientObj, goal: 0, salesTotal: 0, salesWeeks: new Array(weeks.length).fill(0) });
+                }
+
+                const entry = clientMap.get(codCli);
+                const val = Number(s.VLVENDA) || 0;
+                const weekIdx = getWeekIndex(d);
+
+                entry.salesTotal += val;
+                if (weekIdx !== -1) entry.salesWeeks[weekIdx] += val;
+            }
+
+            // 3. Transform to Array and Calculate Dynamic Goals
+            const results = [];
+            clientMap.forEach((data, codCli) => {
+                // Filter out if No Goal AND No Sales (Clean up empty active clients)
+                if (data.goal === 0 && data.salesTotal === 0) return;
+
+                const adjustedGoals = calculateAdjustedWeeklyGoals(data.goal, data.salesWeeks, weeks);
+
+                const weekData = weeks.map((w, i) => {
+                    return { meta: adjustedGoals[i], real: data.salesWeeks[i] };
+                });
+
+                // Resolve Vendor Name
+                let vendorName = 'N/A';
+                const rcaCode = (data.clientObj.rcas && data.clientObj.rcas.length > 0) ? data.clientObj.rcas[0] : (data.clientObj.rca1 || 'N/A');
+                if (rcaCode !== 'N/A') {
+                    vendorName = optimizedData.rcaNameByCode.get(String(rcaCode)) || rcaCode;
+                }
+
+                results.push({
+                    codcli: codCli,
+                    razaoSocial: data.clientObj.nomeCliente || data.clientObj.razaoSocial || 'N/A',
+                    cidade: data.clientObj.cidade || 'N/A',
+                    vendedor: vendorName,
+                    metaTotal: data.goal,
+                    realTotal: data.salesTotal,
+                    weekData: weekData
+                });
+            });
+
+            // Sort: High Potential? High Sales?
+            // Default: Meta Descending, then Sales Descending
+            results.sort((a, b) => b.metaTotal - a.metaTotal || b.realTotal - a.realTotal);
+
+            return results;
+        }
+
+        function renderMetaRealizadoClientsTable(data, weeks) {
+            const tableHead = document.getElementById('meta-realizado-clients-table-head');
+            const tableBody = document.getElementById('meta-realizado-clients-table-body');
+            const controls = document.getElementById('meta-realizado-clients-pagination-controls');
+            const infoText = document.getElementById('meta-realizado-clients-page-info-text');
+            const prevBtn = document.getElementById('meta-realizado-clients-prev-page-btn');
+            const nextBtn = document.getElementById('meta-realizado-clients-next-page-btn');
+
+            // 1. Build Headers (Same logic as Seller Table but with Client Info)
+            let headerHTML = `
+                <tr>
+                    <th rowspan="2" class="px-2 py-2 text-center bg-[#161e3d] border-r border-b border-slate-700 w-16">CÓD</th>
+                    <th rowspan="2" class="px-3 py-2 text-left bg-[#161e3d] border-r border-b border-slate-700 min-w-[200px]">CLIENTE</th>
+                    <th rowspan="2" class="px-3 py-2 text-left bg-[#161e3d] border-r border-b border-slate-700 w-32">VENDEDOR</th>
+                    <th rowspan="2" class="px-3 py-2 text-left bg-[#161e3d] border-r border-b border-slate-700 w-32">CIDADE</th>
+                    <th colspan="2" class="px-2 py-1 text-center bg-blue-900/30 text-blue-400 border-r border-slate-700 border-b-0">GERAL</th>
+            `;
+
+            weeks.forEach((week, i) => {
+                headerHTML += `<th colspan="2" class="px-2 py-1 text-center border-r border-slate-700 border-b-0 text-slate-300">SEMANA ${i + 1}</th>`;
+            });
+            headerHTML += `</tr><tr>`;
+
+            headerHTML += `
+                <th class="px-2 py-2 text-right bg-blue-900/20 text-blue-300 border-r border-b border-slate-700/50 text-[10px]">META</th>
+                <th class="px-2 py-2 text-right bg-blue-900/20 text-blue-100 font-bold border-r border-b border-slate-700 text-[10px]">REALIZADO</th>
+            `;
+
+            weeks.forEach(() => {
+                headerHTML += `
+                    <th class="px-2 py-2 text-right border-r border-b border-slate-700/50 text-slate-400 text-[10px]">META</th>
+                    <th class="px-2 py-2 text-right border-r border-b border-slate-700 text-white font-bold text-[10px]">REAL.</th>
+                `;
+            });
+            headerHTML += `</tr>`;
+
+            tableHead.innerHTML = headerHTML;
+
+            // 2. Pagination Logic
+            const startIndex = (metaRealizadoClientsTableState.currentPage - 1) * metaRealizadoClientsTableState.itemsPerPage;
+            const endIndex = startIndex + metaRealizadoClientsTableState.itemsPerPage;
+            const pageData = metaRealizadoClientsTableState.filteredData.slice(startIndex, endIndex);
+
+            // 3. Build Body
+            if (pageData.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="${6 + (weeks.length * 2)}" class="px-4 py-8 text-center text-slate-500">Nenhum cliente encontrado com os filtros atuais.</td></tr>`;
+            } else {
+                const rowsHTML = pageData.map(row => {
+                    const metaTotalStr = row.metaTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                    const realTotalStr = row.realTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+                    let cells = `
+                        <td class="px-2 py-2 text-center text-slate-400 text-xs border-r border-b border-slate-700">${row.codcli}</td>
+                        <td class="px-3 py-2 text-xs font-medium text-slate-200 border-r border-b border-slate-700 truncate" title="${escapeHtml(row.razaoSocial)}">${escapeHtml(row.razaoSocial)}</td>
+                        <td class="px-3 py-2 text-xs text-slate-400 border-r border-b border-slate-700 truncate">${escapeHtml(getFirstName(row.vendedor))}</td>
+                        <td class="px-3 py-2 text-xs text-slate-400 border-r border-b border-slate-700 truncate">${escapeHtml(row.cidade)}</td>
+                        <td class="px-2 py-2 text-right bg-blue-900/10 text-teal-400 border-r border-b border-slate-700/50 text-xs">${metaTotalStr}</td>
+                        <td class="px-2 py-2 text-right bg-blue-900/10 text-yellow-400 font-bold border-r border-b border-slate-700 text-xs">${realTotalStr}</td>
+                    `;
+
+                    row.weekData.forEach(w => {
+                        const wMetaStr = w.meta.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                        const wRealStr = w.real.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                        const realClass = w.real >= w.meta && w.meta > 0 ? 'text-green-400' : 'text-slate-300';
+
+                        cells += `
+                            <td class="px-2 py-3 text-right text-slate-400 text-xs border-r border-b border-slate-700">${wMetaStr}</td>
+                            <td class="px-2 py-3 text-right ${realClass} text-xs font-medium border-r border-b border-slate-700">${wRealStr}</td>
+                        `;
+                    });
+
+                    return `<tr class="hover:bg-slate-700/30 transition-colors">${cells}</tr>`;
+                }).join('');
+                tableBody.innerHTML = rowsHTML;
+            }
+
+            // 4. Update Pagination Controls
+            if (metaRealizadoClientsTableState.filteredData.length > 0) {
+                infoText.textContent = `Página ${metaRealizadoClientsTableState.currentPage} de ${metaRealizadoClientsTableState.totalPages} (Total: ${metaRealizadoClientsTableState.filteredData.length} clientes)`;
+                prevBtn.disabled = metaRealizadoClientsTableState.currentPage === 1;
+                nextBtn.disabled = metaRealizadoClientsTableState.currentPage === metaRealizadoClientsTableState.totalPages;
+                controls.classList.remove('hidden');
+            } else {
+                controls.classList.add('hidden');
+            }
         }
 
         function getMetricsForSupervisors(supervisorsList) {
@@ -11951,6 +12236,20 @@ const supervisorGroups = new Map();
                 if (!metaRealizadoSupplierFilterBtn.contains(e.target) && !metaRealizadoSupplierFilterDropdown.contains(e.target)) metaRealizadoSupplierFilterDropdown.classList.add('hidden');
             });
 
+            // Pagination Listeners for Meta Realizado Clients Table
+            document.getElementById('meta-realizado-clients-prev-page-btn').addEventListener('click', () => {
+                if (metaRealizadoClientsTableState.currentPage > 1) {
+                    metaRealizadoClientsTableState.currentPage--;
+                    updateMetaRealizadoView();
+                }
+            });
+            document.getElementById('meta-realizado-clients-next-page-btn').addEventListener('click', () => {
+                if (metaRealizadoClientsTableState.currentPage < metaRealizadoClientsTableState.totalPages) {
+                    metaRealizadoClientsTableState.currentPage++;
+                    updateMetaRealizadoView();
+                }
+            });
+
 
             const updateMix = () => {
                 markDirty('mix');
@@ -12311,7 +12610,17 @@ const supervisorGroups = new Map();
         // Initialize Meta Vs Realizado Filters
         selectedMetaRealizadoSupervisors = updateSupervisorFilter(document.getElementById('meta-realizado-supervisor-filter-dropdown'), document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
         updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, allSalesData);
-        selectedMetaRealizadoSuppliers = updateSupplierFilter(document.getElementById('meta-realizado-supplier-filter-dropdown'), document.getElementById('meta-realizado-supplier-filter-text'), selectedMetaRealizadoSuppliers, [...allSalesData, ...allHistoryData], 'metaRealizado');
+
+        // Fix: Pre-filter Suppliers for Meta Realizado (Only PEPSICO)
+        const pepsicoSuppliersSource = [...allSalesData, ...allHistoryData].filter(s => {
+            let rowPasta = s.OBSERVACAOFOR;
+            if (!rowPasta || rowPasta === '0' || rowPasta === '00' || rowPasta === 'N/A') {
+                 const rawFornecedor = String(s.FORNECEDOR || '').toUpperCase();
+                 rowPasta = rawFornecedor.includes('PEPSICO') ? 'PEPSICO' : 'MULTIMARCAS';
+            }
+            return rowPasta === 'PEPSICO';
+        });
+        selectedMetaRealizadoSuppliers = updateSupplierFilter(document.getElementById('meta-realizado-supplier-filter-dropdown'), document.getElementById('meta-realizado-supplier-filter-text'), selectedMetaRealizadoSuppliers, pepsicoSuppliersSource, 'metaRealizado');
 
         updateAllComparisonFilters();
 
@@ -12364,3 +12673,90 @@ const supervisorGroups = new Map();
             navigateTo('dashboard');
         }
         renderTable(aggregatedOrders);
+        // Helper to redistribute weekly goals
+        function calculateAdjustedWeeklyGoals(totalGoal, realizedByWeek, weeks) {
+            let adjustedGoals = new Array(weeks.length).fill(0);
+            let remainingWorkingDays = 0;
+            let pastDifference = 0;
+            let totalWorkingDays = weeks.reduce((sum, w) => sum + w.workingDays, 0);
+            if (totalWorkingDays === 0) totalWorkingDays = 1;
+
+            const currentDate = lastSaleDate; // Global context
+
+            // 1. First Pass: Identify Past Weeks and Calculate Initial Diff
+            weeks.forEach((week, i) => {
+                // Determine if week is fully past
+                // A week is "past" if its END date is strictly BEFORE the currentDate (ignoring time)
+                // Note: user said "check if first week passed... then redistribute difference".
+                // If we are IN week 2, week 1 is past.
+                // Assuming lastSaleDate represents "today".
+
+                const isPast = week.end < currentDate;
+                const dailyGoal = totalGoal / totalWorkingDays;
+                let originalWeekGoal = dailyGoal * week.workingDays;
+
+                if (isPast) {
+                    // Week is closed. The goal is fixed? No, the user says:
+                    // "case in the first week the goal that was 40k wasn't hit (realized 30k), the 10k missing must be reassigned"
+                    // This implies the "Goal" for the past week stays as original or realized?
+                    // Usually in these reports, you show the original goal for past weeks, and the *future* weeks get adjusted.
+                    // Or does the user want to see the "gap" moved?
+                    // "the 10.000 missing must be reassigned to other weeks"
+                    // This means the TARGET for future weeks increases. The displayed Goal for past week usually remains static (Original) so you can see the failure.
+                    // HOWEVER, if I change the future goals, the sum of all displayed goals will be Total Goal.
+                    // If I show Original Goal for W1 (40k) and Realized (30k), I have a deficit of 10k.
+                    // If I add 10k to W2, W3, W4...
+                    // The sum of displayed goals would be: 40k (W1) + (Original W2 + share of 10k) + ... = Total Goal + 10k.
+                    // This is mathmatically wrong if "Meta Total" column shows the fixed monthly target.
+                    // BUT, dynamic planning often works this way: "To hit the month, now I need to do X".
+                    // The user said: "as colunas onde mostram as metas por semana fossem dinâmicas de acordo com o realizado"
+
+                    // Let's assume:
+                    // Displayed Goal for Past Week = Original Proportional Goal (so you can see the variance).
+                    // Displayed Goal for Future Week = Original + Redistribution.
+
+                    adjustedGoals[i] = originalWeekGoal;
+                    const realized = realizedByWeek[i] || 0;
+                    pastDifference += (originalWeekGoal - realized); // Positive if deficit, Negative if surplus
+                } else {
+                    remainingWorkingDays += week.workingDays;
+                }
+            });
+
+            // 2. Second Pass: Distribute Difference to Future Weeks
+            if (remainingWorkingDays > 0) {
+                weeks.forEach((week, i) => {
+                    const isPast = week.end < currentDate;
+                    if (!isPast) {
+                        const dailyGoal = totalGoal / totalWorkingDays;
+                        const originalWeekGoal = dailyGoal * week.workingDays;
+
+                        // Distribute pastDifference proportionally to this week's weight in remaining time
+                        const share = pastDifference * (week.workingDays / remainingWorkingDays);
+
+                        // New Goal = Original + Share
+                        // If deficit (pos), goal increases. If surplus (neg), goal decreases.
+                        let newGoal = originalWeekGoal + share;
+
+                        // Prevent negative goals? (Extreme surplus)
+                        if (newGoal < 0) newGoal = 0;
+
+                        adjustedGoals[i] = newGoal;
+                    }
+                });
+            } else {
+                // If no remaining days (month over), the deficit just sits there (or we add to last week?)
+                // Usually just leave as is.
+                weeks.forEach((week, i) => {
+                    const isPast = week.end < currentDate;
+                    if (!isPast) {
+                         // Should not happen if logic is correct, unless current date is before start of month?
+                         // If we are strictly before month starts, remaining = total. Loop above handles it (pastDifference=0).
+                         const dailyGoal = totalGoal / totalWorkingDays;
+                         adjustedGoals[i] = dailyGoal * week.workingDays;
+                    }
+                });
+            }
+
+            return adjustedGoals;
+        }
