@@ -3058,22 +3058,28 @@
             // Build Headers
             let headerHTML = `
                 <tr>
-                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-left border-r border-b border-slate-700 w-48 sticky left-0 z-50">Vendedor</th>
-                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-center border-r border-b border-slate-700 w-32">Meta Total</th>
-                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-center border-r border-b border-slate-700 w-32">Realizado Total</th>
+                    <th rowspan="2" class="px-3 py-2 text-left bg-[#161e3d] z-50 sticky left-0 border-r border-b border-slate-700 w-32 shadow-lg">VENDEDOR</th>
+                    <th colspan="2" class="px-2 py-1 text-center bg-blue-900/30 text-blue-400 border-r border-slate-700 border-b-0">GERAL</th>
             `;
 
             // Week Headers (Top Row)
             weeks.forEach((week, i) => {
-                headerHTML += `<th colspan="2" class="px-2 py-2 bg-slate-800 text-center border-r border-b border-slate-700">Semana ${i + 1} (${week.workingDays}d)</th>`;
+                headerHTML += `<th colspan="2" class="px-2 py-1 text-center border-r border-slate-700 border-b-0 text-slate-300">SEMANA ${i + 1} (${week.workingDays}d)</th>`;
             });
             headerHTML += `</tr><tr>`;
 
-            // Week Sub-headers (Bottom Row)
+            // Sub-headers Row
+            // Geral Sub-headers
+            headerHTML += `
+                <th class="px-2 py-2 text-right bg-blue-900/20 text-blue-300 border-r border-b border-slate-700/50 text-[10px]">META</th>
+                <th class="px-2 py-2 text-right bg-blue-900/20 text-blue-100 font-bold border-r border-b border-slate-700 text-[10px]">REALIZADO</th>
+            `;
+
+            // Week Sub-headers
             weeks.forEach(() => {
                 headerHTML += `
-                    <th class="px-2 py-2 bg-slate-800/90 text-center border-r border-b border-slate-700 text-[10px] text-slate-400 w-24">Meta</th>
-                    <th class="px-2 py-2 bg-slate-800/90 text-center border-r border-b border-slate-700 text-[10px] text-slate-400 w-24">Realizado</th>
+                    <th class="px-2 py-2 text-right border-r border-b border-slate-700/50 text-slate-400 text-[10px]">META</th>
+                    <th class="px-2 py-2 text-right border-r border-b border-slate-700 text-white font-bold text-[10px]">REAL.</th>
                 `;
             });
             headerHTML += `</tr>`;
@@ -3086,12 +3092,10 @@
                 const metaTotalStr = row.metaTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 const realTotalStr = row.realTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 
-                // Colorize Total Difference? Maybe later.
-                
                 let cells = `
-                    <td class="px-4 py-3 font-medium text-slate-200 border-r border-b border-slate-700 sticky left-0 bg-[#1d2347] z-30 truncate" title="${row.name}">${getFirstName(row.name)}</td>
-                    <td class="px-4 py-3 text-right text-teal-400 font-bold border-r border-b border-slate-700">${metaTotalStr}</td>
-                    <td class="px-4 py-3 text-right text-yellow-400 font-bold border-r border-b border-slate-700">${realTotalStr}</td>
+                    <td class="px-3 py-2 font-medium text-slate-200 border-r border-b border-slate-700 sticky left-0 bg-[#1d2347] z-30 truncate" title="${row.name}">${getFirstName(row.name)}</td>
+                    <td class="px-2 py-2 text-right bg-blue-900/10 text-teal-400 border-r border-b border-slate-700/50 text-xs">${metaTotalStr}</td>
+                    <td class="px-2 py-2 text-right bg-blue-900/10 text-yellow-400 font-bold border-r border-b border-slate-700 text-xs">${realTotalStr}</td>
                 `;
 
                 row.weekData.forEach(w => {
