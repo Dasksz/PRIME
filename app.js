@@ -3055,28 +3055,25 @@
             const tableHead = document.getElementById('meta-realizado-table-head');
             const tableBody = document.getElementById('meta-realizado-table-body');
             
-            // Build Headers with sticky positioning
+            // Build Headers
             let headerHTML = `
                 <tr>
-                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-left border-r border-b border-slate-700 w-48 sticky left-0 z-30" style="top: 0;">Vendedor</th>
-                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-center border-r border-b border-slate-700 w-32 sticky z-20" style="top: 0;">Meta Total</th>
-                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-center border-r border-b border-slate-700 w-32 sticky z-20" style="top: 0;">Realizado Total</th>
+                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-left border-r border-b border-slate-700 w-48 sticky left-0 z-50">Vendedor</th>
+                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-center border-r border-b border-slate-700 w-32">Meta Total</th>
+                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-center border-r border-b border-slate-700 w-32">Realizado Total</th>
             `;
 
-            // Week Headers (Top Row) - Sticky Top 0
+            // Week Headers (Top Row)
             weeks.forEach((week, i) => {
-                headerHTML += `<th colspan="2" class="px-2 py-2 bg-slate-800 text-center border-r border-b border-slate-700 sticky z-20" style="top: 0;">Semana ${i + 1} (${week.workingDays}d)</th>`;
+                headerHTML += `<th colspan="2" class="px-2 py-2 bg-slate-800 text-center border-r border-b border-slate-700">Semana ${i + 1} (${week.workingDays}d)</th>`;
             });
             headerHTML += `</tr><tr>`;
 
-            // Week Sub-headers (Bottom Row) - Sticky Top ~45px (height of first row)
-            // Using approx 41px based on standard padding/font
-            const secondRowTop = "41px"; 
-            
+            // Week Sub-headers (Bottom Row)
             weeks.forEach(() => {
                 headerHTML += `
-                    <th class="px-2 py-2 bg-slate-800/90 text-center border-r border-b border-slate-700 text-[10px] text-slate-400 w-24 sticky z-20" style="top: ${secondRowTop};">Meta</th>
-                    <th class="px-2 py-2 bg-slate-800/90 text-center border-r border-b border-slate-700 text-[10px] text-slate-400 w-24 sticky z-20" style="top: ${secondRowTop};">Realizado</th>
+                    <th class="px-2 py-2 bg-slate-800/90 text-center border-r border-b border-slate-700 text-[10px] text-slate-400 w-24">Meta</th>
+                    <th class="px-2 py-2 bg-slate-800/90 text-center border-r border-b border-slate-700 text-[10px] text-slate-400 w-24">Realizado</th>
                 `;
             });
             headerHTML += `</tr>`;
@@ -3092,7 +3089,7 @@
                 // Colorize Total Difference? Maybe later.
                 
                 let cells = `
-                    <td class="px-4 py-3 font-medium text-slate-200 border-r border-b border-slate-700 sticky left-0 bg-[#1d2347] z-10 truncate" title="${row.name}">${getFirstName(row.name)}</td>
+                    <td class="px-4 py-3 font-medium text-slate-200 border-r border-b border-slate-700 sticky left-0 bg-[#1d2347] z-30 truncate" title="${row.name}">${getFirstName(row.name)}</td>
                     <td class="px-4 py-3 text-right text-teal-400 font-bold border-r border-b border-slate-700">${metaTotalStr}</td>
                     <td class="px-4 py-3 text-right text-yellow-400 font-bold border-r border-b border-slate-700">${realTotalStr}</td>
                 `;
