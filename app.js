@@ -10533,7 +10533,7 @@ const supervisorGroups = new Map();
                         if (viewState.metaRealizado.dirty) {
                             // Initial filter logic if needed, similar to other views
                             selectedMetaRealizadoSupervisors = updateSupervisorFilter(document.getElementById('meta-realizado-supervisor-filter-dropdown'), document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
-                            selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, allSalesData);
+                            selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData]);
                             
                             updateMetaRealizadoView();
                             viewState.metaRealizado.dirty = false;
@@ -11934,12 +11934,12 @@ const supervisorGroups = new Map();
                     if (checked) selectedGoalsGvSupervisors.push(value);
                     else selectedGoalsGvSupervisors = selectedGoalsGvSupervisors.filter(s => s !== value);
 
-                    selectedGoalsGvSupervisors = updateSupervisorFilter(goalsGvSupervisorFilterDropdown, goalsGvSupervisorFilterText, selectedGoalsGvSupervisors, allSalesData, true);
+                    selectedGoalsGvSupervisors = updateSupervisorFilter(goalsGvSupervisorFilterDropdown, goalsGvSupervisorFilterText, selectedGoalsGvSupervisors, [...allSalesData, ...allHistoryData], true);
 
                     // Reset sellers or keep intersection?
                     // Standard: Update Seller Options based on Supervisor
                     selectedGoalsGvSellers = [];
-                    selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, allSalesData);
+                    selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, [...allSalesData, ...allHistoryData]);
 
                     updateGoals();
                 }
@@ -11952,7 +11952,7 @@ const supervisorGroups = new Map();
                     if (checked) selectedGoalsGvSellers.push(value);
                     else selectedGoalsGvSellers = selectedGoalsGvSellers.filter(s => s !== value);
 
-                    selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, allSalesData, true);
+                    selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, [...allSalesData, ...allHistoryData], true);
 
                     updateGoals();
                 }
@@ -12128,7 +12128,7 @@ const supervisorGroups = new Map();
                     
                     // Reset or Filter Sellers
                     selectedMetaRealizadoSellers = [];
-                    selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, allSalesData);
+                    selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData]);
                     
                     debouncedUpdateMetaRealizado();
                 }
@@ -12599,7 +12599,7 @@ const supervisorGroups = new Map();
 
         // Initial Population for Goals Filters
         selectedGoalsGvSupervisors = updateSupervisorFilter(goalsGvSupervisorFilterDropdown, goalsGvSupervisorFilterText, selectedGoalsGvSupervisors, allSalesData);
-        selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, allSalesData);
+        selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, [...allSalesData, ...allHistoryData]);
         // Initialize SV Supervisor filter just in case
         selectedGoalsSvSupervisors = updateSupervisorFilter(goalsSvSupervisorFilterDropdown, goalsSvSupervisorFilterText, selectedGoalsSvSupervisors, allSalesData);
         // Initialize Summary Supervisor Filter
@@ -12609,7 +12609,7 @@ const supervisorGroups = new Map();
 
         // Initialize Meta Vs Realizado Filters
         selectedMetaRealizadoSupervisors = updateSupervisorFilter(document.getElementById('meta-realizado-supervisor-filter-dropdown'), document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
-        updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, allSalesData);
+        updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData]);
 
         // Fix: Pre-filter Suppliers for Meta Realizado (Only PEPSICO)
         const pepsicoSuppliersSource = [...allSalesData, ...allHistoryData].filter(s => {
