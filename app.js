@@ -2825,7 +2825,7 @@
         function getMonthWeeksDistribution(date) {
             const year = date.getUTCFullYear();
             const month = date.getUTCMonth();
-
+            
             // Start of Month
             const startDate = new Date(Date.UTC(year, month, 1));
             // End of Month
@@ -2846,14 +2846,14 @@
                 // However, user said "reconhecer as semanas pelo calendário... De segunda a sexta".
                 // Let's define week chunks.
                 // Logic: A week ends on Saturday (or Sunday).
-
+                
                 // Find next Sunday (or End of Month)
                 let dayOfWeek = currentWeekStart.getUTCDay(); // 0=Sun, 1=Mon...
                 let daysToSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-
+                
                 let currentWeekEnd = new Date(currentWeekStart);
                 currentWeekEnd.setUTCDate(currentWeekStart.getUTCDate() + daysToSunday);
-
+                
                 if (currentWeekEnd > endDate) currentWeekEnd = new Date(endDate);
 
                 // Count Working Days in this chunk
@@ -2995,7 +2995,7 @@
 
             for(let i=0; i<allSalesData.length; i++) {
                 const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
-
+                
                 // Date Filter
                 const d = typeof s.DTPED === 'number' ? new Date(s.DTPED) : parseDate(s.DTPED);
                 if (!d || d.getUTCMonth() !== currentMonthIndex || d.getUTCFullYear() !== currentYear) continue;
@@ -3019,7 +3019,7 @@
                 // "Meta Vs Realizado" implies comparing the same entity.
                 // If I filter Supervisor "X", I show Seller Goals for X and Seller Sales for X.
                 // Let's use the standard filter logic:
-
+                
                 if (supervisorsSet.size > 0 && !supervisorsSet.has(s.SUPERV)) continue;
                 if (sellersSet.size > 0 && !sellersSet.has(s.NOME)) continue;
                 if (suppliersSet.size > 0 && !suppliersSet.has(s.CODFOR)) continue;
@@ -3044,30 +3044,33 @@
         function renderMetaRealizadoTable(data, weeks, totalWorkingDays) {
             const tableHead = document.getElementById('meta-realizado-table-head');
             const tableBody = document.getElementById('meta-realizado-table-body');
-
-            // Build Headers
+            
+            // Build Headers with sticky positioning
             let headerHTML = `
                 <tr>
-                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-left border-r border-b border-slate-700 w-48 sticky left-0 z-20">Vendedor</th>
-                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-center border-r border-b border-slate-700 w-32">Meta Total</th>
-                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-center border-r border-b border-slate-700 w-32">Realizado Total</th>
+                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-left border-r border-b border-slate-700 w-48 sticky left-0 z-30" style="top: 0;">Vendedor</th>
+                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-center border-r border-b border-slate-700 w-32 sticky z-20" style="top: 0;">Meta Total</th>
+                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-center border-r border-b border-slate-700 w-32 sticky z-20" style="top: 0;">Realizado Total</th>
             `;
 
-            // Week Headers (Top Row)
+            // Week Headers (Top Row) - Sticky Top 0
             weeks.forEach((week, i) => {
-                headerHTML += `<th colspan="2" class="px-2 py-2 bg-slate-800 text-center border-r border-b border-slate-700">Semana ${i + 1} (${week.workingDays}d)</th>`;
+                headerHTML += `<th colspan="2" class="px-2 py-2 bg-slate-800 text-center border-r border-b border-slate-700 sticky z-20" style="top: 0;">Semana ${i + 1} (${week.workingDays}d)</th>`;
             });
             headerHTML += `</tr><tr>`;
 
-            // Week Sub-headers (Bottom Row)
+            // Week Sub-headers (Bottom Row) - Sticky Top ~45px (height of first row)
+            // Using approx 41px based on standard padding/font
+            const secondRowTop = "41px"; 
+            
             weeks.forEach(() => {
                 headerHTML += `
-                    <th class="px-2 py-2 bg-slate-800/80 text-center border-r border-b border-slate-700 text-[10px] text-slate-400 w-24">Meta</th>
-                    <th class="px-2 py-2 bg-slate-800/80 text-center border-r border-b border-slate-700 text-[10px] text-slate-400 w-24">Realizado</th>
+                    <th class="px-2 py-2 bg-slate-800/90 text-center border-r border-b border-slate-700 text-[10px] text-slate-400 w-24 sticky z-20" style="top: ${secondRowTop};">Meta</th>
+                    <th class="px-2 py-2 bg-slate-800/90 text-center border-r border-b border-slate-700 text-[10px] text-slate-400 w-24 sticky z-20" style="top: ${secondRowTop};">Realizado</th>
                 `;
             });
             headerHTML += `</tr>`;
-
+            
             tableHead.innerHTML = headerHTML;
 
             // Build Body
@@ -3075,9 +3078,9 @@
             const rowsHTML = data.map(row => {
                 const metaTotalStr = row.metaTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 const realTotalStr = row.realTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
+                
                 // Colorize Total Difference? Maybe later.
-
+                
                 let cells = `
                     <td class="px-4 py-3 font-medium text-slate-200 border-r border-b border-slate-700 sticky left-0 bg-[#1d2347] z-10 truncate" title="${row.name}">${getFirstName(row.name)}</td>
                     <td class="px-4 py-3 text-right text-teal-400 font-bold border-r border-b border-slate-700">${metaTotalStr}</td>
@@ -3087,7 +3090,7 @@
                 row.weekData.forEach(w => {
                     const wMetaStr = w.meta.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                     const wRealStr = w.real.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
+                    
                     // Simple logic: Green if Real >= Meta, Red if Real < Meta (only if week has passed? Or always?)
                     // Let's keep it neutral for now or simple colors.
                     const realClass = w.real >= w.meta ? 'text-green-400' : 'text-slate-300';
@@ -3111,37 +3114,37 @@
             // Destroy previous chart if exists (assume we store it in charts object)
             // Wait, createChart helper handles destruction if we pass ID. But here we have container ID.
             // Let's use a canvas inside the container.
-
+            
             let canvas = ctx.querySelector('canvas');
             if (!canvas) {
                 canvas = document.createElement('canvas');
                 ctx.appendChild(canvas);
             }
-
+            
             const chartId = 'metaRealizadoChartInstance';
             if (charts[chartId]) {
                 charts[chartId].destroy();
             }
 
-            const labels = data.map(d => getFirstName(d.name));
-            const metaValues = data.map(d => d.metaTotal);
-            const realValues = data.map(d => d.realTotal);
+            // Aggregate totals for the chart (Total Meta vs Total Realizado)
+            const totalMeta = data.reduce((sum, d) => sum + d.metaTotal, 0);
+            const totalReal = data.reduce((sum, d) => sum + d.realTotal, 0);
 
             charts[chartId] = new Chart(canvas, {
                 type: 'bar',
                 data: {
-                    labels: labels,
+                    labels: ['Total'],
                     datasets: [
                         {
                             label: 'Meta',
-                            data: metaValues,
+                            data: [totalMeta],
                             backgroundColor: '#14b8a6', // Teal
                             barPercentage: 0.6,
                             categoryPercentage: 0.8
                         },
                         {
                             label: 'Realizado',
-                            data: realValues,
+                            data: [totalReal],
                             backgroundColor: '#f59e0b', // Amber/Yellow
                             barPercentage: 0.6,
                             categoryPercentage: 0.8
@@ -3189,7 +3192,7 @@
         function updateMetaRealizadoView() {
             // 1. Get Data
             const { goalsBySeller, salesBySeller, weeks } = getMetaRealizadoFilteredData();
-
+            
             // Re-calculate Total Working Days from the calculated weeks structure to be consistent
             let totalWorkingDays = 0;
             weeks.forEach(w => totalWorkingDays += w.workingDays);
@@ -3204,9 +3207,9 @@
             allSellers.forEach(sellerName => {
                 const totalGoal = goalsBySeller.get(sellerName) || 0;
                 const salesData = salesBySeller.get(sellerName) || { total: 0, weeks: [] };
-
+                
                 const dailyGoal = totalGoal / totalWorkingDays;
-
+                
                 const weekData = weeks.map((w, i) => {
                     const wMeta = dailyGoal * w.workingDays;
                     const wReal = salesData.weeks[i] || 0;
@@ -10235,7 +10238,7 @@ const supervisorGroups = new Map();
                             // Initial filter logic if needed, similar to other views
                             selectedMetaRealizadoSupervisors = updateSupervisorFilter(document.getElementById('meta-realizado-supervisor-filter-dropdown'), document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
                             selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, allSalesData);
-
+                            
                             updateMetaRealizadoView();
                             viewState.metaRealizado.dirty = false;
                         }
@@ -11826,11 +11829,11 @@ const supervisorGroups = new Map();
                     else selectedMetaRealizadoSupervisors = selectedMetaRealizadoSupervisors.filter(s => s !== value);
 
                     selectedMetaRealizadoSupervisors = updateSupervisorFilter(metaRealizadoSupervisorFilterDropdown, document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
-
+                    
                     // Reset or Filter Sellers
                     selectedMetaRealizadoSellers = [];
                     selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, allSalesData);
-
+                    
                     debouncedUpdateMetaRealizado();
                 }
             });
@@ -11876,7 +11879,7 @@ const supervisorGroups = new Map();
                         if (currentMetaRealizadoPasta !== pasta) {
                             currentMetaRealizadoPasta = pasta;
                             metaRealizadoPastaContainer.querySelectorAll('.pasta-btn').forEach(b => b.classList.remove('active', 'bg-slate-500')); // Adjust active style removal
-                            // Standardize toggle logic:
+                            // Standardize toggle logic: 
                             metaRealizadoPastaContainer.querySelectorAll('.pasta-btn').forEach(b => {
                                 if (b.dataset.pasta === pasta) {
                                     b.classList.remove('bg-slate-700');
@@ -11890,7 +11893,7 @@ const supervisorGroups = new Map();
                         }
                     }
                 });
-
+                
                 // Initialize default active button style
                 metaRealizadoPastaContainer.querySelectorAll('.pasta-btn').forEach(b => {
                     if (b.dataset.pasta === currentMetaRealizadoPasta) {
@@ -11910,7 +11913,7 @@ const supervisorGroups = new Map();
                 // Reset UI
                 updateSupervisorFilter(metaRealizadoSupervisorFilterDropdown, document.getElementById('meta-realizado-supervisor-filter-text'), [], allSalesData);
                 updateSellerFilter([], metaRealizadoSellerFilterDropdown, document.getElementById('meta-realizado-vendedor-filter-text'), [], allSalesData);
-
+                
                 // Reset Supplier UI (Need generic function or manual)
                 // Assuming generic `updateSupplierFilter` usage pattern if available or just reset text
                 document.getElementById('meta-realizado-supplier-filter-text').textContent = 'Todos';
