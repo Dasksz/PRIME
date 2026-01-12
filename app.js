@@ -3045,25 +3045,28 @@
             const tableHead = document.getElementById('meta-realizado-table-head');
             const tableBody = document.getElementById('meta-realizado-table-body');
 
-            // Build Headers
+            // Build Headers with sticky positioning
             let headerHTML = `
                 <tr>
-                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-left border-r border-b border-slate-700 w-48 sticky left-0 z-20">Vendedor</th>
-                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-center border-r border-b border-slate-700 w-32">Meta Total</th>
-                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-center border-r border-b border-slate-700 w-32">Realizado Total</th>
+                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-left border-r border-b border-slate-700 w-48 sticky left-0 z-30" style="top: 0;">Vendedor</th>
+                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-center border-r border-b border-slate-700 w-32 sticky z-20" style="top: 0;">Meta Total</th>
+                    <th rowspan="2" class="px-4 py-3 bg-slate-800 text-center border-r border-b border-slate-700 w-32 sticky z-20" style="top: 0;">Realizado Total</th>
             `;
 
-            // Week Headers (Top Row)
+            // Week Headers (Top Row) - Sticky Top 0
             weeks.forEach((week, i) => {
-                headerHTML += `<th colspan="2" class="px-2 py-2 bg-slate-800 text-center border-r border-b border-slate-700">Semana ${i + 1} (${week.workingDays}d)</th>`;
+                headerHTML += `<th colspan="2" class="px-2 py-2 bg-slate-800 text-center border-r border-b border-slate-700 sticky z-20" style="top: 0;">Semana ${i + 1} (${week.workingDays}d)</th>`;
             });
             headerHTML += `</tr><tr>`;
 
-            // Week Sub-headers (Bottom Row)
+            // Week Sub-headers (Bottom Row) - Sticky Top ~45px (height of first row)
+            // Using approx 41px based on standard padding/font
+            const secondRowTop = "41px";
+
             weeks.forEach(() => {
                 headerHTML += `
-                    <th class="px-2 py-2 bg-slate-800/80 text-center border-r border-b border-slate-700 text-[10px] text-slate-400 w-24">Meta</th>
-                    <th class="px-2 py-2 bg-slate-800/80 text-center border-r border-b border-slate-700 text-[10px] text-slate-400 w-24">Realizado</th>
+                    <th class="px-2 py-2 bg-slate-800/90 text-center border-r border-b border-slate-700 text-[10px] text-slate-400 w-24 sticky z-20" style="top: ${secondRowTop};">Meta</th>
+                    <th class="px-2 py-2 bg-slate-800/90 text-center border-r border-b border-slate-700 text-[10px] text-slate-400 w-24 sticky z-20" style="top: ${secondRowTop};">Realizado</th>
                 `;
             });
             headerHTML += `</tr>`;
@@ -3123,25 +3126,25 @@
                 charts[chartId].destroy();
             }
 
-            const labels = data.map(d => getFirstName(d.name));
-            const metaValues = data.map(d => d.metaTotal);
-            const realValues = data.map(d => d.realTotal);
+            // Aggregate totals for the chart (Total Meta vs Total Realizado)
+            const totalMeta = data.reduce((sum, d) => sum + d.metaTotal, 0);
+            const totalReal = data.reduce((sum, d) => sum + d.realTotal, 0);
 
             charts[chartId] = new Chart(canvas, {
                 type: 'bar',
                 data: {
-                    labels: labels,
+                    labels: ['Total'],
                     datasets: [
                         {
                             label: 'Meta',
-                            data: metaValues,
+                            data: [totalMeta],
                             backgroundColor: '#14b8a6', // Teal
                             barPercentage: 0.6,
                             categoryPercentage: 0.8
                         },
                         {
                             label: 'Realizado',
-                            data: realValues,
+                            data: [totalReal],
                             backgroundColor: '#f59e0b', // Amber/Yellow
                             barPercentage: 0.6,
                             categoryPercentage: 0.8
