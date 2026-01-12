@@ -77,7 +77,13 @@ def test_meta_realizado_view():
         expect(page.locator("#meta-realizado-supervisor-filter-btn")).to_be_visible()
         expect(page.locator("#meta-realizado-vendedor-filter-btn")).to_be_visible()
         expect(page.locator("#meta-realizado-supplier-filter-btn")).to_be_visible()
-        expect(page.locator("button[data-pasta='PEPSICO']")).to_be_visible()
+
+        # VERIFY PASTA BUTTONS (UPDATED)
+        # PEPSICO Should NOT exist
+        expect(page.locator("button[data-pasta='PEPSICO']")).not_to_be_visible()
+        # ELMA and FOODS Should exist
+        expect(page.locator("button[data-pasta='ELMA']")).to_be_visible()
+        expect(page.locator("button[data-pasta='FOODS']")).to_be_visible()
 
         # Verify Chart and Table Containers
         expect(page.locator("#metaRealizadoChartContainer")).to_be_visible()
