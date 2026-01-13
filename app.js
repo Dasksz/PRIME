@@ -763,7 +763,7 @@
                     maintainAspectRatio: false,
                     layout: {
                         padding: {
-                            top: 30
+                            top: 50
                         }
                     },
                     plugins: {
@@ -786,6 +786,7 @@
                     scales: {
                         y: {
                             beginAtZero: true,
+                            grace: '10%',
                             grid: { color: '#334155' },
                             ticks: { color: '#94a3b8' }
                         },
@@ -3295,7 +3296,7 @@
                     maintainAspectRatio: false,
                     layout: {
                         padding: {
-                            top: 30
+                            top: 50
                         }
                     },
                     plugins: {
@@ -3326,6 +3327,7 @@
                     scales: {
                         y: {
                             beginAtZero: true,
+                            grace: '10%',
                             grid: { color: '#334155' },
                             ticks: { color: '#94a3b8' }
                         },
