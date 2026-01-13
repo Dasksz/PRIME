@@ -1613,7 +1613,7 @@
             filteredData: [],
             totalPages: 1
         };
-        let goalsTargets = {
+        var goalsTargets = {
             '707': { fat: 0, vol: 0 },
             '708': { fat: 0, vol: 0 },
             '752': { fat: 0, vol: 0 },
@@ -1623,7 +1623,7 @@
         };
         let globalGoalsMetrics = {};
         let globalGoalsTotalsCache = {};
-        let globalClientGoals = new Map();
+        var globalClientGoals = new Map();
         let goalsPosAdjustments = { 'ELMA_ALL': new Map(), 'FOODS_ALL': new Map(), 'PEPSICO_ALL': new Map(), '707': new Map(), '708': new Map(), '752': new Map(), '1119_TODDYNHO': new Map(), '1119_TODDY': new Map(), '1119_QUAKER_KEROCOCO': new Map() }; // Map<CodCli, Map<Key, {fat: 0, vol: 0}>>
         let goalsMixSaltyAdjustments = { 'PEPSICO_ALL': new Map(), 'ELMA_ALL': new Map(), 'FOODS_ALL': new Map() }; // Map<SellerName, adjustment>
         let goalsMixFoodsAdjustments = { 'PEPSICO_ALL': new Map(), 'ELMA_ALL': new Map(), 'FOODS_ALL': new Map() }; // Map<SellerName, adjustment>
