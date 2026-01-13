@@ -3423,9 +3423,17 @@
                     vendorName = optimizedData.rcaNameByCode.get(String(rcaCode)) || rcaCode;
                 }
 
+                let nomeExibicao = data.clientObj.nomeCliente || data.clientObj.razaoSocial || 'N/A';
+                if (nomeExibicao.toUpperCase().includes('AMERICANAS')) {
+                    const fantasia = data.clientObj.fantasia || data.clientObj.FANTASIA || data.clientObj['Nome Fantasia'];
+                    if (fantasia) {
+                        nomeExibicao = fantasia;
+                    }
+                }
+
                 results.push({
                     codcli: codCli,
-                    razaoSocial: data.clientObj.nomeCliente || data.clientObj.razaoSocial || 'N/A',
+                    razaoSocial: nomeExibicao,
                     cidade: data.clientObj.cidade || 'N/A',
                     vendedor: vendorName,
                     metaTotal: data.goal,
