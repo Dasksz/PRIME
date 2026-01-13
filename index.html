@@ -1429,9 +1429,22 @@
                                 </div>
                             </div>
 
-                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm mb-6">
-                                <h2 class="text-lg font-semibold text-white mb-4 text-center">Meta Vs Realizado</h2>
-                                <div id="metaRealizadoChartContainer" class="relative h-96"></div>
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                                <!-- Gráfico Meta Vs Realizado (Financeiro/Volume) -->
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
+                                    <div class="flex justify-between items-center mb-4">
+                                        <h2 class="text-lg font-semibold text-white">Meta Vs Realizado</h2>
+                                        <div class="flex bg-slate-700 rounded-lg p-1">
+                                            <button id="metaRealizadoMetricToggleBtn" class="metric-btn active px-3 py-1 text-sm rounded-md text-white">R$ / Ton</button>
+                                        </div>
+                                    </div>
+                                    <div id="metaRealizadoChartContainer" class="relative h-96"></div>
+                                </div>
+                                <!-- Gráfico Meta Vs Realizado (Positivação) -->
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
+                                    <h2 class="text-lg font-semibold text-white mb-4 text-center">Meta Vs Realizado (Positivação)</h2>
+                                    <div id="metaRealizadoPosChartContainer" class="relative h-96"></div>
+                                </div>
                             </div>
 
                             <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
