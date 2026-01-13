@@ -709,6 +709,13 @@
                     }
                 }
             });
+
+            if (queuedCount > 0) {
+                console.log(`[GeoSync] Identificados ${queuedCount} clientes sem coordenadas. Iniciando download...`);
+                processNominatimQueue();
+            } else {
+                console.log("[GeoSync] Todos os clientes ativos já possuem coordenadas.");
+            }
         }
 
         function renderMetaRealizadoPosChart(data) {
@@ -785,12 +792,6 @@
                 }
             });
 
-            if (queuedCount > 0) {
-                console.log(`[GeoSync] Identificados ${queuedCount} clientes sem coordenadas. Iniciando download...`);
-                processNominatimQueue();
-            } else {
-                console.log("[GeoSync] Todos os clientes ativos já possuem coordenadas.");
-            }
         }
 
         async function geocodeAddressNominatim(address) {
@@ -3046,7 +3047,7 @@
                         goalsBySeller.set(rcaName, { totalFat: 0, totalVol: 0, totalPos: 0 });
                     }
                     const sellerGoals = goalsBySeller.get(rcaName);
-
+                    
                     if (clientTotalFatGoal > 0) sellerGoals.totalFat += clientTotalFatGoal;
                     if (clientTotalVolGoal > 0) sellerGoals.totalVol += clientTotalVolGoal;
                     if (hasGoal) sellerGoals.totalPos += 1; // Count client as 1 target
@@ -3135,10 +3136,10 @@
                     salesBySeller.set(sellerName, { totalFat: 0, totalVol: 0, weeksFat: [0, 0, 0, 0, 0], weeksVol: [0, 0, 0, 0, 0], totalPos: 0 });
                 }
                 const entry = salesBySeller.get(sellerName);
-
+                
                 entry.totalFat += valFat;
                 entry.totalVol += valVol;
-
+                
                 if (weekIdx !== -1 && weekIdx < 5) {
                     entry.weeksFat[weekIdx] += valFat;
                     entry.weeksVol[weekIdx] += valVol;
@@ -3251,7 +3252,7 @@
 
             // Adjust formatting based on metric
             const isVolume = currentMetaRealizadoMetric === 'peso';
-
+            
             // If Volume, display in Tons (input was Kg)
             const displayTotalMeta = isVolume ? totalMeta / 1000 : totalMeta;
             const displayTotalReal = isVolume ? totalReal / 1000 : totalReal;
@@ -3344,7 +3345,7 @@
             allSellers.forEach(sellerName => {
                 const goals = goalsBySeller.get(sellerName) || { totalFat: 0, totalVol: 0, totalPos: 0 };
                 const sales = salesBySeller.get(sellerName) || { totalFat: 0, totalVol: 0, weeksFat: [], weeksVol: [], totalPos: 0 };
-
+                
                 // Determine which metric to use for the main chart/table
                 // Note: The Table logic (renderMetaRealizadoTable) seems built for ONE metric (previously just Revenue).
                 // If we want the Table to also toggle or show both, we need to adjust it.
@@ -12380,17 +12381,17 @@ const supervisorGroups = new Map();
                         // Let's update text to indicate CURRENT state or NEXT state?
                         // Usually toggle buttons indicate current state.
                         // Let's use: "Faturamento (R$)" and "Volume (Ton)" as labels for clarity, or stick to user image.
-                        // User image: "R$ / Ton".
+                        // User image: "R$ / Ton". 
                         // Let's assume the button text is static "R$ / Ton" and we just toggle state?
                         // No, usually buttons show what is selected.
                         // Let's change text to "Volume (Ton)" when Ton is selected, and "Faturamento (R$)" when R$ is selected?
                         // Or just keep "R$ / Ton" and toggle a visual indicator?
                         // Let's just update the chart and maybe change button style/text slightly.
                     }
-
+                    
                     // Simple Toggle Text Update
                     metaRealizadoMetricToggleBtn.textContent = currentMetaRealizadoMetric === 'valor' ? 'R$ / Ton' : 'Toneladas';
-
+                    
                     updateMetaRealizado();
                 });
             }
