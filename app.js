@@ -12391,6 +12391,11 @@ const supervisorGroups = new Map();
                     
                     // Simple Toggle Text Update
                     metaRealizadoMetricToggleBtn.textContent = currentMetaRealizadoMetric === 'valor' ? 'R$ / Ton' : 'Toneladas';
+
+                    const metaRealizadoChartTitle = document.getElementById('metaRealizadoChartTitle');
+                    if (metaRealizadoChartTitle) {
+                        metaRealizadoChartTitle.textContent = currentMetaRealizadoMetric === 'valor' ? 'Meta Vs Realizado - Faturamento' : 'Meta Vs Realizado - Tonelada';
+                    }
                     
                     updateMetaRealizado();
                 });
