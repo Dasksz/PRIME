@@ -1,3 +1,4 @@
+{
         const embeddedData = window.embeddedData;
 
         // --- OPTIMIZATION: Lazy Columnar Accessor with Write-Back Support ---
@@ -13196,3 +13197,4 @@ const supervisorGroups = new Map();
             });
             return changes;
         }
+}
