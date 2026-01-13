@@ -709,6 +709,81 @@
                     }
                 }
             });
+        }
+
+        function renderMetaRealizadoPosChart(data) {
+            const container = document.getElementById('metaRealizadoPosChartContainer');
+            if (!container) return;
+
+            let canvas = container.querySelector('canvas');
+            if (!canvas) {
+                canvas = document.createElement('canvas');
+                container.appendChild(canvas);
+            }
+
+            const chartId = 'metaRealizadoPosChartInstance';
+            if (charts[chartId]) {
+                charts[chartId].destroy();
+            }
+
+            // Aggregate Totals for Positivação
+            const totalGoal = data.reduce((sum, d) => sum + (d.posGoal || 0), 0);
+            const totalReal = data.reduce((sum, d) => sum + (d.posRealized || 0), 0);
+
+            charts[chartId] = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: ['Positivação'],
+                    datasets: [
+                        {
+                            label: 'Meta',
+                            data: [totalGoal],
+                            backgroundColor: '#a855f7', // Purple
+                            barPercentage: 0.6,
+                            categoryPercentage: 0.8
+                        },
+                        {
+                            label: 'Realizado',
+                            data: [totalReal],
+                            backgroundColor: '#22c55e', // Green
+                            barPercentage: 0.6,
+                            categoryPercentage: 0.8
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top', labels: { color: '#cbd5e1' } },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.parsed.y} Clientes`;
+                                }
+                            }
+                        },
+                        datalabels: {
+                            color: '#fff',
+                            anchor: 'end',
+                            align: 'top',
+                            formatter: (value) => value,
+                            font: { weight: 'bold' }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#334155' },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#94a3b8' }
+                        }
+                    }
+                }
+            });
 
             if (queuedCount > 0) {
                 console.log(`[GeoSync] Identificados ${queuedCount} clientes sem coordenadas. Iniciando download...`);
@@ -1815,6 +1890,7 @@
         let selectedMetaRealizadoSellers = [];
         let selectedMetaRealizadoSuppliers = [];
         let currentMetaRealizadoPasta = 'PEPSICO'; // Default
+        let currentMetaRealizadoMetric = 'valor'; // 'valor' or 'peso'
 
         // let innovationsIncludeBonus = true; // REMOVED
         // let innovationsMonthIncludeBonus = true; // REMOVED
@@ -2929,6 +3005,8 @@
 
             // 2. Goals Aggregation (By Seller)
             // Structure: Map<SellerName, TotalGoal>
+            // 2. Goals Aggregation (By Seller)
+            // Structure: Map<SellerName, { totalFat: 0, totalVol: 0, totalPos: 0 }>
             const goalsBySeller = new Map();
 
             clients.forEach(client => {
@@ -2951,21 +3029,32 @@
 
                 if (globalClientGoals.has(codCli)) {
                     const clientGoals = globalClientGoals.get(codCli);
-                    let clientTotalGoal = 0;
+                    let clientTotalFatGoal = 0;
+                    let clientTotalVolGoal = 0;
+                    let hasGoal = false;
+
                     goalKeys.forEach(k => {
                         if (clientGoals.has(k)) {
-                            clientTotalGoal += (clientGoals.get(k).fat || 0);
+                            const g = clientGoals.get(k);
+                            clientTotalFatGoal += (g.fat || 0);
+                            clientTotalVolGoal += (g.vol || 0);
+                            if ((g.fat || 0) > 0) hasGoal = true;
                         }
                     });
 
-                    if (clientTotalGoal > 0) {
-                        goalsBySeller.set(rcaName, (goalsBySeller.get(rcaName) || 0) + clientTotalGoal);
+                    if (!goalsBySeller.has(rcaName)) {
+                        goalsBySeller.set(rcaName, { totalFat: 0, totalVol: 0, totalPos: 0 });
                     }
+                    const sellerGoals = goalsBySeller.get(rcaName);
+
+                    if (clientTotalFatGoal > 0) sellerGoals.totalFat += clientTotalFatGoal;
+                    if (clientTotalVolGoal > 0) sellerGoals.totalVol += clientTotalVolGoal;
+                    if (hasGoal) sellerGoals.totalPos += 1; // Count client as 1 target
                 }
             });
 
             // 3. Sales Aggregation (By Seller & Week)
-            // Structure: Map<SellerName, { total: 0, weeks: [0, 0, 0, 0, 0] }>
+            // Structure: Map<SellerName, { totalFat: 0, totalVol: 0, weeksFat: [], weeksVol: [] }>
             const salesBySeller = new Map();
             const { weeks } = getMonthWeeksDistribution(lastSaleDate); // Use current global date context
 
@@ -2987,6 +3076,9 @@
             const currentMonthIndex = lastSaleDate.getUTCMonth();
             const currentYear = lastSaleDate.getUTCFullYear();
 
+            // Cache for Positivação Logic (Unique Clients per Seller)
+            const sellerClients = new Map(); // Map<SellerName, Set<CodCli>>
+
             for(let i=0; i<allSalesData.length; i++) {
                 const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
                 
@@ -2994,7 +3086,7 @@
                 const d = typeof s.DTPED === 'number' ? new Date(s.DTPED) : parseDate(s.DTPED);
                 if (!d || d.getUTCMonth() !== currentMonthIndex || d.getUTCFullYear() !== currentYear) continue;
 
-                // Type Filter
+                // Type Filter (Types 5 and 11 excluded)
                 const tipo = String(s.TIPOVENDA);
                 if (tipo === '5' || tipo === '11') continue;
 
@@ -3035,18 +3127,34 @@
                 if (suppliersSet.size > 0 && !suppliersSet.has(s.CODFOR)) continue;
 
                 const sellerName = s.NOME;
-                const val = Number(s.VLVENDA) || 0;
+                const valFat = Number(s.VLVENDA) || 0;
+                const valVol = Number(s.TOTPESOLIQ) || 0;
                 const weekIdx = getWeekIndex(d);
 
                 if (!salesBySeller.has(sellerName)) {
-                    salesBySeller.set(sellerName, { total: 0, weeks: new Array(weeks.length).fill(0) });
+                    salesBySeller.set(sellerName, { totalFat: 0, totalVol: 0, weeksFat: [0, 0, 0, 0, 0], weeksVol: [0, 0, 0, 0, 0], totalPos: 0 });
                 }
                 const entry = salesBySeller.get(sellerName);
-                entry.total += val;
-                if (weekIdx !== -1) {
-                    entry.weeks[weekIdx] += val;
+
+                entry.totalFat += valFat;
+                entry.totalVol += valVol;
+
+                if (weekIdx !== -1 && weekIdx < 5) {
+                    entry.weeksFat[weekIdx] += valFat;
+                    entry.weeksVol[weekIdx] += valVol;
                 }
+
+                // Positivação Logic (Accumulate Clients)
+                if (!sellerClients.has(sellerName)) sellerClients.set(sellerName, new Set());
+                sellerClients.get(sellerName).add(String(s.CODCLI));
             }
+
+            // Finalize Positivação Counts
+            sellerClients.forEach((clientSet, sel) => {
+                if (salesBySeller.has(sel)) {
+                    salesBySeller.get(sel).totalPos = clientSet.size;
+                }
+            });
 
             return { goalsBySeller, salesBySeller, weeks };
         }
@@ -3141,6 +3249,20 @@
             const totalMeta = data.reduce((sum, d) => sum + d.metaTotal, 0);
             const totalReal = data.reduce((sum, d) => sum + d.realTotal, 0);
 
+            // Adjust formatting based on metric
+            const isVolume = currentMetaRealizadoMetric === 'peso';
+
+            // If Volume, display in Tons (input was Kg)
+            const displayTotalMeta = isVolume ? totalMeta / 1000 : totalMeta;
+            const displayTotalReal = isVolume ? totalReal / 1000 : totalReal;
+
+            const formatValue = (val) => {
+                if (isVolume) {
+                    return val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' Ton';
+                }
+                return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            };
+
             charts[chartId] = new Chart(canvas, {
                 type: 'bar',
                 data: {
@@ -3148,14 +3270,14 @@
                     datasets: [
                         {
                             label: 'Meta',
-                            data: [totalMeta],
+                            data: [displayTotalMeta],
                             backgroundColor: '#14b8a6', // Teal
                             barPercentage: 0.6,
                             categoryPercentage: 0.8
                         },
                         {
                             label: 'Realizado',
-                            data: [totalReal],
+                            data: [displayTotalReal],
                             backgroundColor: '#f59e0b', // Amber/Yellow
                             barPercentage: 0.6,
                             categoryPercentage: 0.8
@@ -3175,7 +3297,7 @@
                                         label += ': ';
                                     }
                                     if (context.parsed.y !== null) {
-                                        label += context.parsed.y.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                                        label += formatValue(context.parsed.y);
                                     }
                                     return label;
                                 }
@@ -3220,25 +3342,49 @@
             const rowData = [];
 
             allSellers.forEach(sellerName => {
-                const totalGoal = goalsBySeller.get(sellerName) || 0;
-                const salesData = salesBySeller.get(sellerName) || { total: 0, weeks: [] };
+                const goals = goalsBySeller.get(sellerName) || { totalFat: 0, totalVol: 0, totalPos: 0 };
+                const sales = salesBySeller.get(sellerName) || { totalFat: 0, totalVol: 0, weeksFat: [], weeksVol: [], totalPos: 0 };
+
+                // Determine which metric to use for the main chart/table
+                // Note: The Table logic (renderMetaRealizadoTable) seems built for ONE metric (previously just Revenue).
+                // If we want the Table to also toggle or show both, we need to adjust it.
+                // Given the requirement "toggle button for R$/Ton", let's make the Table adhere to that too.
                 
-                // Calculate Dynamic Weekly Goals
-                // We need realized by week array. salesData.weeks might be sparse or undefined.
-                const realizedByWeek = salesData.weeks || [];
-                const adjustedGoals = calculateAdjustedWeeklyGoals(totalGoal, realizedByWeek, weeks);
+                let targetTotalGoal = 0;
+                let targetRealizedTotal = 0;
+                let targetRealizedWeeks = [];
+
+                if (currentMetaRealizadoMetric === 'valor') {
+                    targetTotalGoal = goals.totalFat;
+                    targetRealizedTotal = sales.totalFat;
+                    targetRealizedWeeks = sales.weeksFat || [];
+                } else {
+                    targetTotalGoal = goals.totalVol; // Kg
+                    targetRealizedTotal = sales.totalVol; // Kg
+                    targetRealizedWeeks = sales.weeksVol || [];
+                }
+
+                // Positivação Data
+                const posGoal = goals.totalPos;
+                const posRealized = sales.totalPos;
+
+                // Calculate Dynamic Weekly Goals (For the selected metric)
+                const adjustedGoals = calculateAdjustedWeeklyGoals(targetTotalGoal, targetRealizedWeeks, weeks);
 
                 const weekData = weeks.map((w, i) => {
                     const wMeta = adjustedGoals[i];
-                    const wReal = realizedByWeek[i] || 0;
+                    const wReal = targetRealizedWeeks[i] || 0;
                     return { meta: wMeta, real: wReal };
                 });
 
                 rowData.push({
                     name: sellerName,
-                    metaTotal: totalGoal,
-                    realTotal: salesData.total,
-                    weekData: weekData
+                    metaTotal: targetTotalGoal,
+                    realTotal: targetRealizedTotal,
+                    weekData: weekData,
+                    // Additional Data for Positivação Chart
+                    posGoal: posGoal,
+                    posRealized: posRealized
                 });
             });
 
@@ -3247,7 +3393,8 @@
 
             // 3. Render Sellers Table & Chart
             renderMetaRealizadoTable(rowData, weeks, totalWorkingDays);
-            renderMetaRealizadoChart(rowData);
+            renderMetaRealizadoChart(rowData); // Chart 1 (Selected Metric)
+            renderMetaRealizadoPosChart(rowData); // Chart 2 (Positivação)
 
             // 4. Clients Table Processing
             const clientsData = getMetaRealizadoClientsData(weeks);
@@ -12210,6 +12357,41 @@ const supervisorGroups = new Map();
                         b.classList.remove('bg-slate-700');
                         b.classList.add('bg-teal-600', 'hover:bg-teal-500');
                     }
+                });
+            }
+
+            // Toggle Metric Logic
+            const metaRealizadoMetricToggleBtn = document.getElementById('metaRealizadoMetricToggleBtn');
+            if (metaRealizadoMetricToggleBtn) {
+                metaRealizadoMetricToggleBtn.addEventListener('click', () => {
+                    if (currentMetaRealizadoMetric === 'valor') {
+                        currentMetaRealizadoMetric = 'peso';
+                        metaRealizadoMetricToggleBtn.textContent = 'Toneladas';
+                        metaRealizadoMetricToggleBtn.classList.remove('active', 'text-white');
+                        metaRealizadoMetricToggleBtn.classList.add('text-slate-300'); // Inactive style? No, it's a toggle button.
+                        // Better style: keep active but change text? Or standard toggle behavior?
+                        // User image shows "R$ / Ton". It implies a switch.
+                        // Let's toggle between states.
+                    } else {
+                        currentMetaRealizadoMetric = 'valor';
+                        metaRealizadoMetricToggleBtn.textContent = 'R$ / Ton'; // Or 'Faturamento'? Image says "R$ / Ton" likely meaning the button label is static or toggles?
+                        // "gostaria de ter um botão desse da imagem, deve ter a função de alternar entre R$ e Tonelada"
+                        // The image shows "R$ / Ton". It might be a label for the button that cycles?
+                        // Let's update text to indicate CURRENT state or NEXT state?
+                        // Usually toggle buttons indicate current state.
+                        // Let's use: "Faturamento (R$)" and "Volume (Ton)" as labels for clarity, or stick to user image.
+                        // User image: "R$ / Ton".
+                        // Let's assume the button text is static "R$ / Ton" and we just toggle state?
+                        // No, usually buttons show what is selected.
+                        // Let's change text to "Volume (Ton)" when Ton is selected, and "Faturamento (R$)" when R$ is selected?
+                        // Or just keep "R$ / Ton" and toggle a visual indicator?
+                        // Let's just update the chart and maybe change button style/text slightly.
+                    }
+
+                    // Simple Toggle Text Update
+                    metaRealizadoMetricToggleBtn.textContent = currentMetaRealizadoMetric === 'valor' ? 'R$ / Ton' : 'Toneladas';
+
+                    updateMetaRealizado();
                 });
             }
 
