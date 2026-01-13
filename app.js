@@ -3220,9 +3220,10 @@
                     // Simple logic: Green if Real >= Meta, Red if Real < Meta (only if week has passed? Or always?)
                     // Let's keep it neutral for now or simple colors.
                     const realClass = w.real >= w.meta ? 'text-green-400' : 'text-slate-300';
+                    const metaClass = w.isPast ? 'text-red-500' : 'text-slate-400';
 
                     cells += `
-                        <td class="px-2 py-3 text-right text-slate-400 text-xs border-r border-b border-slate-700">${wMetaStr}</td>
+                        <td class="px-2 py-3 text-right ${metaClass} text-xs border-r border-b border-slate-700">${wMetaStr}</td>
                         <td class="px-2 py-3 text-right ${realClass} text-xs font-medium border-r border-b border-slate-700">${wRealStr}</td>
                     `;
                 });
@@ -3392,7 +3393,8 @@
                 const weekData = weeks.map((w, i) => {
                     const wMeta = adjustedGoals[i];
                     const wReal = targetRealizedWeeks[i] || 0;
-                    return { meta: wMeta, real: wReal };
+                    const isPast = w.end < lastSaleDate;
+                    return { meta: wMeta, real: wReal, isPast: isPast };
                 });
 
                 rowData.push({
@@ -3578,7 +3580,8 @@
                 const adjustedGoals = calculateAdjustedWeeklyGoals(data.goal, data.salesWeeks, weeks);
 
                 const weekData = weeks.map((w, i) => {
-                    return { meta: adjustedGoals[i], real: data.salesWeeks[i] };
+                    const isPast = w.end < lastSaleDate;
+                    return { meta: adjustedGoals[i], real: data.salesWeeks[i], isPast: isPast };
                 });
 
                 // Resolve Vendor Name
@@ -3678,9 +3681,10 @@
                         const wMetaStr = w.meta.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                         const wRealStr = w.real.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                         const realClass = w.real >= w.meta && w.meta > 0 ? 'text-green-400' : 'text-slate-300';
+                        const metaClass = w.isPast ? 'text-red-500' : 'text-slate-400';
 
                         cells += `
-                            <td class="px-2 py-3 text-right text-slate-400 text-xs border-r border-b border-slate-700">${wMetaStr}</td>
+                            <td class="px-2 py-3 text-right ${metaClass} text-xs border-r border-b border-slate-700">${wMetaStr}</td>
                             <td class="px-2 py-3 text-right ${realClass} text-xs font-medium border-r border-b border-slate-700">${wRealStr}</td>
                         `;
                     });
