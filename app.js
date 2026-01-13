@@ -709,6 +709,13 @@
                     }
                 }
             });
+
+            if (queuedCount > 0) {
+                console.log(`[GeoSync] Identificados ${queuedCount} clientes sem coordenadas. Iniciando download...`);
+                processNominatimQueue();
+            } else {
+                console.log("[GeoSync] Todos os clientes ativos já possuem coordenadas.");
+            }
         }
 
         function renderMetaRealizadoPosChart(data) {
@@ -785,12 +792,6 @@
                 }
             });
 
-            if (queuedCount > 0) {
-                console.log(`[GeoSync] Identificados ${queuedCount} clientes sem coordenadas. Iniciando download...`);
-                processNominatimQueue();
-            } else {
-                console.log("[GeoSync] Todos os clientes ativos já possuem coordenadas.");
-            }
         }
 
         async function geocodeAddressNominatim(address) {
