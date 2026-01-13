@@ -1613,7 +1613,7 @@
             filteredData: [],
             totalPages: 1
         };
-        let goalsTargets = {
+        var goalsTargets = {
             '707': { fat: 0, vol: 0 },
             '708': { fat: 0, vol: 0 },
             '752': { fat: 0, vol: 0 },
@@ -1623,7 +1623,7 @@
         };
         let globalGoalsMetrics = {};
         let globalGoalsTotalsCache = {};
-        let globalClientGoals = new Map();
+        var globalClientGoals = new Map();
         let goalsPosAdjustments = { 'ELMA_ALL': new Map(), 'FOODS_ALL': new Map(), 'PEPSICO_ALL': new Map(), '707': new Map(), '708': new Map(), '752': new Map(), '1119_TODDYNHO': new Map(), '1119_TODDY': new Map(), '1119_QUAKER_KEROCOCO': new Map() }; // Map<CodCli, Map<Key, {fat: 0, vol: 0}>>
         let goalsMixSaltyAdjustments = { 'PEPSICO_ALL': new Map(), 'ELMA_ALL': new Map(), 'FOODS_ALL': new Map() }; // Map<SellerName, adjustment>
         let goalsMixFoodsAdjustments = { 'PEPSICO_ALL': new Map(), 'ELMA_ALL': new Map(), 'FOODS_ALL': new Map() }; // Map<SellerName, adjustment>
@@ -12817,14 +12817,14 @@ const supervisorGroups = new Map();
                 importAnalyzeBtn.addEventListener('click', () => {
                     const text = importTextarea.value;
                     const parsed = parseGoalsPaste(text);
-
+                    
                     if (!parsed) {
                         alert("Formato inválido. Certifique-se de copiar os cabeçalhos.");
                         return;
                     }
 
                     pendingChanges = compareGoalsData(parsed);
-
+                    
                     // Render Report
                     analysisBody.innerHTML = '';
                     if (pendingChanges.length === 0) {
@@ -12834,7 +12834,7 @@ const supervisorGroups = new Map();
                         pendingChanges.forEach(change => {
                             const diffClass = change.diff > 0 ? 'text-green-400' : 'text-red-400';
                             const diffIcon = change.diff > 0 ? '▲' : '▼';
-
+                            
                             const row = document.createElement('tr');
                             row.className = 'border-b border-slate-700 hover:bg-slate-800/50';
                             row.innerHTML = `
@@ -12848,7 +12848,7 @@ const supervisorGroups = new Map();
                             `;
                             analysisBody.appendChild(row);
                         });
-
+                        
                         importConfirmBtn.disabled = false;
                         importConfirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
                     }
@@ -12867,14 +12867,14 @@ const supervisorGroups = new Map();
                             globalClientGoals.set(change.codCli, new Map());
                         }
                         const clientMap = globalClientGoals.get(change.codCli);
-
+                        
                         // We update only FAT for now as logic implies value paste
                         // Use existing volume or 0
                         let existingVol = 0;
                         if (clientMap.has(change.key)) {
                             existingVol = clientMap.get(change.key).vol;
                         }
-
+                        
                         clientMap.set(change.key, {
                             fat: change.new,
                             vol: existingVol // Preserve volume
@@ -13093,11 +13093,11 @@ const supervisorGroups = new Map();
             for (let i = 1; i < rows.length; i++) {
                 const cols = rows[i].split(/\t/);
                 const rowObj = {};
-
+                
                 // Map columns
                 // Key identifier: CÓD (or CODIGO, COD)
                 // Values: 707, 708, 752, 1119_TODDYNHO, etc.
-
+                
                 // Basic validation: must have COD
                 let hasCod = false;
 
@@ -13107,7 +13107,7 @@ const supervisorGroups = new Map();
                         let key = h;
                         if (h === 'CÓD' || h === 'CODIGO' || h === 'COD') key = 'CODCLI';
                         // Handle compound keys from export if needed, but usually they match
-
+                        
                         rowObj[key] = cols[idx].trim();
                         if (key === 'CODCLI' && rowObj[key]) hasCod = true;
                     }
@@ -13126,7 +13126,7 @@ const supervisorGroups = new Map();
 
             // Define keys we care about (Targets)
             const targetKeys = [
-                '707', '708', '752',
+                '707', '708', '752', 
                 '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'
             ];
 
@@ -13147,13 +13147,13 @@ const supervisorGroups = new Map();
 
                 // Check against current globalClientGoals
                 const clientGoals = globalClientGoals.get(codCli);
-
+                
                 targetKeys.forEach(key => {
                     let importVal = undefined;
-
+                    
                     // 1. Try direct ID match (e.g. 707)
                     if (row[key] !== undefined) importVal = row[key];
-
+                    
                     // 2. Try Label match (e.g. EXTRUSADOS)
                     if (importVal === undefined) {
                         // Find header that maps to this key
@@ -13169,7 +13169,7 @@ const supervisorGroups = new Map();
                         // Parse value (remove R$, Kg, dots, replace comma)
                         let cleanVal = String(importVal).replace(/[R$\sKg]/g, '').replace(/\./g, '').replace(',', '.');
                         let numVal = parseFloat(cleanVal);
-
+                        
                         if (isNaN(numVal)) return;
 
                         // Get Current Value
