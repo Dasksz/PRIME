@@ -12782,6 +12782,111 @@ const supervisorGroups = new Map();
                     handleStockFilterChange();
                 });
             });
+
+            // --- Import / Paste Modal Logic ---
+            const importBtn = document.getElementById('goals-sv-import-btn');
+            const importModal = document.getElementById('import-goals-modal');
+            const importCloseBtn = document.getElementById('import-goals-close-btn');
+            const importCancelBtn = document.getElementById('import-goals-cancel-btn');
+            const importAnalyzeBtn = document.getElementById('import-goals-analyze-btn');
+            const importConfirmBtn = document.getElementById('import-goals-confirm-btn');
+            const importTextarea = document.getElementById('import-goals-textarea');
+            const analysisContainer = document.getElementById('import-analysis-container');
+            const analysisBody = document.getElementById('import-analysis-table-body');
+            const analysisBadges = document.getElementById('import-summary-badges');
+
+            if (importBtn && importModal) {
+                importBtn.addEventListener('click', () => {
+                    importModal.classList.remove('hidden');
+                    importTextarea.value = '';
+                    importTextarea.focus();
+                    analysisContainer.classList.add('hidden');
+                    importConfirmBtn.disabled = true;
+                    importConfirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                });
+
+                const closeModal = () => {
+                    importModal.classList.add('hidden');
+                };
+
+                importCloseBtn.addEventListener('click', closeModal);
+                importCancelBtn.addEventListener('click', closeModal);
+
+                let pendingChanges = [];
+
+                importAnalyzeBtn.addEventListener('click', () => {
+                    const text = importTextarea.value;
+                    const parsed = parseGoalsPaste(text);
+
+                    if (!parsed) {
+                        alert("Formato inválido. Certifique-se de copiar os cabeçalhos.");
+                        return;
+                    }
+
+                    pendingChanges = compareGoalsData(parsed);
+
+                    // Render Report
+                    analysisBody.innerHTML = '';
+                    if (pendingChanges.length === 0) {
+                        analysisBody.innerHTML = `<tr><td colspan="7" class="text-center p-4 text-slate-400">Nenhuma alteração detectada.</td></tr>`;
+                        importConfirmBtn.disabled = true;
+                    } else {
+                        pendingChanges.forEach(change => {
+                            const diffClass = change.diff > 0 ? 'text-green-400' : 'text-red-400';
+                            const diffIcon = change.diff > 0 ? '▲' : '▼';
+
+                            const row = document.createElement('tr');
+                            row.className = 'border-b border-slate-700 hover:bg-slate-800/50';
+                            row.innerHTML = `
+                                <td class="px-4 py-2 font-mono text-xs text-slate-300">${change.codCli}</td>
+                                <td class="px-4 py-2 text-xs text-slate-400">${change.clientName}</td>
+                                <td class="px-4 py-2 text-xs text-blue-300">${change.key}</td>
+                                <td class="px-4 py-2 text-right text-xs text-slate-500">${change.current.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                <td class="px-4 py-2 text-right text-xs text-white font-bold">${change.new.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                <td class="px-4 py-2 text-right text-xs ${diffClass}">${diffIcon} ${Math.abs(change.diff).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                <td class="px-4 py-2 text-center text-xs"><span class="px-2 py-1 rounded-full bg-yellow-900/50 text-yellow-200 text-[10px]">Pendente</span></td>
+                            `;
+                            analysisBody.appendChild(row);
+                        });
+
+                        importConfirmBtn.disabled = false;
+                        importConfirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    }
+
+                    analysisBadges.innerHTML = `<span class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">${pendingChanges.length} Mudanças</span>`;
+                    analysisContainer.classList.remove('hidden');
+                });
+
+                importConfirmBtn.addEventListener('click', () => {
+                    if (pendingChanges.length === 0) return;
+
+                    let updatedCount = 0;
+                    pendingChanges.forEach(change => {
+                        // Apply Change to Memory
+                        if (!globalClientGoals.has(change.codCli)) {
+                            globalClientGoals.set(change.codCli, new Map());
+                        }
+                        const clientMap = globalClientGoals.get(change.codCli);
+
+                        // We update only FAT for now as logic implies value paste
+                        // Use existing volume or 0
+                        let existingVol = 0;
+                        if (clientMap.has(change.key)) {
+                            existingVol = clientMap.get(change.key).vol;
+                        }
+
+                        clientMap.set(change.key, {
+                            fat: change.new,
+                            vol: existingVol // Preserve volume
+                        });
+                        updatedCount++;
+                    });
+
+                    alert(`${updatedCount} metas atualizadas com sucesso! Não esqueça de clicar em "Salvar Metas" para persistir no banco.`);
+                    closeModal();
+                    updateGoals(); // Refresh UI
+                });
+            }
         }
 
         initializeOptimizedDataStructures();
@@ -12976,4 +13081,118 @@ const supervisorGroups = new Map();
             }
 
             return adjustedGoals;
+        }
+
+        function parseGoalsPaste(text) {
+            const rows = text.trim().split(/\r?\n/);
+            if (rows.length < 2) return null; // Need at least header + 1 row
+
+            const headers = rows[0].split(/\t/).map(h => h.trim().toUpperCase());
+            const data = [];
+
+            for (let i = 1; i < rows.length; i++) {
+                const cols = rows[i].split(/\t/);
+                const rowObj = {};
+
+                // Map columns
+                // Key identifier: CÓD (or CODIGO, COD)
+                // Values: 707, 708, 752, 1119_TODDYNHO, etc.
+
+                // Basic validation: must have COD
+                let hasCod = false;
+
+                headers.forEach((h, idx) => {
+                    if (idx < cols.length) {
+                        // Normalize Header to match internal keys
+                        let key = h;
+                        if (h === 'CÓD' || h === 'CODIGO' || h === 'COD') key = 'CODCLI';
+                        // Handle compound keys from export if needed, but usually they match
+
+                        rowObj[key] = cols[idx].trim();
+                        if (key === 'CODCLI' && rowObj[key]) hasCod = true;
+                    }
+                });
+
+                if (hasCod) {
+                    data.push(rowObj);
+                }
+            }
+            return { headers, data };
+        }
+
+        function compareGoalsData(importedData) {
+            const changes = [];
+            const { headers, data } = importedData;
+
+            // Define keys we care about (Targets)
+            const targetKeys = [
+                '707', '708', '752',
+                '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'
+            ];
+
+            const labelMap = {
+                'EXTRUSADOS': '707',
+                'NÃO EXTRUSADOS': '708',
+                'TORCIDA': '752',
+                'TODDYNHO': '1119_TODDYNHO',
+                'TODDY': '1119_TODDY',
+                'QUAKER / KEROCOCO': '1119_QUAKER_KEROCOCO',
+                'QUAKER': '1119_QUAKER_KEROCOCO', // Partial match safety
+                'KEROCOCO': '1119_QUAKER_KEROCOCO'
+            };
+
+            data.forEach(row => {
+                const codCli = row.CODCLI;
+                if (!codCli) return;
+
+                // Check against current globalClientGoals
+                const clientGoals = globalClientGoals.get(codCli);
+
+                targetKeys.forEach(key => {
+                    let importVal = undefined;
+
+                    // 1. Try direct ID match (e.g. 707)
+                    if (row[key] !== undefined) importVal = row[key];
+
+                    // 2. Try Label match (e.g. EXTRUSADOS)
+                    if (importVal === undefined) {
+                        // Find header that maps to this key
+                        for (const h of headers) {
+                            if (labelMap[h] === key) {
+                                importVal = row[h];
+                                break;
+                            }
+                        }
+                    }
+
+                    if (importVal !== undefined) {
+                        // Parse value (remove R$, Kg, dots, replace comma)
+                        let cleanVal = String(importVal).replace(/[R$\sKg]/g, '').replace(/\./g, '').replace(',', '.');
+                        let numVal = parseFloat(cleanVal);
+
+                        if (isNaN(numVal)) return;
+
+                        // Get Current Value
+                        let currentVal = 0;
+                        let exists = false;
+                        if (clientGoals && clientGoals.has(key)) {
+                            currentVal = clientGoals.get(key).fat;
+                            exists = true;
+                        }
+
+                        // Update if diff > 0.01 OR if it's new
+                        if (!exists || Math.abs(numVal - currentVal) > 0.01) {
+                            changes.push({
+                                codCli,
+                                clientName: row['CLIENTE'] || row['NOME'] || 'N/A',
+                                key,
+                                current: currentVal,
+                                new: numVal,
+                                diff: numVal - currentVal
+                            });
+                        }
+                    }
+                });
+            });
+            return changes;
         }

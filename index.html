@@ -1097,6 +1097,10 @@
                                             </button>
                                             <div id="goals-sv-supervisor-filter-dropdown" class="hidden absolute z-50 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
                                         </div>
+                                        <button id="goals-sv-import-btn" class="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg flex items-center justify-center gap-2 shadow-lg transition-colors">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                                            Importar / Colar
+                                        </button>
                                         <button id="goals-sv-export-xlsx-btn" class="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-6 rounded-lg flex items-center justify-center gap-2 shadow-lg transition-colors">
                                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                                             Exportar Excel
@@ -1112,6 +1116,65 @@
                                             <tbody id="goals-sv-table-body" class="divide-y divide-slate-800 bg-[#151c36]"></tbody>
                                         </table>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modal Importar Metas -->
+                        <div id="import-goals-modal" class="modal-overlay hidden">
+                            <div class="bg-slate-800 rounded-lg shadow-2xl max-w-6xl w-full m-4 text-slate-300 border border-slate-700 flex flex-col max-h-[90vh]">
+                                <div class="p-4 border-b border-slate-700 flex justify-between items-center">
+                                    <h2 class="text-lg font-bold text-white">Importar / Analisar Planilha de Metas</h2>
+                                    <button id="import-goals-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button>
+                                </div>
+                                <div class="p-6 flex-1 overflow-y-auto custom-scrollbar">
+                                    <p class="mb-4 text-sm text-slate-400">Cole abaixo os dados copiados da planilha (Excel/Sheets). Certifique-se de incluir os cabeçalhos das colunas (ex: CÓD, 707, TODDYNHO).</p>
+
+                                    <textarea id="import-goals-textarea" class="w-full h-48 bg-slate-900 border border-slate-600 rounded-lg p-3 text-xs font-mono text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent mb-4" placeholder="Cole os dados aqui..."></textarea>
+
+                                    <div class="flex justify-end gap-4 mb-6">
+                                        <button id="import-goals-analyze-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg flex items-center gap-2">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                                            Analisar Mudanças (AI)
+                                        </button>
+                                    </div>
+
+                                    <!-- Analysis Report Container -->
+                                    <div id="import-analysis-container" class="hidden border-t border-slate-700 pt-6">
+                                        <div class="flex justify-between items-center mb-4">
+                                            <h3 class="text-white font-bold text-lg">Relatório de Análise</h3>
+                                            <div id="import-summary-badges" class="flex gap-2">
+                                                <!-- Badges will be injected here -->
+                                            </div>
+                                        </div>
+
+                                        <div class="bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
+                                            <div class="overflow-x-auto">
+                                                <table class="min-w-full text-xs text-left text-slate-300">
+                                                    <thead class="bg-slate-800 text-slate-400 uppercase font-bold">
+                                                        <tr>
+                                                            <th class="px-4 py-3">Cód</th>
+                                                            <th class="px-4 py-3">Cliente</th>
+                                                            <th class="px-4 py-3">Categoria / Coluna</th>
+                                                            <th class="px-4 py-3 text-right">Valor Atual</th>
+                                                            <th class="px-4 py-3 text-right">Novo Valor</th>
+                                                            <th class="px-4 py-3 text-right">Diferença</th>
+                                                            <th class="px-4 py-3 text-center">Status</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody id="import-analysis-table-body" class="divide-y divide-slate-800">
+                                                        <!-- Diff rows injected here -->
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="p-4 border-t border-slate-700 flex justify-end gap-3 bg-slate-800 rounded-b-lg">
+                                    <button id="import-goals-cancel-btn" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">Cancelar</button>
+                                    <button id="import-goals-confirm-btn" class="px-6 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                        Confirmar Importação e Salvar
+                                    </button>
                                 </div>
                             </div>
                         </div>
