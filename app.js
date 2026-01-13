@@ -761,6 +761,11 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    layout: {
+                        padding: {
+                            top: 30
+                        }
+                    },
                     plugins: {
                         legend: { position: 'top', labels: { color: '#cbd5e1' } },
                         tooltip: {
@@ -3288,6 +3293,11 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    layout: {
+                        padding: {
+                            top: 30
+                        }
+                    },
                     plugins: {
                         legend: { position: 'top', labels: { color: '#cbd5e1' } },
                         tooltip: {
@@ -3305,7 +3315,12 @@
                             }
                         },
                         datalabels: {
-                            display: false // Too crowded usually
+                            display: true,
+                            color: '#fff',
+                            anchor: 'end',
+                            align: 'top',
+                            formatter: formatValue,
+                            font: { weight: 'bold' }
                         }
                     },
                     scales: {
