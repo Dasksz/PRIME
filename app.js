@@ -13525,6 +13525,240 @@ const supervisorGroups = new Map();
                 return 0;
             }
 
+            // --- AI Insights Logic ---
+            async function generateGeminiInsights() {
+                const btn = document.getElementById('btn-generate-ai');
+                const container = document.getElementById('ai-insights-result');
+                const contentDiv = document.getElementById('ai-insights-content');
+                
+                if (!pendingImportUpdates || pendingImportUpdates.length === 0) return;
+
+                // UI Loading State
+                btn.disabled = true;
+                btn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Analisando...`;
+                container.classList.remove('hidden');
+                contentDiv.innerHTML = '<p class="text-slate-400 animate-pulse">A Inteligência Artificial está analisando os dados de importação e comparando com o histórico de vendas...</p>';
+
+                try {
+                    // 1. Prepare Data Context (Enhanced with History)
+                    const summary = {
+                        total_fat_diff: 0,
+                        total_vol_diff: 0,
+                        top_growths: [],
+                        top_drops: []
+                    };
+
+                    const detailedContext = pendingImportUpdates.map(u => {
+                        const current = getSellerCurrentGoal(u.seller, u.category, u.type);
+                        const diff = u.val - current;
+                        const pct = current > 0 ? (diff / current) * 100 : 100;
+                        
+                        if (u.type === 'rev') summary.total_fat_diff += diff;
+                        if (u.type === 'vol') summary.total_vol_diff += diff;
+
+                        // Fetch Historical Context (History is critical for validation)
+                        let historyAvg = 0;
+                        let lastMonth = 0;
+                        
+                        // We can get this from globalMetrics if cached, or recalculate.
+                        // Simplest robust way: Recalculate context for this specific seller/category slice.
+                        // (Reusing logic from getSellerCurrentGoal but for history)
+                        if (u.type === 'rev' || u.type === 'vol') {
+                            const sellerCode = optimizedData.rcaCodeByName.get(u.seller);
+                            if (sellerCode) {
+                                const clients = optimizedData.clientsByRca.get(sellerCode) || [];
+                                const activeClients = clients.filter(c => {
+                                    const cod = String(c['Código'] || c['codigo_cliente']);
+                                    const rca1 = String(c.rca1 || '').trim();
+                                    const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
+                                    return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
+                                });
+                                
+                                const leafCategories = resolveGoalCategory(u.category);
+                                const isHistoryColumnar = optimizedData.historyById instanceof IndexMap;
+                                const historyValues = isHistoryColumnar ? optimizedData.historyById._source.values : null;
+
+                                const currentDate = lastSaleDate;
+                                const prevMonthDate = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth() - 1, 1));
+                                const prevMonthIndex = prevMonthDate.getUTCMonth();
+                                const prevMonthYear = prevMonthDate.getUTCFullYear();
+
+                                activeClients.forEach(client => {
+                                    const codCli = String(client['Código'] || client['codigo_cliente']);
+                                    const clientHistoryIds = optimizedData.indices.history.byClient.get(codCli);
+                                    if (clientHistoryIds) {
+                                        clientHistoryIds.forEach(id => {
+                                            const idx = isHistoryColumnar ? optimizedData.historyById.getIndex(id) : id;
+                                            const sale = isHistoryColumnar ? null : optimizedData.historyById.get(id); // If not columnar
+                                            
+                                            // Helper to get val
+                                            const getV = (prop) => isHistoryColumnar ? historyValues[prop][idx] : sale[prop];
+                                            
+                                            const codFor = String(getV('CODFOR'));
+                                            const desc = normalize(getV('DESCRICAO') || '');
+                                            let isMatch = false;
+                                            leafCategories.forEach(cat => {
+                                                if (cat === '707' && codFor === '707') isMatch = true;
+                                                else if (cat === '708' && codFor === '708') isMatch = true;
+                                                else if (cat === '752' && codFor === '752') isMatch = true;
+                                                else if (codFor === '1119') {
+                                                    if (cat === '1119_TODDYNHO' && desc.includes('TODDYNHO')) isMatch = true;
+                                                    else if (cat === '1119_TODDY' && desc.includes('TODDY')) isMatch = true;
+                                                    else if (cat === '1119_QUAKER_KEROCOCO' && (desc.includes('QUAKER') || desc.includes('KEROCOCO'))) isMatch = true;
+                                                }
+                                            });
+
+                                            if (isMatch) {
+                                                const val = u.type === 'rev' ? (Number(getV('VLVENDA')) || 0) : (Number(getV('TOTPESOLIQ')) || 0);
+                                                
+                                                historyAvg += val; // Total sum for quarter
+                                                
+                                                const dtPed = getV('DTPED');
+                                                const d = typeof dtPed === 'number' ? new Date(dtPed) : parseDate(dtPed);
+                                                if (d && d.getUTCMonth() === prevMonthIndex && d.getUTCFullYear() === prevMonthYear) {
+                                                    lastMonth += val;
+                                                }
+                                            }
+                                        });
+                                    }
+                                });
+                                historyAvg = historyAvg / 3; // Approximate Quarterly Average
+                            }
+                        }
+
+                        return {
+                            seller: u.seller,
+                            category: u.category,
+                            type: u.type,
+                            current_goal: current,
+                            proposed_goal: u.val,
+                            history_avg: historyAvg,
+                            last_month: lastMonth,
+                            diff_vs_current: diff,
+                            diff_vs_history: u.val - historyAvg,
+                            pct_growth_vs_avg: historyAvg > 0 ? ((u.val - historyAvg) / historyAvg) * 100 : 100
+                        };
+                    });
+
+                    // Sort by Impact (Absolute Difference) to send most relevant info
+                    detailedContext.sort((a, b) => Math.abs(b.diff_vs_current) - Math.abs(a.diff_vs_current));
+                    const topContext = detailedContext.slice(0, 30).map(i => ({
+                        ...i,
+                        pct_growth_vs_avg: i.pct_growth_vs_avg.toFixed(1) + '%'
+                    })); 
+
+                    const promptText = `
+                        Atue como um Gerente Nacional de Vendas experiente da Prime Distribuição.
+                        Analise a nova proposta de metas (Proposed Goal) comparando com o Histórico de Vendas (History Avg / Last Month).
+                        
+                        Contexto Geral:
+                        - Diferença Total (R$) Proposta vs Atual: R$ ${summary.total_fat_diff.toLocaleString('pt-BR')}
+                        
+                        Dados Detalhados (Top Alterações):
+                        ${JSON.stringify(topContext)}
+                        
+                        Gere um relatório em Markdown com:
+                        1. **Estratégia Identificada**: O que a mudança sugere? (Ex: Estamos puxando muito acima da média histórica?).
+                        2. **Validação de Realismo**: Aponte metas que estão desviando muito (>20%) da média histórica (History Avg). Isso é sustentável?
+                        3. **Risco de Quebra**: Vendedores com metas muito altas vs. histórico recente.
+                        4. **Oportunidades**: Onde estamos sendo conservadores demais (meta abaixo do histórico)?
+                        
+                        Seja crítico e use emojis.
+                    `;
+
+                    // 2. Call API
+                    // WARNING: Key is client-side. Ensure domain restrictions are set in Google Cloud Console.
+                    const API_KEY = 'AIzaSyBmQVvqjBPmx2PbDo0q1D1WUTkz2u0cOks'; 
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: promptText }] }]
+                        })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.error) throw new Error(data.error.message);
+                    
+                    const aiText = data.candidates[0].content.parts[0].text;
+
+                    // 3. Render Result
+                    const htmlText = aiText
+                        .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>')
+                        .replace(/^# (.*$)/gim, '<h3 class="text-xl font-bold text-teal-400 mt-4 mb-2">$1</h3>')
+                        .replace(/^## (.*$)/gim, '<h4 class="text-lg font-bold text-blue-400 mt-3 mb-1">$1</h4>')
+                        .replace(/^\* (.*$)/gim, '<li class="ml-4 list-disc text-slate-300">$1</li>')
+                        .replace(/\n/g, '<br>');
+
+                    contentDiv.innerHTML = htmlText;
+
+                    // Render Mini Chart
+                    renderAiSummaryChart(summary.total_fat_diff);
+
+                } catch (err) {
+                    console.error("AI Error:", err);
+                    contentDiv.innerHTML = `<div class="p-4 bg-red-900/30 border border-red-500 rounded text-red-200">Erro ao gerar insights: ${err.message}</div>`;
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = `✨ Regenerar Insights`;
+                }
+            }
+
+            function renderAiSummaryChart(fatDiff) {
+                const chartContainer = document.getElementById('ai-chart-container');
+                if(!chartContainer) return;
+                
+                // Clear previous canvas
+                chartContainer.innerHTML = '<canvas id="aiSummaryChart"></canvas>';
+                const ctx = document.getElementById('aiSummaryChart').getContext('2d');
+
+                // Calc Total Current vs Total Proposed based on diff (Approximation for visual)
+                // We need the absolute totals to make a bar chart.
+                // Let's iterate updates again to sum "Current" and "Proposed" totals for Revenue only.
+                let totalCurrent = 0;
+                let totalProposed = 0;
+                
+                pendingImportUpdates.forEach(u => {
+                    if (u.type === 'rev') {
+                        const cur = getSellerCurrentGoal(u.seller, u.category, u.type);
+                        totalCurrent += cur;
+                        totalProposed += u.val;
+                    }
+                });
+
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Meta Atual', 'Nova Proposta'],
+                        datasets: [{
+                            label: 'Faturamento Total (R$)',
+                            data: [totalCurrent, totalProposed],
+                            backgroundColor: ['#64748b', fatDiff >= 0 ? '#22c55e' : '#ef4444'],
+                            borderWidth: 0,
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            title: { display: true, text: 'Comparativo de Faturamento Total', color: '#fff' }
+                        },
+                        scales: {
+                            y: { beginAtZero: false, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                            x: { grid: { display: false }, ticks: { color: '#fff' } }
+                        }
+                    }
+                });
+            }
+
+            const btnGenerateAi = document.getElementById('btn-generate-ai');
+            if(btnGenerateAi) {
+                btnGenerateAi.addEventListener('click', generateGeminiInsights);
+            }
+
             importAnalyzeBtn.addEventListener('click', () => {
                 console.log("Analisar Texto Colado clicado");
                 try {
