@@ -13347,10 +13347,15 @@ const supervisorGroups = new Map();
 
                 // Try col 1 for name, fallback to col 0 if col 1 is empty/numeric
                 let sellerName = row[1];
+                let sellerCodeCandidate = row[0]; // Candidate for Code
+
                 if (!sellerName || !isNaN(parseImportValue(sellerName))) {
                      // If col 1 is number, maybe col 0 is name? Or col 2?
                      // Standard: Col 0 = Code, Col 1 = Name.
-                     if (row[0] && isNaN(parseImportValue(row[0]))) sellerName = row[0];
+                     if (row[0] && isNaN(parseImportValue(row[0]))) {
+                         sellerName = row[0];
+                         sellerCodeCandidate = null; // Name is in Col 0
+                     }
                 }
 
                 if (!sellerName) continue; 
@@ -13364,16 +13369,44 @@ const supervisorGroups = new Map();
                     continue;
                 }
 
+                // --- RESOLUTION LOGIC: Normalize Seller Name to System Canonical Name ---
+                let canonicalName = null;
+
+                // 1. Try by Code (Col 0)
+                if (sellerCodeCandidate) {
+                    const parsedCode = parseImportValue(sellerCodeCandidate);
+                    if (!isNaN(parsedCode)) {
+                        const codeStr = String(parsedCode);
+                        if (optimizedData.rcaNameByCode.has(codeStr)) {
+                            canonicalName = optimizedData.rcaNameByCode.get(codeStr);
+                        }
+                    }
+                }
+
+                // 2. Try by Name (Fuzzy/Case-Insensitive)
+                if (!canonicalName) {
+                    // Iterate existing system names to find case-insensitive match
+                    for (const [sysName, sysCode] of optimizedData.rcaCodeByName) {
+                         const sysUpper = sysName.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+                         if (sysUpper === upperName) {
+                             canonicalName = sysName;
+                             break;
+                         }
+                    }
+                }
+
+                const finalSellerName = canonicalName || sellerName;
+
                 // 2. Dynamic Supervisor Check
                 // If the name is a known Supervisor (key in rcasBySupervisor), ignore it.
                 // Assuming supervisors are not also sellers in this context (or we only want leaf sellers).
-                if (optimizedData.rcasBySupervisor.has(upperName) || optimizedData.rcasBySupervisor.has(sellerName)) {
+                if (optimizedData.rcasBySupervisor.has(finalSellerName) || optimizedData.rcasBySupervisor.has(finalSellerName.toUpperCase())) {
                     continue;
                 }
                 // ------------------------------------------------
 
-                if (processedSellers.has(sellerName)) continue;
-                processedSellers.add(sellerName);
+                if (processedSellers.has(finalSellerName)) continue;
+                processedSellers.add(finalSellerName);
 
                 // 1. Revenue
                 const revCats = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
