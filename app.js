@@ -3230,6 +3230,21 @@
                 }
             });
 
+            // Apply Positivation Overrides from goalsSellerTargets (Imported Absolute Values)
+            goalsBySeller.forEach((goals, sellerName) => {
+                let overrideKey = null;
+                if (pasta === 'PEPSICO') overrideKey = 'GERAL';
+                else if (pasta === 'ELMA') overrideKey = 'total_elma';
+                else if (pasta === 'FOODS') overrideKey = 'total_foods';
+
+                if (overrideKey && goalsSellerTargets.has(sellerName)) {
+                    const targets = goalsSellerTargets.get(sellerName);
+                    if (targets[overrideKey] !== undefined) {
+                        goals.totalPos = targets[overrideKey];
+                    }
+                }
+            });
+
             // 3. Sales Aggregation (By Seller & Week)
             // Structure: Map<SellerName, { totalFat: 0, totalVol: 0, weeksFat: [], weeksVol: [] }>
             const salesBySeller = new Map();
@@ -4872,6 +4887,24 @@
             XLSX.writeFile(wb, `Metas_GV_${currentGoalsSupplier}_${new Date().toISOString().slice(0,10)}.xlsx`);
         }
 
+        function getSellerTargetOverride(sellerName, metricType, context) {
+            if (!goalsSellerTargets || !goalsSellerTargets.has(sellerName)) return null;
+            const targets = goalsSellerTargets.get(sellerName);
+
+            if (metricType === 'mix_salty') return targets['mix_salty'] !== undefined ? targets['mix_salty'] : null;
+            if (metricType === 'mix_foods') return targets['mix_foods'] !== undefined ? targets['mix_foods'] : null;
+
+            if (metricType === 'pos') {
+                if (context === 'ELMA_ALL' || context === 'ELMA') return targets['total_elma'] !== undefined ? targets['total_elma'] : null;
+                if (context === 'FOODS_ALL' || context === 'FOODS') return targets['total_foods'] !== undefined ? targets['total_foods'] : null;
+                if (context === 'PEPSICO_ALL' || context === 'PEPSICO') {
+                    if (targets['GERAL'] !== undefined) return targets['GERAL'];
+                    return null;
+                }
+            }
+            return null;
+        }
+
         function updateGoalsView() {
             goalsRenderId++;
             const currentRenderId = goalsRenderId;
@@ -5068,12 +5101,18 @@
                     // Calculate Total Adjustment for Current View Context
                     let contextAdjustment = 0;
                     const adjustmentMap = goalsPosAdjustments[currentGoalsSupplier];
+                    let absoluteOverride = null;
 
-                    if (adjustmentMap) {
-                        if (isSingleSeller) {
-                            // Specific Seller Context
+                    if (isSingleSeller) {
+                        // Check for Absolute Override from Import
+                        absoluteOverride = getSellerTargetOverride(selectedGoalsGvSellers[0], 'pos', currentGoalsSupplier);
+
+                        if (absoluteOverride === null && adjustmentMap) {
+                            // Specific Seller Context (Fallback)
                             contextAdjustment = adjustmentMap.get(selectedGoalsGvSellers[0]) || 0;
-                        } else {
+                        }
+                    } else {
+                        if (adjustmentMap) {
                             const visibleSellers = new Set(clientMetrics.map(c => c.seller));
                             adjustmentMap.forEach((val, seller) => {
                                 if (visibleSellers.has(seller)) {
@@ -5083,7 +5122,7 @@
                         }
                     }
 
-                    const displayPos = naturalTotalPos + contextAdjustment;
+                    const displayPos = absoluteOverride !== null ? absoluteOverride : (naturalTotalPos + contextAdjustment);
                     newMixInput.value = displayPos.toLocaleString('pt-BR');
 
                     if (isSingleSeller) {
@@ -5169,8 +5208,13 @@
 
                     const handleMixCard = (type, naturalTarget, adjustmentsMap, inputId, btnId) => {
                         let adj = 0;
+                        let absOverride = null;
+
                         if (isSingleSeller) {
-                            adj = adjustmentsMap.get(selectedGoalsGvSellers[0]) || 0;
+                            absOverride = getSellerTargetOverride(selectedGoalsGvSellers[0], type === 'salty' ? 'mix_salty' : 'mix_foods', currentGoalsSupplier);
+                            if (absOverride === null) {
+                                adj = adjustmentsMap.get(selectedGoalsGvSellers[0]) || 0;
+                            }
                         } else {
                             const visibleSellers = new Set(clientMetrics.map(c => c.seller));
                             adjustmentsMap.forEach((val, seller) => {
@@ -5178,7 +5222,7 @@
                             });
                         }
 
-                        const displayVal = naturalTarget + adj;
+                        const displayVal = absOverride !== null ? absOverride : (naturalTarget + adj);
                         const input = document.getElementById(inputId);
                         const btn = document.getElementById(btnId);
 
