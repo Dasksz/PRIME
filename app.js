@@ -13429,9 +13429,12 @@ const supervisorGroups = new Map();
                     if (u.type === 'rev') desc = `Faturamento (Ajuste): R$ ${u.val.toLocaleString('pt-BR')}`;
                     else if (u.type === 'vol') desc = `Volume (Ajuste): ${u.val} Kg`;
                     else if (u.type === 'pos') desc = `Positivação (Meta): ${u.val}`;
+                    else if (u.type === 'mix') desc = `Mix (Meta): ${u.val}`;
                     
+                    const sellerCode = optimizedData.rcaCodeByName.get(u.seller) || '-';
+
                     row.innerHTML = `
-                        <td class="px-4 py-2 text-xs text-slate-300">-</td>
+                        <td class="px-4 py-2 text-xs text-slate-300">${sellerCode}</td>
                         <td class="px-4 py-2 text-xs text-slate-400">${u.seller}</td>
                         <td class="px-4 py-2 text-xs text-blue-300">${u.category}</td>
                         <td class="px-4 py-2 text-xs text-slate-500">-</td>
