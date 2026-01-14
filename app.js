@@ -13169,31 +13169,41 @@ const supervisorGroups = new Map();
             // Robust Number Parser (Handles BR vs US format and 'Kg' unit)
             const parseImportValue = (rawStr) => {
                 if (!rawStr) return NaN;
-                // Remove Currency (R$), Units (Kg), Spaces
-                let clean = String(rawStr).trim().toUpperCase().replace(/[R$\sKG]/g, '');
+                // Remove everything that is NOT digit, comma, dot, or minus.
+                let clean = String(rawStr).trim().toUpperCase().replace(/[^0-9,.-]/g, '');
                 
-                // Detection Logic
-                if (clean.includes(',')) {
-                    // Assume BR Format: 1.250,00 -> 1250.00
-                    clean = clean.replace(/\./g, '').replace(',', '.');
-                } else {
-                    // No comma. Check for dots.
-                    const dotCount = (clean.match(/\./g) || []).length;
-                    
-                    if (dotCount > 1) {
-                        // Multiple dots (e.g. 1.250.000) -> Thousands (Remove all)
+                // Separator positions
+                const dotIdx = clean.lastIndexOf('.');
+                const commaIdx = clean.lastIndexOf(',');
+                
+                if (dotIdx > -1 && commaIdx > -1) {
+                    // Both present. The last one is decimal.
+                    if (dotIdx > commaIdx) {
+                        // US: 51,000.00 -> 51000.00
+                        clean = clean.replace(/,/g, ''); 
+                    } else {
+                        // BR: 51.000,00 -> 51000.00
+                        clean = clean.replace(/\./g, '').replace(',', '.');
+                    }
+                } else if (commaIdx > -1) {
+                    // Only comma. 51,000 (US 51k) vs 51,00 (BR 51)
+                    if (/,\d{3}$/.test(clean)) {
+                         // 51,000 -> 51000 (US Thousands)
+                         clean = clean.replace(/,/g, '');
+                    } else {
+                         // 51,00 -> 51.00 (BR Decimal)
+                         clean = clean.replace(',', '.');
+                    }
+                } else if (dotIdx > -1) {
+                    // Only dot. 51.000 (BR 51k) vs 51.00 (US 51)
+                    if (/\.\d{3}$/.test(clean)) {
+                        // 51.000 -> 51000 (BR Thousands)
                         clean = clean.replace(/\./g, '');
-                    } else if (dotCount === 1) {
-                        // Single dot ambiguity: 1.250 (1250) vs 1250.00 (1250)
-                        // Heuristic for Goals context:
-                        // If followed by exactly 3 digits at end (e.g. 1.250), treat as BR Thousand.
-                        // Otherwise (e.g. 1250.00), treat as US Decimal.
-                        if (/\.\d{3}$/.test(clean)) {
-                            clean = clean.replace('.', '');
-                        }
-                        // Else keep dot (decimal)
+                    } else {
+                        // 51.00 -> 51.00 (US Decimal - Keep dot)
                     }
                 }
+                
                 return parseFloat(clean);
             };
 
