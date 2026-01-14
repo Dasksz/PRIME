@@ -5723,24 +5723,42 @@
                     posKeys['1119_TODDYNHO'] = '1119_TODDYNHO';
 
                     for (const [colId, data] of Object.entries(seller.data)) {
-                        // Apply Pos Adjustment
-                        const adjKey = posKeys[colId] || colId; // Fallback to ID
-                        if (goalsPosAdjustments[adjKey]) {
-                            const adj = goalsPosAdjustments[adjKey].get(sellerName) || 0;
-                            // Update Meta Pos: Natural (Summed from clients) + Adjustment
-                            // Note: 'data.metaPos' currently holds Natural Count from client loop.
-                            data.metaPos = data.metaPos + adj;
+                        // Priority Check: Explicit Target from Import/Supabase (goalsSellerTargets)
+                        let explicitTarget = undefined;
+                        if (goalsSellerTargets && goalsSellerTargets.has(sellerName)) {
+                            const targets = goalsSellerTargets.get(sellerName);
+                            // Check exact key or upper case key
+                            if (targets[colId] !== undefined) explicitTarget = targets[colId];
+                            else if (targets[colId.toUpperCase()] !== undefined) explicitTarget = targets[colId.toUpperCase()];
                         }
 
-                        // Apply Mix Adjustment (Only for Mix Cols)
-                        if (colId === 'mix_salty') {
-                            const adj = goalsMixSaltyAdjustments['PEPSICO_ALL']?.get(sellerName) || 0;
-                            // metaMix was calculated as Math.round(active * 0.5).
-                            data.metaMix = data.metaMix + adj;
-                        }
-                        if (colId === 'mix_foods') {
-                            const adj = goalsMixFoodsAdjustments['PEPSICO_ALL']?.get(sellerName) || 0;
-                            data.metaMix = data.metaMix + adj;
+                        if (explicitTarget !== undefined) {
+                            // Apply Explicit Target
+                            if (colId.startsWith('mix_')) {
+                                data.metaMix = explicitTarget;
+                            } else {
+                                data.metaPos = explicitTarget;
+                            }
+                        } else {
+                            // Fallback: Legacy Adjustment Logic (Session only)
+
+                            // Apply Pos Adjustment
+                            const adjKey = posKeys[colId] || colId; // Fallback to ID
+                            if (goalsPosAdjustments[adjKey]) {
+                                const adj = goalsPosAdjustments[adjKey].get(sellerName) || 0;
+                                // Update Meta Pos: Natural (Summed from clients) + Adjustment
+                                data.metaPos = data.metaPos + adj;
+                            }
+
+                            // Apply Mix Adjustment (Only for Mix Cols)
+                            if (colId === 'mix_salty') {
+                                const adj = goalsMixSaltyAdjustments['PEPSICO_ALL']?.get(sellerName) || 0;
+                                data.metaMix = data.metaMix + adj;
+                            }
+                            if (colId === 'mix_foods') {
+                                const adj = goalsMixFoodsAdjustments['PEPSICO_ALL']?.get(sellerName) || 0;
+                                data.metaMix = data.metaMix + adj;
+                            }
                         }
 
                         // Apply Pedev Adjustment? (Calculated as 90% of Total Elma)
