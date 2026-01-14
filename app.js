@@ -13110,7 +13110,13 @@ const supervisorGroups = new Map();
         // --- IMPORT PARSER AND LOGIC ---
 
         function parseGoalsSvStructure(text) {
-            const rows = text.trim().split(/\r?\n/).map(row => row.split('\t'));
+            // Remove empty lines at start/end but preserve indentation (tabs) within lines
+            // Don't use trim() as it strips leading tabs which shifts columns
+            const lines = text.replace(/[\r\n]+$/, '').split(/\r?\n/);
+            const rows = lines.map(row => row.split('\t'));
+            
+            // Filter out purely empty rows if any, but be careful not to shift header logic if it relies on fixed row indices
+            // actually, we just need to ensure we have enough rows.
             if (rows.length < 4) return null;
 
             const header0 = rows[0].map(h => h ? h.trim().toUpperCase() : '');
@@ -13125,9 +13131,12 @@ const supervisorGroups = new Map();
             for (let i = 0; i < header0.length; i++) {
                 if (header0[i]) currentCategory = header0[i];
                 if (header1[i]) currentMetric = header1[i];
-                const subMetric = header2[i]; // Meta, Ajuste, etc.
+                let subMetric = header2[i]; // Meta, Ajuste, etc.
 
                 if (currentCategory && subMetric) {
+                    // Normalize SubMetric
+                    if (subMetric === 'AJ.' || subMetric === 'AJ') subMetric = 'AJUSTE';
+
                     let catKey = currentCategory;
                     // Normalize Category Names to IDs
                     if (catKey === 'EXTRUSADOS') catKey = '707';
@@ -13147,7 +13156,7 @@ const supervisorGroups = new Map();
                     if (currentMetric === 'FATURAMENTO' || currentMetric === 'MÉDIA TRIM.') metricKey = 'FAT';
                     else if (currentMetric === 'POSITIVAÇÃO') metricKey = 'POS';
                     else if (currentMetric === 'TONELADA' || currentMetric === 'META KG') metricKey = 'VOL';
-                    else if (currentMetric === 'META MIX') metricKey = 'MIX';
+                    else if (currentMetric === 'META MIX' || currentMetric === 'MIX' || currentMetric === 'QTD') metricKey = 'MIX';
 
                     const key = `${catKey}_${metricKey}_${subMetric}`;
                     colMap[key] = i;
@@ -13156,6 +13165,37 @@ const supervisorGroups = new Map();
 
             const updates = [];
             const processedSellers = new Set();
+
+            // Robust Number Parser (Handles BR vs US format and 'Kg' unit)
+            const parseImportValue = (rawStr) => {
+                if (!rawStr) return NaN;
+                // Remove Currency (R$), Units (Kg), Spaces
+                let clean = String(rawStr).trim().toUpperCase().replace(/[R$\sKG]/g, '');
+                
+                // Detection Logic
+                if (clean.includes(',')) {
+                    // Assume BR Format: 1.250,00 -> 1250.00
+                    clean = clean.replace(/\./g, '').replace(',', '.');
+                } else {
+                    // No comma. Check for dots.
+                    const dotCount = (clean.match(/\./g) || []).length;
+                    
+                    if (dotCount > 1) {
+                        // Multiple dots (e.g. 1.250.000) -> Thousands (Remove all)
+                        clean = clean.replace(/\./g, '');
+                    } else if (dotCount === 1) {
+                        // Single dot ambiguity: 1.250 (1250) vs 1250.00 (1250)
+                        // Heuristic for Goals context:
+                        // If followed by exactly 3 digits at end (e.g. 1.250), treat as BR Thousand.
+                        // Otherwise (e.g. 1250.00), treat as US Decimal.
+                        if (/\.\d{3}$/.test(clean)) {
+                            clean = clean.replace('.', '');
+                        }
+                        // Else keep dot (decimal)
+                    }
+                }
+                return parseFloat(clean);
+            };
 
             for (let i = 3; i < rows.length; i++) {
                 const row = rows[i];
@@ -13168,8 +13208,7 @@ const supervisorGroups = new Map();
                 revCats.forEach(cat => {
                     const idx = colMap[`${cat}_FAT_AJUSTE`];
                     if (idx !== undefined && row[idx]) {
-                        const clean = String(row[idx]).replace(/[R$\s\.]/g, '').replace(',', '.');
-                        const val = parseFloat(clean);
+                        const val = parseImportValue(row[idx]);
                         if (!isNaN(val)) {
                             updates.push({ type: 'rev', seller: sellerName, category: cat, val: val });
                         }
@@ -13181,8 +13220,7 @@ const supervisorGroups = new Map();
                 volCats.forEach(cat => {
                     const idx = colMap[`${cat}_VOL_AJUSTE`];
                     if (idx !== undefined && row[idx]) {
-                        const clean = String(row[idx]).replace(/[Kg\s\.]/g, '').replace(',', '.');
-                        const val = parseFloat(clean);
+                        const val = parseImportValue(row[idx]);
                         if (!isNaN(val)) {
                             updates.push({ type: 'vol', seller: sellerName, category: cat, val: val });
                         }
@@ -13203,10 +13241,10 @@ const supervisorGroups = new Map();
                     const idx = colMap[searchKey] !== undefined ? colMap[searchKey] : colMap[`${normCat}_POS_AJUSTE`];
                     
                     if (idx !== undefined && row[idx]) {
-                        const clean = String(row[idx]).replace(/\D/g, '');
-                        const val = parseInt(clean);
+                        const val = parseImportValue(row[idx]);
                         if (!isNaN(val)) {
-                            updates.push({ type: 'pos', seller: sellerName, category: normCat, val: val });
+                            // Positivação uses integer count
+                            updates.push({ type: 'pos', seller: sellerName, category: normCat, val: Math.round(val) });
                         }
                     }
                 });
@@ -13216,10 +13254,10 @@ const supervisorGroups = new Map();
                 mixCats.forEach(cat => {
                     const idx = colMap[`${cat}_MIX_AJUSTE`];
                     if (idx !== undefined && row[idx]) {
-                        const clean = String(row[idx]).replace(/\D/g, '');
-                        const val = parseInt(clean);
+                        const val = parseImportValue(row[idx]);
                         if (!isNaN(val)) {
-                            updates.push({ type: 'mix', seller: sellerName, category: cat, val: val });
+                            // Mix uses integer count
+                            updates.push({ type: 'mix', seller: sellerName, category: cat, val: Math.round(val) });
                         }
                     }
                 });
