@@ -5926,8 +5926,9 @@ const supervisorGroups = new Map();
                     }
 
                     // Override summed totals with recalculated totals
-                    if (group.totals['mix_salty']) group.totals['mix_salty'].metaMix = groupMixSaltyMeta + groupMixSaltyAdj;
-                    if (group.totals['mix_foods']) group.totals['mix_foods'].metaMix = groupMixFoodsMeta + groupMixFoodsAdj;
+                    // DISABLED: We trust the sum of seller targets (which might be overridden)
+                    // if (group.totals['mix_salty']) group.totals['mix_salty'].metaMix = groupMixSaltyMeta + groupMixSaltyAdj;
+                    // if (group.totals['mix_foods']) group.totals['mix_foods'].metaMix = groupMixFoodsMeta + groupMixFoodsAdj;
                 });
 
                 // Recalculate Grand Total (Geral PRIME) using Global Aggregates
@@ -5942,35 +5943,14 @@ const supervisorGroups = new Map();
                         const s = group.totals[col.id]; const t = grandTotalRow.totals[col.id];
                         t.metaFat += s.metaFat; t.metaVol += s.metaVol; t.metaPos += s.metaPos;
                         t.avgVol += s.avgVol; t.avgMix += s.avgMix; t.avgFat += s.avgFat;
-                        // Don't sum metaMix yet
+                        // Sum metaMix
+                        t.metaMix += s.metaMix || 0;
                     });
                 });
 
-                // Recalculate Grand Total Mix
-                // Calculate Global Natural Base excluding Americanas (using TOTAL_ELMA base as per RESUMO logic)
-                let globalElmaNatural = 0;
-                sellerMap.forEach(seller => {
-                    if (seller.code !== '1001') {
-                        globalElmaNatural += (seller.data['total_elma'] ? seller.data['total_elma'].metaPos : 0);
-                    }
-                });
-
-                let globalElmaAdj = 0;
-                let globalMixSaltyAdj = 0;
-                let globalMixFoodsAdj = 0;
-
-                // Iterate ALL sellers to get total adjustments
-                sellerMap.forEach(seller => {
-                    if (seller.code !== '1001') {
-                        globalElmaAdj += (goalsPosAdjustments['ELMA_ALL'] ? (goalsPosAdjustments['ELMA_ALL'].get(seller.name) || 0) : 0);
-                        globalMixSaltyAdj += (goalsMixSaltyAdjustments['PEPSICO_ALL'] ? (goalsMixSaltyAdjustments['PEPSICO_ALL'].get(seller.name) || 0) : 0);
-                        globalMixFoodsAdj += (goalsMixFoodsAdjustments['PEPSICO_ALL'] ? (goalsMixFoodsAdjustments['PEPSICO_ALL'].get(seller.name) || 0) : 0);
-                    }
-                });
-
-                const globalElmaBase = globalElmaNatural + globalElmaAdj;
-                grandTotalRow.totals['mix_salty'].metaMix = Math.round(globalElmaBase * 0.50) + globalMixSaltyAdj;
-                grandTotalRow.totals['mix_foods'].metaMix = Math.round(globalElmaBase * 0.30) + globalMixFoodsAdj;
+                // Recalculate Grand Total Mix - DISABLED (Use Sum)
+                // grandTotalRow.totals['mix_salty'].metaMix = Math.round(globalElmaBase * 0.50) + globalMixSaltyAdj;
+                // grandTotalRow.totals['mix_foods'].metaMix = Math.round(globalElmaBase * 0.30) + globalMixFoodsAdj;
 
                 // We inject this fake Grand Total row logic into the sortedSupervisors array or handle it in rendering?
                 // The rendering logic likely expects sortedSupervisors to contain only supervisors.
@@ -13535,14 +13515,19 @@ const supervisorGroups = new Map();
                 // 3. Positivation
                 const posCats = ['GERAL', 'TOTAL ELMA', 'TOTAL FOODS', '707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
                 posCats.forEach(cat => {
-                    let searchKey = `${cat}_POS_AJUSTE`;
-                    if (cat === 'GERAL') searchKey = `${cat}_POS_META`; 
                     let normCat = cat;
                     if (cat === 'TOTAL ELMA') normCat = 'total_elma';
                     if (cat === 'TOTAL FOODS') normCat = 'total_foods';
-                    if (cat === 'GERAL') searchKey = `GERAL_POS_META`;
 
-                    const idx = colMap[searchKey] !== undefined ? colMap[searchKey] : colMap[`${normCat}_POS_AJUSTE`];
+                    // Check for META first, then AJUSTE
+                    let idx = undefined;
+                    // Try exact key + META
+                    if (colMap[`${cat}_POS_META`] !== undefined) idx = colMap[`${cat}_POS_META`];
+                    else if (colMap[`${normCat}_POS_META`] !== undefined) idx = colMap[`${normCat}_POS_META`];
+                    // Try exact key + AJUSTE (Fallback)
+                    else if (colMap[`${cat}_POS_AJUSTE`] !== undefined) idx = colMap[`${cat}_POS_AJUSTE`];
+                    else if (colMap[`${normCat}_POS_AJUSTE`] !== undefined) idx = colMap[`${normCat}_POS_AJUSTE`];
+
                     if (idx !== undefined && row[idx]) {
                         const val = parseImportValue(row[idx]);
                         if (!isNaN(val)) updates.push({ type: 'pos', seller: sellerName, category: normCat, val: Math.round(val) });
