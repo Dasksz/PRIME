@@ -1613,7 +1613,7 @@
             filteredData: [],
             totalPages: 1
         };
-        var goalsTargets = {
+        let goalsTargets = {
             '707': { fat: 0, vol: 0 },
             '708': { fat: 0, vol: 0 },
             '752': { fat: 0, vol: 0 },
@@ -1623,7 +1623,7 @@
         };
         let globalGoalsMetrics = {};
         let globalGoalsTotalsCache = {};
-        var globalClientGoals = new Map();
+        let globalClientGoals = new Map();
         let goalsPosAdjustments = { 'ELMA_ALL': new Map(), 'FOODS_ALL': new Map(), 'PEPSICO_ALL': new Map(), '707': new Map(), '708': new Map(), '752': new Map(), '1119_TODDYNHO': new Map(), '1119_TODDY': new Map(), '1119_QUAKER_KEROCOCO': new Map() }; // Map<CodCli, Map<Key, {fat: 0, vol: 0}>>
         let goalsMixSaltyAdjustments = { 'PEPSICO_ALL': new Map(), 'ELMA_ALL': new Map(), 'FOODS_ALL': new Map() }; // Map<SellerName, adjustment>
         let goalsMixFoodsAdjustments = { 'PEPSICO_ALL': new Map(), 'ELMA_ALL': new Map(), 'FOODS_ALL': new Map() }; // Map<SellerName, adjustment>
@@ -12799,10 +12799,14 @@ const supervisorGroups = new Map();
                 importBtn.addEventListener('click', () => {
                     importModal.classList.remove('hidden');
                     importTextarea.value = '';
-                    importTextarea.focus();
+                    // importTextarea.focus(); // Focus optional if drag zone is primary
                     analysisContainer.classList.add('hidden');
                     importConfirmBtn.disabled = true;
                     importConfirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    
+                    // Reset File Input
+                    const fileInput = document.getElementById('import-goals-file');
+                    if(fileInput) fileInput.value = '';
                 });
 
                 const closeModal = () => {
@@ -12814,24 +12818,42 @@ const supervisorGroups = new Map();
 
                 let pendingChanges = [];
 
-                importAnalyzeBtn.addEventListener('click', () => {
-                    const text = importTextarea.value;
-                    const parsed = parseGoalsPaste(text);
-                    
-                    if (!parsed) {
-                        alert("Formato inválido. Certifique-se de copiar os cabeçalhos.");
+                // --- Helper Functions for Data Processing ---
+                function processGoalsImport(rawData, sourceType) {
+                    if (!rawData) {
+                        alert("Nenhum dado encontrado.");
+                        return;
+                    }
+
+                    // Source Type: 'text' (Paste) or 'json' (Excel)
+                    let parsed;
+                    if (sourceType === 'text') {
+                        parsed = parseGoalsPaste(rawData);
+                    } else if (sourceType === 'json') {
+                        parsed = parseGoalsJson(rawData);
+                    }
+
+                    if (!parsed || parsed.data.length === 0) {
+                        alert("Formato inválido ou vazio. Certifique-se de incluir os cabeçalhos (CÓD, etc).");
                         return;
                     }
 
                     pendingChanges = compareGoalsData(parsed);
-                    
-                    // Render Report
+                    renderAnalysisReport(pendingChanges);
+                }
+
+                function renderAnalysisReport(changes) {
                     analysisBody.innerHTML = '';
-                    if (pendingChanges.length === 0) {
+                    if (changes.length === 0) {
                         analysisBody.innerHTML = `<tr><td colspan="7" class="text-center p-4 text-slate-400">Nenhuma alteração detectada.</td></tr>`;
                         importConfirmBtn.disabled = true;
+                        importConfirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
                     } else {
-                        pendingChanges.forEach(change => {
+                        // Limit rendering for performance if huge
+                        const maxRender = 500;
+                        const renderSet = changes.slice(0, maxRender);
+                        
+                        renderSet.forEach(change => {
                             const diffClass = change.diff > 0 ? 'text-green-400' : 'text-red-400';
                             const diffIcon = change.diff > 0 ? '▲' : '▼';
                             
@@ -12848,13 +12870,90 @@ const supervisorGroups = new Map();
                             `;
                             analysisBody.appendChild(row);
                         });
+
+                        if (changes.length > maxRender) {
+                             const row = document.createElement('tr');
+                             row.innerHTML = `<td colspan="7" class="text-center p-2 text-xs text-slate-500">... e mais ${changes.length - maxRender} alterações.</td>`;
+                             analysisBody.appendChild(row);
+                        }
                         
                         importConfirmBtn.disabled = false;
                         importConfirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
                     }
 
-                    analysisBadges.innerHTML = `<span class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">${pendingChanges.length} Mudanças</span>`;
+                    analysisBadges.innerHTML = `<span class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">${changes.length} Mudanças</span>`;
                     analysisContainer.classList.remove('hidden');
+                }
+
+                // --- Event Listeners for Drag & Drop / File ---
+                const dropZone = document.getElementById('import-drop-zone');
+                const fileInput = document.getElementById('import-goals-file');
+
+                if (dropZone && fileInput) {
+                    // Prevent default drag behaviors
+                    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                        dropZone.addEventListener(eventName, preventDefaults, false);
+                    });
+
+                    function preventDefaults(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+
+                    // Highlight drop zone
+                    ['dragenter', 'dragover'].forEach(eventName => {
+                        dropZone.addEventListener(eventName, () => dropZone.classList.add('bg-slate-700/50', 'border-teal-500'), false);
+                    });
+
+                    ['dragleave', 'drop'].forEach(eventName => {
+                        dropZone.addEventListener(eventName, () => dropZone.classList.remove('bg-slate-700/50', 'border-teal-500'), false);
+                    });
+
+                    // Handle Drop
+                    dropZone.addEventListener('drop', (e) => {
+                        const dt = e.dataTransfer;
+                        const files = dt.files;
+                        handleFiles(files);
+                    });
+
+                    // Handle File Select
+                    fileInput.addEventListener('change', (e) => {
+                        handleFiles(e.target.files);
+                    });
+                }
+
+                function handleFiles(files) {
+                    if (files.length === 0) return;
+                    const file = files[0];
+                    
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const data = new Uint8Array(e.target.result);
+                            const workbook = XLSX.read(data, {type: 'array'});
+                            
+                            // Assume Sheet 1
+                            const sheetName = workbook.SheetNames[0];
+                            const sheet = workbook.Sheets[sheetName];
+                            
+                            // Convert to JSON (Array of Arrays to preserve Header order)
+                            const jsonData = XLSX.utils.sheet_to_json(sheet, {header: 1});
+                            processGoalsImport(jsonData, 'json');
+                        } catch (err) {
+                            console.error(err);
+                            alert("Erro ao ler arquivo Excel. Verifique o formato.");
+                        }
+                    };
+                    reader.readAsArrayBuffer(file);
+                }
+
+                importAnalyzeBtn.addEventListener('click', () => {
+                    const text = importTextarea.value;
+                    if (!text.trim()) {
+                        alert("Cole os dados ou selecione um arquivo.");
+                        return;
+                    }
+                    processGoalsImport(text, 'text');
                 });
 
                 importConfirmBtn.addEventListener('click', () => {
@@ -12887,6 +12986,173 @@ const supervisorGroups = new Map();
                     updateGoals(); // Refresh UI
                 });
             }
+        }
+
+        function parseGoalsJson(jsonData) {
+            // jsonData is array of arrays (header: 1)
+            // Row 0 is header
+            if (!jsonData || jsonData.length < 2) return null;
+
+            const headers = jsonData[0].map(h => String(h).trim().toUpperCase());
+            const data = [];
+
+            for (let i = 1; i < jsonData.length; i++) {
+                const cols = jsonData[i];
+                const rowObj = {};
+                let hasCod = false;
+
+                headers.forEach((h, idx) => {
+                    if (idx < cols.length) {
+                        let key = h;
+                        if (h === 'CÓD' || h === 'CODIGO' || h === 'COD') key = 'CODCLI';
+                        
+                        rowObj[key] = cols[idx];
+                        if (key === 'CODCLI' && rowObj[key]) hasCod = true;
+                    }
+                });
+
+                if (hasCod) {
+                    data.push(rowObj);
+                }
+            }
+            return { headers, data };
+        }
+
+        function parseGoalsPaste(text) {
+            const rows = text.trim().split(/\r?\n/);
+            if (rows.length < 2) return null; // Need at least header + 1 row
+
+            const headers = rows[0].split(/\t/).map(h => h.trim().toUpperCase());
+            const data = [];
+
+            for (let i = 1; i < rows.length; i++) {
+                const cols = rows[i].split(/\t/);
+                const rowObj = {};
+                
+                // Map columns
+                // Key identifier: CÓD (or CODIGO, COD)
+                // Values: 707, 708, 752, 1119_TODDYNHO, etc.
+                
+                // Basic validation: must have COD
+                let hasCod = false;
+
+                headers.forEach((h, idx) => {
+                    if (idx < cols.length) {
+                        // Normalize Header to match internal keys
+                        let key = h;
+                        if (h === 'CÓD' || h === 'CODIGO' || h === 'COD') key = 'CODCLI';
+                        // Handle compound keys from export if needed, but usually they match
+                        
+                        rowObj[key] = cols[idx].trim();
+                        if (key === 'CODCLI' && rowObj[key]) hasCod = true;
+                    }
+                });
+
+                if (hasCod) {
+                    data.push(rowObj);
+                }
+            }
+            return { headers, data };
+        }
+
+        function compareGoalsData(importedData) {
+            const changes = [];
+            const { headers, data } = importedData;
+
+            // Define keys we care about (Targets)
+            const targetKeys = [
+                '707', '708', '752', 
+                '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'
+            ];
+
+            const labelMap = {
+                'EXTRUSADOS': '707',
+                'NÃO EXTRUSADOS': '708',
+                'TORCIDA': '752',
+                'TODDYNHO': '1119_TODDYNHO',
+                'TODDY': '1119_TODDY',
+                'QUAKER / KEROCOCO': '1119_QUAKER_KEROCOCO',
+                'QUAKER': '1119_QUAKER_KEROCOCO', // Partial match safety
+                'KEROCOCO': '1119_QUAKER_KEROCOCO'
+            };
+
+            data.forEach(row => {
+                const codCli = row.CODCLI;
+                if (!codCli) return;
+
+                // Check against current globalClientGoals
+                const clientGoals = globalClientGoals.get(String(codCli));
+                
+                targetKeys.forEach(key => {
+                    let importVal = undefined;
+                    
+                    // 1. Try direct ID match (e.g. 707)
+                    if (row[key] !== undefined) importVal = row[key];
+                    
+                    // 2. Try Label match (e.g. EXTRUSADOS)
+                    if (importVal === undefined) {
+                        // Find header that maps to this key
+                        for (const h of headers) {
+                            if (labelMap[h] === key) {
+                                importVal = row[h];
+                                break;
+                            }
+                        }
+                    }
+
+                    if (importVal !== undefined) {
+                        let numVal;
+
+                        // Check if it's already a number (from Excel JSON)
+                        if (typeof importVal === 'number') {
+                            numVal = importVal;
+                        } else {
+                            // Parse string (Brazilian format: 1.234,56 -> 1234.56)
+                            let cleanVal = String(importVal).replace(/[R$\sKg]/g, '');
+                            
+                            // Heuristic: If it has comma, assume it's decimal separator.
+                            // If it has dots and comma, dots are thousands.
+                            // If it has only dots, it might be thousands (1.000) or decimal (1.5)?
+                            // Usually, pasted data from Excel uses local format (comma decimal).
+                            
+                            if (cleanVal.includes(',')) {
+                                cleanVal = cleanVal.replace(/\./g, '').replace(',', '.');
+                            } else {
+                                // No comma. If dot exists, is it thousand or decimal?
+                                // If multiple dots, thousands.
+                                // If one dot, ambiguous.
+                                // But usually our export format is currency R$ #.##0,00
+                                // So we expect comma for decimals.
+                                // If raw number in string "1000", it works.
+                            }
+                            numVal = parseFloat(cleanVal);
+                        }
+                        
+                        if (isNaN(numVal)) return;
+
+                        // Get Current Value
+                        let currentVal = 0;
+                        let exists = false;
+                        if (clientGoals && clientGoals.has(key)) {
+                            currentVal = clientGoals.get(key).fat;
+                            exists = true;
+                        }
+
+                        // Update if diff > 0.01 OR if it's new
+                        if (!exists || Math.abs(numVal - currentVal) > 0.01) {
+                            changes.push({
+                                codCli,
+                                clientName: row['CLIENTE'] || row['NOME'] || 'N/A',
+                                key,
+                                current: currentVal,
+                                new: numVal,
+                                diff: numVal - currentVal
+                            });
+                        }
+                    }
+                });
+            });
+            return changes;
         }
 
         initializeOptimizedDataStructures();
@@ -13081,118 +13347,4 @@ const supervisorGroups = new Map();
             }
 
             return adjustedGoals;
-        }
-
-        function parseGoalsPaste(text) {
-            const rows = text.trim().split(/\r?\n/);
-            if (rows.length < 2) return null; // Need at least header + 1 row
-
-            const headers = rows[0].split(/\t/).map(h => h.trim().toUpperCase());
-            const data = [];
-
-            for (let i = 1; i < rows.length; i++) {
-                const cols = rows[i].split(/\t/);
-                const rowObj = {};
-                
-                // Map columns
-                // Key identifier: CÓD (or CODIGO, COD)
-                // Values: 707, 708, 752, 1119_TODDYNHO, etc.
-                
-                // Basic validation: must have COD
-                let hasCod = false;
-
-                headers.forEach((h, idx) => {
-                    if (idx < cols.length) {
-                        // Normalize Header to match internal keys
-                        let key = h;
-                        if (h === 'CÓD' || h === 'CODIGO' || h === 'COD') key = 'CODCLI';
-                        // Handle compound keys from export if needed, but usually they match
-                        
-                        rowObj[key] = cols[idx].trim();
-                        if (key === 'CODCLI' && rowObj[key]) hasCod = true;
-                    }
-                });
-
-                if (hasCod) {
-                    data.push(rowObj);
-                }
-            }
-            return { headers, data };
-        }
-
-        function compareGoalsData(importedData) {
-            const changes = [];
-            const { headers, data } = importedData;
-
-            // Define keys we care about (Targets)
-            const targetKeys = [
-                '707', '708', '752', 
-                '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'
-            ];
-
-            const labelMap = {
-                'EXTRUSADOS': '707',
-                'NÃO EXTRUSADOS': '708',
-                'TORCIDA': '752',
-                'TODDYNHO': '1119_TODDYNHO',
-                'TODDY': '1119_TODDY',
-                'QUAKER / KEROCOCO': '1119_QUAKER_KEROCOCO',
-                'QUAKER': '1119_QUAKER_KEROCOCO', // Partial match safety
-                'KEROCOCO': '1119_QUAKER_KEROCOCO'
-            };
-
-            data.forEach(row => {
-                const codCli = row.CODCLI;
-                if (!codCli) return;
-
-                // Check against current globalClientGoals
-                const clientGoals = globalClientGoals.get(codCli);
-                
-                targetKeys.forEach(key => {
-                    let importVal = undefined;
-                    
-                    // 1. Try direct ID match (e.g. 707)
-                    if (row[key] !== undefined) importVal = row[key];
-                    
-                    // 2. Try Label match (e.g. EXTRUSADOS)
-                    if (importVal === undefined) {
-                        // Find header that maps to this key
-                        for (const h of headers) {
-                            if (labelMap[h] === key) {
-                                importVal = row[h];
-                                break;
-                            }
-                        }
-                    }
-
-                    if (importVal !== undefined) {
-                        // Parse value (remove R$, Kg, dots, replace comma)
-                        let cleanVal = String(importVal).replace(/[R$\sKg]/g, '').replace(/\./g, '').replace(',', '.');
-                        let numVal = parseFloat(cleanVal);
-                        
-                        if (isNaN(numVal)) return;
-
-                        // Get Current Value
-                        let currentVal = 0;
-                        let exists = false;
-                        if (clientGoals && clientGoals.has(key)) {
-                            currentVal = clientGoals.get(key).fat;
-                            exists = true;
-                        }
-
-                        // Update if diff > 0.01 OR if it's new
-                        if (!exists || Math.abs(numVal - currentVal) > 0.01) {
-                            changes.push({
-                                codCli,
-                                clientName: row['CLIENTE'] || row['NOME'] || 'N/A',
-                                key,
-                                current: currentVal,
-                                new: numVal,
-                                diff: numVal - currentVal
-                            });
-                        }
-                    }
-                });
-            });
-            return changes;
         }
