@@ -3920,7 +3920,9 @@
 
                 if (clientHistoryIds) {
                     clientHistoryIds.forEach(id => {
-                        const sale = optimizedData.historyById.get(id);
+                        const idx = isHistoryColumnar ? optimizedData.historyById.getIndex(id) : id;
+                        const sale = (optimizedData.historyById instanceof ColumnarDataset) ? optimizedData.historyById.get(id) : optimizedData.historyById[id];
+
                         // EXCEPTION: Exclude Balcão (53) sales for Client 9569 from Summary Metrics
                         if (String(codCli).trim() === '9569' && (String(sale.CODUSUR).trim() === '53' || String(sale.CODUSUR).trim() === '053')) return;
 
@@ -13490,13 +13492,117 @@ const supervisorGroups = new Map();
                 return [category];
             }
 
+            function calculateSellerPrevPos(sellerName, category) {
+                const sellerCode = optimizedData.rcaCodeByName.get(sellerName);
+                if (!sellerCode) return 0;
+
+                const clients = optimizedData.clientsByRca.get(sellerCode) || [];
+                const activeClients = clients.filter(c => {
+                    const cod = String(c['Código'] || c['codigo_cliente']);
+                    const rca1 = String(c.rca1 || '').trim();
+                    const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
+                    return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
+                });
+
+                if (activeClients.length === 0) return 0;
+
+                const currentDate = lastSaleDate;
+                const prevMonthDate = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth() - 1, 1));
+                const prevMonthIndex = prevMonthDate.getUTCMonth();
+                const prevMonthYear = prevMonthDate.getUTCFullYear();
+
+                let count = 0;
+
+                // Optimization: Detect if history is columnar and IndexMap is available
+                const isHistoryColumnar = optimizedData.historyById instanceof IndexMap && optimizedData.historyById._source.values;
+                const historyValues = isHistoryColumnar ? optimizedData.historyById._source.values : null;
+
+                // Categories Mapping
+                let targetCategories = [category];
+                if (category === 'total_elma') targetCategories = ['707', '708', '752'];
+                else if (category === 'total_foods') targetCategories = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+                else if (category === 'GERAL') targetCategories = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+
+                const checkClient = (codCli) => {
+                    const clientHistoryIds = optimizedData.indices.history.byClient.get(codCli);
+                    if (!clientHistoryIds) return false;
+
+                    let hasPos = false;
+                    let mixSaltyFound = new Set();
+                    let mixFoodsFound = new Set();
+
+                    const iterateHistory = (id) => {
+                        const idx = isHistoryColumnar ? optimizedData.historyById.getIndex(id) : id;
+                        // Helper to get val
+                        const getV = (prop) => {
+                            if (isHistoryColumnar) return historyValues[prop][idx];
+                            const item = (optimizedData.historyById instanceof ColumnarDataset) ? optimizedData.historyById.get(id) : optimizedData.historyById[id];
+                            return item[prop];
+                        };
+
+                        const dtPed = getV('DTPED');
+                        const d = typeof dtPed === 'number' ? new Date(dtPed) : parseDate(dtPed);
+                        if (!d || d.getUTCMonth() !== prevMonthIndex || d.getUTCFullYear() !== prevMonthYear) return;
+
+                        const val = Number(getV('VLVENDA')) || 0;
+                        if (val <= 0) return;
+
+                        const codFor = String(getV('CODFOR'));
+                        const desc = normalize(getV('DESCRICAO') || '');
+
+                        if (category === 'mix_salty') {
+                            MIX_SALTY_CATEGORIES.forEach(brand => {
+                                if (desc.includes(brand)) mixSaltyFound.add(brand);
+                            });
+                        } else if (category === 'mix_foods') {
+                            MIX_FOODS_CATEGORIES.forEach(brand => {
+                                if (desc.includes(brand)) mixFoodsFound.add(brand);
+                            });
+                        } else {
+                            // Standard Categories
+                            targetCategories.forEach(cat => {
+                                if (cat === '707' && codFor === '707') hasPos = true;
+                                else if (cat === '708' && codFor === '708') hasPos = true;
+                                else if (cat === '752' && codFor === '752') hasPos = true;
+                                else if (codFor === '1119') {
+                                    if (cat === '1119_TODDYNHO' && desc.includes('TODDYNHO')) hasPos = true;
+                                    else if (cat === '1119_TODDY' && desc.includes('TODDY')) hasPos = true;
+                                    else if (cat === '1119_QUAKER_KEROCOCO' && (desc.includes('QUAKER') || desc.includes('KEROCOCO'))) hasPos = true;
+                                }
+                            });
+                        }
+                    };
+
+                    clientHistoryIds.forEach(iterateHistory);
+
+                    if (category === 'mix_salty') {
+                        return MIX_SALTY_CATEGORIES.every(b => mixSaltyFound.has(b));
+                    } else if (category === 'mix_foods') {
+                        return MIX_FOODS_CATEGORIES.every(b => mixFoodsFound.has(b));
+                    }
+
+                    return hasPos;
+                };
+
+                activeClients.forEach(client => {
+                    const codCli = String(client['Código'] || client['codigo_cliente']);
+                    if (checkClient(codCli)) count++;
+                });
+
+                return count;
+            }
+
             function getSellerCurrentGoal(sellerName, category, type) {
                 const sellerCode = optimizedData.rcaCodeByName.get(sellerName);
                 if (!sellerCode) return 0;
 
                 if (type === 'pos' || type === 'mix') {
                     const targets = goalsSellerTargets.get(sellerName);
-                    return targets ? (targets[category] || 0) : 0;
+                    const val = targets ? (targets[category] || 0) : 0;
+                    if (val === 0) {
+                        return calculateSellerPrevPos(sellerName, category);
+                    }
+                    return val;
                 }
 
                 if (type === 'rev' || type === 'vol') {
