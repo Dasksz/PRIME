@@ -13155,26 +13155,52 @@ const supervisorGroups = new Map();
         // --- IMPORT PARSER AND LOGIC ---
 
         function parseGoalsSvStructure(text) {
-            // Remove empty lines at start/end but preserve indentation (tabs) within lines
-            // Don't use trim() as it strips leading tabs which shifts columns
+            console.log("[Parser] Iniciando parse...");
             const lines = text.replace(/[\r\n]+$/, '').split(/\r?\n/);
-            const rows = lines.map(row => row.split('\t'));
-            
+            if (lines.length === 0) return null;
+
+            // 1. Detect Delimiter (Heuristic)
+            const firstLine = lines[0];
+            let delimiter = '\t';
+            if (firstLine.includes('\t')) delimiter = '\t';
+            else if (firstLine.includes(';')) delimiter = ';';
+            else if (firstLine.includes(',') && lines.length > 1) delimiter = ',';
+            // Fallback for space separated copy-paste if single line has spaces
+            else if (firstLine.trim().split(/\s{2,}/).length > 1) delimiter = /\s{2,}/; // At least 2 spaces
+
+            console.log("[Parser] Delimitador detectado:", delimiter);
+
+            const rows = lines.map(line => {
+                // If delimiter is regex, use split directly
+                if (delimiter instanceof RegExp) return line.trim().split(delimiter);
+                return line.split(delimiter);
+            });
+
             console.log(`[Parser] Linhas encontradas: ${rows.length}`);
 
-            // Filter out purely empty rows if any, but be careful not to shift header logic if it relies on fixed row indices
-            // actually, we just need to ensure we have enough rows.
-            if (rows.length < 4) {
-                console.warn("[Parser] Menos de 4 linhas encontradas. Abortando.");
+            // 2. Identify Header Rows
+            // We look for 3 consecutive rows that might be the header structure
+            // Row A: Categories (EXTRUSADOS, ETC)
+            // Row B: Metrics (FATURAMENTO, ETC)
+            // Row C: Submetrics (META, AJUSTE)
+            let startRow = 0;
+            if (rows.length >= 3) {
+                // Standard logic: Rows 0, 1, 2
+                startRow = 0;
+            } else {
+                console.warn("[Parser] Menos de 3 linhas. Tentando modo simplificado...");
+                // TODO: Implement simplified mode for single-row updates if needed
+                // For now, abort to avoid garbage data
                 return null;
             }
 
-            const header0 = rows[0].map(h => h ? h.trim().toUpperCase() : '');
-            const header1 = rows[1].map(h => h ? h.trim().toUpperCase() : '');
-            const header2 = rows[2].map(h => h ? h.trim().toUpperCase() : '');
+            const header0 = rows[startRow].map(h => h ? h.trim().toUpperCase() : '');
+            const header1 = rows[startRow + 1].map(h => h ? h.trim().toUpperCase() : '');
+            const header2 = rows[startRow + 2].map(h => h ? h.trim().toUpperCase() : '');
 
-            console.log("[Parser] Header 0 (Categorias):", header0.filter(h=>h).join(', '));
-            console.log("[Parser] Header 2 (Detalhes):", header2.filter(h=>h).join(', '));
+            console.log("[Parser] Header 0:", header0.join('|'));
+            console.log("[Parser] Header 1:", header1.join('|'));
+            console.log("[Parser] Header 2:", header2.join('|'));
 
             const colMap = {};
             let currentCategory = null;
@@ -13187,7 +13213,6 @@ const supervisorGroups = new Map();
                 let subMetric = header2[i]; // Meta, Ajuste, etc.
 
                 if (currentCategory && subMetric) {
-                    // Normalize SubMetric
                     if (subMetric === 'AJ.' || subMetric === 'AJ') subMetric = 'AJUSTE';
 
                     let catKey = currentCategory;
@@ -13219,115 +13244,95 @@ const supervisorGroups = new Map();
             const updates = [];
             const processedSellers = new Set();
 
-            // Robust Number Parser (Handles BR vs US format and 'Kg' unit)
             const parseImportValue = (rawStr) => {
                 if (!rawStr) return NaN;
-                // Remove everything that is NOT digit, comma, dot, or minus.
                 let clean = String(rawStr).trim().toUpperCase().replace(/[^0-9,.-]/g, '');
-                
-                // Separator positions
+                if (!clean) return NaN;
+
                 const dotIdx = clean.lastIndexOf('.');
                 const commaIdx = clean.lastIndexOf(',');
                 
                 if (dotIdx > -1 && commaIdx > -1) {
-                    // Both present. The last one is decimal.
-                    if (dotIdx > commaIdx) {
-                        // US: 51,000.00 -> 51000.00
-                        clean = clean.replace(/,/g, ''); 
-                    } else {
-                        // BR: 51.000,00 -> 51000.00
-                        clean = clean.replace(/\./g, '').replace(',', '.');
-                    }
+                    if (dotIdx > commaIdx) clean = clean.replace(/,/g, '');
+                    else clean = clean.replace(/\./g, '').replace(',', '.');
                 } else if (commaIdx > -1) {
-                    // Only comma. 51,000 (US 51k) vs 51,00 (BR 51)
-                    if (/,\d{3}$/.test(clean)) {
-                         // 51,000 -> 51000 (US Thousands)
-                         clean = clean.replace(/,/g, '');
-                    } else {
-                         // 51,00 -> 51.00 (BR Decimal)
-                         clean = clean.replace(',', '.');
-                    }
+                    if (/,\d{3}$/.test(clean)) clean = clean.replace(/,/g, '');
+                    else clean = clean.replace(',', '.');
                 } else if (dotIdx > -1) {
-                    // Only dot. 51.000 (BR 51k) vs 51.00 (US 51)
-                    if (/\.\d{3}$/.test(clean)) {
-                        // 51.000 -> 51000 (BR Thousands)
-                        clean = clean.replace(/\./g, '');
-                    } else {
-                        // 51.00 -> 51.00 (US Decimal - Keep dot)
-                    }
+                    if (/\.\d{3}$/.test(clean)) clean = clean.replace(/\./g, '');
                 }
-                
                 return parseFloat(clean);
             };
 
-            console.log(`[Parser] Colunas mapeadas (Ajuste): ${Object.keys(colMap).filter(k => k.includes('AJUSTE')).length}`);
+            const dataStartRow = startRow + 3;
+            // Identify Vendor Column Index (Name)
+            // Usually Index 1 (Code, Name, ...)
+            // We scan first few rows to find valid seller names
+            let nameColIndex = 1;
+            // Basic Heuristic: If col 0 looks like a name and col 1 is number, maybe it's col 0.
+            // But standard template is [Code, Name, ...]. We stick to 1 for now or 0 if 1 is empty.
 
-            for (let i = 3; i < rows.length; i++) {
+            for (let i = dataStartRow; i < rows.length; i++) {
                 const row = rows[i];
-                const sellerName = row[1]; // Vendedor Name
+                if (!row || row.length < 2) continue;
 
-                // Ignorar linhas vazias ou totais se não tiver vendedor
+                // Try col 1 for name, fallback to col 0 if col 1 is empty/numeric
+                let sellerName = row[1];
+                if (!sellerName || !isNaN(parseImportValue(sellerName))) {
+                     // If col 1 is number, maybe col 0 is name? Or col 2?
+                     // Standard: Col 0 = Code, Col 1 = Name.
+                     if (row[0] && isNaN(parseImportValue(row[0]))) sellerName = row[0];
+                }
+
                 if (!sellerName) continue;
 
                 if (processedSellers.has(sellerName)) continue;
                 processedSellers.add(sellerName);
 
-                // 1. Revenue (Detailed Categories)
+                // 1. Revenue
                 const revCats = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
                 revCats.forEach(cat => {
                     const idx = colMap[`${cat}_FAT_AJUSTE`];
                     if (idx !== undefined && row[idx]) {
                         const val = parseImportValue(row[idx]);
-                        if (!isNaN(val)) {
-                            updates.push({ type: 'rev', seller: sellerName, category: cat, val: val });
-                        }
+                        if (!isNaN(val)) updates.push({ type: 'rev', seller: sellerName, category: cat, val: val });
                     }
                 });
 
-                // 2. Volume (Aggregated Categories)
+                // 2. Volume
                 const volCats = ['tonelada_elma', 'tonelada_foods'];
                 volCats.forEach(cat => {
                     const idx = colMap[`${cat}_VOL_AJUSTE`];
                     if (idx !== undefined && row[idx]) {
                         const val = parseImportValue(row[idx]);
-                        if (!isNaN(val)) {
-                            updates.push({ type: 'vol', seller: sellerName, category: cat, val: val });
-                        }
+                        if (!isNaN(val)) updates.push({ type: 'vol', seller: sellerName, category: cat, val: val });
                     }
                 });
 
-                // 3. Positivation (All Categories)
+                // 3. Positivation
                 const posCats = ['GERAL', 'TOTAL ELMA', 'TOTAL FOODS', '707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
                 posCats.forEach(cat => {
                     let searchKey = `${cat}_POS_AJUSTE`;
                     if (cat === 'GERAL') searchKey = `${cat}_POS_META`; 
-                    
                     let normCat = cat;
                     if (cat === 'TOTAL ELMA') normCat = 'total_elma';
                     if (cat === 'TOTAL FOODS') normCat = 'total_foods';
                     if (cat === 'GERAL') searchKey = `GERAL_POS_META`;
 
                     const idx = colMap[searchKey] !== undefined ? colMap[searchKey] : colMap[`${normCat}_POS_AJUSTE`];
-                    
                     if (idx !== undefined && row[idx]) {
                         const val = parseImportValue(row[idx]);
-                        if (!isNaN(val)) {
-                            // Positivação uses integer count
-                            updates.push({ type: 'pos', seller: sellerName, category: normCat, val: Math.round(val) });
-                        }
+                        if (!isNaN(val)) updates.push({ type: 'pos', seller: sellerName, category: normCat, val: Math.round(val) });
                     }
                 });
 
-                // 4. Mix Targets
+                // 4. Mix
                 const mixCats = ['mix_salty', 'mix_foods'];
                 mixCats.forEach(cat => {
                     const idx = colMap[`${cat}_MIX_AJUSTE`];
                     if (idx !== undefined && row[idx]) {
                         const val = parseImportValue(row[idx]);
-                        if (!isNaN(val)) {
-                            // Mix uses integer count
-                            updates.push({ type: 'mix', seller: sellerName, category: cat, val: Math.round(val) });
-                        }
+                        if (!isNaN(val)) updates.push({ type: 'mix', seller: sellerName, category: cat, val: Math.round(val) });
                     }
                 });
             }
@@ -13523,6 +13528,240 @@ const supervisorGroups = new Map();
                     return total;
                 }
                 return 0;
+            }
+
+            // --- AI Insights Logic ---
+            async function generateGeminiInsights() {
+                const btn = document.getElementById('btn-generate-ai');
+                const container = document.getElementById('ai-insights-result');
+                const contentDiv = document.getElementById('ai-insights-content');
+
+                if (!pendingImportUpdates || pendingImportUpdates.length === 0) return;
+
+                // UI Loading State
+                btn.disabled = true;
+                btn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Analisando...`;
+                container.classList.remove('hidden');
+                contentDiv.innerHTML = '<p class="text-slate-400 animate-pulse">A Inteligência Artificial está analisando os dados de importação e comparando com o histórico de vendas...</p>';
+
+                try {
+                    // 1. Prepare Data Context (Enhanced with History)
+                    const summary = {
+                        total_fat_diff: 0,
+                        total_vol_diff: 0,
+                        top_growths: [],
+                        top_drops: []
+                    };
+
+                    const detailedContext = pendingImportUpdates.map(u => {
+                        const current = getSellerCurrentGoal(u.seller, u.category, u.type);
+                        const diff = u.val - current;
+                        const pct = current > 0 ? (diff / current) * 100 : 100;
+
+                        if (u.type === 'rev') summary.total_fat_diff += diff;
+                        if (u.type === 'vol') summary.total_vol_diff += diff;
+
+                        // Fetch Historical Context (History is critical for validation)
+                        let historyAvg = 0;
+                        let lastMonth = 0;
+
+                        // We can get this from globalMetrics if cached, or recalculate.
+                        // Simplest robust way: Recalculate context for this specific seller/category slice.
+                        // (Reusing logic from getSellerCurrentGoal but for history)
+                        if (u.type === 'rev' || u.type === 'vol') {
+                            const sellerCode = optimizedData.rcaCodeByName.get(u.seller);
+                            if (sellerCode) {
+                                const clients = optimizedData.clientsByRca.get(sellerCode) || [];
+                                const activeClients = clients.filter(c => {
+                                    const cod = String(c['Código'] || c['codigo_cliente']);
+                                    const rca1 = String(c.rca1 || '').trim();
+                                    const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
+                                    return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
+                                });
+
+                                const leafCategories = resolveGoalCategory(u.category);
+                                const isHistoryColumnar = optimizedData.historyById instanceof IndexMap;
+                                const historyValues = isHistoryColumnar ? optimizedData.historyById._source.values : null;
+
+                                const currentDate = lastSaleDate;
+                                const prevMonthDate = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth() - 1, 1));
+                                const prevMonthIndex = prevMonthDate.getUTCMonth();
+                                const prevMonthYear = prevMonthDate.getUTCFullYear();
+
+                                activeClients.forEach(client => {
+                                    const codCli = String(client['Código'] || client['codigo_cliente']);
+                                    const clientHistoryIds = optimizedData.indices.history.byClient.get(codCli);
+                                    if (clientHistoryIds) {
+                                        clientHistoryIds.forEach(id => {
+                                            const idx = isHistoryColumnar ? optimizedData.historyById.getIndex(id) : id;
+                                            const sale = isHistoryColumnar ? null : optimizedData.historyById.get(id); // If not columnar
+
+                                            // Helper to get val
+                                            const getV = (prop) => isHistoryColumnar ? historyValues[prop][idx] : sale[prop];
+
+                                            const codFor = String(getV('CODFOR'));
+                                            const desc = normalize(getV('DESCRICAO') || '');
+                                            let isMatch = false;
+                                            leafCategories.forEach(cat => {
+                                                if (cat === '707' && codFor === '707') isMatch = true;
+                                                else if (cat === '708' && codFor === '708') isMatch = true;
+                                                else if (cat === '752' && codFor === '752') isMatch = true;
+                                                else if (codFor === '1119') {
+                                                    if (cat === '1119_TODDYNHO' && desc.includes('TODDYNHO')) isMatch = true;
+                                                    else if (cat === '1119_TODDY' && desc.includes('TODDY')) isMatch = true;
+                                                    else if (cat === '1119_QUAKER_KEROCOCO' && (desc.includes('QUAKER') || desc.includes('KEROCOCO'))) isMatch = true;
+                                                }
+                                            });
+
+                                            if (isMatch) {
+                                                const val = u.type === 'rev' ? (Number(getV('VLVENDA')) || 0) : (Number(getV('TOTPESOLIQ')) || 0);
+
+                                                historyAvg += val; // Total sum for quarter
+
+                                                const dtPed = getV('DTPED');
+                                                const d = typeof dtPed === 'number' ? new Date(dtPed) : parseDate(dtPed);
+                                                if (d && d.getUTCMonth() === prevMonthIndex && d.getUTCFullYear() === prevMonthYear) {
+                                                    lastMonth += val;
+                                                }
+                                            }
+                                        });
+                                    }
+                                });
+                                historyAvg = historyAvg / 3; // Approximate Quarterly Average
+                            }
+                        }
+
+                        return {
+                            seller: u.seller,
+                            category: u.category,
+                            type: u.type,
+                            current_goal: current,
+                            proposed_goal: u.val,
+                            history_avg: historyAvg,
+                            last_month: lastMonth,
+                            diff_vs_current: diff,
+                            diff_vs_history: u.val - historyAvg,
+                            pct_growth_vs_avg: historyAvg > 0 ? ((u.val - historyAvg) / historyAvg) * 100 : 100
+                        };
+                    });
+
+                    // Sort by Impact (Absolute Difference) to send most relevant info
+                    detailedContext.sort((a, b) => Math.abs(b.diff_vs_current) - Math.abs(a.diff_vs_current));
+                    const topContext = detailedContext.slice(0, 30).map(i => ({
+                        ...i,
+                        pct_growth_vs_avg: i.pct_growth_vs_avg.toFixed(1) + '%'
+                    }));
+
+                    const promptText = `
+                        Atue como um Gerente Nacional de Vendas experiente da Prime Distribuição.
+                        Analise a nova proposta de metas (Proposed Goal) comparando com o Histórico de Vendas (History Avg / Last Month).
+
+                        Contexto Geral:
+                        - Diferença Total (R$) Proposta vs Atual: R$ ${summary.total_fat_diff.toLocaleString('pt-BR')}
+
+                        Dados Detalhados (Top Alterações):
+                        ${JSON.stringify(topContext)}
+
+                        Gere um relatório em Markdown com:
+                        1. **Estratégia Identificada**: O que a mudança sugere? (Ex: Estamos puxando muito acima da média histórica?).
+                        2. **Validação de Realismo**: Aponte metas que estão desviando muito (>20%) da média histórica (History Avg). Isso é sustentável?
+                        3. **Risco de Quebra**: Vendedores com metas muito altas vs. histórico recente.
+                        4. **Oportunidades**: Onde estamos sendo conservadores demais (meta abaixo do histórico)?
+
+                        Seja crítico e use emojis.
+                    `;
+
+                    // 2. Call API
+                    // WARNING: Key is client-side. Ensure domain restrictions are set in Google Cloud Console.
+                    const API_KEY = 'AIzaSyBmQVvqjBPmx2PbDo0q1D1WUTkz2u0cOks';
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: promptText }] }]
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.error) throw new Error(data.error.message);
+
+                    const aiText = data.candidates[0].content.parts[0].text;
+
+                    // 3. Render Result
+                    const htmlText = aiText
+                        .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>')
+                        .replace(/^# (.*$)/gim, '<h3 class="text-xl font-bold text-teal-400 mt-4 mb-2">$1</h3>')
+                        .replace(/^## (.*$)/gim, '<h4 class="text-lg font-bold text-blue-400 mt-3 mb-1">$1</h4>')
+                        .replace(/^\* (.*$)/gim, '<li class="ml-4 list-disc text-slate-300">$1</li>')
+                        .replace(/\n/g, '<br>');
+
+                    contentDiv.innerHTML = htmlText;
+
+                    // Render Mini Chart
+                    renderAiSummaryChart(summary.total_fat_diff);
+
+                } catch (err) {
+                    console.error("AI Error:", err);
+                    contentDiv.innerHTML = `<div class="p-4 bg-red-900/30 border border-red-500 rounded text-red-200">Erro ao gerar insights: ${err.message}</div>`;
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = `✨ Regenerar Insights`;
+                }
+            }
+
+            function renderAiSummaryChart(fatDiff) {
+                const chartContainer = document.getElementById('ai-chart-container');
+                if(!chartContainer) return;
+
+                // Clear previous canvas
+                chartContainer.innerHTML = '<canvas id="aiSummaryChart"></canvas>';
+                const ctx = document.getElementById('aiSummaryChart').getContext('2d');
+
+                // Calc Total Current vs Total Proposed based on diff (Approximation for visual)
+                // We need the absolute totals to make a bar chart.
+                // Let's iterate updates again to sum "Current" and "Proposed" totals for Revenue only.
+                let totalCurrent = 0;
+                let totalProposed = 0;
+
+                pendingImportUpdates.forEach(u => {
+                    if (u.type === 'rev') {
+                        const cur = getSellerCurrentGoal(u.seller, u.category, u.type);
+                        totalCurrent += cur;
+                        totalProposed += u.val;
+                    }
+                });
+
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Meta Atual', 'Nova Proposta'],
+                        datasets: [{
+                            label: 'Faturamento Total (R$)',
+                            data: [totalCurrent, totalProposed],
+                            backgroundColor: ['#64748b', fatDiff >= 0 ? '#22c55e' : '#ef4444'],
+                            borderWidth: 0,
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            title: { display: true, text: 'Comparativo de Faturamento Total', color: '#fff' }
+                        },
+                        scales: {
+                            y: { beginAtZero: false, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                            x: { grid: { display: false }, ticks: { color: '#fff' } }
+                        }
+                    }
+                });
+            }
+
+            const btnGenerateAi = document.getElementById('btn-generate-ai');
+            if(btnGenerateAi) {
+                btnGenerateAi.addEventListener('click', generateGeminiInsights);
             }
 
             importAnalyzeBtn.addEventListener('click', () => {
