@@ -13531,7 +13531,7 @@ const supervisorGroups = new Map();
             }
 
             // --- AI Insights Logic ---
-            async function generateGeminiInsights() {
+            async function generateAIInsights() {
                 const btn = document.getElementById('btn-generate-ai');
                 const container = document.getElementById('ai-insights-result');
                 const contentDiv = document.getElementById('ai-insights-content');
@@ -13673,18 +13673,22 @@ const supervisorGroups = new Map();
 
                     // 2. Call API
                     // Key retrieved from Supabase metadata (not hardcoded)
-                    const metaEntry = embeddedData.metadata ? embeddedData.metadata.find(m => m.key === 'gemini_api_key') : null;
+                    const metaEntry = embeddedData.metadata ? embeddedData.metadata.find(m => m.key === 'groq_api_key') : null;
                     const API_KEY = metaEntry ? metaEntry.value : null;
 
                     if (!API_KEY) {
-                        throw new Error("Chave de API (gemini_api_key) não encontrada na tabela de metadados.");
+                        throw new Error("Chave de API (groq_api_key) não encontrada na tabela de metadados.");
                     }
 
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-001:generateContent?key=${API_KEY}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                        method: "POST",
+                        headers: {
+                            "Authorization": `Bearer ${API_KEY}`,
+                            "Content-Type": "application/json"
+                        },
                         body: JSON.stringify({
-                            contents: [{ parts: [{ text: promptText }] }]
+                            messages: [{ role: "user", content: promptText }],
+                            model: "llama-3.3-70b-versatile"
                         })
                     });
 
@@ -13692,7 +13696,7 @@ const supervisorGroups = new Map();
                     
                     if (data.error) throw new Error(data.error.message);
                     
-                    const aiText = data.candidates[0].content.parts[0].text;
+                    const aiText = data.choices[0].message.content;
 
                     // 3. Render Result
                     const htmlText = aiText
@@ -13767,7 +13771,7 @@ const supervisorGroups = new Map();
 
             const btnGenerateAi = document.getElementById('btn-generate-ai');
             if(btnGenerateAi) {
-                btnGenerateAi.addEventListener('click', generateGeminiInsights);
+                btnGenerateAi.addEventListener('click', generateAIInsights);
             }
 
             importAnalyzeBtn.addEventListener('click', () => {
