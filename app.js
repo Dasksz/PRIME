@@ -2461,6 +2461,51 @@
         let goalsSellerTargets = new Map(); // Stores Seller-Level Targets (Positivation, etc.)
         window.goalsSellerTargets = goalsSellerTargets; // Export for init.js
 
+        async function saveGoalsToSupabase() {
+            try {
+                const monthKey = new Date().toISOString().slice(0, 7);
+
+                // Serialize globalClientGoals (Map<CodCli, Map<Key, {fat: 0, vol: 0}>>)
+                const clientsObj = {};
+                for (const [clientId, clientMap] of globalClientGoals) {
+                    clientsObj[clientId] = Object.fromEntries(clientMap);
+                }
+
+                // Serialize goalsSellerTargets (Map<Seller, Targets>)
+                const sellerTargetsObj = {};
+                for (const [seller, targets] of goalsSellerTargets) {
+                    sellerTargetsObj[seller] = targets;
+                }
+
+                const payload = {
+                    clients: clientsObj,
+                    targets: goalsTargets,
+                    seller_targets: sellerTargetsObj
+                };
+
+                const { error } = await window.supabaseClient
+                    .from('goals_distribution')
+                    .upsert({
+                        month_key: monthKey,
+                        supplier: 'ALL',
+                        brand: 'GENERAL',
+                        goals_data: payload
+                    });
+
+                if (error) {
+                    console.error('Erro ao salvar metas:', error);
+                    alert('Erro ao salvar metas no banco de dados. Verifique o console.');
+                    return false;
+                }
+                console.log('Metas salvas com sucesso.');
+                return true;
+            } catch (err) {
+                console.error('Exceção ao salvar metas:', err);
+                alert('Erro inesperado ao salvar metas.');
+                return false;
+            }
+        }
+
         function distributeSellerGoal(sellerName, categoryId, newTotalValue, metric = 'fat') {
             // metric: 'fat' or 'vol'
             // categoryId: '707', '1119_TODDY', 'tonelada_elma', etc.
@@ -11985,51 +12030,6 @@ const supervisorGroups = new Map();
 
             const debouncedUpdateGoals = debounce(updateGoals, 400);
 
-            async function saveGoalsToSupabase() {
-                try {
-                    const monthKey = new Date().toISOString().slice(0, 7);
-
-                    // Serialize globalClientGoals (Map<CodCli, Map<Key, {fat: 0, vol: 0}>>)
-                    const clientsObj = {};
-                    for (const [clientId, clientMap] of globalClientGoals) {
-                        clientsObj[clientId] = Object.fromEntries(clientMap);
-                    }
-
-                    // Serialize goalsSellerTargets (Map<Seller, Targets>)
-                    const sellerTargetsObj = {};
-                    for (const [seller, targets] of goalsSellerTargets) {
-                        sellerTargetsObj[seller] = targets;
-                    }
-
-                    const payload = {
-                        clients: clientsObj,
-                        targets: goalsTargets,
-                        seller_targets: sellerTargetsObj
-                    };
-
-                    const { error } = await window.supabaseClient
-                        .from('goals_distribution')
-                        .upsert({
-                            month_key: monthKey,
-                            supplier: 'ALL',
-                            brand: 'GENERAL',
-                            goals_data: payload
-                        });
-
-                    if (error) {
-                        console.error('Erro ao salvar metas:', error);
-                        alert('Erro ao salvar metas no banco de dados. Verifique o console.');
-                        return false;
-                    }
-                    console.log('Metas salvas com sucesso.');
-                    return true;
-                } catch (err) {
-                    console.error('Exceção ao salvar metas:', err);
-                    alert('Erro inesperado ao salvar metas.');
-                    return false;
-                }
-            }
-
             async function loadGoalsFromSupabase() {
                 try {
                     const monthKey = new Date().toISOString().slice(0, 7);
@@ -13463,6 +13463,7 @@ const supervisorGroups = new Map();
             }
 
             importAnalyzeBtn.addEventListener('click', () => {
+                console.log("Analisar Texto Colado clicado");
                 try {
                     const text = importTextarea.value;
                     if (!text.trim()) {
