@@ -884,8 +884,11 @@
         }
 
         async function saveGoalsToSupabase(authToken) {
-            // Collect Goals Data
-            if (typeof globalClientGoals === 'undefined') {
+            // Collect Goals Data from Global Window Scope (Populated by app.js)
+            const globalClientGoals = window.globalClientGoals;
+            const goalsTargets = window.goalsTargets;
+
+            if (typeof globalClientGoals === 'undefined' || !globalClientGoals) {
                 throw new Error('Dados de metas não disponíveis (globalClientGoals undefined).');
             }
 

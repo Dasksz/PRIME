@@ -1621,9 +1621,12 @@
             '1119_TODDY': { fat: 0, vol: 0 },
             '1119_QUAKER_KEROCOCO': { fat: 0, vol: 0 }
         };
+        window.goalsTargets = goalsTargets;
+
         let globalGoalsMetrics = {};
         let globalGoalsTotalsCache = {};
         let globalClientGoals = new Map();
+        window.globalClientGoals = globalClientGoals;
         let goalsPosAdjustments = { 'ELMA_ALL': new Map(), 'FOODS_ALL': new Map(), 'PEPSICO_ALL': new Map(), '707': new Map(), '708': new Map(), '752': new Map(), '1119_TODDYNHO': new Map(), '1119_TODDY': new Map(), '1119_QUAKER_KEROCOCO': new Map() }; // Map<CodCli, Map<Key, {fat: 0, vol: 0}>>
         let goalsMixSaltyAdjustments = { 'PEPSICO_ALL': new Map(), 'ELMA_ALL': new Map(), 'FOODS_ALL': new Map() }; // Map<SellerName, adjustment>
         let goalsMixFoodsAdjustments = { 'PEPSICO_ALL': new Map(), 'ELMA_ALL': new Map(), 'FOODS_ALL': new Map() }; // Map<SellerName, adjustment>
@@ -12066,6 +12069,7 @@ const supervisorGroups = new Map();
                             }
                             globalClientGoals.set(key, clientMap);
                         }
+                        window.globalClientGoals = globalClientGoals;
 
                         if (targetsData && Object.keys(targetsData).length > 0) {
                             for (const key in targetsData) {
@@ -13877,11 +13881,13 @@ const supervisorGroups = new Map();
                         
                         Gere um relatório em Markdown com:
                         1. **Estratégia Identificada**: O que a mudança sugere? (Ex: Estamos puxando muito acima da média histórica?).
-                        2. **Validação de Realismo**: Aponte metas que estão desviando muito (>20%) da média histórica (History Avg). Isso é sustentável?
-                        3. **Risco de Quebra**: Vendedores com metas muito altas vs. histórico recente.
-                        4. **Oportunidades**: Onde estamos sendo conservadores demais (meta abaixo do histórico)?
+                        2. **Validação de Realismo**: Aponte metas que estão desviando muito (>20%) da média histórica (History Avg).
+                           - **Atenção:** Se a "Proposed Goal" for **MENOR** que "History Avg", isso NÃO é um risco de quebra, é uma meta conservadora/fácil.
+                           - Se "Proposed Goal" for **MAIOR** que "History Avg", isso é um desafio agressivo (Risco).
+                        3. **Risco de Quebra (Aggressive Goals)**: Aponte APENAS vendedores onde a meta proposta é MUITO MAIOR que o histórico.
+                        4. **Oportunidades (Conservative Goals)**: Aponte onde a meta proposta é MENOR que o histórico (estamos deixando dinheiro na mesa?).
                         
-                        Seja crítico e use emojis.
+                        Seja crítico e use emojis. Não confunda meta baixa com risco.
                     `;
 
                     // 2. Call API
