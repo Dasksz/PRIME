@@ -1128,14 +1128,32 @@
                                     <button id="import-goals-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button>
                                 </div>
                                 <div class="p-6 flex-1 overflow-y-auto custom-scrollbar">
-                                    <p class="mb-4 text-sm text-slate-400">Cole abaixo os dados copiados da planilha (Excel/Sheets). Certifique-se de incluir os cabeçalhos das colunas (ex: CÓD, 707, TODDYNHO).</p>
+                                    <div id="import-drop-zone" class="border-2 border-dashed border-slate-600 rounded-lg p-8 mb-6 flex flex-col items-center justify-center transition-colors hover:border-teal-500 hover:bg-slate-700/30 cursor-pointer">
+                                        <svg class="w-12 h-12 text-slate-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                        </svg>
+                                        <p class="text-slate-300 font-medium mb-2">Arraste e solte o arquivo Excel aqui</p>
+                                        <p class="text-slate-500 text-sm mb-4">ou</p>
+                                        <label for="import-goals-file" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg cursor-pointer transition-colors shadow-lg">
+                                            Selecionar Arquivo
+                                        </label>
+                                        <input type="file" id="import-goals-file" class="hidden" accept=".xlsx, .xls, .csv">
+                                        <p class="text-xs text-slate-500 mt-4">Formatos suportados: .xlsx, .xls, .csv</p>
+                                    </div>
+
+                                    <div class="relative flex py-2 items-center mb-4">
+                                        <div class="flex-grow border-t border-slate-700"></div>
+                                        <span class="flex-shrink-0 mx-4 text-slate-500 text-xs uppercase font-bold">Ou colar texto</span>
+                                        <div class="flex-grow border-t border-slate-700"></div>
+                                    </div>
                                     
-                                    <textarea id="import-goals-textarea" class="w-full h-48 bg-slate-900 border border-slate-600 rounded-lg p-3 text-xs font-mono text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent mb-4" placeholder="Cole os dados aqui..."></textarea>
+                                    <p class="mb-2 text-sm text-slate-400">Cole abaixo os dados copiados da planilha (Excel/Sheets). Certifique-se de incluir os cabeçalhos das colunas.</p>
+                                    <textarea id="import-goals-textarea" class="w-full h-32 bg-slate-900 border border-slate-600 rounded-lg p-3 text-xs font-mono text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent mb-4" placeholder="Cole os dados aqui..."></textarea>
                                     
                                     <div class="flex justify-end gap-4 mb-6">
-                                        <button id="import-goals-analyze-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg flex items-center gap-2">
+                                        <button id="import-goals-analyze-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg flex items-center gap-2 shadow-lg">
                                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
-                                            Analisar Mudanças (AI)
+                                            Analisar Texto Colado
                                         </button>
                                     </div>
 
