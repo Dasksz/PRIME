@@ -13672,9 +13672,15 @@ const supervisorGroups = new Map();
                     `;
 
                     // 2. Call API
-                    // WARNING: Key is client-side. Ensure domain restrictions are set in Google Cloud Console.
-                    const API_KEY = 'AIzaSyBmQVvqjBPmx2PbDo0q1D1WUTkz2u0cOks'; 
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
+                    // Key retrieved from Supabase metadata (not hardcoded)
+                    const metaEntry = embeddedData.metadata ? embeddedData.metadata.find(m => m.key === 'gemini_api_key') : null;
+                    const API_KEY = metaEntry ? metaEntry.value : null;
+
+                    if (!API_KEY) {
+                        throw new Error("Chave de API (gemini_api_key) não encontrada na tabela de metadados.");
+                    }
+
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${API_KEY}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
