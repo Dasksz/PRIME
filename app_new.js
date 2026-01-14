@@ -459,8 +459,8 @@
                 minOpacity: 0.05, // More transparent
                 max: 20.0, // Increased max to prevent saturation and allow transparency
                 gradient: {
-                    0.2: 'rgba(0, 0, 255, 0.35)', 
-                    0.5: 'rgba(0, 255, 0, 0.35)', 
+                    0.2: 'rgba(0, 0, 255, 0.35)',
+                    0.5: 'rgba(0, 255, 0, 0.35)',
                     1.0: 'rgba(255, 0, 0, 0.35)'
                 }
             }).addTo(leafletMap);
@@ -539,41 +539,41 @@
             const bairro = client.bairro || client.BAIRRO || '';
             const cidade = client.cidade || client.CIDADE || '';
             const nome = client.nomeCliente || client.nome || '';
-            
+
             const parts = [];
             const isValid = (s) => s && s !== 'N/A' && s !== '0' && String(s).toUpperCase() !== 'S/N' && String(s).trim() !== '';
-            
+
             // Level 0 (POI - Business Name): Name + Bairro + City
-            if (level === 0) { 
+            if (level === 0) {
                 if(isValid(nome)) parts.push(nome);
                 if(isValid(bairro)) parts.push(bairro);
                 if(isValid(cidade)) parts.push(cidade);
-            } 
+            }
             // Level 1 (Address Full - Street + Number): Street + Number + Bairro + City
-            else if (level === 1) { 
+            else if (level === 1) {
                 if(isValid(endereco)) parts.push(endereco);
                 if(isValid(numero)) parts.push(numero);
                 if(isValid(bairro)) parts.push(bairro);
                 if(isValid(cidade)) parts.push(cidade);
-            } 
+            }
             // Level 2 (Street): Street + Bairro + City
-            else if (level === 2) { 
+            else if (level === 2) {
                 if(isValid(endereco)) parts.push(endereco);
                 if(isValid(bairro)) parts.push(bairro);
                 if(isValid(cidade)) parts.push(cidade);
-            } 
+            }
             // Level 3 (Neighborhood): Bairro + City
-            else if (level === 3) { 
+            else if (level === 3) {
                 if(isValid(bairro)) parts.push(bairro);
                 if(isValid(cidade)) parts.push(cidade);
-            } 
+            }
             // Level 4 (City): City only
-            else if (level === 4) { 
+            else if (level === 4) {
                 if(isValid(cidade)) parts.push(cidade);
             }
-            
+
             if (parts.length === 0) return null;
-            
+
             // Append Context if not CEP only - Enforce Bahia
             parts.push("Bahia");
             parts.push("Brasil");
@@ -596,12 +596,12 @@
                 const client = item.client;
                 // Determine level (default 0)
                 let level = item.level !== undefined ? item.level : 0;
-                
+
                 // Construct address or use legacy
                 let address = item.address;
                 if (!address) {
                     address = buildAddress(client, level);
-                    
+
                     // If address is null (e.g. invalid level data), auto-advance
                     if (!address && level < 4) {
                         nominatimQueue.unshift({ client, level: level + 1 });
@@ -690,7 +690,7 @@
                 // Validate minimal info (City)
                 const cidade = client.cidade || client.CIDADE || '';
                 const cep = client.cep || client.CEP || '';
-                
+
                 // CEP Validation: Must be Bahia (40xxx to 48xxx)
                 const cleanCep = cep.replace(/\D/g, '');
                 const cepVal = parseInt(cleanCep);
@@ -850,7 +850,7 @@
                         mix = { elma: false, foods: false };
                         currentClientMixStatus.set(cod, mix);
                     }
-                    
+
                     const codFor = String(s.CODFOR);
                     // Elma: 707, 708, 752
                     if (codFor === '707' || codFor === '708' || codFor === '752') {
@@ -1053,7 +1053,7 @@
 
                 // Handle RCAS array (could be 'rcas' or 'RCAS')
                 let rcas = client.rcas || client.RCAS;
-                
+
                 // Sanitize RCAS: Filter out invalid values like "rcas" (header leak)
                 if (Array.isArray(rcas)) {
                     rcas = rcas.filter(r => r && String(r).toLowerCase() !== 'rcas');
@@ -1319,7 +1319,7 @@
                 const codcli = String(c['Código'] || c['codigo_cliente']);
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                
+
                 // Logic identical to 'updateCoverageView' active clients KPI
                 return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(codcli));
             });
@@ -2464,7 +2464,7 @@
         async function saveGoalsToSupabase() {
             try {
                 const monthKey = new Date().toISOString().slice(0, 7);
-                
+
                 // Serialize globalClientGoals (Map<CodCli, Map<Key, {fat: 0, vol: 0}>>)
                 const clientsObj = {};
                 for (const [clientId, clientMap] of globalClientGoals) {
@@ -2536,7 +2536,7 @@
             activeClients.forEach(client => {
                 const codCli = String(client['Código'] || client['codigo_cliente']);
                 const historyIds = optimizedData.indices.history.byClient.get(codCli);
-                
+
                 if (!clientSubCatHistory.has(codCli)) clientSubCatHistory.set(codCli, new Map());
                 const subCatMap = clientSubCatHistory.get(codCli);
 
@@ -2545,7 +2545,7 @@
                         const sale = optimizedData.historyById.get(id);
                         const codFor = String(sale.CODFOR);
                         const desc = normalize(sale.DESCRICAO || '');
-                        
+
                         // Check against all target categories
                         targetCategories.forEach(subCat => {
                             let isMatch = false;
@@ -2572,7 +2572,7 @@
 
             // 2. Distribute
             // NewGoal(Client, SubCat) = NewTotalValue * (ClientSubCatHistory / TotalSellerHistory)
-            
+
             const clientCount = activeClients.length;
             const subCatCount = targetCategories.length;
 
@@ -2594,7 +2594,7 @@
                     // Update Global
                     if (!globalClientGoals.has(codCli)) globalClientGoals.set(codCli, new Map());
                     const cGoals = globalClientGoals.get(codCli);
-                    
+
                     if (!cGoals.has(subCat)) cGoals.set(subCat, { fat: 0, vol: 0 });
                     const target = cGoals.get(subCat);
 
@@ -2778,7 +2778,7 @@
 
                                 rowData.push({ t: 'n', v: d.metaFat, f: formulaFat, s: { ...aggCellStyle, numFmt: fmtMoney }, z: fmtMoney });
                                 rowData.push(createCell(d.metaPos, readOnlyStyle, fmtInt));
-                                
+
                                 // Positivation (Aggregate): Use Stored Target
                                 let posVal = d.metaPos;
                                 if (goalsSellerTargets.has(seller.name)) {
@@ -2791,7 +2791,7 @@
                                 // Editable Cells
                                 rowData.push(createCell(d.metaFat, cellStyle, fmtMoney));
                                 rowData.push(createCell(d.metaPos, readOnlyStyle, fmtInt));
-                                
+
                                 // Positivation (Standard): Use Stored Target
                                 let posVal = d.metaPos;
                                 if (goalsSellerTargets.has(seller.name)) {
@@ -3075,7 +3075,7 @@
         function getMonthWeeksDistribution(date) {
             const year = date.getUTCFullYear();
             const month = date.getUTCMonth();
-            
+
             // Start of Month
             const startDate = new Date(Date.UTC(year, month, 1));
             // End of Month
@@ -3096,14 +3096,14 @@
                 // However, user said "reconhecer as semanas pelo calendário... De segunda a sexta".
                 // Let's define week chunks.
                 // Logic: A week ends on Saturday (or Sunday).
-                
+
                 // Find next Sunday (or End of Month)
                 let dayOfWeek = currentWeekStart.getUTCDay(); // 0=Sun, 1=Mon...
                 let daysToSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-                
+
                 let currentWeekEnd = new Date(currentWeekStart);
                 currentWeekEnd.setUTCDate(currentWeekStart.getUTCDate() + daysToSunday);
-                
+
                 if (currentWeekEnd > endDate) currentWeekEnd = new Date(endDate);
 
                 // Count Working Days in this chunk
@@ -3220,7 +3220,7 @@
                         goalsBySeller.set(rcaName, { totalFat: 0, totalVol: 0, totalPos: 0 });
                     }
                     const sellerGoals = goalsBySeller.get(rcaName);
-                    
+
                     if (clientTotalFatGoal > 0) sellerGoals.totalFat += clientTotalFatGoal;
                     if (clientTotalVolGoal > 0) sellerGoals.totalVol += clientTotalVolGoal;
                     if (hasGoal) sellerGoals.totalPos += 1; // Count client as 1 target
@@ -3255,7 +3255,7 @@
 
             for(let i=0; i<allSalesData.length; i++) {
                 const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
-                
+
                 // Date Filter
                 const d = typeof s.DTPED === 'number' ? new Date(s.DTPED) : parseDate(s.DTPED);
                 if (!d || d.getUTCMonth() !== currentMonthIndex || d.getUTCFullYear() !== currentYear) continue;
@@ -3279,7 +3279,7 @@
                 // If filter is PEPSICO, we include everything (since we already filtered for PEPSICO above)
                 // If filter is ELMA, we check CODFOR 707, 708, 752
                 // If filter is FOODS, we check CODFOR 1119 (or specific sub-brands if needed, but usually 1119 is Foods)
-                
+
                 const codFor = String(s.CODFOR);
                 if (pasta === 'ELMA') {
                     if (!['707', '708', '752'].includes(codFor)) continue;
@@ -3295,7 +3295,7 @@
                 // "Meta Vs Realizado" implies comparing the same entity.
                 // If I filter Supervisor "X", I show Seller Goals for X and Seller Sales for X.
                 // Let's use the standard filter logic:
-                
+
                 if (supervisorsSet.size > 0 && !supervisorsSet.has(s.SUPERV)) continue;
                 if (sellersSet.size > 0 && !sellersSet.has(s.NOME)) continue;
                 if (suppliersSet.size > 0 && !suppliersSet.has(s.CODFOR)) continue;
@@ -3309,10 +3309,10 @@
                     salesBySeller.set(sellerName, { totalFat: 0, totalVol: 0, weeksFat: [0, 0, 0, 0, 0], weeksVol: [0, 0, 0, 0, 0], totalPos: 0 });
                 }
                 const entry = salesBySeller.get(sellerName);
-                
+
                 entry.totalFat += valFat;
                 entry.totalVol += valVol;
-                
+
                 if (weekIdx !== -1 && weekIdx < 5) {
                     entry.weeksFat[weekIdx] += valFat;
                     entry.weeksVol[weekIdx] += valVol;
@@ -3336,7 +3336,7 @@
         function renderMetaRealizadoTable(data, weeks, totalWorkingDays) {
             const tableHead = document.getElementById('meta-realizado-table-head');
             const tableBody = document.getElementById('meta-realizado-table-body');
-            
+
             // Build Headers
             let headerHTML = `
                 <tr>
@@ -3365,7 +3365,7 @@
                 `;
             });
             headerHTML += `</tr>`;
-            
+
             tableHead.innerHTML = headerHTML;
 
             // Build Body
@@ -3373,7 +3373,7 @@
             const rowsHTML = data.map(row => {
                 const metaTotalStr = row.metaTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 const realTotalStr = row.realTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                
+
                 let cells = `
                     <td class="px-3 py-2 font-medium text-slate-200 border-r border-b border-slate-700 sticky left-0 bg-[#1d2347] z-30 truncate" title="${row.name}">${getFirstName(row.name)}</td>
                     <td class="px-2 py-2 text-right bg-blue-900/10 text-teal-400 border-r border-b border-slate-700/50 text-xs">${metaTotalStr}</td>
@@ -3383,7 +3383,7 @@
                 row.weekData.forEach(w => {
                     const wMetaStr = w.meta.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                     const wRealStr = w.real.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                    
+
                     // Simple logic: Green if Real >= Meta, Red if Real < Meta (only if week has passed? Or always?)
                     // Let's keep it neutral for now or simple colors.
                     const realClass = w.real >= w.meta ? 'text-green-400' : 'text-slate-300';
@@ -3408,13 +3408,13 @@
             // Destroy previous chart if exists (assume we store it in charts object)
             // Wait, createChart helper handles destruction if we pass ID. But here we have container ID.
             // Let's use a canvas inside the container.
-            
+
             let canvas = ctx.querySelector('canvas');
             if (!canvas) {
                 canvas = document.createElement('canvas');
                 ctx.appendChild(canvas);
             }
-            
+
             const chartId = 'metaRealizadoChartInstance';
             if (charts[chartId]) {
                 charts[chartId].destroy();
@@ -3426,7 +3426,7 @@
 
             // Adjust formatting based on metric
             const isVolume = currentMetaRealizadoMetric === 'peso';
-            
+
             // If Volume, display in Tons (input was Kg)
             const displayTotalMeta = isVolume ? totalMeta / 1000 : totalMeta;
             const displayTotalReal = isVolume ? totalReal / 1000 : totalReal;
@@ -3518,7 +3518,7 @@
         function updateMetaRealizadoView() {
             // 1. Get Data
             const { goalsBySeller, salesBySeller, weeks } = getMetaRealizadoFilteredData();
-            
+
             // Re-calculate Total Working Days
             let totalWorkingDays = weeks.reduce((sum, w) => sum + w.workingDays, 0);
             if (totalWorkingDays === 0) totalWorkingDays = 1;
@@ -3530,12 +3530,12 @@
             allSellers.forEach(sellerName => {
                 const goals = goalsBySeller.get(sellerName) || { totalFat: 0, totalVol: 0, totalPos: 0 };
                 const sales = salesBySeller.get(sellerName) || { totalFat: 0, totalVol: 0, weeksFat: [], weeksVol: [], totalPos: 0 };
-                
+
                 // Determine which metric to use for the main chart/table
                 // Note: The Table logic (renderMetaRealizadoTable) seems built for ONE metric (previously just Revenue).
                 // If we want the Table to also toggle or show both, we need to adjust it.
                 // Given the requirement "toggle button for R$/Ton", let's make the Table adhere to that too.
-                
+
                 let targetTotalGoal = 0;
                 let targetRealizedTotal = 0;
                 let targetRealizedWeeks = [];
@@ -7458,7 +7458,7 @@ const supervisorGroups = new Map();
         function updateCitySuggestions(filterInput, suggestionsContainer, dataSource) {
             const forbidden = ['CIDADE', 'MUNICIPIO', 'CIDADE_CLIENTE', 'NOME DA CIDADE', 'CITY'];
             const inputValue = filterInput.value.toLowerCase();
-            
+
             if (!inputValue) {
                 suggestionsContainer.classList.add('hidden');
                 return;
@@ -7782,7 +7782,7 @@ const supervisorGroups = new Map();
             const currentMonthDatasets = weekNumbers.map((weekNum, index) => ({ label: `Semana ${weekNum}`, data: weekLabels.map(day => salesByWeekAndDay[weekNum][day] || 0), backgroundColor: professionalPalette[index % professionalPalette.length] }));
             // Note: Calculate "Melhor Dia Mês Anterior" dynamically based on current filters
             const historicalDataForChart = [0, 0, 0, 0, 0];
-            
+
             // 1. Get Filtered History Data
             let historyDataForCalculation;
             if (filters.supervisor || filters.seller || filters.pasta) {
@@ -7798,7 +7798,7 @@ const supervisorGroups = new Map();
 
             // 3. Aggregate Sales by Date for the Previous Month
             const prevMonthSalesByDate = {}; // 'YYYY-MM-DD' -> Total
-            
+
             // Optimize iteration if it's a columnar dataset proxy (although array methods work)
             for (let i = 0; i < historyDataForCalculation.length; i++) {
                 const sale = historyDataForCalculation instanceof ColumnarDataset ? historyDataForCalculation.get(i) : historyDataForCalculation[i];
@@ -10878,7 +10878,7 @@ const supervisorGroups = new Map();
                             // Initial filter logic if needed, similar to other views
                             selectedMetaRealizadoSupervisors = updateSupervisorFilter(document.getElementById('meta-realizado-supervisor-filter-dropdown'), document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
                             selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData]);
-                            
+
                             updateMetaRealizadoView();
                             viewState.metaRealizado.dirty = false;
                         }
@@ -11134,7 +11134,7 @@ const supervisorGroups = new Map();
                     const sideMenu = document.getElementById('side-menu');
                     const sidebarOverlay = document.getElementById('sidebar-overlay');
                     if (sideMenu) {
-                        sideMenu.classList.remove('translate-x-0'); 
+                        sideMenu.classList.remove('translate-x-0');
                         sideMenu.classList.add('-translate-x-full');
                     }
                     if (sidebarOverlay) sidebarOverlay.classList.add('hidden');
@@ -12476,11 +12476,11 @@ const supervisorGroups = new Map();
                     else selectedMetaRealizadoSupervisors = selectedMetaRealizadoSupervisors.filter(s => s !== value);
 
                     selectedMetaRealizadoSupervisors = updateSupervisorFilter(metaRealizadoSupervisorFilterDropdown, document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
-                    
+
                     // Reset or Filter Sellers
                     selectedMetaRealizadoSellers = [];
                     selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData]);
-                    
+
                     debouncedUpdateMetaRealizado();
                 }
             });
@@ -12523,7 +12523,7 @@ const supervisorGroups = new Map();
                 metaRealizadoPastaContainer.addEventListener('click', (e) => {
                     if (e.target.tagName === 'BUTTON') {
                         const pasta = e.target.dataset.pasta;
-                        
+
                         // Toggle logic: If clicking active button, deselect (revert to PEPSICO/All).
                         // If clicking inactive, select it.
                         if (currentMetaRealizadoPasta === pasta) {
@@ -12542,11 +12542,11 @@ const supervisorGroups = new Map();
                                 b.classList.remove('bg-teal-600', 'hover:bg-teal-500');
                             }
                         });
-                        
+
                         debouncedUpdateMetaRealizado();
                     }
                 });
-                
+
                 // Initialize default active button style
                 metaRealizadoPastaContainer.querySelectorAll('.pasta-btn').forEach(b => {
                     if (b.dataset.pasta === currentMetaRealizadoPasta) {
@@ -12576,14 +12576,14 @@ const supervisorGroups = new Map();
                         // Let's update text to indicate CURRENT state or NEXT state?
                         // Usually toggle buttons indicate current state.
                         // Let's use: "Faturamento (R$)" and "Volume (Ton)" as labels for clarity, or stick to user image.
-                        // User image: "R$ / Ton". 
+                        // User image: "R$ / Ton".
                         // Let's assume the button text is static "R$ / Ton" and we just toggle state?
                         // No, usually buttons show what is selected.
                         // Let's change text to "Volume (Ton)" when Ton is selected, and "Faturamento (R$)" when R$ is selected?
                         // Or just keep "R$ / Ton" and toggle a visual indicator?
                         // Let's just update the chart and maybe change button style/text slightly.
                     }
-                    
+
                     // Simple Toggle Text Update
                     metaRealizadoMetricToggleBtn.textContent = currentMetaRealizadoMetric === 'valor' ? 'R$ / Ton' : 'Toneladas';
 
@@ -12591,7 +12591,7 @@ const supervisorGroups = new Map();
                     if (metaRealizadoChartTitle) {
                         metaRealizadoChartTitle.textContent = currentMetaRealizadoMetric === 'valor' ? 'Meta Vs Realizado - Faturamento' : 'Meta Vs Realizado - Tonelada';
                     }
-                    
+
                     updateMetaRealizado();
                 });
             }
@@ -12606,7 +12606,7 @@ const supervisorGroups = new Map();
                 // Reset UI
                 updateSupervisorFilter(metaRealizadoSupervisorFilterDropdown, document.getElementById('meta-realizado-supervisor-filter-text'), [], allSalesData);
                 updateSellerFilter([], metaRealizadoSellerFilterDropdown, document.getElementById('meta-realizado-vendedor-filter-text'), [], allSalesData);
-                
+
                 // Reset Supplier UI
                 document.getElementById('meta-realizado-supplier-filter-text').textContent = 'Todos';
                 metaRealizadoSupplierFilterDropdown.querySelectorAll('input').forEach(cb => cb.checked = false);
@@ -13166,15 +13166,23 @@ const supervisorGroups = new Map();
             if (!sellerCode) return defaults;
 
             const clients = optimizedData.clientsByRca.get(sellerCode) || [];
+            // Use same active filter as updateGoalsSvView
             const activeClients = clients.filter(c => {
-                const cod = String(c["Código"] || c["codigo_cliente"]);
-                const rca1 = String(c.rca1 || "").trim();
-                const isAmericanas = (c.razaoSocial || "").toUpperCase().includes("AMERICANAS");
-                return (isAmericanas || rca1 !== "53" || clientsWithSalesThisMonth.has(cod));
+                const cod = String(c['Código'] || c['codigo_cliente']);
+                const rca1 = String(c.rca1 || '').trim();
+                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
+                return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
             });
 
+            // Calculate Positivation Base (Unique Clients buying > 1 in History)
+            // Using allHistoryData (optimizedData.historyById)
+            // We need to iterate History for these active clients.
+
+            // Reusing logic from updateGoalsSvView
+            // Optimized: We can iterate clientHistoryIds directly
+
             activeClients.forEach(client => {
-                const codCli = String(client["Código"] || client["codigo_cliente"]);
+                const codCli = String(client['Código'] || client['codigo_cliente']);
                 const historyIds = optimizedData.indices.history.byClient.get(codCli);
 
                 if (historyIds) {
@@ -13183,18 +13191,19 @@ const supervisorGroups = new Map();
 
                     historyIds.forEach(id => {
                         const sale = optimizedData.historyById.get(id);
-                        if (String(codCli).trim() === "9569" && (String(sale.CODUSUR).trim() === "53" || String(sale.CODUSUR).trim() === "053")) return;
+                        // EXCEPTION: Exclude Balcão (53) sales for Client 9569
+                        if (String(codCli).trim() === '9569' && (String(sale.CODUSUR).trim() === '53' || String(sale.CODUSUR).trim() === '053')) return;
 
-                        const isRev = (sale.TIPOVENDA === "1" || sale.TIPOVENDA === "9");
+                        const isRev = (sale.TIPOVENDA === '1' || sale.TIPOVENDA === '9');
                         if (!isRev) return;
 
                         const codFor = String(sale.CODFOR);
-                        const desc = (sale.DESCRICAO || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+                        const desc = (sale.DESCRICAO || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
 
-                        if (codFor === "707" || codFor === "708" || codFor === "752") {
+                        if (codFor === '707' || codFor === '708' || codFor === '752') {
                             clientElmaFat += sale.VLVENDA;
-                        } else if (codFor === "1119") {
-                            if (desc.includes("TODDYNHO") || desc.includes("TODDY") || desc.includes("QUAKER") || desc.includes("KEROCOCO")) {
+                        } else if (codFor === '1119') {
+                            if (desc.includes('TODDYNHO') || desc.includes('TODDY') || desc.includes('QUAKER') || desc.includes('KEROCOCO')) {
                                 clientFoodsFat += sale.VLVENDA;
                             }
                         }
@@ -13205,20 +13214,21 @@ const supervisorGroups = new Map();
                 }
             });
 
-            const elmaAdj = goalsPosAdjustments["ELMA_ALL"] ? (goalsPosAdjustments["ELMA_ALL"].get(sellerName) || 0) : 0;
+            // Calculate Mix Targets
+            // Base: Active Elma Clients + ELMA Adjustment (from global `goalsPosAdjustments`)
+            const elmaAdj = goalsPosAdjustments['ELMA_ALL'] ? (goalsPosAdjustments['ELMA_ALL'].get(sellerName) || 0) : 0;
             const elmaBase = defaults.elmaPos + elmaAdj;
 
             defaults.mixSalty = Math.round(elmaBase * 0.50);
             defaults.mixFoods = Math.round(elmaBase * 0.30);
 
-            if (sellerCode === "1001") {
+            if (sellerCode === '1001') {
                 defaults.mixSalty = 0;
                 defaults.mixFoods = 0;
             }
 
             return defaults;
         }
-
         function parseGoalsSvStructure(text) {
             console.log("[Parser] Iniciando parse...");
             const lines = text.replace(/[\r\n]+$/, '').split(/\r?\n/);
@@ -13316,9 +13326,9 @@ const supervisorGroups = new Map();
 
                 const dotIdx = clean.lastIndexOf('.');
                 const commaIdx = clean.lastIndexOf(',');
-                
+
                 if (dotIdx > -1 && commaIdx > -1) {
-                    if (dotIdx > commaIdx) clean = clean.replace(/,/g, ''); 
+                    if (dotIdx > commaIdx) clean = clean.replace(/,/g, '');
                     else clean = clean.replace(/\./g, '').replace(',', '.');
                 } else if (commaIdx > -1) {
                     if (/,\d{3}$/.test(clean)) clean = clean.replace(/,/g, '');
@@ -13333,7 +13343,7 @@ const supervisorGroups = new Map();
             // Identify Vendor Column Index (Name)
             // Usually Index 1 (Code, Name, ...)
             // We scan first few rows to find valid seller names
-            let nameColIndex = 1; 
+            let nameColIndex = 1;
             // Basic Heuristic: If col 0 looks like a name and col 1 is number, maybe it's col 0.
             // But standard template is [Code, Name, ...]. We stick to 1 for now or 0 if 1 is empty.
 
@@ -13349,24 +13359,7 @@ const supervisorGroups = new Map();
                      if (row[0] && isNaN(parseImportValue(row[0]))) sellerName = row[0];
                 }
 
-                if (!sellerName) continue; 
-                
-                // --- ENHANCED FILTER: Ignore Supervisors, Aggregates, and BALCAO ---
-                const upperName = sellerName.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-
-                // 1. Explicit Blocklist
-                if (upperName === 'BALCAO' || upperName === 'BALCÃO' ||
-                    upperName.includes('TOTAL') || upperName.includes('SUPERVISOR') || upperName.includes('GERAL')) {
-                    continue;
-                }
-
-                // 2. Dynamic Supervisor Check
-                // If the name is a known Supervisor (key in rcasBySupervisor), ignore it.
-                // Assuming supervisors are not also sellers in this context (or we only want leaf sellers).
-                if (optimizedData.rcasBySupervisor.has(upperName) || optimizedData.rcasBySupervisor.has(sellerName)) {
-                    continue;
-                }
-                // ------------------------------------------------
+                if (!sellerName) continue;
 
                 if (processedSellers.has(sellerName)) continue;
                 processedSellers.add(sellerName);
@@ -13395,7 +13388,7 @@ const supervisorGroups = new Map();
                 const posCats = ['GERAL', 'TOTAL ELMA', 'TOTAL FOODS', '707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
                 posCats.forEach(cat => {
                     let searchKey = `${cat}_POS_AJUSTE`;
-                    if (cat === 'GERAL') searchKey = `${cat}_POS_META`; 
+                    if (cat === 'GERAL') searchKey = `${cat}_POS_META`;
                     let normCat = cat;
                     if (cat === 'TOTAL ELMA') normCat = 'total_elma';
                     if (cat === 'TOTAL FOODS') normCat = 'total_foods';
@@ -13432,120 +13425,12 @@ const supervisorGroups = new Map();
         const analysisContainer = document.getElementById('import-analysis-container');
         const analysisBody = document.getElementById('import-analysis-table-body');
         const analysisBadges = document.getElementById('import-summary-badges');
-            const importPaginationControls = document.createElement('div');
-            importPaginationControls.id = 'import-pagination-controls';
-            importPaginationControls.className = 'flex justify-between items-center mt-4 hidden';
-            importPaginationControls.innerHTML = `
-                <button id="import-prev-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50 text-xs" disabled>Anterior</button>
-                <span id="import-page-info-text" class="text-slate-400 text-xs">Página 1 de 1</span>
-                <button id="import-next-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50 text-xs" disabled>Próxima</button>
-            `;
-            // Insert after table container (which is inside analysisContainer -> div.bg-slate-900)
-            // analysisContainer contains a header div, result div, and then the table container div.
-            // We need to find the table container.
 
         let pendingImportUpdates = [];
-            let importTablePage = 1;
-            const importTablePageSize = 19;
-
-            function renderImportTable() {
-                if (!analysisBody) return;
-                analysisBody.innerHTML = '';
-
-                const totalPages = Math.ceil(pendingImportUpdates.length / importTablePageSize);
-                if (importTablePage > totalPages && totalPages > 0) importTablePage = totalPages;
-                if (totalPages === 0) importTablePage = 1;
-
-                const start = (importTablePage - 1) * importTablePageSize;
-                const end = start + importTablePageSize;
-                const pageItems = pendingImportUpdates.slice(start, end);
-
-                const formatGoalValue = (val, type) => {
-                    if (type === 'rev') return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                    if (type === 'vol') return val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' Kg';
-                    return Math.round(val).toString();
-                };
-
-                pageItems.forEach(u => {
-                    const row = document.createElement('tr');
-
-                    const currentVal = getSellerCurrentGoal(u.seller, u.category, u.type);
-                    const newVal = u.val;
-                    const diff = newVal - currentVal;
-
-                    const currentValStr = formatGoalValue(currentVal, u.type);
-                    const newValStr = formatGoalValue(newVal, u.type);
-                    const diffStr = formatGoalValue(diff, u.type);
-
-                    let diffClass = "text-slate-500";
-                    if (diff > 0.001) diffClass = "text-green-400 font-bold";
-                    else if (diff < -0.001) diffClass = "text-red-400 font-bold";
-
-                    const sellerCode = optimizedData.rcaCodeByName.get(u.seller) || '-';
-
-                    row.innerHTML = `
-                        <td class="px-4 py-2 text-xs text-slate-300">${sellerCode}</td>
-                        <td class="px-4 py-2 text-xs text-slate-400">${u.seller}</td>
-                        <td class="px-4 py-2 text-xs text-blue-300">${u.category}</td>
-                        <td class="px-4 py-2 text-xs text-slate-400 font-mono text-right">${currentValStr}</td>
-                        <td class="px-4 py-2 text-xs text-white font-bold font-mono text-right">${newValStr}</td>
-                        <td class="px-4 py-2 text-xs ${diffClass} font-mono text-right">${diff > 0 ? '+' : ''}${diffStr}</td>
-                        <td class="px-4 py-2 text-center text-xs"><span class="px-2 py-1 rounded-full bg-blue-900/50 text-blue-200 text-[10px]">Importar</span></td>
-                    `;
-                    analysisBody.appendChild(row);
-                });
-
-                // Update Pagination Controls
-                const prevBtn = document.getElementById('import-prev-page-btn');
-                const nextBtn = document.getElementById('import-next-page-btn');
-                const infoText = document.getElementById('import-page-info-text');
-                const paginationContainer = document.getElementById('import-pagination-controls');
-
-                if (paginationContainer) {
-                    if (pendingImportUpdates.length > importTablePageSize) {
-                        paginationContainer.classList.remove('hidden');
-                        if(infoText) infoText.textContent = `Página ${importTablePage} de ${totalPages}`;
-                        if(prevBtn) prevBtn.disabled = importTablePage === 1;
-                        if(nextBtn) nextBtn.disabled = importTablePage === totalPages;
-                    } else {
-                        paginationContainer.classList.add('hidden');
-                    }
-                }
-            }
 
         if (importBtn && importModal) {
             const dropZone = document.getElementById('import-drop-zone');
             const fileInput = document.getElementById('import-goals-file');
-
-            // Inject Pagination Controls into Analysis Container if not present
-            if (!document.getElementById('import-pagination-controls')) {
-                const tableContainer = analysisContainer.querySelector('.bg-slate-900.rounded-lg.border.border-slate-700');
-                if (tableContainer) {
-                    tableContainer.parentNode.insertBefore(importPaginationControls, tableContainer.nextSibling);
-                }
-            }
-
-            // Bind Pagination Listeners
-            const prevBtn = document.getElementById('import-prev-page-btn');
-            const nextBtn = document.getElementById('import-next-page-btn');
-
-            if (prevBtn) {
-                prevBtn.addEventListener('click', () => {
-                    if (importTablePage > 1) {
-                        importTablePage--;
-                        renderImportTable();
-                    }
-                });
-            }
-            if (nextBtn) {
-                nextBtn.addEventListener('click', () => {
-                    const totalPages = Math.ceil(pendingImportUpdates.length / importTablePageSize);
-                    if (importTablePage < totalPages) {
-                        importTablePage++;
-                        renderImportTable();
-                    }
-                });
-            }
 
             importBtn.addEventListener('click', () => {
                 importModal.classList.remove('hidden');
@@ -13553,7 +13438,7 @@ const supervisorGroups = new Map();
                 analysisContainer.classList.add('hidden');
                 importConfirmBtn.disabled = true;
                 importConfirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                
+
                 // Reset File Input
                 if (fileInput) fileInput.value = '';
                 if (dropZone) {
@@ -13618,7 +13503,7 @@ const supervisorGroups = new Map();
             function handleFiles(files) {
                 if (files.length === 0) return;
                 const file = files[0];
-                
+
                 // Visual Feedback: Loading
                 if (dropZone) {
                     dropZone.innerHTML = `
@@ -13637,13 +13522,13 @@ const supervisorGroups = new Map();
                     try {
                         const data = new Uint8Array(e.target.result);
                         const workbook = XLSX.read(data, {type: 'array'});
-                        
+
                         const sheetName = workbook.SheetNames[0];
                         const sheet = workbook.Sheets[sheetName];
-                        
+
                         // Convert to TSV for the parser
                         const tsv = XLSX.utils.sheet_to_csv(sheet, {FS: "\t"});
-                        
+
                         // Update UI
                         importTextarea.value = tsv;
                         if (dropZone) {
@@ -13653,7 +13538,7 @@ const supervisorGroups = new Map();
                                 <p class="text-slate-400 text-sm">${file.name} carregado.</p>
                             `;
                         }
-                        
+
                         // Auto-analyze
                         setTimeout(() => importAnalyzeBtn.click(), 500);
 
@@ -13686,22 +13571,7 @@ const supervisorGroups = new Map();
 
                 if (type === 'pos' || type === 'mix') {
                     const targets = goalsSellerTargets.get(sellerName);
-                    // FIX: Return Default Calculated Value if Manual Target is Missing
-                    if (targets && targets[category] !== undefined) {
-                        return targets[category];
-                    } else {
-                        // Calculate Default
-                        const defaults = calculateSellerDefaults(sellerName);
-                        if (category === 'total_elma') return defaults.elmaPos;
-                        if (category === 'total_foods') return defaults.foodsPos;
-                        if (category === 'mix_salty') return defaults.mixSalty;
-                        if (category === 'mix_foods') return defaults.mixFoods;
-                        // Fallback for leaf components? Currently Pos adjustments are manual.
-                        // If category is a leaf (e.g. 707), default adjustment is 0 (Natural Base is not stored here).
-                        // Note: parseGoalsSvStructure sends '707', '708' etc for Positivação.
-                        // We assume 0 for leaf adjustments if not set.
-                        return 0;
-                    }
+                    return targets ? (targets[category] || 0) : 0;
                 }
 
                 if (type === 'rev' || type === 'vol') {
@@ -13716,7 +13586,7 @@ const supervisorGroups = new Map();
 
                     let total = 0;
                     const leafCategories = resolveGoalCategory(category);
-                    
+
                     activeClients.forEach(client => {
                         const codCli = String(client['Código'] || client['codigo_cliente']);
                         const clientGoals = globalClientGoals.get(codCli);
@@ -13740,7 +13610,7 @@ const supervisorGroups = new Map();
                 const btn = document.getElementById('btn-generate-ai');
                 const container = document.getElementById('ai-insights-result');
                 const contentDiv = document.getElementById('ai-insights-content');
-                
+
                 if (!pendingImportUpdates || pendingImportUpdates.length === 0) return;
 
                 // UI Loading State
@@ -13762,22 +13632,14 @@ const supervisorGroups = new Map();
                         const current = getSellerCurrentGoal(u.seller, u.category, u.type);
                         const diff = u.val - current;
                         const pct = current > 0 ? (diff / current) * 100 : 100;
-                        
+
                         if (u.type === 'rev') summary.total_fat_diff += diff;
                         if (u.type === 'vol') summary.total_vol_diff += diff;
-
-                        // --- FIX: Filter out Supervisor/Aggregate names from AI Analysis Context ---
-                        const upperUName = u.seller.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-                        if (upperUName === 'BALCAO' || upperUName === 'BALCÃO' ||
-                            upperUName.includes('TOTAL') || upperUName.includes('SUPERVISOR') || upperUName.includes('GERAL') ||
-                            optimizedData.rcasBySupervisor.has(upperUName) || optimizedData.rcasBySupervisor.has(u.seller)) {
-                            return null;
-                        }
 
                         // Fetch Historical Context (History is critical for validation)
                         let historyAvg = 0;
                         let lastMonth = 0;
-                        
+
                         // We can get this from globalMetrics if cached, or recalculate.
                         // Simplest robust way: Recalculate context for this specific seller/category slice.
                         // (Reusing logic from getSellerCurrentGoal but for history)
@@ -13791,7 +13653,7 @@ const supervisorGroups = new Map();
                                     const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
                                     return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
                                 });
-                                
+
                                 const leafCategories = resolveGoalCategory(u.category);
                                 const isHistoryColumnar = optimizedData.historyById instanceof IndexMap;
                                 const historyValues = isHistoryColumnar ? optimizedData.historyById._source.values : null;
@@ -13808,10 +13670,10 @@ const supervisorGroups = new Map();
                                         clientHistoryIds.forEach(id => {
                                             const idx = isHistoryColumnar ? optimizedData.historyById.getIndex(id) : id;
                                             const sale = isHistoryColumnar ? null : optimizedData.historyById.get(id); // If not columnar
-                                            
+
                                             // Helper to get val
                                             const getV = (prop) => isHistoryColumnar ? historyValues[prop][idx] : sale[prop];
-                                            
+
                                             const codFor = String(getV('CODFOR'));
                                             const desc = normalize(getV('DESCRICAO') || '');
                                             let isMatch = false;
@@ -13828,9 +13690,9 @@ const supervisorGroups = new Map();
 
                                             if (isMatch) {
                                                 const val = u.type === 'rev' ? (Number(getV('VLVENDA')) || 0) : (Number(getV('TOTPESOLIQ')) || 0);
-                                                
+
                                                 historyAvg += val; // Total sum for quarter
-                                                
+
                                                 const dtPed = getV('DTPED');
                                                 const d = typeof dtPed === 'number' ? new Date(dtPed) : parseDate(dtPed);
                                                 if (d && d.getUTCMonth() === prevMonthIndex && d.getUTCFullYear() === prevMonthYear) {
@@ -13856,31 +13718,31 @@ const supervisorGroups = new Map();
                             diff_vs_history: u.val - historyAvg,
                             pct_growth_vs_avg: historyAvg > 0 ? ((u.val - historyAvg) / historyAvg) * 100 : 100
                         };
-                    }).filter(i => i !== null); // Filter out nulls from exclusions
+                    });
 
                     // Sort by Impact (Absolute Difference) to send most relevant info
                     detailedContext.sort((a, b) => Math.abs(b.diff_vs_current) - Math.abs(a.diff_vs_current));
                     const topContext = detailedContext.slice(0, 30).map(i => ({
                         ...i,
                         pct_growth_vs_avg: i.pct_growth_vs_avg.toFixed(1) + '%'
-                    })); 
+                    }));
 
                     const promptText = `
                         Atue como um Gerente Nacional de Vendas experiente da Prime Distribuição.
                         Analise a nova proposta de metas (Proposed Goal) comparando com o Histórico de Vendas (History Avg / Last Month).
-                        
+
                         Contexto Geral:
                         - Diferença Total (R$) Proposta vs Atual: R$ ${summary.total_fat_diff.toLocaleString('pt-BR')}
-                        
+
                         Dados Detalhados (Top Alterações):
                         ${JSON.stringify(topContext)}
-                        
+
                         Gere um relatório em Markdown com:
                         1. **Estratégia Identificada**: O que a mudança sugere? (Ex: Estamos puxando muito acima da média histórica?).
                         2. **Validação de Realismo**: Aponte metas que estão desviando muito (>20%) da média histórica (History Avg). Isso é sustentável?
                         3. **Risco de Quebra**: Vendedores com metas muito altas vs. histórico recente.
                         4. **Oportunidades**: Onde estamos sendo conservadores demais (meta abaixo do histórico)?
-                        
+
                         Seja crítico e use emojis.
                     `;
 
@@ -13895,7 +13757,7 @@ const supervisorGroups = new Map();
 
                     const response = await fetch(`https://api.groq.com/openai/v1/chat/completions`, {
                         method: 'POST',
-                        headers: { 
+                        headers: {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${API_KEY}`
                         },
@@ -13906,9 +13768,9 @@ const supervisorGroups = new Map();
                     });
 
                     const data = await response.json();
-                    
+
                     if (data.error) throw new Error(data.error.message);
-                    
+
                     const aiText = data.choices[0].message.content;
 
                     // 3. Render Result
@@ -13936,7 +13798,7 @@ const supervisorGroups = new Map();
             function renderAiSummaryChart(fatDiff) {
                 const chartContainer = document.getElementById('ai-chart-container');
                 if(!chartContainer) return;
-                
+
                 // Clear previous canvas
                 chartContainer.innerHTML = '<canvas id="aiSummaryChart"></canvas>';
                 const ctx = document.getElementById('aiSummaryChart').getContext('2d');
@@ -13946,7 +13808,7 @@ const supervisorGroups = new Map();
                 // Let's iterate updates again to sum "Current" and "Proposed" totals for Revenue only.
                 let totalCurrent = 0;
                 let totalProposed = 0;
-                
+
                 pendingImportUpdates.forEach(u => {
                     if (u.type === 'rev') {
                         const cur = getSellerCurrentGoal(u.seller, u.category, u.type);
@@ -13996,7 +13858,7 @@ const supervisorGroups = new Map();
                         return;
                     }
                     console.log("Iniciando análise. Tamanho do texto:", text.length);
-                    
+
                     const updates = parseGoalsSvStructure(text);
                     console.log("Resultado da análise:", updates ? updates.length : "null");
 
@@ -14004,16 +13866,49 @@ const supervisorGroups = new Map();
                         alert("Nenhum dado válido encontrado para atualização. \n\nVerifique se:\n1. O arquivo possui os cabeçalhos corretos (3 linhas iniciais).\n2. As colunas de 'Ajuste' contêm valores numéricos.\n3. Os nomes dos vendedores correspondem ao cadastro.");
                         return;
                     }
-                    
+
                     pendingImportUpdates = updates;
-                    
-                    // Reset to page 1 and render using the pagination function
-                    importTablePage = 1;
-                    renderImportTable();
-                    
+
+                    const formatGoalValue = (val, type) => {
+                        if (type === 'rev') return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                        if (type === 'vol') return val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' Kg';
+                        return Math.round(val).toString();
+                    };
+
+                    // Render Analysis
+                    analysisBody.innerHTML = '';
+                    updates.slice(0, 100).forEach(u => {
+                        const row = document.createElement('tr');
+
+                        const currentVal = getSellerCurrentGoal(u.seller, u.category, u.type);
+                        const newVal = u.val;
+                        const diff = newVal - currentVal;
+
+                        const currentValStr = formatGoalValue(currentVal, u.type);
+                        const newValStr = formatGoalValue(newVal, u.type);
+                        const diffStr = formatGoalValue(diff, u.type);
+
+                        let diffClass = "text-slate-500";
+                        if (diff > 0.001) diffClass = "text-green-400 font-bold";
+                        else if (diff < -0.001) diffClass = "text-red-400 font-bold";
+
+                        const sellerCode = optimizedData.rcaCodeByName.get(u.seller) || '-';
+
+                        row.innerHTML = `
+                            <td class="px-4 py-2 text-xs text-slate-300">${sellerCode}</td>
+                            <td class="px-4 py-2 text-xs text-slate-400">${u.seller}</td>
+                            <td class="px-4 py-2 text-xs text-blue-300">${u.category}</td>
+                            <td class="px-4 py-2 text-xs text-slate-400 font-mono text-right">${currentValStr}</td>
+                            <td class="px-4 py-2 text-xs text-white font-bold font-mono text-right">${newValStr}</td>
+                            <td class="px-4 py-2 text-xs ${diffClass} font-mono text-right">${diff > 0 ? '+' : ''}${diffStr}</td>
+                            <td class="px-4 py-2 text-center text-xs"><span class="px-2 py-1 rounded-full bg-blue-900/50 text-blue-200 text-[10px]">Importar</span></td>
+                        `;
+                        analysisBody.appendChild(row);
+                    });
+
                     analysisBadges.innerHTML = `<span class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">${updates.length} Registros Encontrados</span>`;
                     analysisContainer.classList.remove('hidden');
-                    
+
                     // Force Scroll
                     analysisContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -14034,8 +13929,7 @@ const supervisorGroups = new Map();
                 try {
                     let countRev = 0;
                     let countPos = 0;
-                    
-                    // 1. Process Manual Updates (Imported)
+
                     pendingImportUpdates.forEach(u => {
                         if (u.type === 'rev') {
                             distributeSellerGoal(u.seller, u.category, u.val, 'fat');
@@ -14052,34 +13946,9 @@ const supervisorGroups = new Map();
                         }
                     });
 
-                    // 2. Backfill Defaults for ALL Active Sellers
-                    // Iterate all active sellers to ensure their calculated "Suggestions" are saved if not manually set.
-                    // We get active sellers from optimizedData.rcasBySupervisor
-                    const activeSellerNames = new Set();
-                    optimizedData.rcasBySupervisor.forEach(rcas => {
-                        rcas.forEach(code => {
-                            const name = optimizedData.rcaNameByCode.get(code);
-                            if (name) activeSellerNames.add(name);
-                        });
-                    });
-
-                    activeSellerNames.forEach(sellerName => {
-                        if (!goalsSellerTargets.has(sellerName)) goalsSellerTargets.set(sellerName, {});
-                        const targets = goalsSellerTargets.get(sellerName);
-
-                        // Calculate Defaults
-                        const defaults = calculateSellerDefaults(sellerName);
-
-                        // Backfill if missing
-                        if (targets['total_elma'] === undefined) targets['total_elma'] = defaults.elmaPos;
-                        if (targets['total_foods'] === undefined) targets['total_foods'] = defaults.foodsPos;
-                        if (targets['mix_salty'] === undefined) targets['mix_salty'] = defaults.mixSalty;
-                        if (targets['mix_foods'] === undefined) targets['mix_foods'] = defaults.mixFoods;
-                    });
-
                     // Save to Supabase
                     const success = await saveGoalsToSupabase();
-                    
+
                     if (success) {
                         alert(`Importação e salvamento concluídos!\n${countRev} distribuições de Faturamento/Volume.\n${countPos} metas de Positivação/Mix atualizadas.`);
                         closeModal();
