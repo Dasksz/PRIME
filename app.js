@@ -13154,6 +13154,71 @@ const supervisorGroups = new Map();
 
         // --- IMPORT PARSER AND LOGIC ---
 
+        function calculateSellerDefaults(sellerName) {
+            const defaults = {
+                elmaPos: 0,
+                foodsPos: 0,
+                mixSalty: 0,
+                mixFoods: 0
+            };
+
+            const sellerCode = optimizedData.rcaCodeByName.get(sellerName);
+            if (!sellerCode) return defaults;
+
+            const clients = optimizedData.clientsByRca.get(sellerCode) || [];
+            const activeClients = clients.filter(c => {
+                const cod = String(c["Código"] || c["codigo_cliente"]);
+                const rca1 = String(c.rca1 || "").trim();
+                const isAmericanas = (c.razaoSocial || "").toUpperCase().includes("AMERICANAS");
+                return (isAmericanas || rca1 !== "53" || clientsWithSalesThisMonth.has(cod));
+            });
+
+            activeClients.forEach(client => {
+                const codCli = String(client["Código"] || client["codigo_cliente"]);
+                const historyIds = optimizedData.indices.history.byClient.get(codCli);
+                
+                if (historyIds) {
+                    let clientElmaFat = 0;
+                    let clientFoodsFat = 0;
+
+                    historyIds.forEach(id => {
+                        const sale = optimizedData.historyById.get(id);
+                        if (String(codCli).trim() === "9569" && (String(sale.CODUSUR).trim() === "53" || String(sale.CODUSUR).trim() === "053")) return;
+
+                        const isRev = (sale.TIPOVENDA === "1" || sale.TIPOVENDA === "9");
+                        if (!isRev) return;
+
+                        const codFor = String(sale.CODFOR);
+                        const desc = (sale.DESCRICAO || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+
+                        if (codFor === "707" || codFor === "708" || codFor === "752") {
+                            clientElmaFat += sale.VLVENDA;
+                        } else if (codFor === "1119") {
+                            if (desc.includes("TODDYNHO") || desc.includes("TODDY") || desc.includes("QUAKER") || desc.includes("KEROCOCO")) {
+                                clientFoodsFat += sale.VLVENDA;
+                            }
+                        }
+                    });
+
+                    if (clientElmaFat >= 1) defaults.elmaPos++;
+                    if (clientFoodsFat >= 1) defaults.foodsPos++;
+                }
+            });
+
+            const elmaAdj = goalsPosAdjustments["ELMA_ALL"] ? (goalsPosAdjustments["ELMA_ALL"].get(sellerName) || 0) : 0;
+            const elmaBase = defaults.elmaPos + elmaAdj;
+
+            defaults.mixSalty = Math.round(elmaBase * 0.50);
+            defaults.mixFoods = Math.round(elmaBase * 0.30);
+
+            if (sellerCode === "1001") {
+                defaults.mixSalty = 0;
+                defaults.mixFoods = 0;
+            }
+
+            return defaults;
+        }
+
         function parseGoalsSvStructure(text) {
             console.log("[Parser] Iniciando parse...");
             const lines = text.replace(/[\r\n]+$/, '').split(/\r?\n/);
@@ -13286,6 +13351,23 @@ const supervisorGroups = new Map();
 
                 if (!sellerName) continue; 
                 
+                // --- ENHANCED FILTER: Ignore Supervisors, Aggregates, and BALCAO ---
+                const upperName = sellerName.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+                
+                // 1. Explicit Blocklist
+                if (upperName === 'BALCAO' || upperName === 'BALCÃO' || 
+                    upperName.includes('TOTAL') || upperName.includes('SUPERVISOR') || upperName.includes('GERAL')) {
+                    continue;
+                }
+
+                // 2. Dynamic Supervisor Check
+                // If the name is a known Supervisor (key in rcasBySupervisor), ignore it.
+                // Assuming supervisors are not also sellers in this context (or we only want leaf sellers).
+                if (optimizedData.rcasBySupervisor.has(upperName) || optimizedData.rcasBySupervisor.has(sellerName)) {
+                    continue;
+                }
+                // ------------------------------------------------
+
                 if (processedSellers.has(sellerName)) continue;
                 processedSellers.add(sellerName);
 
@@ -13350,12 +13432,120 @@ const supervisorGroups = new Map();
         const analysisContainer = document.getElementById('import-analysis-container');
         const analysisBody = document.getElementById('import-analysis-table-body');
         const analysisBadges = document.getElementById('import-summary-badges');
-
+            const importPaginationControls = document.createElement('div');
+            importPaginationControls.id = 'import-pagination-controls';
+            importPaginationControls.className = 'flex justify-between items-center mt-4 hidden';
+            importPaginationControls.innerHTML = `
+                <button id="import-prev-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50 text-xs" disabled>Anterior</button>
+                <span id="import-page-info-text" class="text-slate-400 text-xs">Página 1 de 1</span>
+                <button id="import-next-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50 text-xs" disabled>Próxima</button>
+            `;
+            // Insert after table container (which is inside analysisContainer -> div.bg-slate-900)
+            // analysisContainer contains a header div, result div, and then the table container div.
+            // We need to find the table container.
+            
         let pendingImportUpdates = [];
+            let importTablePage = 1;
+            const importTablePageSize = 19;
+
+            function renderImportTable() {
+                if (!analysisBody) return;
+                analysisBody.innerHTML = '';
+                
+                const totalPages = Math.ceil(pendingImportUpdates.length / importTablePageSize);
+                if (importTablePage > totalPages && totalPages > 0) importTablePage = totalPages;
+                if (totalPages === 0) importTablePage = 1;
+
+                const start = (importTablePage - 1) * importTablePageSize;
+                const end = start + importTablePageSize;
+                const pageItems = pendingImportUpdates.slice(start, end);
+
+                const formatGoalValue = (val, type) => {
+                    if (type === 'rev') return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                    if (type === 'vol') return val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' Kg';
+                    return Math.round(val).toString();
+                };
+
+                pageItems.forEach(u => {
+                    const row = document.createElement('tr');
+                    
+                    const currentVal = getSellerCurrentGoal(u.seller, u.category, u.type);
+                    const newVal = u.val;
+                    const diff = newVal - currentVal;
+
+                    const currentValStr = formatGoalValue(currentVal, u.type);
+                    const newValStr = formatGoalValue(newVal, u.type);
+                    const diffStr = formatGoalValue(diff, u.type);
+
+                    let diffClass = "text-slate-500";
+                    if (diff > 0.001) diffClass = "text-green-400 font-bold";
+                    else if (diff < -0.001) diffClass = "text-red-400 font-bold";
+
+                    const sellerCode = optimizedData.rcaCodeByName.get(u.seller) || '-';
+
+                    row.innerHTML = `
+                        <td class="px-4 py-2 text-xs text-slate-300">${sellerCode}</td>
+                        <td class="px-4 py-2 text-xs text-slate-400">${u.seller}</td>
+                        <td class="px-4 py-2 text-xs text-blue-300">${u.category}</td>
+                        <td class="px-4 py-2 text-xs text-slate-400 font-mono text-right">${currentValStr}</td>
+                        <td class="px-4 py-2 text-xs text-white font-bold font-mono text-right">${newValStr}</td>
+                        <td class="px-4 py-2 text-xs ${diffClass} font-mono text-right">${diff > 0 ? '+' : ''}${diffStr}</td>
+                        <td class="px-4 py-2 text-center text-xs"><span class="px-2 py-1 rounded-full bg-blue-900/50 text-blue-200 text-[10px]">Importar</span></td>
+                    `;
+                    analysisBody.appendChild(row);
+                });
+
+                // Update Pagination Controls
+                const prevBtn = document.getElementById('import-prev-page-btn');
+                const nextBtn = document.getElementById('import-next-page-btn');
+                const infoText = document.getElementById('import-page-info-text');
+                const paginationContainer = document.getElementById('import-pagination-controls');
+
+                if (paginationContainer) {
+                    if (pendingImportUpdates.length > importTablePageSize) {
+                        paginationContainer.classList.remove('hidden');
+                        if(infoText) infoText.textContent = `Página ${importTablePage} de ${totalPages}`;
+                        if(prevBtn) prevBtn.disabled = importTablePage === 1;
+                        if(nextBtn) nextBtn.disabled = importTablePage === totalPages;
+                    } else {
+                        paginationContainer.classList.add('hidden');
+                    }
+                }
+            }
 
         if (importBtn && importModal) {
             const dropZone = document.getElementById('import-drop-zone');
             const fileInput = document.getElementById('import-goals-file');
+
+            // Inject Pagination Controls into Analysis Container if not present
+            if (!document.getElementById('import-pagination-controls')) {
+                const tableContainer = analysisContainer.querySelector('.bg-slate-900.rounded-lg.border.border-slate-700');
+                if (tableContainer) {
+                    tableContainer.parentNode.insertBefore(importPaginationControls, tableContainer.nextSibling);
+                }
+            }
+
+            // Bind Pagination Listeners
+            const prevBtn = document.getElementById('import-prev-page-btn');
+            const nextBtn = document.getElementById('import-next-page-btn');
+            
+            if (prevBtn) {
+                prevBtn.addEventListener('click', () => {
+                    if (importTablePage > 1) {
+                        importTablePage--;
+                        renderImportTable();
+                    }
+                });
+            }
+            if (nextBtn) {
+                nextBtn.addEventListener('click', () => {
+                    const totalPages = Math.ceil(pendingImportUpdates.length / importTablePageSize);
+                    if (importTablePage < totalPages) {
+                        importTablePage++;
+                        renderImportTable();
+                    }
+                });
+            }
 
             importBtn.addEventListener('click', () => {
                 importModal.classList.remove('hidden');
@@ -13496,7 +13686,22 @@ const supervisorGroups = new Map();
 
                 if (type === 'pos' || type === 'mix') {
                     const targets = goalsSellerTargets.get(sellerName);
-                    return targets ? (targets[category] || 0) : 0;
+                    // FIX: Return Default Calculated Value if Manual Target is Missing
+                    if (targets && targets[category] !== undefined) {
+                        return targets[category];
+                    } else {
+                        // Calculate Default
+                        const defaults = calculateSellerDefaults(sellerName);
+                        if (category === 'total_elma') return defaults.elmaPos;
+                        if (category === 'total_foods') return defaults.foodsPos;
+                        if (category === 'mix_salty') return defaults.mixSalty;
+                        if (category === 'mix_foods') return defaults.mixFoods;
+                        // Fallback for leaf components? Currently Pos adjustments are manual.
+                        // If category is a leaf (e.g. 707), default adjustment is 0 (Natural Base is not stored here).
+                        // Note: parseGoalsSvStructure sends '707', '708' etc for Positivação.
+                        // We assume 0 for leaf adjustments if not set.
+                        return 0;
+                    }
                 }
 
                 if (type === 'rev' || type === 'vol') {
@@ -13560,6 +13765,14 @@ const supervisorGroups = new Map();
                         
                         if (u.type === 'rev') summary.total_fat_diff += diff;
                         if (u.type === 'vol') summary.total_vol_diff += diff;
+
+                        // --- FIX: Filter out Supervisor/Aggregate names from AI Analysis Context ---
+                        const upperUName = u.seller.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+                        if (upperUName === 'BALCAO' || upperUName === 'BALCÃO' || 
+                            upperUName.includes('TOTAL') || upperUName.includes('SUPERVISOR') || upperUName.includes('GERAL') ||
+                            optimizedData.rcasBySupervisor.has(upperUName) || optimizedData.rcasBySupervisor.has(u.seller)) {
+                            return null;
+                        }
 
                         // Fetch Historical Context (History is critical for validation)
                         let historyAvg = 0;
@@ -13643,7 +13856,7 @@ const supervisorGroups = new Map();
                             diff_vs_history: u.val - historyAvg,
                             pct_growth_vs_avg: historyAvg > 0 ? ((u.val - historyAvg) / historyAvg) * 100 : 100
                         };
-                    });
+                    }).filter(i => i !== null); // Filter out nulls from exclusions
 
                     // Sort by Impact (Absolute Difference) to send most relevant info
                     detailedContext.sort((a, b) => Math.abs(b.diff_vs_current) - Math.abs(a.diff_vs_current));
@@ -13794,42 +14007,9 @@ const supervisorGroups = new Map();
                     
                     pendingImportUpdates = updates;
                     
-                    const formatGoalValue = (val, type) => {
-                        if (type === 'rev') return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                        if (type === 'vol') return val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' Kg';
-                        return Math.round(val).toString();
-                    };
-
-                    // Render Analysis
-                    analysisBody.innerHTML = '';
-                    updates.slice(0, 100).forEach(u => {
-                        const row = document.createElement('tr');
-                        
-                        const currentVal = getSellerCurrentGoal(u.seller, u.category, u.type);
-                        const newVal = u.val;
-                        const diff = newVal - currentVal;
-
-                        const currentValStr = formatGoalValue(currentVal, u.type);
-                        const newValStr = formatGoalValue(newVal, u.type);
-                        const diffStr = formatGoalValue(diff, u.type);
-
-                        let diffClass = "text-slate-500";
-                        if (diff > 0.001) diffClass = "text-green-400 font-bold";
-                        else if (diff < -0.001) diffClass = "text-red-400 font-bold";
-
-                        const sellerCode = optimizedData.rcaCodeByName.get(u.seller) || '-';
-
-                        row.innerHTML = `
-                            <td class="px-4 py-2 text-xs text-slate-300">${sellerCode}</td>
-                            <td class="px-4 py-2 text-xs text-slate-400">${u.seller}</td>
-                            <td class="px-4 py-2 text-xs text-blue-300">${u.category}</td>
-                            <td class="px-4 py-2 text-xs text-slate-400 font-mono text-right">${currentValStr}</td>
-                            <td class="px-4 py-2 text-xs text-white font-bold font-mono text-right">${newValStr}</td>
-                            <td class="px-4 py-2 text-xs ${diffClass} font-mono text-right">${diff > 0 ? '+' : ''}${diffStr}</td>
-                            <td class="px-4 py-2 text-center text-xs"><span class="px-2 py-1 rounded-full bg-blue-900/50 text-blue-200 text-[10px]">Importar</span></td>
-                        `;
-                        analysisBody.appendChild(row);
-                    });
+                    // Reset to page 1 and render using the pagination function
+                    importTablePage = 1;
+                    renderImportTable();
                     
                     analysisBadges.innerHTML = `<span class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">${updates.length} Registros Encontrados</span>`;
                     analysisContainer.classList.remove('hidden');
@@ -13855,6 +14035,7 @@ const supervisorGroups = new Map();
                     let countRev = 0;
                     let countPos = 0;
                     
+                    // 1. Process Manual Updates (Imported)
                     pendingImportUpdates.forEach(u => {
                         if (u.type === 'rev') {
                             distributeSellerGoal(u.seller, u.category, u.val, 'fat');
@@ -13869,6 +14050,31 @@ const supervisorGroups = new Map();
                             t[u.category] = u.val;
                             countPos++;
                         }
+                    });
+
+                    // 2. Backfill Defaults for ALL Active Sellers
+                    // Iterate all active sellers to ensure their calculated "Suggestions" are saved if not manually set.
+                    // We get active sellers from optimizedData.rcasBySupervisor
+                    const activeSellerNames = new Set();
+                    optimizedData.rcasBySupervisor.forEach(rcas => {
+                        rcas.forEach(code => {
+                            const name = optimizedData.rcaNameByCode.get(code);
+                            if (name) activeSellerNames.add(name);
+                        });
+                    });
+
+                    activeSellerNames.forEach(sellerName => {
+                        if (!goalsSellerTargets.has(sellerName)) goalsSellerTargets.set(sellerName, {});
+                        const targets = goalsSellerTargets.get(sellerName);
+                        
+                        // Calculate Defaults
+                        const defaults = calculateSellerDefaults(sellerName);
+
+                        // Backfill if missing
+                        if (targets['total_elma'] === undefined) targets['total_elma'] = defaults.elmaPos;
+                        if (targets['total_foods'] === undefined) targets['total_foods'] = defaults.foodsPos;
+                        if (targets['mix_salty'] === undefined) targets['mix_salty'] = defaults.mixSalty;
+                        if (targets['mix_foods'] === undefined) targets['mix_foods'] = defaults.mixFoods;
                     });
 
                     // Save to Supabase
