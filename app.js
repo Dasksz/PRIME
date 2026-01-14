@@ -5112,14 +5112,32 @@
                             contextAdjustment = adjustmentMap.get(selectedGoalsGvSellers[0]) || 0;
                         }
                     } else {
-                        if (adjustmentMap) {
-                            const visibleSellers = new Set(clientMetrics.map(c => c.seller));
-                            adjustmentMap.forEach((val, seller) => {
-                                if (visibleSellers.has(seller)) {
-                                    contextAdjustment += val;
-                                }
-                            });
-                        }
+                        // Aggregate Logic for Multiple Sellers (Supervisor/Global)
+                        const visibleSellers = new Set(clientMetrics.map(c => c.seller));
+                        const naturalPosBySeller = new Map();
+                        
+                        // 1. Calculate Natural Pos per Seller
+                        clientMetrics.forEach(c => {
+                            if (c.metaPos > 0) {
+                                naturalPosBySeller.set(c.seller, (naturalPosBySeller.get(c.seller) || 0) + c.metaPos);
+                            }
+                        });
+
+                        // 2. Sum (Override OR (Natural + Adjustment))
+                        let sumTotal = 0;
+                        visibleSellers.forEach(seller => {
+                            const override = getSellerTargetOverride(seller, 'pos', currentGoalsSupplier);
+                            if (override !== null) {
+                                sumTotal += override;
+                            } else {
+                                const nat = naturalPosBySeller.get(seller) || 0;
+                                const adj = adjustmentMap ? (adjustmentMap.get(seller) || 0) : 0;
+                                sumTotal += (nat + adj);
+                            }
+                        });
+                        
+                        // Override the standard calculation
+                        absoluteOverride = sumTotal; 
                     }
 
                     const displayPos = absoluteOverride !== null ? absoluteOverride : (naturalTotalPos + contextAdjustment);
@@ -5216,10 +5234,34 @@
                                 adj = adjustmentsMap.get(selectedGoalsGvSellers[0]) || 0;
                             }
                         } else {
+                            // Aggregate Logic for Multiple Sellers (Mix)
                             const visibleSellers = new Set(clientMetrics.map(c => c.seller));
-                            adjustmentsMap.forEach((val, seller) => {
-                                if (visibleSellers.has(seller)) adj += val;
+                            const naturalBaseBySeller = new Map();
+
+                            // 1. Calculate Natural Base per Seller
+                            clientMetrics.forEach(c => {
+                                const sellerCode = optimizedData.rcaCodeByName.get(c.seller) || '';
+                                if (sellerCode !== '1001') {
+                                    if (c.metaPos > 0) {
+                                        naturalBaseBySeller.set(c.seller, (naturalBaseBySeller.get(c.seller) || 0) + 1);
+                                    }
+                                }
                             });
+
+                            // 2. Sum
+                            let sumTotal = 0;
+                            visibleSellers.forEach(seller => {
+                                const override = getSellerTargetOverride(seller, type === 'salty' ? 'mix_salty' : 'mix_foods', currentGoalsSupplier);
+                                if (override !== null) {
+                                    sumTotal += override;
+                                } else {
+                                    const base = naturalBaseBySeller.get(seller) || 0;
+                                    const nat = Math.round(base * (type === 'salty' ? 0.5 : 0.3));
+                                    const adj = adjustmentsMap ? (adjustmentsMap.get(seller) || 0) : 0;
+                                    sumTotal += (nat + adj);
+                                }
+                            });
+                            absOverride = sumTotal;
                         }
 
                         const displayVal = absOverride !== null ? absOverride : (naturalTarget + adj);
@@ -5260,10 +5302,10 @@
                     const globalNaturalFoods = Math.round(elmaTargetBase * 0.30);
 
                     if (goalsMixSaltyAdjustments['PEPSICO_ALL']) {
-                        handleMixCard('Salty', globalNaturalSalty, goalsMixSaltyAdjustments['PEPSICO_ALL'], 'goal-global-mix-salty', 'btn-distribute-mix-salty');
+                        handleMixCard('salty', globalNaturalSalty, goalsMixSaltyAdjustments['PEPSICO_ALL'], 'goal-global-mix-salty', 'btn-distribute-mix-salty');
                     }
                     if (goalsMixFoodsAdjustments['PEPSICO_ALL']) {
-                        handleMixCard('Foods', globalNaturalFoods, goalsMixFoodsAdjustments['PEPSICO_ALL'], 'goal-global-mix-foods', 'btn-distribute-mix-foods');
+                        handleMixCard('foods', globalNaturalFoods, goalsMixFoodsAdjustments['PEPSICO_ALL'], 'goal-global-mix-foods', 'btn-distribute-mix-foods');
                     }
 
                 } else {
