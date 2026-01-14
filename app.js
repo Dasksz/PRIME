@@ -13680,7 +13680,7 @@ const supervisorGroups = new Map();
                         throw new Error("Chave de API (gemini_api_key) não encontrada na tabela de metadados.");
                     }
 
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
