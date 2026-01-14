@@ -13160,13 +13160,21 @@ const supervisorGroups = new Map();
             const lines = text.replace(/[\r\n]+$/, '').split(/\r?\n/);
             const rows = lines.map(row => row.split('\t'));
             
+            console.log(`[Parser] Linhas encontradas: ${rows.length}`);
+
             // Filter out purely empty rows if any, but be careful not to shift header logic if it relies on fixed row indices
             // actually, we just need to ensure we have enough rows.
-            if (rows.length < 4) return null;
+            if (rows.length < 4) {
+                console.warn("[Parser] Menos de 4 linhas encontradas. Abortando.");
+                return null;
+            }
 
             const header0 = rows[0].map(h => h ? h.trim().toUpperCase() : '');
             const header1 = rows[1].map(h => h ? h.trim().toUpperCase() : '');
             const header2 = rows[2].map(h => h ? h.trim().toUpperCase() : '');
+
+            console.log("[Parser] Header 0 (Categorias):", header0.filter(h=>h).join(', '));
+            console.log("[Parser] Header 2 (Detalhes):", header2.filter(h=>h).join(', '));
 
             const colMap = {};
             let currentCategory = null;
@@ -13252,10 +13260,16 @@ const supervisorGroups = new Map();
                 return parseFloat(clean);
             };
 
+            console.log(`[Parser] Colunas mapeadas (Ajuste): ${Object.keys(colMap).filter(k => k.includes('AJUSTE')).length}`);
+
             for (let i = 3; i < rows.length; i++) {
                 const row = rows[i];
                 const sellerName = row[1]; // Vendedor Name
-                if (!sellerName || processedSellers.has(sellerName)) continue;
+                
+                // Ignorar linhas vazias ou totais se não tiver vendedor
+                if (!sellerName) continue; 
+                
+                if (processedSellers.has(sellerName)) continue;
                 processedSellers.add(sellerName);
 
                 // 1. Revenue (Detailed Categories)
@@ -13467,12 +13481,16 @@ const supervisorGroups = new Map();
                 try {
                     const text = importTextarea.value;
                     if (!text.trim()) {
-                        alert("Cole os dados.");
+                        alert("A área de texto está vazia. Cole os dados ou arraste um arquivo novamente.");
                         return;
                     }
+                    console.log("Iniciando análise. Tamanho do texto:", text.length);
+                    
                     const updates = parseGoalsSvStructure(text);
+                    console.log("Resultado da análise:", updates ? updates.length : "null");
+
                     if (!updates || updates.length === 0) {
-                        alert("Nenhum dado válido encontrado ou formato incorreto. Verifique se copiou os cabeçalhos.");
+                        alert("Nenhum dado válido encontrado para atualização. \n\nVerifique se:\n1. O arquivo possui os cabeçalhos corretos (3 linhas iniciais).\n2. As colunas de 'Ajuste' contêm valores numéricos.\n3. Os nomes dos vendedores correspondem ao cadastro.");
                         return;
                     }
                     
@@ -13502,8 +13520,12 @@ const supervisorGroups = new Map();
                         analysisBody.appendChild(row);
                     });
                     
-                    analysisBadges.innerHTML = `<span class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">${updates.length} Registros</span>`;
+                    analysisBadges.innerHTML = `<span class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">${updates.length} Registros Encontrados</span>`;
                     analysisContainer.classList.remove('hidden');
+                    
+                    // Force Scroll
+                    analysisContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
                     importConfirmBtn.disabled = false;
                     importConfirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
                 } catch (e) {
