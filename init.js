@@ -96,9 +96,11 @@
 
             // 1. Fetch Metadata from Supabase first (lightweight)
             let metadataRemote = null;
+            let metadataRemoteRaw = null;
             try {
                 const { data, error } = await supabaseClient.from('data_metadata').select('*');
                 if (!error && data && data.length > 0) {
+                    metadataRemoteRaw = data;
                     metadataRemote = {};
                     data.forEach(item => metadataRemote[item.key] = item.value);
                 }
@@ -456,7 +458,7 @@
                 activeProds = cachedData.activeProds;
                 stock = cachedData.stock;
                 innovations = cachedData.innovations;
-                metadata = cachedData.metadata;
+                metadata = metadataRemoteRaw || cachedData.metadata;
                 orders = cachedData.orders;
                 
                 // Refresh Coordinates specifically (Background Update for Cache)
