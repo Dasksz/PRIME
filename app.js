@@ -11985,6 +11985,51 @@ const supervisorGroups = new Map();
 
             const debouncedUpdateGoals = debounce(updateGoals, 400);
 
+            async function saveGoalsToSupabase() {
+                try {
+                    const monthKey = new Date().toISOString().slice(0, 7);
+
+                    // Serialize globalClientGoals (Map<CodCli, Map<Key, {fat: 0, vol: 0}>>)
+                    const clientsObj = {};
+                    for (const [clientId, clientMap] of globalClientGoals) {
+                        clientsObj[clientId] = Object.fromEntries(clientMap);
+                    }
+
+                    // Serialize goalsSellerTargets (Map<Seller, Targets>)
+                    const sellerTargetsObj = {};
+                    for (const [seller, targets] of goalsSellerTargets) {
+                        sellerTargetsObj[seller] = targets;
+                    }
+
+                    const payload = {
+                        clients: clientsObj,
+                        targets: goalsTargets,
+                        seller_targets: sellerTargetsObj
+                    };
+
+                    const { error } = await window.supabaseClient
+                        .from('goals_distribution')
+                        .upsert({
+                            month_key: monthKey,
+                            supplier: 'ALL',
+                            brand: 'GENERAL',
+                            goals_data: payload
+                        });
+
+                    if (error) {
+                        console.error('Erro ao salvar metas:', error);
+                        alert('Erro ao salvar metas no banco de dados. Verifique o console.');
+                        return false;
+                    }
+                    console.log('Metas salvas com sucesso.');
+                    return true;
+                } catch (err) {
+                    console.error('Exceção ao salvar metas:', err);
+                    alert('Erro inesperado ao salvar metas.');
+                    return false;
+                }
+            }
+
             async function loadGoalsFromSupabase() {
                 try {
                     const monthKey = new Date().toISOString().slice(0, 7);
@@ -13418,73 +13463,97 @@ const supervisorGroups = new Map();
             }
 
             importAnalyzeBtn.addEventListener('click', () => {
-                const text = importTextarea.value;
-                if (!text.trim()) {
-                    alert("Cole os dados.");
-                    return;
-                }
-                const updates = parseGoalsSvStructure(text);
-                if (!updates || updates.length === 0) {
-                    alert("Nenhum dado válido encontrado ou formato incorreto. Verifique se copiou os cabeçalhos.");
-                    return;
-                }
-                
-                pendingImportUpdates = updates;
-                
-                // Render Analysis
-                analysisBody.innerHTML = '';
-                updates.slice(0, 100).forEach(u => {
-                    const row = document.createElement('tr');
-                    let desc = '';
-                    if (u.type === 'rev') desc = `Faturamento (Ajuste): R$ ${u.val.toLocaleString('pt-BR')}`;
-                    else if (u.type === 'vol') desc = `Volume (Ajuste): ${u.val} Kg`;
-                    else if (u.type === 'pos') desc = `Positivação (Meta): ${u.val}`;
-                    else if (u.type === 'mix') desc = `Mix (Meta): ${u.val}`;
+                try {
+                    const text = importTextarea.value;
+                    if (!text.trim()) {
+                        alert("Cole os dados.");
+                        return;
+                    }
+                    const updates = parseGoalsSvStructure(text);
+                    if (!updates || updates.length === 0) {
+                        alert("Nenhum dado válido encontrado ou formato incorreto. Verifique se copiou os cabeçalhos.");
+                        return;
+                    }
                     
-                    const sellerCode = optimizedData.rcaCodeByName.get(u.seller) || '-';
+                    pendingImportUpdates = updates;
 
-                    row.innerHTML = `
-                        <td class="px-4 py-2 text-xs text-slate-300">${sellerCode}</td>
-                        <td class="px-4 py-2 text-xs text-slate-400">${u.seller}</td>
-                        <td class="px-4 py-2 text-xs text-blue-300">${u.category}</td>
-                        <td class="px-4 py-2 text-xs text-slate-500">-</td>
-                        <td class="px-4 py-2 text-xs text-white font-bold">${desc}</td>
-                        <td class="px-4 py-2 text-xs text-slate-500">-</td>
-                        <td class="px-4 py-2 text-center text-xs"><span class="px-2 py-1 rounded-full bg-blue-900/50 text-blue-200 text-[10px]">Importar</span></td>
-                    `;
-                    analysisBody.appendChild(row);
-                });
-                
-                analysisBadges.innerHTML = `<span class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">${updates.length} Registros</span>`;
-                analysisContainer.classList.remove('hidden');
-                importConfirmBtn.disabled = false;
-                importConfirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    // Render Analysis
+                    analysisBody.innerHTML = '';
+                    updates.slice(0, 100).forEach(u => {
+                        const row = document.createElement('tr');
+                        let desc = '';
+                        if (u.type === 'rev') desc = `Faturamento (Ajuste): R$ ${u.val.toLocaleString('pt-BR')}`;
+                        else if (u.type === 'vol') desc = `Volume (Ajuste): ${u.val} Kg`;
+                        else if (u.type === 'pos') desc = `Positivação (Meta): ${u.val}`;
+                        else if (u.type === 'mix') desc = `Mix (Meta): ${u.val}`;
+
+                        const sellerCode = optimizedData.rcaCodeByName.get(u.seller) || '-';
+
+                        row.innerHTML = `
+                            <td class="px-4 py-2 text-xs text-slate-300">${sellerCode}</td>
+                            <td class="px-4 py-2 text-xs text-slate-400">${u.seller}</td>
+                            <td class="px-4 py-2 text-xs text-blue-300">${u.category}</td>
+                            <td class="px-4 py-2 text-xs text-slate-500">-</td>
+                            <td class="px-4 py-2 text-xs text-white font-bold">${desc}</td>
+                            <td class="px-4 py-2 text-xs text-slate-500">-</td>
+                            <td class="px-4 py-2 text-center text-xs"><span class="px-2 py-1 rounded-full bg-blue-900/50 text-blue-200 text-[10px]">Importar</span></td>
+                        `;
+                        analysisBody.appendChild(row);
+                    });
+
+                    analysisBadges.innerHTML = `<span class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">${updates.length} Registros</span>`;
+                    analysisContainer.classList.remove('hidden');
+                    importConfirmBtn.disabled = false;
+                    importConfirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                } catch (e) {
+                    console.error("Erro ao analisar dados importados:", e);
+                    alert("Erro ao analisar dados: " + e.message);
+                }
             });
 
-            importConfirmBtn.addEventListener('click', () => {
-                let countRev = 0;
-                let countPos = 0;
-                
-                pendingImportUpdates.forEach(u => {
-                    if (u.type === 'rev') {
-                        distributeSellerGoal(u.seller, u.category, u.val, 'fat');
-                        countRev++;
-                    } else if (u.type === 'vol') {
-                        distributeSellerGoal(u.seller, u.category, u.val, 'vol');
-                        countRev++;
-                    } else if (u.type === 'pos' || u.type === 'mix') {
-                        // Update Seller Target Map
-                        if (!goalsSellerTargets.has(u.seller)) goalsSellerTargets.set(u.seller, {});
-                        const t = goalsSellerTargets.get(u.seller);
-                        t[u.category] = u.val;
-                        countPos++;
+            importConfirmBtn.addEventListener('click', async () => {
+                const originalText = importConfirmBtn.textContent;
+                importConfirmBtn.textContent = "Salvando...";
+                importConfirmBtn.disabled = true;
+                importConfirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+                try {
+                    let countRev = 0;
+                    let countPos = 0;
+
+                    pendingImportUpdates.forEach(u => {
+                        if (u.type === 'rev') {
+                            distributeSellerGoal(u.seller, u.category, u.val, 'fat');
+                            countRev++;
+                        } else if (u.type === 'vol') {
+                            distributeSellerGoal(u.seller, u.category, u.val, 'vol');
+                            countRev++;
+                        } else if (u.type === 'pos' || u.type === 'mix') {
+                            // Update Seller Target Map
+                            if (!goalsSellerTargets.has(u.seller)) goalsSellerTargets.set(u.seller, {});
+                            const t = goalsSellerTargets.get(u.seller);
+                            t[u.category] = u.val;
+                            countPos++;
+                        }
+                    });
+
+                    // Save to Supabase
+                    const success = await saveGoalsToSupabase();
+
+                    if (success) {
+                        alert(`Importação e salvamento concluídos!\n${countRev} distribuições de Faturamento/Volume.\n${countPos} metas de Positivação/Mix atualizadas.`);
+                        closeModal();
+                        updateGoalsSvView(); // Refresh Report View
+                        // Also refresh GV view metrics if active
+                        calculateGoalsMetrics();
                     }
-                });
-                
-                alert(`Importação concluída!\n${countRev} distribuições de Faturamento/Volume.\n${countPos} metas de Positivação/Mix atualizadas.`);
-                closeModal();
-                updateGoalsSvView(); // Refresh Report View
-                // Also refresh GV view metrics if active
-                calculateGoalsMetrics();
+                } catch (e) {
+                    console.error("Erro no processo de confirmação:", e);
+                    alert("Erro ao processar/salvar: " + e.message);
+                } finally {
+                    importConfirmBtn.textContent = originalText;
+                    importConfirmBtn.disabled = false;
+                    importConfirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
             });
         }
