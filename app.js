@@ -13476,6 +13476,55 @@ const supervisorGroups = new Map();
                 reader.readAsArrayBuffer(file);
             }
 
+            function resolveGoalCategory(category) {
+                // Returns list of leaf categories and metric type hint if needed
+                if (category === 'tonelada_elma') return ['707', '708', '752'];
+                if (category === 'tonelada_foods') return ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+                if (category === 'total_elma') return ['707', '708', '752'];
+                if (category === 'total_foods') return ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+                return [category];
+            }
+
+            function getSellerCurrentGoal(sellerName, category, type) {
+                const sellerCode = optimizedData.rcaCodeByName.get(sellerName);
+                if (!sellerCode) return 0;
+
+                if (type === 'pos' || type === 'mix') {
+                    const targets = goalsSellerTargets.get(sellerName);
+                    return targets ? (targets[category] || 0) : 0;
+                }
+
+                if (type === 'rev' || type === 'vol') {
+                    // Aggregate from globalClientGoals
+                    const clients = optimizedData.clientsByRca.get(sellerCode) || [];
+                    const activeClients = clients.filter(c => {
+                        const cod = String(c['Código'] || c['codigo_cliente']);
+                        const rca1 = String(c.rca1 || '').trim();
+                        const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
+                        return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
+                    });
+
+                    let total = 0;
+                    const leafCategories = resolveGoalCategory(category);
+
+                    activeClients.forEach(client => {
+                        const codCli = String(client['Código'] || client['codigo_cliente']);
+                        const clientGoals = globalClientGoals.get(codCli);
+                        if (clientGoals) {
+                            leafCategories.forEach(leaf => {
+                                const goal = clientGoals.get(leaf);
+                                if (goal) {
+                                    if (type === 'rev') total += (goal.fat || 0);
+                                    else if (type === 'vol') total += (goal.vol || 0);
+                                }
+                            });
+                        }
+                    });
+                    return total;
+                }
+                return 0;
+            }
+
             importAnalyzeBtn.addEventListener('click', () => {
                 console.log("Analisar Texto Colado clicado");
                 try {
@@ -13496,25 +13545,38 @@ const supervisorGroups = new Map();
                     
                     pendingImportUpdates = updates;
                     
+                    const formatGoalValue = (val, type) => {
+                        if (type === 'rev') return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                        if (type === 'vol') return val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' Kg';
+                        return Math.round(val).toString();
+                    };
+
                     // Render Analysis
                     analysisBody.innerHTML = '';
                     updates.slice(0, 100).forEach(u => {
                         const row = document.createElement('tr');
-                        let desc = '';
-                        if (u.type === 'rev') desc = `Faturamento (Ajuste): R$ ${u.val.toLocaleString('pt-BR')}`;
-                        else if (u.type === 'vol') desc = `Volume (Ajuste): ${u.val} Kg`;
-                        else if (u.type === 'pos') desc = `Positivação (Meta): ${u.val}`;
-                        else if (u.type === 'mix') desc = `Mix (Meta): ${u.val}`;
                         
+                        const currentVal = getSellerCurrentGoal(u.seller, u.category, u.type);
+                        const newVal = u.val;
+                        const diff = newVal - currentVal;
+
+                        const currentValStr = formatGoalValue(currentVal, u.type);
+                        const newValStr = formatGoalValue(newVal, u.type);
+                        const diffStr = formatGoalValue(diff, u.type);
+
+                        let diffClass = "text-slate-500";
+                        if (diff > 0.001) diffClass = "text-green-400 font-bold";
+                        else if (diff < -0.001) diffClass = "text-red-400 font-bold";
+
                         const sellerCode = optimizedData.rcaCodeByName.get(u.seller) || '-';
 
                         row.innerHTML = `
                             <td class="px-4 py-2 text-xs text-slate-300">${sellerCode}</td>
                             <td class="px-4 py-2 text-xs text-slate-400">${u.seller}</td>
                             <td class="px-4 py-2 text-xs text-blue-300">${u.category}</td>
-                            <td class="px-4 py-2 text-xs text-slate-500">-</td>
-                            <td class="px-4 py-2 text-xs text-white font-bold">${desc}</td>
-                            <td class="px-4 py-2 text-xs text-slate-500">-</td>
+                            <td class="px-4 py-2 text-xs text-slate-400 font-mono text-right">${currentValStr}</td>
+                            <td class="px-4 py-2 text-xs text-white font-bold font-mono text-right">${newValStr}</td>
+                            <td class="px-4 py-2 text-xs ${diffClass} font-mono text-right">${diff > 0 ? '+' : ''}${diffStr}</td>
                             <td class="px-4 py-2 text-center text-xs"><span class="px-2 py-1 rounded-full bg-blue-900/50 text-blue-200 text-[10px]">Importar</span></td>
                         `;
                         analysisBody.appendChild(row);
