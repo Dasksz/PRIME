@@ -13155,26 +13155,52 @@ const supervisorGroups = new Map();
         // --- IMPORT PARSER AND LOGIC ---
 
         function parseGoalsSvStructure(text) {
-            // Remove empty lines at start/end but preserve indentation (tabs) within lines
-            // Don't use trim() as it strips leading tabs which shifts columns
+            console.log("[Parser] Iniciando parse...");
             const lines = text.replace(/[\r\n]+$/, '').split(/\r?\n/);
-            const rows = lines.map(row => row.split('\t'));
-            
+            if (lines.length === 0) return null;
+
+            // 1. Detect Delimiter (Heuristic)
+            const firstLine = lines[0];
+            let delimiter = '\t';
+            if (firstLine.includes('\t')) delimiter = '\t';
+            else if (firstLine.includes(';')) delimiter = ';';
+            else if (firstLine.includes(',') && lines.length > 1) delimiter = ',';
+            // Fallback for space separated copy-paste if single line has spaces
+            else if (firstLine.trim().split(/\s{2,}/).length > 1) delimiter = /\s{2,}/; // At least 2 spaces
+
+            console.log("[Parser] Delimitador detectado:", delimiter);
+
+            const rows = lines.map(line => {
+                // If delimiter is regex, use split directly
+                if (delimiter instanceof RegExp) return line.trim().split(delimiter);
+                return line.split(delimiter);
+            });
+
             console.log(`[Parser] Linhas encontradas: ${rows.length}`);
 
-            // Filter out purely empty rows if any, but be careful not to shift header logic if it relies on fixed row indices
-            // actually, we just need to ensure we have enough rows.
-            if (rows.length < 4) {
-                console.warn("[Parser] Menos de 4 linhas encontradas. Abortando.");
+            // 2. Identify Header Rows
+            // We look for 3 consecutive rows that might be the header structure
+            // Row A: Categories (EXTRUSADOS, ETC)
+            // Row B: Metrics (FATURAMENTO, ETC)
+            // Row C: Submetrics (META, AJUSTE)
+            let startRow = 0;
+            if (rows.length >= 3) {
+                // Standard logic: Rows 0, 1, 2
+                startRow = 0;
+            } else {
+                console.warn("[Parser] Menos de 3 linhas. Tentando modo simplificado...");
+                // TODO: Implement simplified mode for single-row updates if needed
+                // For now, abort to avoid garbage data
                 return null;
             }
 
-            const header0 = rows[0].map(h => h ? h.trim().toUpperCase() : '');
-            const header1 = rows[1].map(h => h ? h.trim().toUpperCase() : '');
-            const header2 = rows[2].map(h => h ? h.trim().toUpperCase() : '');
+            const header0 = rows[startRow].map(h => h ? h.trim().toUpperCase() : '');
+            const header1 = rows[startRow + 1].map(h => h ? h.trim().toUpperCase() : '');
+            const header2 = rows[startRow + 2].map(h => h ? h.trim().toUpperCase() : '');
 
-            console.log("[Parser] Header 0 (Categorias):", header0.filter(h=>h).join(', '));
-            console.log("[Parser] Header 2 (Detalhes):", header2.filter(h=>h).join(', '));
+            console.log("[Parser] Header 0:", header0.join('|'));
+            console.log("[Parser] Header 1:", header1.join('|'));
+            console.log("[Parser] Header 2:", header2.join('|'));
 
             const colMap = {};
             let currentCategory = null;
@@ -13187,7 +13213,6 @@ const supervisorGroups = new Map();
                 let subMetric = header2[i]; // Meta, Ajuste, etc.
 
                 if (currentCategory && subMetric) {
-                    // Normalize SubMetric
                     if (subMetric === 'AJ.' || subMetric === 'AJ') subMetric = 'AJUSTE';
 
                     let catKey = currentCategory;
@@ -13219,115 +13244,95 @@ const supervisorGroups = new Map();
             const updates = [];
             const processedSellers = new Set();
 
-            // Robust Number Parser (Handles BR vs US format and 'Kg' unit)
             const parseImportValue = (rawStr) => {
                 if (!rawStr) return NaN;
-                // Remove everything that is NOT digit, comma, dot, or minus.
                 let clean = String(rawStr).trim().toUpperCase().replace(/[^0-9,.-]/g, '');
-                
-                // Separator positions
+                if (!clean) return NaN;
+
                 const dotIdx = clean.lastIndexOf('.');
                 const commaIdx = clean.lastIndexOf(',');
                 
                 if (dotIdx > -1 && commaIdx > -1) {
-                    // Both present. The last one is decimal.
-                    if (dotIdx > commaIdx) {
-                        // US: 51,000.00 -> 51000.00
-                        clean = clean.replace(/,/g, ''); 
-                    } else {
-                        // BR: 51.000,00 -> 51000.00
-                        clean = clean.replace(/\./g, '').replace(',', '.');
-                    }
+                    if (dotIdx > commaIdx) clean = clean.replace(/,/g, ''); 
+                    else clean = clean.replace(/\./g, '').replace(',', '.');
                 } else if (commaIdx > -1) {
-                    // Only comma. 51,000 (US 51k) vs 51,00 (BR 51)
-                    if (/,\d{3}$/.test(clean)) {
-                         // 51,000 -> 51000 (US Thousands)
-                         clean = clean.replace(/,/g, '');
-                    } else {
-                         // 51,00 -> 51.00 (BR Decimal)
-                         clean = clean.replace(',', '.');
-                    }
+                    if (/,\d{3}$/.test(clean)) clean = clean.replace(/,/g, '');
+                    else clean = clean.replace(',', '.');
                 } else if (dotIdx > -1) {
-                    // Only dot. 51.000 (BR 51k) vs 51.00 (US 51)
-                    if (/\.\d{3}$/.test(clean)) {
-                        // 51.000 -> 51000 (BR Thousands)
-                        clean = clean.replace(/\./g, '');
-                    } else {
-                        // 51.00 -> 51.00 (US Decimal - Keep dot)
-                    }
+                    if (/\.\d{3}$/.test(clean)) clean = clean.replace(/\./g, '');
                 }
-                
                 return parseFloat(clean);
             };
 
-            console.log(`[Parser] Colunas mapeadas (Ajuste): ${Object.keys(colMap).filter(k => k.includes('AJUSTE')).length}`);
+            const dataStartRow = startRow + 3;
+            // Identify Vendor Column Index (Name)
+            // Usually Index 1 (Code, Name, ...)
+            // We scan first few rows to find valid seller names
+            let nameColIndex = 1; 
+            // Basic Heuristic: If col 0 looks like a name and col 1 is number, maybe it's col 0.
+            // But standard template is [Code, Name, ...]. We stick to 1 for now or 0 if 1 is empty.
 
-            for (let i = 3; i < rows.length; i++) {
+            for (let i = dataStartRow; i < rows.length; i++) {
                 const row = rows[i];
-                const sellerName = row[1]; // Vendedor Name
-                
-                // Ignorar linhas vazias ou totais se não tiver vendedor
+                if (!row || row.length < 2) continue;
+
+                // Try col 1 for name, fallback to col 0 if col 1 is empty/numeric
+                let sellerName = row[1];
+                if (!sellerName || !isNaN(parseImportValue(sellerName))) {
+                     // If col 1 is number, maybe col 0 is name? Or col 2?
+                     // Standard: Col 0 = Code, Col 1 = Name.
+                     if (row[0] && isNaN(parseImportValue(row[0]))) sellerName = row[0];
+                }
+
                 if (!sellerName) continue; 
                 
                 if (processedSellers.has(sellerName)) continue;
                 processedSellers.add(sellerName);
 
-                // 1. Revenue (Detailed Categories)
+                // 1. Revenue
                 const revCats = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
                 revCats.forEach(cat => {
                     const idx = colMap[`${cat}_FAT_AJUSTE`];
                     if (idx !== undefined && row[idx]) {
                         const val = parseImportValue(row[idx]);
-                        if (!isNaN(val)) {
-                            updates.push({ type: 'rev', seller: sellerName, category: cat, val: val });
-                        }
+                        if (!isNaN(val)) updates.push({ type: 'rev', seller: sellerName, category: cat, val: val });
                     }
                 });
 
-                // 2. Volume (Aggregated Categories)
+                // 2. Volume
                 const volCats = ['tonelada_elma', 'tonelada_foods'];
                 volCats.forEach(cat => {
                     const idx = colMap[`${cat}_VOL_AJUSTE`];
                     if (idx !== undefined && row[idx]) {
                         const val = parseImportValue(row[idx]);
-                        if (!isNaN(val)) {
-                            updates.push({ type: 'vol', seller: sellerName, category: cat, val: val });
-                        }
+                        if (!isNaN(val)) updates.push({ type: 'vol', seller: sellerName, category: cat, val: val });
                     }
                 });
 
-                // 3. Positivation (All Categories)
+                // 3. Positivation
                 const posCats = ['GERAL', 'TOTAL ELMA', 'TOTAL FOODS', '707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
                 posCats.forEach(cat => {
                     let searchKey = `${cat}_POS_AJUSTE`;
                     if (cat === 'GERAL') searchKey = `${cat}_POS_META`; 
-                    
                     let normCat = cat;
                     if (cat === 'TOTAL ELMA') normCat = 'total_elma';
                     if (cat === 'TOTAL FOODS') normCat = 'total_foods';
                     if (cat === 'GERAL') searchKey = `GERAL_POS_META`;
 
                     const idx = colMap[searchKey] !== undefined ? colMap[searchKey] : colMap[`${normCat}_POS_AJUSTE`];
-                    
                     if (idx !== undefined && row[idx]) {
                         const val = parseImportValue(row[idx]);
-                        if (!isNaN(val)) {
-                            // Positivação uses integer count
-                            updates.push({ type: 'pos', seller: sellerName, category: normCat, val: Math.round(val) });
-                        }
+                        if (!isNaN(val)) updates.push({ type: 'pos', seller: sellerName, category: normCat, val: Math.round(val) });
                     }
                 });
 
-                // 4. Mix Targets
+                // 4. Mix
                 const mixCats = ['mix_salty', 'mix_foods'];
                 mixCats.forEach(cat => {
                     const idx = colMap[`${cat}_MIX_AJUSTE`];
                     if (idx !== undefined && row[idx]) {
                         const val = parseImportValue(row[idx]);
-                        if (!isNaN(val)) {
-                            // Mix uses integer count
-                            updates.push({ type: 'mix', seller: sellerName, category: cat, val: Math.round(val) });
-                        }
+                        if (!isNaN(val)) updates.push({ type: 'mix', seller: sellerName, category: cat, val: Math.round(val) });
                     }
                 });
             }
