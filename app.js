@@ -2457,6 +2457,109 @@
 
         // --- GOALS VIEW LOGIC ---
 
+        // --- GOALS REDISTRIBUTION LOGIC ---
+        let goalsSellerTargets = new Map(); // Stores Seller-Level Targets (Positivation, etc.)
+        window.goalsSellerTargets = goalsSellerTargets; // Export for init.js
+
+        function distributeSellerGoal(sellerName, categoryId, newTotalValue, metric = 'fat') {
+            // metric: 'fat' or 'vol'
+            // categoryId: '707', '1119_TODDY', 'tonelada_elma', etc.
+
+            const sellerCode = optimizedData.rcaCodeByName.get(sellerName);
+            if (!sellerCode) { console.warn(`[Goals] Seller not found: ${sellerName}`); return; }
+
+            const clients = optimizedData.clientsByRca.get(sellerCode) || [];
+            const activeClients = clients.filter(c => {
+                const cod = String(c['Código'] || c['codigo_cliente']);
+                const rca1 = String(c.rca1 || '').trim();
+                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
+                return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
+            });
+
+            if (activeClients.length === 0) return;
+
+            // Define Sub-Categories for Cascade Logic
+            let targetCategories = [categoryId];
+            if (categoryId === 'tonelada_elma') targetCategories = ['707', '708', '752'];
+            else if (categoryId === 'tonelada_foods') targetCategories = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+
+            // 1. Calculate Total History for the Seller (All sub-cats combined)
+            // AND Calculate individual client-subcat history to determine specific shares.
+            const clientSubCatHistory = new Map(); // Map<Client, Map<SubCat, Value>>
+            let totalSellerHistory = 0;
+
+            activeClients.forEach(client => {
+                const codCli = String(client['Código'] || client['codigo_cliente']);
+                const historyIds = optimizedData.indices.history.byClient.get(codCli);
+
+                if (!clientSubCatHistory.has(codCli)) clientSubCatHistory.set(codCli, new Map());
+                const subCatMap = clientSubCatHistory.get(codCli);
+
+                if (historyIds) {
+                    historyIds.forEach(id => {
+                        const sale = optimizedData.historyById.get(id);
+                        const codFor = String(sale.CODFOR);
+                        const desc = normalize(sale.DESCRICAO || '');
+
+                        // Check against all target categories
+                        targetCategories.forEach(subCat => {
+                            let isMatch = false;
+                            if (subCat === '707' && codFor === '707') isMatch = true;
+                            else if (subCat === '708' && codFor === '708') isMatch = true;
+                            else if (subCat === '752' && codFor === '752') isMatch = true;
+                            else if (codFor === '1119') {
+                                if (subCat === '1119_TODDYNHO' && desc.includes('TODDYNHO')) isMatch = true;
+                                else if (subCat === '1119_TODDY' && desc.includes('TODDY')) isMatch = true;
+                                else if (subCat === '1119_QUAKER_KEROCOCO' && (desc.includes('QUAKER') || desc.includes('KEROCOCO'))) isMatch = true;
+                            }
+
+                            if (isMatch) {
+                                const val = metric === 'fat' ? (Number(sale.VLVENDA) || 0) : (Number(sale.TOTPESOLIQ) || 0);
+                                if (val > 0) {
+                                    subCatMap.set(subCat, (subCatMap.get(subCat) || 0) + val);
+                                    totalSellerHistory += val;
+                                }
+                            }
+                        });
+                    });
+                }
+            });
+
+            // 2. Distribute
+            // NewGoal(Client, SubCat) = NewTotalValue * (ClientSubCatHistory / TotalSellerHistory)
+
+            const clientCount = activeClients.length;
+            const subCatCount = targetCategories.length;
+
+            activeClients.forEach(client => {
+                const codCli = String(client['Código'] || client['codigo_cliente']);
+                const subCatMap = clientSubCatHistory.get(codCli);
+
+                targetCategories.forEach(subCat => {
+                    let share = 0;
+                    if (totalSellerHistory > 0) {
+                        share = (subCatMap.get(subCat) || 0) / totalSellerHistory;
+                    } else {
+                        // Fallback: Even split across all clients and subcats?
+                        share = 1 / (clientCount * subCatCount);
+                    }
+
+                    const goalVal = newTotalValue * share;
+
+                    // Update Global
+                    if (!globalClientGoals.has(codCli)) globalClientGoals.set(codCli, new Map());
+                    const cGoals = globalClientGoals.get(codCli);
+
+                    if (!cGoals.has(subCat)) cGoals.set(subCat, { fat: 0, vol: 0 });
+                    const target = cGoals.get(subCat);
+
+                    if (metric === 'fat') target.fat = goalVal;
+                    else if (metric === 'vol') target.vol = goalVal;
+                });
+            });
+            console.log(`[Goals] Distributed ${newTotalValue} (${metric}) for ${sellerName} / ${categoryId} (Cascade: ${targetCategories.join(',')})`);
+        }
+
         function exportGoalsSvXLSX() {
             if (typeof XLSX === 'undefined') {
                 alert("Erro: Biblioteca XLSX não carregada. Verifique sua conexão com a internet.");
@@ -2630,13 +2733,27 @@
 
                                 rowData.push({ t: 'n', v: d.metaFat, f: formulaFat, s: { ...aggCellStyle, numFmt: fmtMoney }, z: fmtMoney });
                                 rowData.push(createCell(d.metaPos, readOnlyStyle, fmtInt));
-                                // Static value for Positivation (Unique Clients), no formula
-                                rowData.push(createCell(d.metaPos, aggCellStyle, fmtInt));
+
+                                // Positivation (Aggregate): Use Stored Target
+                                let posVal = d.metaPos;
+                                if (goalsSellerTargets.has(seller.name)) {
+                                    const t = goalsSellerTargets.get(seller.name);
+                                    if (t && t[col.id] !== undefined) posVal = t[col.id];
+                                }
+                                // Make Editable (cellStyle instead of aggCellStyle)
+                                rowData.push(createCell(posVal, editableStyle, fmtInt));
                             } else {
                                 // Editable Cells
                                 rowData.push(createCell(d.metaFat, cellStyle, fmtMoney));
                                 rowData.push(createCell(d.metaPos, readOnlyStyle, fmtInt));
-                                rowData.push(createCell(d.metaPos, cellStyle, fmtInt));
+
+                                // Positivation (Standard): Use Stored Target
+                                let posVal = d.metaPos;
+                                if (goalsSellerTargets.has(seller.name)) {
+                                    const t = goalsSellerTargets.get(seller.name);
+                                    if (t && t[col.id] !== undefined) posVal = t[col.id];
+                                }
+                                rowData.push(createCell(posVal, cellStyle, fmtInt));
                             }
 
                             colCellsForSupTotal[col.id].fat.push(`${getColLet(cIdx + 1)}${excelRow}`);
@@ -2672,7 +2789,12 @@
                             rowData.push({ t: 'n', v: d.metaFat, f: fFat, s: { ...aggCellStyle, numFmt: fmtMoney }, z: fmtMoney });
                             rowData.push({ t: 'n', v: d.metaVol, f: fTon, s: { ...aggCellStyle, numFmt: fmtVol }, z: fmtVol });
                             // Use static adjusted value for Positivation (PEPSICO_ALL)
-                            rowData.push(createCell(d.metaPos, aggCellStyle, fmtInt));
+                            let posVal = d.metaPos;
+                            if (goalsSellerTargets.has(seller.name)) {
+                                const t = goalsSellerTargets.get(seller.name);
+                                if (t && t['GERAL'] !== undefined) posVal = t['GERAL'];
+                            }
+                            rowData.push(createCell(posVal, editableStyle, fmtInt));
 
                             colCellsForSupTotal[col.id].fat.push(`${getColLet(cIdx + 1)}${excelRow}`);
                             colCellsForSupTotal[col.id].vol.push(`${getColLet(cIdx + 2)}${excelRow}`);
@@ -11906,6 +12028,13 @@ const supervisorGroups = new Map();
                             }
                         }
 
+                        if (gd.seller_targets) {
+                            goalsSellerTargets.clear();
+                            for (const [seller, targets] of Object.entries(gd.seller_targets)) {
+                                goalsSellerTargets.set(seller, targets);
+                            }
+                        }
+
                         console.log('Metas carregadas do Supabase.');
                         updateGoals();
                     }
@@ -12782,377 +12911,6 @@ const supervisorGroups = new Map();
                     handleStockFilterChange();
                 });
             });
-
-            // --- Import / Paste Modal Logic ---
-            const importBtn = document.getElementById('goals-sv-import-btn');
-            const importModal = document.getElementById('import-goals-modal');
-            const importCloseBtn = document.getElementById('import-goals-close-btn');
-            const importCancelBtn = document.getElementById('import-goals-cancel-btn');
-            const importAnalyzeBtn = document.getElementById('import-goals-analyze-btn');
-            const importConfirmBtn = document.getElementById('import-goals-confirm-btn');
-            const importTextarea = document.getElementById('import-goals-textarea');
-            const analysisContainer = document.getElementById('import-analysis-container');
-            const analysisBody = document.getElementById('import-analysis-table-body');
-            const analysisBadges = document.getElementById('import-summary-badges');
-
-            if (importBtn && importModal) {
-                importBtn.addEventListener('click', () => {
-                    importModal.classList.remove('hidden');
-                    importTextarea.value = '';
-                    // importTextarea.focus(); // Focus optional if drag zone is primary
-                    analysisContainer.classList.add('hidden');
-                    importConfirmBtn.disabled = true;
-                    importConfirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
-
-                    // Reset File Input
-                    const fileInput = document.getElementById('import-goals-file');
-                    if(fileInput) fileInput.value = '';
-                });
-
-                const closeModal = () => {
-                    importModal.classList.add('hidden');
-                };
-
-                importCloseBtn.addEventListener('click', closeModal);
-                importCancelBtn.addEventListener('click', closeModal);
-
-                let pendingChanges = [];
-
-                // --- Helper Functions for Data Processing ---
-                function processGoalsImport(rawData, sourceType) {
-                    if (!rawData) {
-                        alert("Nenhum dado encontrado.");
-                        return;
-                    }
-
-                    // Source Type: 'text' (Paste) or 'json' (Excel)
-                    let parsed;
-                    if (sourceType === 'text') {
-                        parsed = parseGoalsPaste(rawData);
-                    } else if (sourceType === 'json') {
-                        parsed = parseGoalsJson(rawData);
-                    }
-
-                    if (!parsed || parsed.data.length === 0) {
-                        alert("Formato inválido ou vazio. Certifique-se de incluir os cabeçalhos (CÓD, etc).");
-                        return;
-                    }
-
-                    pendingChanges = compareGoalsData(parsed);
-                    renderAnalysisReport(pendingChanges);
-                }
-
-                function renderAnalysisReport(changes) {
-                    analysisBody.innerHTML = '';
-                    if (changes.length === 0) {
-                        analysisBody.innerHTML = `<tr><td colspan="7" class="text-center p-4 text-slate-400">Nenhuma alteração detectada.</td></tr>`;
-                        importConfirmBtn.disabled = true;
-                        importConfirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                    } else {
-                        // Limit rendering for performance if huge
-                        const maxRender = 500;
-                        const renderSet = changes.slice(0, maxRender);
-
-                        renderSet.forEach(change => {
-                            const diffClass = change.diff > 0 ? 'text-green-400' : 'text-red-400';
-                            const diffIcon = change.diff > 0 ? '▲' : '▼';
-
-                            const row = document.createElement('tr');
-                            row.className = 'border-b border-slate-700 hover:bg-slate-800/50';
-                            row.innerHTML = `
-                                <td class="px-4 py-2 font-mono text-xs text-slate-300">${change.codCli}</td>
-                                <td class="px-4 py-2 text-xs text-slate-400">${change.clientName}</td>
-                                <td class="px-4 py-2 text-xs text-blue-300">${change.key}</td>
-                                <td class="px-4 py-2 text-right text-xs text-slate-500">${change.current.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                <td class="px-4 py-2 text-right text-xs text-white font-bold">${change.new.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                <td class="px-4 py-2 text-right text-xs ${diffClass}">${diffIcon} ${Math.abs(change.diff).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                <td class="px-4 py-2 text-center text-xs"><span class="px-2 py-1 rounded-full bg-yellow-900/50 text-yellow-200 text-[10px]">Pendente</span></td>
-                            `;
-                            analysisBody.appendChild(row);
-                        });
-
-                        if (changes.length > maxRender) {
-                             const row = document.createElement('tr');
-                             row.innerHTML = `<td colspan="7" class="text-center p-2 text-xs text-slate-500">... e mais ${changes.length - maxRender} alterações.</td>`;
-                             analysisBody.appendChild(row);
-                        }
-
-                        importConfirmBtn.disabled = false;
-                        importConfirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                    }
-
-                    analysisBadges.innerHTML = `<span class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">${changes.length} Mudanças</span>`;
-                    analysisContainer.classList.remove('hidden');
-                }
-
-                // --- Event Listeners for Drag & Drop / File ---
-                const dropZone = document.getElementById('import-drop-zone');
-                const fileInput = document.getElementById('import-goals-file');
-
-                if (dropZone && fileInput) {
-                    // Prevent default drag behaviors
-                    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                        dropZone.addEventListener(eventName, preventDefaults, false);
-                    });
-
-                    function preventDefaults(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                    }
-
-                    // Highlight drop zone
-                    ['dragenter', 'dragover'].forEach(eventName => {
-                        dropZone.addEventListener(eventName, () => dropZone.classList.add('bg-slate-700/50', 'border-teal-500'), false);
-                    });
-
-                    ['dragleave', 'drop'].forEach(eventName => {
-                        dropZone.addEventListener(eventName, () => dropZone.classList.remove('bg-slate-700/50', 'border-teal-500'), false);
-                    });
-
-                    // Handle Drop
-                    dropZone.addEventListener('drop', (e) => {
-                        const dt = e.dataTransfer;
-                        const files = dt.files;
-                        handleFiles(files);
-                    });
-
-                    // Handle File Select
-                    fileInput.addEventListener('change', (e) => {
-                        handleFiles(e.target.files);
-                    });
-                }
-
-                function handleFiles(files) {
-                    if (files.length === 0) return;
-                    const file = files[0];
-
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        try {
-                            const data = new Uint8Array(e.target.result);
-                            const workbook = XLSX.read(data, {type: 'array'});
-
-                            // Assume Sheet 1
-                            const sheetName = workbook.SheetNames[0];
-                            const sheet = workbook.Sheets[sheetName];
-
-                            // Convert to JSON (Array of Arrays to preserve Header order)
-                            const jsonData = XLSX.utils.sheet_to_json(sheet, {header: 1});
-                            processGoalsImport(jsonData, 'json');
-                        } catch (err) {
-                            console.error(err);
-                            alert("Erro ao ler arquivo Excel. Verifique o formato.");
-                        }
-                    };
-                    reader.readAsArrayBuffer(file);
-                }
-
-                importAnalyzeBtn.addEventListener('click', () => {
-                    const text = importTextarea.value;
-                    if (!text.trim()) {
-                        alert("Cole os dados ou selecione um arquivo.");
-                        return;
-                    }
-                    processGoalsImport(text, 'text');
-                });
-
-                importConfirmBtn.addEventListener('click', () => {
-                    if (pendingChanges.length === 0) return;
-
-                    let updatedCount = 0;
-                    pendingChanges.forEach(change => {
-                        // Apply Change to Memory
-                        if (!globalClientGoals.has(change.codCli)) {
-                            globalClientGoals.set(change.codCli, new Map());
-                        }
-                        const clientMap = globalClientGoals.get(change.codCli);
-
-                        // We update only FAT for now as logic implies value paste
-                        // Use existing volume or 0
-                        let existingVol = 0;
-                        if (clientMap.has(change.key)) {
-                            existingVol = clientMap.get(change.key).vol;
-                        }
-
-                        clientMap.set(change.key, {
-                            fat: change.new,
-                            vol: existingVol // Preserve volume
-                        });
-                        updatedCount++;
-                    });
-
-                    alert(`${updatedCount} metas atualizadas com sucesso! Não esqueça de clicar em "Salvar Metas" para persistir no banco.`);
-                    closeModal();
-                    updateGoals(); // Refresh UI
-                });
-            }
-        }
-
-        function parseGoalsJson(jsonData) {
-            // jsonData is array of arrays (header: 1)
-            // Row 0 is header
-            if (!jsonData || jsonData.length < 2) return null;
-
-            const headers = jsonData[0].map(h => String(h).trim().toUpperCase());
-            const data = [];
-
-            for (let i = 1; i < jsonData.length; i++) {
-                const cols = jsonData[i];
-                const rowObj = {};
-                let hasCod = false;
-
-                headers.forEach((h, idx) => {
-                    if (idx < cols.length) {
-                        let key = h;
-                        if (h === 'CÓD' || h === 'CODIGO' || h === 'COD') key = 'CODCLI';
-
-                        rowObj[key] = cols[idx];
-                        if (key === 'CODCLI' && rowObj[key]) hasCod = true;
-                    }
-                });
-
-                if (hasCod) {
-                    data.push(rowObj);
-                }
-            }
-            return { headers, data };
-        }
-
-        function parseGoalsPaste(text) {
-            const rows = text.trim().split(/\r?\n/);
-            if (rows.length < 2) return null; // Need at least header + 1 row
-
-            const headers = rows[0].split(/\t/).map(h => h.trim().toUpperCase());
-            const data = [];
-
-            for (let i = 1; i < rows.length; i++) {
-                const cols = rows[i].split(/\t/);
-                const rowObj = {};
-
-                // Map columns
-                // Key identifier: CÓD (or CODIGO, COD)
-                // Values: 707, 708, 752, 1119_TODDYNHO, etc.
-
-                // Basic validation: must have COD
-                let hasCod = false;
-
-                headers.forEach((h, idx) => {
-                    if (idx < cols.length) {
-                        // Normalize Header to match internal keys
-                        let key = h;
-                        if (h === 'CÓD' || h === 'CODIGO' || h === 'COD') key = 'CODCLI';
-                        // Handle compound keys from export if needed, but usually they match
-
-                        rowObj[key] = cols[idx].trim();
-                        if (key === 'CODCLI' && rowObj[key]) hasCod = true;
-                    }
-                });
-
-                if (hasCod) {
-                    data.push(rowObj);
-                }
-            }
-            return { headers, data };
-        }
-
-        function compareGoalsData(importedData) {
-            const changes = [];
-            const { headers, data } = importedData;
-
-            // Define keys we care about (Targets)
-            const targetKeys = [
-                '707', '708', '752',
-                '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'
-            ];
-
-            const labelMap = {
-                'EXTRUSADOS': '707',
-                'NÃO EXTRUSADOS': '708',
-                'TORCIDA': '752',
-                'TODDYNHO': '1119_TODDYNHO',
-                'TODDY': '1119_TODDY',
-                'QUAKER / KEROCOCO': '1119_QUAKER_KEROCOCO',
-                'QUAKER': '1119_QUAKER_KEROCOCO', // Partial match safety
-                'KEROCOCO': '1119_QUAKER_KEROCOCO'
-            };
-
-            data.forEach(row => {
-                const codCli = row.CODCLI;
-                if (!codCli) return;
-
-                // Check against current globalClientGoals
-                const clientGoals = globalClientGoals.get(String(codCli));
-
-                targetKeys.forEach(key => {
-                    let importVal = undefined;
-
-                    // 1. Try direct ID match (e.g. 707)
-                    if (row[key] !== undefined) importVal = row[key];
-
-                    // 2. Try Label match (e.g. EXTRUSADOS)
-                    if (importVal === undefined) {
-                        // Find header that maps to this key
-                        for (const h of headers) {
-                            if (labelMap[h] === key) {
-                                importVal = row[h];
-                                break;
-                            }
-                        }
-                    }
-
-                    if (importVal !== undefined) {
-                        let numVal;
-
-                        // Check if it's already a number (from Excel JSON)
-                        if (typeof importVal === 'number') {
-                            numVal = importVal;
-                        } else {
-                            // Parse string (Brazilian format: 1.234,56 -> 1234.56)
-                            let cleanVal = String(importVal).replace(/[R$\sKg]/g, '');
-
-                            // Heuristic: If it has comma, assume it's decimal separator.
-                            // If it has dots and comma, dots are thousands.
-                            // If it has only dots, it might be thousands (1.000) or decimal (1.5)?
-                            // Usually, pasted data from Excel uses local format (comma decimal).
-
-                            if (cleanVal.includes(',')) {
-                                cleanVal = cleanVal.replace(/\./g, '').replace(',', '.');
-                            } else {
-                                // No comma. If dot exists, is it thousand or decimal?
-                                // If multiple dots, thousands.
-                                // If one dot, ambiguous.
-                                // But usually our export format is currency R$ #.##0,00
-                                // So we expect comma for decimals.
-                                // If raw number in string "1000", it works.
-                            }
-                            numVal = parseFloat(cleanVal);
-                        }
-
-                        if (isNaN(numVal)) return;
-
-                        // Get Current Value
-                        let currentVal = 0;
-                        let exists = false;
-                        if (clientGoals && clientGoals.has(key)) {
-                            currentVal = clientGoals.get(key).fat;
-                            exists = true;
-                        }
-
-                        // Update if diff > 0.01 OR if it's new
-                        if (!exists || Math.abs(numVal - currentVal) > 0.01) {
-                            changes.push({
-                                codCli,
-                                clientName: row['CLIENTE'] || row['NOME'] || 'N/A',
-                                key,
-                                current: currentVal,
-                                new: numVal,
-                                diff: numVal - currentVal
-                            });
-                        }
-                    }
-                });
-            });
-            return changes;
         }
 
         initializeOptimizedDataStructures();
@@ -13347,4 +13105,223 @@ const supervisorGroups = new Map();
             }
 
             return adjustedGoals;
+        }
+
+        // --- IMPORT PARSER AND LOGIC ---
+
+        function parseGoalsSvStructure(text) {
+            const rows = text.trim().split(/\r?\n/).map(row => row.split('\t'));
+            if (rows.length < 4) return null;
+
+            const header0 = rows[0].map(h => h ? h.trim().toUpperCase() : '');
+            const header1 = rows[1].map(h => h ? h.trim().toUpperCase() : '');
+            const header2 = rows[2].map(h => h ? h.trim().toUpperCase() : '');
+
+            const colMap = {};
+            let currentCategory = null;
+            let currentMetric = null;
+
+            // Map Headers
+            for (let i = 0; i < header0.length; i++) {
+                if (header0[i]) currentCategory = header0[i];
+                if (header1[i]) currentMetric = header1[i];
+                const subMetric = header2[i]; // Meta, Ajuste, etc.
+
+                if (currentCategory && subMetric) {
+                    let catKey = currentCategory;
+                    // Normalize Category Names to IDs
+                    if (catKey === 'EXTRUSADOS') catKey = '707';
+                    else if (catKey === 'NÃO EXTRUSADOS') catKey = '708';
+                    else if (catKey === 'TORCIDA') catKey = '752';
+                    else if (catKey === 'TODDYNHO') catKey = '1119_TODDYNHO';
+                    else if (catKey === 'TODDY') catKey = '1119_TODDY';
+                    else if (catKey === 'QUAKER / KEROCOCO' || catKey.includes('QUAKER')) catKey = '1119_QUAKER_KEROCOCO';
+                    else if (catKey === 'KG ELMA') catKey = 'tonelada_elma';
+                    else if (catKey === 'KG FOODS') catKey = 'tonelada_foods';
+                    else if (catKey === 'TOTAL ELMA') catKey = 'total_elma';
+                    else if (catKey === 'TOTAL FOODS') catKey = 'total_foods';
+                    else if (catKey === 'MIX SALTY') catKey = 'mix_salty';
+                    else if (catKey === 'MIX FOODS') catKey = 'mix_foods';
+
+                    let metricKey = 'OTHER';
+                    if (currentMetric === 'FATURAMENTO' || currentMetric === 'MÉDIA TRIM.') metricKey = 'FAT';
+                    else if (currentMetric === 'POSITIVAÇÃO') metricKey = 'POS';
+                    else if (currentMetric === 'TONELADA' || currentMetric === 'META KG') metricKey = 'VOL';
+                    else if (currentMetric === 'META MIX') metricKey = 'MIX';
+
+                    const key = `${catKey}_${metricKey}_${subMetric}`;
+                    colMap[key] = i;
+                }
+            }
+
+            const updates = [];
+            const processedSellers = new Set();
+
+            for (let i = 3; i < rows.length; i++) {
+                const row = rows[i];
+                const sellerName = row[1]; // Vendedor Name
+                if (!sellerName || processedSellers.has(sellerName)) continue;
+                processedSellers.add(sellerName);
+
+                // 1. Revenue (Detailed Categories)
+                const revCats = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+                revCats.forEach(cat => {
+                    const idx = colMap[`${cat}_FAT_AJUSTE`];
+                    if (idx !== undefined && row[idx]) {
+                        const clean = String(row[idx]).replace(/[R$\s\.]/g, '').replace(',', '.');
+                        const val = parseFloat(clean);
+                        if (!isNaN(val)) {
+                            updates.push({ type: 'rev', seller: sellerName, category: cat, val: val });
+                        }
+                    }
+                });
+
+                // 2. Volume (Aggregated Categories)
+                const volCats = ['tonelada_elma', 'tonelada_foods'];
+                volCats.forEach(cat => {
+                    const idx = colMap[`${cat}_VOL_AJUSTE`];
+                    if (idx !== undefined && row[idx]) {
+                        const clean = String(row[idx]).replace(/[Kg\s\.]/g, '').replace(',', '.');
+                        const val = parseFloat(clean);
+                        if (!isNaN(val)) {
+                            updates.push({ type: 'vol', seller: sellerName, category: cat, val: val });
+                        }
+                    }
+                });
+
+                // 3. Positivation (All Categories)
+                const posCats = ['GERAL', 'TOTAL ELMA', 'TOTAL FOODS', '707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+                posCats.forEach(cat => {
+                    let searchKey = `${cat}_POS_AJUSTE`;
+                    if (cat === 'GERAL') searchKey = `${cat}_POS_META`;
+
+                    let normCat = cat;
+                    if (cat === 'TOTAL ELMA') normCat = 'total_elma';
+                    if (cat === 'TOTAL FOODS') normCat = 'total_foods';
+                    if (cat === 'GERAL') searchKey = `GERAL_POS_META`;
+
+                    const idx = colMap[searchKey] !== undefined ? colMap[searchKey] : colMap[`${normCat}_POS_AJUSTE`];
+
+                    if (idx !== undefined && row[idx]) {
+                        const clean = String(row[idx]).replace(/\D/g, '');
+                        const val = parseInt(clean);
+                        if (!isNaN(val)) {
+                            updates.push({ type: 'pos', seller: sellerName, category: normCat, val: val });
+                        }
+                    }
+                });
+
+                // 4. Mix Targets
+                const mixCats = ['mix_salty', 'mix_foods'];
+                mixCats.forEach(cat => {
+                    const idx = colMap[`${cat}_MIX_AJUSTE`];
+                    if (idx !== undefined && row[idx]) {
+                        const clean = String(row[idx]).replace(/\D/g, '');
+                        const val = parseInt(clean);
+                        if (!isNaN(val)) {
+                            updates.push({ type: 'mix', seller: sellerName, category: cat, val: val });
+                        }
+                    }
+                });
+            }
+            return updates;
+        }
+
+        // --- Event Listeners for Import ---
+        const importBtn = document.getElementById('goals-sv-import-btn');
+        const importModal = document.getElementById('import-goals-modal');
+        const importCloseBtn = document.getElementById('import-goals-close-btn');
+        const importCancelBtn = document.getElementById('import-goals-cancel-btn');
+        const importAnalyzeBtn = document.getElementById('import-goals-analyze-btn');
+        const importConfirmBtn = document.getElementById('import-goals-confirm-btn');
+        const importTextarea = document.getElementById('import-goals-textarea');
+        const analysisContainer = document.getElementById('import-analysis-container');
+        const analysisBody = document.getElementById('import-analysis-table-body');
+        const analysisBadges = document.getElementById('import-summary-badges');
+
+        let pendingImportUpdates = [];
+
+        if (importBtn && importModal) {
+            importBtn.addEventListener('click', () => {
+                importModal.classList.remove('hidden');
+                importTextarea.value = '';
+                analysisContainer.classList.add('hidden');
+                importConfirmBtn.disabled = true;
+                importConfirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            });
+
+            const closeModal = () => {
+                importModal.classList.add('hidden');
+            };
+
+            importCloseBtn.addEventListener('click', closeModal);
+            importCancelBtn.addEventListener('click', closeModal);
+
+            importAnalyzeBtn.addEventListener('click', () => {
+                const text = importTextarea.value;
+                if (!text.trim()) {
+                    alert("Cole os dados.");
+                    return;
+                }
+                const updates = parseGoalsSvStructure(text);
+                if (!updates || updates.length === 0) {
+                    alert("Nenhum dado válido encontrado ou formato incorreto. Verifique se copiou os cabeçalhos.");
+                    return;
+                }
+
+                pendingImportUpdates = updates;
+
+                // Render Analysis
+                analysisBody.innerHTML = '';
+                updates.slice(0, 100).forEach(u => {
+                    const row = document.createElement('tr');
+                    let desc = '';
+                    if (u.type === 'rev') desc = `Faturamento (Ajuste): R$ ${u.val.toLocaleString('pt-BR')}`;
+                    else if (u.type === 'vol') desc = `Volume (Ajuste): ${u.val} Kg`;
+                    else if (u.type === 'pos') desc = `Positivação (Meta): ${u.val}`;
+
+                    row.innerHTML = `
+                        <td class="px-4 py-2 text-xs text-slate-300">-</td>
+                        <td class="px-4 py-2 text-xs text-slate-400">${u.seller}</td>
+                        <td class="px-4 py-2 text-xs text-blue-300">${u.category}</td>
+                        <td class="px-4 py-2 text-xs text-slate-500">-</td>
+                        <td class="px-4 py-2 text-xs text-white font-bold">${desc}</td>
+                        <td class="px-4 py-2 text-xs text-slate-500">-</td>
+                        <td class="px-4 py-2 text-center text-xs"><span class="px-2 py-1 rounded-full bg-blue-900/50 text-blue-200 text-[10px]">Importar</span></td>
+                    `;
+                    analysisBody.appendChild(row);
+                });
+
+                analysisBadges.innerHTML = `<span class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">${updates.length} Registros</span>`;
+                analysisContainer.classList.remove('hidden');
+                importConfirmBtn.disabled = false;
+                importConfirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            });
+
+            importConfirmBtn.addEventListener('click', () => {
+                let countRev = 0;
+                let countPos = 0;
+
+                pendingImportUpdates.forEach(u => {
+                    if (u.type === 'rev') {
+                        distributeSellerGoal(u.seller, u.category, u.val, 'fat');
+                        countRev++;
+                    } else if (u.type === 'vol') {
+                        distributeSellerGoal(u.seller, u.category, u.val, 'vol');
+                        countRev++;
+                    } else if (u.type === 'pos' || u.type === 'mix') {
+                        // Update Seller Target Map
+                        if (!goalsSellerTargets.has(u.seller)) goalsSellerTargets.set(u.seller, {});
+                        const t = goalsSellerTargets.get(u.seller);
+                        t[u.category] = u.val;
+                        countPos++;
+                    }
+                });
+
+                alert(`Importação concluída!\n${countRev} distribuições de Faturamento/Volume.\n${countPos} metas de Positivação/Mix atualizadas.`);
+                closeModal();
+                updateGoalsSvView(); // Refresh Report View
+                // Also refresh GV view metrics if active
+                calculateGoalsMetrics();
+            });
         }

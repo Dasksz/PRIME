@@ -895,13 +895,23 @@
                 goalsObj[key] = Object.fromEntries(val);
             });
 
+            // Convert goalsSellerTargets to Object
+            let sellerTargetsObj = {};
+            // Try accessing directly or via window
+            const targetsMap = (typeof goalsSellerTargets !== 'undefined') ? goalsSellerTargets : (window.goalsSellerTargets || new Map());
+
+            targetsMap.forEach((val, key) => {
+                sellerTargetsObj[key] = val;
+            });
+
             const payload = {
                 month_key: monthKey,
                 supplier: 'ALL', // Global snapshot
                 brand: 'GENERAL', // Fix for Unique Constraint
                 goals_data: {
                     clients: goalsObj,
-                    targets: goalsTargets
+                    targets: goalsTargets,
+                    seller_targets: sellerTargetsObj
                 },
                 updated_at: new Date().toISOString()
             };
