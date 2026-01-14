@@ -13369,13 +13369,13 @@ const supervisorGroups = new Map();
                     if (subMetric === 'AJ.' || subMetric === 'AJ') subMetric = 'AJUSTE';
 
                     let catKey = currentCategory;
-                    // Normalize Category Names to IDs
-                    if (catKey === 'EXTRUSADOS') catKey = '707';
-                    else if (catKey === 'NÃO EXTRUSADOS') catKey = '708';
-                    else if (catKey === 'TORCIDA') catKey = '752';
-                    else if (catKey === 'TODDYNHO') catKey = '1119_TODDYNHO';
-                    else if (catKey === 'TODDY') catKey = '1119_TODDY';
-                    else if (catKey === 'QUAKER / KEROCOCO' || catKey.includes('QUAKER')) catKey = '1119_QUAKER_KEROCOCO';
+                    // Normalize Category Names to IDs (Fuzzy Matching)
+                    if (catKey.includes('NÃO EXTRUSADOS') || catKey.includes('NAO EXTRUSADOS')) catKey = '708';
+                    else if (catKey.includes('EXTRUSADOS')) catKey = '707';
+                    else if (catKey.includes('TORCIDA')) catKey = '752';
+                    else if (catKey.includes('TODDYNHO')) catKey = '1119_TODDYNHO';
+                    else if (catKey.includes('TODDY')) catKey = '1119_TODDY';
+                    else if (catKey.includes('QUAKER') || catKey.includes('KEROCOCO')) catKey = '1119_QUAKER_KEROCOCO';
                     else if (catKey === 'KG ELMA') catKey = 'tonelada_elma';
                     else if (catKey === 'KG FOODS') catKey = 'tonelada_foods';
                     else if (catKey === 'TOTAL ELMA') catKey = 'total_elma';
@@ -13385,7 +13385,7 @@ const supervisorGroups = new Map();
 
                     let metricKey = 'OTHER';
                     if (currentMetric === 'FATURAMENTO' || currentMetric === 'MÉDIA TRIM.') metricKey = 'FAT';
-                    else if (currentMetric === 'POSITIVAÇÃO') metricKey = 'POS';
+                    else if (currentMetric === 'POSITIVAÇÃO' || currentMetric === 'POSITIVACAO') metricKey = 'POS';
                     else if (currentMetric === 'TONELADA' || currentMetric === 'META KG') metricKey = 'VOL';
                     else if (currentMetric === 'META MIX' || currentMetric === 'MIX' || currentMetric === 'QTD') metricKey = 'MIX';
 
