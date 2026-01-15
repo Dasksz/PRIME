@@ -13388,7 +13388,7 @@ const supervisorGroups = new Map();
 
                     let metricKey = 'OTHER';
                     if (currentMetric === 'FATURAMENTO' || currentMetric === 'MÉDIA TRIM.') metricKey = 'FAT';
-                    else if (currentMetric === 'POSITIVAÇÃO' || currentMetric === 'POSITIVACAO') metricKey = 'POS';
+                    else if (currentMetric === 'POSITIVAÇÃO' || currentMetric === 'POSITIVACAO' || currentMetric.includes('POSITIVA')) metricKey = 'POS';
                     else if (currentMetric === 'TONELADA' || currentMetric === 'META KG') metricKey = 'VOL';
                     else if (currentMetric === 'META MIX' || currentMetric === 'MIX' || currentMetric === 'QTD') metricKey = 'MIX';
 
