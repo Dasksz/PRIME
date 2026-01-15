@@ -4078,7 +4078,6 @@
                 if (rcaCode) {
                     const name = optimizedData.rcaNameByCode.get(rcaCode);
                     if (name) activeSellersInSummary.add(name);
-                    else if (rcaCode === 'INATIVOS') activeSellersInSummary.add('INATIVOS');
                 }
             });
 
@@ -4320,6 +4319,9 @@
                     } else {
                         sellerName = 'INATIVOS';
                     }
+
+                    // Strict Exclusion of INATIVOS from Base Calculation
+                    if (sellerName === 'INATIVOS') continue;
 
                     if (!activeSellersSet.has(sellerName)) belongsToActiveSeller = false;
                 }
