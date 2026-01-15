@@ -13526,8 +13526,9 @@ const supervisorGroups = new Map();
                 const posCats = ['GERAL', 'TOTAL ELMA', 'TOTAL FOODS', '707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
                 posCats.forEach(cat => {
                     let normCat = cat;
-                    if (cat === 'TOTAL ELMA') normCat = 'total_elma';
-                    if (cat === 'TOTAL FOODS') normCat = 'total_foods';
+                    if (cat === 'TOTAL ELMA') normCat = 'ELMA_ALL';
+                    if (cat === 'TOTAL FOODS') normCat = 'FOODS_ALL';
+                    if (cat === 'GERAL') normCat = 'PEPSICO_ALL';
 
                     // Check for META first, then AJUSTE
                     let idx = undefined;
