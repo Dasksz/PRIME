@@ -5581,6 +5581,10 @@
                 const rcaCode = client.rcas[0];
                 if (rcaCode) sellerName = optimizedData.rcaNameByCode.get(rcaCode) || rcaCode;
                 else if (client.rcas.length === 0 || client.rcas[0] === '') sellerName = 'INATIVOS';
+
+                // EXCLUSION: Skip INATIVOS and N/A from Goals View to prevent ghost totals
+                if (sellerName === 'INATIVOS' || sellerName === 'N/A') return;
+
                 const sellerObj = initSeller(sellerName);
 
                 // Initialize client totals for each category
