@@ -13619,10 +13619,13 @@ const supervisorGroups = new Map();
 
                     const sellerCode = optimizedData.rcaCodeByName.get(u.seller) || '-';
 
+                    let displayCategory = u.category;
+                    if (u.type === 'pos') displayCategory += '_POS';
+
                     row.innerHTML = `
                         <td class="px-4 py-2 text-xs text-slate-300">${sellerCode}</td>
                         <td class="px-4 py-2 text-xs text-slate-400">${u.seller}</td>
-                        <td class="px-4 py-2 text-xs text-blue-300">${u.category}</td>
+                        <td class="px-4 py-2 text-xs text-blue-300">${displayCategory}</td>
                         <td class="px-4 py-2 text-xs text-slate-400 font-mono text-right">${currentValStr}</td>
                         <td class="px-4 py-2 text-xs text-white font-bold font-mono text-right">${newValStr}</td>
                         <td class="px-4 py-2 text-xs ${diffClass} font-mono text-right">${diff > 0 ? '+' : ''}${diffStr}</td>
