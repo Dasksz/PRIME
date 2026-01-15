@@ -14221,9 +14221,6 @@ const supervisorGroups = new Map();
                     alert(`Importação realizada! As metas foram carregadas para a aba "Rateio Metas". Verifique e salve manualmente.`);
                     closeModal();
 
-                    // Also refresh GV view metrics if active
-                    calculateGoalsMetrics();
-
                     // Switch to "Rateio Metas" tab to verify
                     const btnGv = document.querySelector('button[data-tab="gv"]');
                     if (btnGv) btnGv.click();
