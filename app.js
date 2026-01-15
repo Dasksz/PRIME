@@ -4935,6 +4935,7 @@
 
             // Cache Key for Global Totals
             const cacheKey = currentGoalsSupplier + (currentGoalsBrand ? `_${currentGoalsBrand}` : '');
+            const contextKey = cacheKey;
 
             if (!globalGoalsTotalsCache[cacheKey]) {
                  calculateDistributedGoals([], currentGoalsSupplier, currentGoalsBrand, 0, 0);
@@ -5102,13 +5103,13 @@
 
                     // Calculate Total Adjustment for Current View Context
                     let contextAdjustment = 0;
-                    const adjustmentMap = goalsPosAdjustments[currentGoalsSupplier];
+                    const adjustmentMap = goalsPosAdjustments[contextKey];
                     let absoluteOverride = null;
 
                     if (isSingleSeller) {
                         // Check for Absolute Override from Import
-                        absoluteOverride = getSellerTargetOverride(selectedGoalsGvSellers[0], 'pos', currentGoalsSupplier);
-                        
+                        absoluteOverride = getSellerTargetOverride(selectedGoalsGvSellers[0], 'pos', contextKey);
+
                         if (absoluteOverride === null && adjustmentMap) {
                             // Specific Seller Context (Fallback)
                             contextAdjustment = adjustmentMap.get(selectedGoalsGvSellers[0]) || 0;
@@ -5117,7 +5118,7 @@
                         // Aggregate Logic for Multiple Sellers (Supervisor/Global)
                         const visibleSellers = new Set(clientMetrics.map(c => c.seller));
                         const naturalPosBySeller = new Map();
-                        
+
                         // 1. Calculate Natural Pos per Seller
                         clientMetrics.forEach(c => {
                             if (c.metaPos > 0) {
@@ -5128,7 +5129,7 @@
                         // 2. Sum (Override OR (Natural + Adjustment))
                         let sumTotal = 0;
                         visibleSellers.forEach(seller => {
-                            const override = getSellerTargetOverride(seller, 'pos', currentGoalsSupplier);
+                            const override = getSellerTargetOverride(seller, 'pos', contextKey);
                             if (override !== null) {
                                 sumTotal += override;
                             } else {
@@ -5137,9 +5138,9 @@
                                 sumTotal += (nat + adj);
                             }
                         });
-                        
+
                         // Override the standard calculation
-                        absoluteOverride = sumTotal; 
+                        absoluteOverride = sumTotal;
                     }
 
                     const displayPos = absoluteOverride !== null ? absoluteOverride : (naturalTotalPos + contextAdjustment);
@@ -5231,7 +5232,7 @@
                         let absOverride = null;
 
                         if (isSingleSeller) {
-                            absOverride = getSellerTargetOverride(selectedGoalsGvSellers[0], type === 'salty' ? 'mix_salty' : 'mix_foods', currentGoalsSupplier);
+                            absOverride = getSellerTargetOverride(selectedGoalsGvSellers[0], type === 'salty' ? 'mix_salty' : 'mix_foods', contextKey);
                             if (absOverride === null) {
                                 adj = adjustmentsMap.get(selectedGoalsGvSellers[0]) || 0;
                             }
@@ -5253,7 +5254,7 @@
                             // 2. Sum
                             let sumTotal = 0;
                             visibleSellers.forEach(seller => {
-                                const override = getSellerTargetOverride(seller, type === 'salty' ? 'mix_salty' : 'mix_foods', currentGoalsSupplier);
+                                const override = getSellerTargetOverride(seller, type === 'salty' ? 'mix_salty' : 'mix_foods', contextKey);
                                 if (override !== null) {
                                     sumTotal += override;
                                 } else {
@@ -5829,7 +5830,7 @@
                             }
                         } else {
                             // Fallback: Legacy Adjustment Logic (Session only)
-                            
+
                             // Apply Pos Adjustment
                             const adjKey = posKeys[colId] || colId; // Fallback to ID
                             if (goalsPosAdjustments[adjKey]) {
