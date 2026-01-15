@@ -13506,9 +13506,16 @@ const supervisorGroups = new Map();
                 });
 
                 // 2. Volume
-                const volCats = ['tonelada_elma', 'tonelada_foods'];
+                // Identify specific categories for Volume as per requirement (Extrusados, Não Extrusados, Torcida, Toddynho, Toddy, Quaker/Kerococo)
+                const volCats = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
                 volCats.forEach(cat => {
-                    const idx = colMap[`${cat}_VOL_AJUSTE`];
+                    // Check for META first, then AJUSTE
+                    let idx = undefined;
+                    // Try exact key + VOL_META
+                    if (colMap[`${cat}_VOL_META`] !== undefined) idx = colMap[`${cat}_VOL_META`];
+                    // Try exact key + VOL_AJUSTE (Fallback)
+                    else if (colMap[`${cat}_VOL_AJUSTE`] !== undefined) idx = colMap[`${cat}_VOL_AJUSTE`];
+
                     if (idx !== undefined && row[idx]) {
                         const val = parseImportValue(row[idx]);
                         if (!isNaN(val)) updates.push({ type: 'vol', seller: sellerName, category: cat, val: val });
@@ -14208,16 +14215,18 @@ const supervisorGroups = new Map();
                         if (targets['mix_foods'] === undefined) targets['mix_foods'] = defaults.mixFoods;
                     });
 
-                    // Save to Supabase
-                    const success = await saveGoalsToSupabase();
+                    // Save to Supabase (SKIPPED - Load to Memory Only)
+                    // const success = await saveGoalsToSupabase();
                     
-                    if (success) {
-                        alert(`Importação e salvamento concluídos!\n${countRev} distribuições de Faturamento/Volume.\n${countPos} metas de Positivação/Mix atualizadas.`);
-                        closeModal();
-                        updateGoalsSvView(); // Refresh Report View
-                        // Also refresh GV view metrics if active
-                        calculateGoalsMetrics();
-                    }
+                    alert(`Importação realizada! As metas foram carregadas para a aba "Rateio Metas". Verifique e salve manualmente.`);
+                    closeModal();
+
+                    // Also refresh GV view metrics if active
+                    calculateGoalsMetrics();
+
+                    // Switch to "Rateio Metas" tab to verify
+                    const btnGv = document.querySelector('button[data-tab="gv"]');
+                    if (btnGv) btnGv.click();
                 } catch (e) {
                     console.error("Erro no processo de confirmação:", e);
                     alert("Erro ao processar/salvar: " + e.message);
