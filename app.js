@@ -13512,12 +13512,10 @@ const supervisorGroups = new Map();
                 // Identify specific categories for Volume as per requirement (Extrusados, Não Extrusados, Torcida, Toddynho, Toddy, Quaker/Kerococo)
                 const volCats = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
                 volCats.forEach(cat => {
-                    // Check for META first, then AJUSTE
-                    let idx = undefined;
-                    // Try exact key + VOL_META
-                    if (colMap[`${cat}_VOL_META`] !== undefined) idx = colMap[`${cat}_VOL_META`];
-                    // Try exact key + VOL_AJUSTE (Fallback)
-                    else if (colMap[`${cat}_VOL_AJUSTE`] !== undefined) idx = colMap[`${cat}_VOL_AJUSTE`];
+                    // Check for AJUSTE only (Prioritize Edited Value)
+                    // If the user wants to keep the original meta, they leave the adjustment cell empty/matches meta?
+                    // Instruction: "deixe que tudo leia apenas a coluna ajuste" (let everything read only the adjustment column)
+                    let idx = colMap[`${cat}_VOL_AJUSTE`];
 
                     if (idx !== undefined && row[idx]) {
                         const val = parseImportValue(row[idx]);
@@ -13530,26 +13528,15 @@ const supervisorGroups = new Map();
                 // Mapping: TOTAL ELMA -> total_elma, TOTAL FOODS -> total_foods
                 const posCats = ['pepsico_all', 'total_elma', 'total_foods', '707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
                 posCats.forEach(cat => {
-                    let headerKey = cat;
-                    // Reverse map for header lookup if needed, but colMap uses normalized keys now
-                    // However, we need to check both the normalized key and potential header variations if normalization missed something?
-                    // No, colMap construction handles normalization. We just need to query using the keys we expect colMap to have.
-                    // The keys in colMap are: `${catKey}_${metricKey}_${subMetric}`
-                    // Where catKey is 'total_elma', 'total_foods', '707', etc.
-
-                    // Check for META first, then AJUSTE
                     let idx = undefined;
-                    
-                    // Try standard normalized key
-                    if (colMap[`${cat}_POS_META`] !== undefined) idx = colMap[`${cat}_POS_META`];
-                    else if (colMap[`${cat}_POS_AJUSTE`] !== undefined) idx = colMap[`${cat}_POS_AJUSTE`];
 
-                    // Fallback for Legacy/Variant keys if the parser didn't catch them or for robustness
-                    // (e.g. if header was literally TOTAL ELMA and logic above converted it to total_elma, then the key IS total_elma_POS_META)
-                    // But if we want to be safe against GERAL vs PEPSICO_ALL...
-                    if (idx === undefined && cat === 'pepsico_all') {
-                         if (colMap['PEPSICO_ALL_POS_META'] !== undefined) idx = colMap['PEPSICO_ALL_POS_META'];
-                         else if (colMap['GERAL_POS_META'] !== undefined) idx = colMap['GERAL_POS_META'];
+                    // EXCEPTION: GERAL/PEPSICO_ALL reads from META
+                    if (cat === 'pepsico_all') {
+                         if (colMap['GERAL_POS_META'] !== undefined) idx = colMap['GERAL_POS_META'];
+                         else if (colMap['PEPSICO_ALL_POS_META'] !== undefined) idx = colMap['PEPSICO_ALL_POS_META'];
+                    } else {
+                        // All other categories read from AJUSTE
+                        if (colMap[`${cat}_POS_AJUSTE`] !== undefined) idx = colMap[`${cat}_POS_AJUSTE`];
                     }
 
                     if (idx !== undefined && row[idx]) {
