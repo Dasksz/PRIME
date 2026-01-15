@@ -4069,18 +4069,30 @@
 
             // 2. Prepare Sets for fast lookup and Sum up goals
             const filteredSummaryClientCodes = new Set();
-            const activeSellersInSummary = new Set();
+            const relevantSellersSet = new Set();
 
-            filteredSummaryClients.forEach(c => {
-                filteredSummaryClientCodes.add(c['Código']);
-                // Resolve Seller Name for Adjustment Filtering
-                const rcaCode = String(c.rca1 || '').trim();
-                if (rcaCode) {
-                    const name = optimizedData.rcaNameByCode.get(rcaCode);
-                    if (name) activeSellersInSummary.add(name);
-                    else if (rcaCode === 'INATIVOS') activeSellersInSummary.add('INATIVOS');
-                }
-            });
+            // Populate filteredSummaryClientCodes for metrics lookup (Actuals)
+            filteredSummaryClients.forEach(c => filteredSummaryClientCodes.add(c['Código']));
+
+            // DETERMINE RELEVANT SELLERS FOR TARGETS (Fix: Include sellers with targets even if no active clients)
+            // Use Supervisor Filter or Default to All
+            if (selectedGoalsSummarySupervisors.length > 0) {
+                 selectedGoalsSummarySupervisors.forEach(sup => {
+                     const rcas = optimizedData.rcasBySupervisor.get(sup) || [];
+                     rcas.forEach(code => {
+                         const name = optimizedData.rcaNameByCode.get(code);
+                         if (name) relevantSellersSet.add(name);
+                     });
+                 });
+            } else {
+                 // All Active Sellers in Structure
+                 optimizedData.rcasBySupervisor.forEach(rcas => {
+                     rcas.forEach(code => {
+                         const name = optimizedData.rcaNameByCode.get(code);
+                         if (name) relevantSellersSet.add(name);
+                     });
+                 });
+            }
 
             const summaryGoalsSums = {
                 '707': { fat: 0, vol: 0 },
@@ -4092,7 +4104,7 @@
             };
 
             // Calculate Base Total for Mix (Use ELMA_ALL metric with exclusion)
-            const elmaTargetBase = getElmaTargetBase(displayMetrics, goalsPosAdjustments, activeSellersInSummary);
+            const elmaTargetBase = getElmaTargetBase(displayMetrics, goalsPosAdjustments, relevantSellersSet);
 
             filteredSummaryClients.forEach(c => {
                 const codCli = c['Código'];
@@ -4139,7 +4151,7 @@
 
                 // NEW: Calculate Pos Target from DB
                 let calculatedPosTarget = 0;
-                activeSellersInSummary.forEach(sellerName => {
+                relevantSellersSet.forEach(sellerName => {
                     calculatedPosTarget += getSellerCurrentGoal(sellerName, key, 'pos');
                 });
 
@@ -4226,9 +4238,14 @@
             let totalMixSaltyTarget = 0;
             let totalMixFoodsTarget = 0;
 
-            activeSellersInSummary.forEach(sellerName => {
-                totalPosTarget += getSellerCurrentGoal(sellerName, 'total_elma', 'pos');
-                totalPosTarget += getSellerCurrentGoal(sellerName, 'total_foods', 'pos');
+            relevantSellersSet.forEach(sellerName => {
+                // Sum components for Total Pos (avoid total_elma/total_foods defaults which might be miscalculated)
+                totalPosTarget += getSellerCurrentGoal(sellerName, '707', 'pos');
+                totalPosTarget += getSellerCurrentGoal(sellerName, '708', 'pos');
+                totalPosTarget += getSellerCurrentGoal(sellerName, '752', 'pos');
+                totalPosTarget += getSellerCurrentGoal(sellerName, '1119_TODDYNHO', 'pos');
+                totalPosTarget += getSellerCurrentGoal(sellerName, '1119_TODDY', 'pos');
+                totalPosTarget += getSellerCurrentGoal(sellerName, '1119_QUAKER_KEROCOCO', 'pos');
 
                 totalMixSaltyTarget += getSellerCurrentGoal(sellerName, 'mix_salty', 'mix');
                 totalMixFoodsTarget += getSellerCurrentGoal(sellerName, 'mix_foods', 'mix');
