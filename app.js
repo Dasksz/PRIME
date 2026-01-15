@@ -4901,6 +4901,8 @@
                     if (targets['GERAL'] !== undefined) return targets['GERAL'];
                     return null;
                 }
+                // Check direct key match (e.g. 707, 708, 1119_TODDYNHO)
+                if (targets[context] !== undefined) return targets[context];
             }
             return null;
         }
