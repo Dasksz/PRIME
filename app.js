@@ -7262,7 +7262,7 @@ const supervisorGroups = new Map();
         }
 
         function updateSellerFilter(supervisors, dropdown, filterText, selectedArray, dataSource, skipRender = false) {
-            const forbidden = ['NOME', 'VENDEDOR', 'SUPERV', 'CODUSUR', 'CODCLI', 'SUPERVISOR'];
+            const forbidden = ['NOME', 'VENDEDOR', 'SUPERV', 'CODUSUR', 'CODCLI', 'SUPERVISOR', 'INATIVOS'];
             let sellersToShow;
             if (supervisors && supervisors.length > 0) {
                 const supSet = new Set(supervisors);
@@ -13393,7 +13393,7 @@ const supervisorGroups = new Map();
                     else if (catKey === 'TOTAL FOODS') catKey = 'total_foods';
                     else if (catKey === 'MIX SALTY') catKey = 'mix_salty';
                     else if (catKey === 'MIX FOODS') catKey = 'mix_foods';
-                    else if (catKey === 'PEPSICO_ALL_POS' || catKey === 'PEPSICO_ALL') catKey = 'pepsico_all';
+                    else if (catKey === 'PEPSICO_ALL_POS' || catKey === 'PEPSICO_ALL' || catKey === 'GERAL') catKey = 'pepsico_all';
 
                     let metricKey = 'OTHER';
                     if (currentMetric === 'FATURAMENTO' || currentMetric === 'MÉDIA TRIM.') metricKey = 'FAT';
@@ -13504,61 +13504,49 @@ const supervisorGroups = new Map();
                 if (processedSellers.has(finalSellerName)) continue;
                 processedSellers.add(finalSellerName);
 
+                // Helper to get value with priority: Adjust > Meta
+                const getPriorityValue = (cat, metric) => {
+                    // 1. Try AJUSTE
+                    let idx = colMap[`${cat}_${metric}_AJUSTE`];
+                    if (idx !== undefined && row[idx]) {
+                        const val = parseImportValue(row[idx]);
+                        if (!isNaN(val)) return val;
+                    }
+                    // 2. Try META
+                    idx = colMap[`${cat}_${metric}_META`];
+                    if (idx !== undefined && row[idx]) {
+                        const val = parseImportValue(row[idx]);
+                        if (!isNaN(val)) return val;
+                    }
+                    return NaN;
+                };
+
                 // 1. Revenue
                 const revCats = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
                 revCats.forEach(cat => {
-                    const idx = colMap[`${cat}_FAT_AJUSTE`];
-                    if (idx !== undefined && row[idx]) {
-                        const val = parseImportValue(row[idx]);
-                        if (!isNaN(val)) updates.push({ type: 'rev', seller: sellerName, category: cat, val: val });
-                    }
+                    const val = getPriorityValue(cat, 'FAT');
+                    if (!isNaN(val)) updates.push({ type: 'rev', seller: sellerName, category: cat, val: val });
                 });
 
                 // 2. Volume
-                // Identify specific categories for Volume as per requirement (Extrusados, Não Extrusados, Torcida, Toddynho, Toddy, Quaker/Kerococo)
                 const volCats = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
                 volCats.forEach(cat => {
-                    // Check for AJUSTE only (Prioritize Edited Value)
-                    // If the user wants to keep the original meta, they leave the adjustment cell empty/matches meta?
-                    // Instruction: "deixe que tudo leia apenas a coluna ajuste" (let everything read only the adjustment column)
-                    let idx = colMap[`${cat}_VOL_AJUSTE`];
-
-                    if (idx !== undefined && row[idx]) {
-                        const val = parseImportValue(row[idx]);
-                        if (!isNaN(val)) updates.push({ type: 'vol', seller: sellerName, category: cat, val: val });
-                    }
+                    const val = getPriorityValue(cat, 'VOL');
+                    if (!isNaN(val)) updates.push({ type: 'vol', seller: sellerName, category: cat, val: val });
                 });
 
                 // 3. Positivation
-                // Use normalized keys that match what is stored in goalsSellerTargets and generated in ColMap
-                // Mapping: TOTAL ELMA -> total_elma, TOTAL FOODS -> total_foods
                 const posCats = ['pepsico_all', 'total_elma', 'total_foods', '707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
                 posCats.forEach(cat => {
-                    let idx = undefined;
-
-                    // EXCEPTION: GERAL/PEPSICO_ALL reads from META
-                    if (cat === 'pepsico_all') {
-                         if (colMap['GERAL_POS_META'] !== undefined) idx = colMap['GERAL_POS_META'];
-                         else if (colMap['PEPSICO_ALL_POS_META'] !== undefined) idx = colMap['PEPSICO_ALL_POS_META'];
-                    } else {
-                        // All other categories read from AJUSTE
-                        if (colMap[`${cat}_POS_AJUSTE`] !== undefined) idx = colMap[`${cat}_POS_AJUSTE`];
-                    }
-
-                    if (idx !== undefined && row[idx]) {
-                        const val = parseImportValue(row[idx]);
-                        if (!isNaN(val)) updates.push({ type: 'pos', seller: sellerName, category: cat, val: Math.round(val) });
-                    }
+                    const val = getPriorityValue(cat, 'POS');
+                    if (!isNaN(val)) updates.push({ type: 'pos', seller: sellerName, category: cat, val: Math.round(val) });
                 });
 
                 // 4. Mix
                 const mixCats = ['mix_salty', 'mix_foods'];
                 mixCats.forEach(cat => {
-                    const idx = colMap[`${cat}_MIX_AJUSTE`];
-                    if (idx !== undefined && row[idx]) {
-                        const val = parseImportValue(row[idx]);
-                        if (!isNaN(val)) updates.push({ type: 'mix', seller: sellerName, category: cat, val: Math.round(val) });
-                    }
+                    const val = getPriorityValue(cat, 'MIX');
+                    if (!isNaN(val)) updates.push({ type: 'mix', seller: sellerName, category: cat, val: Math.round(val) });
                 });
             }
             return updates;
