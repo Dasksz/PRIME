@@ -4069,30 +4069,18 @@
 
             // 2. Prepare Sets for fast lookup and Sum up goals
             const filteredSummaryClientCodes = new Set();
-            const relevantSellersSet = new Set();
+            const activeSellersInSummary = new Set();
 
-            // Populate filteredSummaryClientCodes for metrics lookup (Actuals)
-            filteredSummaryClients.forEach(c => filteredSummaryClientCodes.add(c['Código']));
-
-            // DETERMINE RELEVANT SELLERS FOR TARGETS (Fix: Include sellers with targets even if no active clients)
-            // Use Supervisor Filter or Default to All
-            if (selectedGoalsSummarySupervisors.length > 0) {
-                 selectedGoalsSummarySupervisors.forEach(sup => {
-                     const rcas = optimizedData.rcasBySupervisor.get(sup) || [];
-                     rcas.forEach(code => {
-                         const name = optimizedData.rcaNameByCode.get(code);
-                         if (name) relevantSellersSet.add(name);
-                     });
-                 });
-            } else {
-                 // All Active Sellers in Structure
-                 optimizedData.rcasBySupervisor.forEach(rcas => {
-                     rcas.forEach(code => {
-                         const name = optimizedData.rcaNameByCode.get(code);
-                         if (name) relevantSellersSet.add(name);
-                     });
-                 });
-            }
+            filteredSummaryClients.forEach(c => {
+                filteredSummaryClientCodes.add(c['Código']);
+                // Resolve Seller Name for Adjustment Filtering
+                const rcaCode = String(c.rca1 || '').trim();
+                if (rcaCode) {
+                    const name = optimizedData.rcaNameByCode.get(rcaCode);
+                    if (name) activeSellersInSummary.add(name);
+                    else if (rcaCode === 'INATIVOS') activeSellersInSummary.add('INATIVOS');
+                }
+            });
 
             const summaryGoalsSums = {
                 '707': { fat: 0, vol: 0 },
@@ -4104,7 +4092,7 @@
             };
 
             // Calculate Base Total for Mix (Use ELMA_ALL metric with exclusion)
-            const elmaTargetBase = getElmaTargetBase(displayMetrics, goalsPosAdjustments, relevantSellersSet);
+            const elmaTargetBase = getElmaTargetBase(displayMetrics, goalsPosAdjustments, activeSellersInSummary);
 
             filteredSummaryClients.forEach(c => {
                 const codCli = c['Código'];
@@ -4149,11 +4137,15 @@
                 if (displayFat < 0.01) displayFat = metrics.prevFat;
                 if (displayVol < 0.001) displayVol = metrics.prevVol;
 
-                // NEW: Calculate Pos Target from DB
-                let calculatedPosTarget = 0;
-                relevantSellersSet.forEach(sellerName => {
-                    calculatedPosTarget += getSellerCurrentGoal(sellerName, key, 'pos');
-                });
+                let subCategoryAdjustment = 0;
+                if (goalsPosAdjustments[key]) {
+                    // goalsPosAdjustments keys are Seller Names, not Client Codes
+                    goalsPosAdjustments[key].forEach((adjVal, sellerName) => {
+                        if (activeSellersInSummary.has(sellerName)) {
+                            subCategoryAdjustment += adjVal;
+                        }
+                    });
+                }
 
                 totalFat += displayFat;
                 totalVol += displayVol;
@@ -4210,7 +4202,7 @@
                                     <p class="text-xs text-slate-300 uppercase font-semibold">Meta Pos. (Clientes)</p>
                                 </div>
                                 <p class="text-xl font-bold ${textColor} mb-2">
-                                    ${calculatedPosTarget.toLocaleString('pt-BR')}
+                                    ${((metrics.quarterlyPos || 0) + subCategoryAdjustment).toLocaleString('pt-BR')}
                                 </p>
                                 <div class="flex justify-between text-[10px] text-slate-300 border-t border-slate-700/50 pt-1">
                                     <span>Ativos no Trimestre</span>
@@ -4233,27 +4225,58 @@
             if(totalFatEl) totalFatEl.textContent = totalFat.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             if(totalVolEl) totalVolEl.textContent = totalVol.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
-            // Calculate Base Total from DB Targets (Elma + Foods)
-            let totalPosTarget = 0;
-            let totalMixSaltyTarget = 0;
-            let totalMixFoodsTarget = 0;
+            // Calculate Base Total (Use PEPSICO_ALL metric instead of Union)
+            // basePosCount is already defined at the top of the function
+            const basePosCount = displayMetrics['PEPSICO_ALL'].quarterlyPos;
 
-            relevantSellersSet.forEach(sellerName => {
-                // Sum components for Total Pos (avoid total_elma/total_foods defaults which might be miscalculated)
-                totalPosTarget += getSellerCurrentGoal(sellerName, '707', 'pos');
-                totalPosTarget += getSellerCurrentGoal(sellerName, '708', 'pos');
-                totalPosTarget += getSellerCurrentGoal(sellerName, '752', 'pos');
-                totalPosTarget += getSellerCurrentGoal(sellerName, '1119_TODDYNHO', 'pos');
-                totalPosTarget += getSellerCurrentGoal(sellerName, '1119_TODDY', 'pos');
-                totalPosTarget += getSellerCurrentGoal(sellerName, '1119_QUAKER_KEROCOCO', 'pos');
+            let totalAdjustment = 0;
+            // Only PEPSICO adjustments affect the Global/Summary Total Pos
+            if (goalsPosAdjustments['PEPSICO_ALL']) {
+                goalsPosAdjustments['PEPSICO_ALL'].forEach((val, sellerName) => {
+                    // Only include adjustment if seller is active in current summary view
+                    if (activeSellersInSummary.has(sellerName)) {
+                        totalAdjustment += val;
+                    }
+                });
+            }
 
-                totalMixSaltyTarget += getSellerCurrentGoal(sellerName, 'mix_salty', 'mix');
-                totalMixFoodsTarget += getSellerCurrentGoal(sellerName, 'mix_foods', 'mix');
+            const adjustedTotalPos = basePosCount + totalAdjustment;
+
+            if(totalPosEl) totalPosEl.textContent = adjustedTotalPos.toLocaleString('pt-BR');
+
+            // Calculate base for Mix Goals (Exclude Americanas / Seller 1001)
+            let naturalMixBaseCount = 0;
+            uniquePosClientsSet.forEach(clientCode => {
+                const client = clientMapForKPIs.get(String(clientCode));
+                if (client) {
+                     const rca1 = String(client.rca1 || '').trim();
+                     if (rca1 !== '1001') {
+                         naturalMixBaseCount++;
+                     }
+                }
             });
 
-            if(totalPosEl) totalPosEl.textContent = totalPosTarget.toLocaleString('pt-BR');
-            if(mixSaltyEl) mixSaltyEl.textContent = totalMixSaltyTarget.toLocaleString('pt-BR');
-            if(mixFoodsEl) mixFoodsEl.textContent = totalMixFoodsTarget.toLocaleString('pt-BR');
+            // MIX KPIs - Based on ELMA Target (50% Salty / 30% Foods)
+            const naturalSaltyTarget = Math.round(elmaTargetBase * 0.50);
+
+            let mixSaltyAdjustment = 0;
+            if (goalsMixSaltyAdjustments['PEPSICO_ALL']) {
+                 goalsMixSaltyAdjustments['PEPSICO_ALL'].forEach((val, sellerName) => {
+                     // Check if seller is in the filtered summary view
+                     if (activeSellersInSummary.has(sellerName)) mixSaltyAdjustment += val;
+                 });
+            }
+            if(mixSaltyEl) mixSaltyEl.textContent = (naturalSaltyTarget + mixSaltyAdjustment).toLocaleString('pt-BR');
+
+            // Mix Foods - Based on ELMA Target (30%)
+            const naturalFoodsTarget = Math.round(elmaTargetBase * 0.30);
+            let mixFoodsAdjustment = 0;
+            if (goalsMixFoodsAdjustments['PEPSICO_ALL']) {
+                 goalsMixFoodsAdjustments['PEPSICO_ALL'].forEach((val, sellerName) => {
+                     if (activeSellersInSummary.has(sellerName)) mixFoodsAdjustment += val;
+                 });
+            }
+            if(mixFoodsEl) mixFoodsEl.textContent = (naturalFoodsTarget + mixFoodsAdjustment).toLocaleString('pt-BR');
         }
 
         function getElmaTargetBase(displayMetrics, goalsPosAdjustments, activeSellersSet) {
