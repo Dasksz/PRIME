@@ -4898,6 +4898,8 @@
                 if (context === 'ELMA_ALL' || context === 'ELMA') return targets['total_elma'] !== undefined ? targets['total_elma'] : null;
                 if (context === 'FOODS_ALL' || context === 'FOODS') return targets['total_foods'] !== undefined ? targets['total_foods'] : null;
                 if (context === 'PEPSICO_ALL' || context === 'PEPSICO') {
+                    // Check pepsico_all first (new standard) then GERAL (legacy)
+                    if (targets['pepsico_all'] !== undefined) return targets['pepsico_all'];
                     if (targets['GERAL'] !== undefined) return targets['GERAL'];
                     return null;
                 }
@@ -13385,6 +13387,7 @@ const supervisorGroups = new Map();
                     else if (catKey === 'TOTAL FOODS') catKey = 'total_foods';
                     else if (catKey === 'MIX SALTY') catKey = 'mix_salty';
                     else if (catKey === 'MIX FOODS') catKey = 'mix_foods';
+                    else if (catKey === 'PEPSICO_ALL_POS' || catKey === 'PEPSICO_ALL') catKey = 'pepsico_all';
 
                     let metricKey = 'OTHER';
                     if (currentMetric === 'FATURAMENTO' || currentMetric === 'MÉDIA TRIM.') metricKey = 'FAT';
@@ -13523,25 +13526,35 @@ const supervisorGroups = new Map();
                 });
 
                 // 3. Positivation
-                const posCats = ['GERAL', 'TOTAL ELMA', 'TOTAL FOODS', '707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+                // Use normalized keys that match what is stored in goalsSellerTargets and generated in ColMap
+                // Mapping: TOTAL ELMA -> total_elma, TOTAL FOODS -> total_foods
+                const posCats = ['pepsico_all', 'total_elma', 'total_foods', '707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
                 posCats.forEach(cat => {
-                    let normCat = cat;
-                    if (cat === 'TOTAL ELMA') normCat = 'ELMA_ALL';
-                    if (cat === 'TOTAL FOODS') normCat = 'FOODS_ALL';
-                    if (cat === 'GERAL') normCat = 'PEPSICO_ALL';
+                    let headerKey = cat;
+                    // Reverse map for header lookup if needed, but colMap uses normalized keys now
+                    // However, we need to check both the normalized key and potential header variations if normalization missed something?
+                    // No, colMap construction handles normalization. We just need to query using the keys we expect colMap to have.
+                    // The keys in colMap are: `${catKey}_${metricKey}_${subMetric}`
+                    // Where catKey is 'total_elma', 'total_foods', '707', etc.
 
                     // Check for META first, then AJUSTE
                     let idx = undefined;
-                    // Try exact key + META
+
+                    // Try standard normalized key
                     if (colMap[`${cat}_POS_META`] !== undefined) idx = colMap[`${cat}_POS_META`];
-                    else if (colMap[`${normCat}_POS_META`] !== undefined) idx = colMap[`${normCat}_POS_META`];
-                    // Try exact key + AJUSTE (Fallback)
                     else if (colMap[`${cat}_POS_AJUSTE`] !== undefined) idx = colMap[`${cat}_POS_AJUSTE`];
-                    else if (colMap[`${normCat}_POS_AJUSTE`] !== undefined) idx = colMap[`${normCat}_POS_AJUSTE`];
+
+                    // Fallback for Legacy/Variant keys if the parser didn't catch them or for robustness
+                    // (e.g. if header was literally TOTAL ELMA and logic above converted it to total_elma, then the key IS total_elma_POS_META)
+                    // But if we want to be safe against GERAL vs PEPSICO_ALL...
+                    if (idx === undefined && cat === 'pepsico_all') {
+                         if (colMap['PEPSICO_ALL_POS_META'] !== undefined) idx = colMap['PEPSICO_ALL_POS_META'];
+                         else if (colMap['GERAL_POS_META'] !== undefined) idx = colMap['GERAL_POS_META'];
+                    }
 
                     if (idx !== undefined && row[idx]) {
                         const val = parseImportValue(row[idx]);
-                        if (!isNaN(val)) updates.push({ type: 'pos', seller: sellerName, category: normCat, val: Math.round(val) });
+                        if (!isNaN(val)) updates.push({ type: 'pos', seller: sellerName, category: cat, val: Math.round(val) });
                     }
                 });
 
