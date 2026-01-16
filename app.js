@@ -4925,6 +4925,148 @@
             return null;
         }
 
+        // Helper to get historical positivation count for a seller/category
+        function getHistoricalPositivation(sellerName, category) {
+            const sellerCode = optimizedData.rcaCodeByName.get(sellerName);
+            if (!sellerCode) return 0;
+
+            const clients = optimizedData.clientsByRca.get(sellerCode) || [];
+            // Filter active clients same as main view
+            const activeClients = clients.filter(c => {
+                const cod = String(c['Código'] || c['codigo_cliente']);
+                const rca1 = String(c.rca1 || '').trim();
+                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
+                return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
+            });
+
+            let count = 0;
+            // Identify which products belong to this category
+            // Reuse logic from 'shouldIncludeSale' or similar but specific to categories
+            // Mapping Category -> Condition
+            const checkSale = (codFor, desc) => {
+                if (category === 'pepsico_all') return ['707', '708', '752', '1119'].includes(codFor);
+                if (category === 'total_elma') return ['707', '708', '752'].includes(codFor);
+                if (category === 'total_foods') return codFor === '1119';
+
+                // Specifics
+                if (category === '707') return codFor === '707';
+                if (category === '708') return codFor === '708';
+                if (category === '752') return codFor === '752';
+                if (category === '1119_TODDYNHO') return codFor === '1119' && desc.includes('TODDYNHO');
+                if (category === '1119_TODDY') return codFor === '1119' && desc.includes('TODDY') && !desc.includes('TODDYNHO');
+                if (category === '1119_QUAKER_KEROCOCO') return codFor === '1119' && (desc.includes('QUAKER') || desc.includes('KEROCOCO'));
+
+                return false;
+            };
+
+            activeClients.forEach(client => {
+                const codCli = String(client['Código'] || client['codigo_cliente']);
+                const historyIds = optimizedData.indices.history.byClient.get(codCli);
+                if (historyIds) {
+                    // Check if client bought ANY product in category
+                    for (let id of historyIds) {
+                        const sale = optimizedData.historyById.get(id);
+                        const codFor = String(sale.CODFOR);
+                        const desc = normalize(sale.DESCRICAO || '');
+
+                        // Check Rev Type only? Usually yes for Positivação.
+                        if ((sale.TIPOVENDA === '1' || sale.TIPOVENDA === '9') && checkSale(codFor, desc)) {
+                            count++;
+                            break; // Counted this client
+                        }
+                    }
+                }
+            });
+            return count;
+        }
+
+        function distributeDown(sellerName, parentCategory, parentTargetValue) {
+            // Recursive Cascade
+            let children = [];
+            if (parentCategory === 'pepsico_all') children = ['total_elma', 'total_foods'];
+            else if (parentCategory === 'total_elma') children = ['707', '708', '752'];
+            else if (parentCategory === 'total_foods') children = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+
+            if (children.length === 0) return;
+
+            // 1. Get History for Children
+            const childHistories = children.map(child => ({
+                cat: child,
+                hist: getHistoricalPositivation(sellerName, child)
+            }));
+
+            const parentHistory = getHistoricalPositivation(sellerName, parentCategory);
+
+            childHistories.forEach(item => {
+                let ratio = 0;
+                if (parentHistory > 0) {
+                    ratio = item.hist / parentHistory;
+                }
+
+                // New Target
+                const childTarget = Math.round(parentTargetValue * ratio);
+
+                // Update Seller Targets
+                if (!goalsSellerTargets.has(sellerName)) goalsSellerTargets.set(sellerName, {});
+                const t = goalsSellerTargets.get(sellerName);
+                t[item.cat] = childTarget;
+
+                // Recurse
+                distributeDown(sellerName, item.cat, childTarget);
+            });
+        }
+
+        function handleDistributePositivation(totalGoal, contextKey, filteredClientMetrics) {
+            // filteredClientMetrics contains the list of sellers currently visible/active
+            // We should distribute ONLY to them.
+
+            // Map Context Key (Tab) to Target Key
+            let targetKey = contextKey;
+            if (contextKey === 'PEPSICO_ALL') targetKey = 'pepsico_all';
+            if (contextKey === 'ELMA_ALL') targetKey = 'total_elma';
+            if (contextKey === 'FOODS_ALL') targetKey = 'total_foods';
+
+            // 1. Calculate Total History for THESE sellers in THIS context
+            let totalHistoryPos = 0;
+            const sellersHistory = [];
+
+            // Group by Seller to avoid duplicates if clientMetrics has multiple rows per seller?
+            // clientMetrics is PER CLIENT. So we need to aggregate unique sellers first.
+            const uniqueSellers = new Set(filteredClientMetrics.map(c => c.seller));
+
+            uniqueSellers.forEach(seller => {
+                const hist = getHistoricalPositivation(seller, targetKey);
+                sellersHistory.push({ seller, hist });
+                totalHistoryPos += hist;
+            });
+
+            // 2. Distribute Total Goal
+            // We use Largest Remainder Method or simple rounding? Simple rounding for now.
+
+            sellersHistory.forEach(item => {
+                let share = 0;
+                if (totalHistoryPos > 0) {
+                    share = item.hist / totalHistoryPos;
+                }
+
+                // If totalHistory is 0 but we have a Goal, distribute evenly?
+                // Or leave 0? User said "proporcional". 0 history -> 0 share seems fair.
+
+                const sellerTarget = Math.round(totalGoal * share);
+
+                // Update Primary Target
+                if (!goalsSellerTargets.has(item.seller)) goalsSellerTargets.set(item.seller, {});
+                const t = goalsSellerTargets.get(item.seller);
+                t[targetKey] = sellerTarget;
+
+                // 3. Cascade Down
+                distributeDown(item.seller, targetKey, sellerTarget);
+            });
+
+            // Trigger View Update
+            updateGoalsView();
+        }
+
         function updateGoalsView() {
             goalsRenderId++;
             const currentRenderId = goalsRenderId;
