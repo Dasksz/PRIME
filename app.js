@@ -3045,17 +3045,6 @@
                     const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
                     return clientRcas.some(r => rcasSet.has(r));
                 });
-            } else {
-                // Implicit Filter: If no supervisor selected, include only clients belonging to KNOWN Supervisors.
-                const allSupervisors = Array.from(optimizedData.rcasBySupervisor.keys());
-                const rcasSet = new Set();
-                allSupervisors.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
-                });
-                clients = clients.filter(c => {
-                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
-                    return clientRcas.some(r => rcasSet.has(r));
-                });
             }
 
             // Filter by Seller
@@ -3935,15 +3924,6 @@
                 const supervisorsSet = new Set(supervisorsList);
                 const rcasSet = new Set();
                 supervisorsSet.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
-                });
-                activeClients = activeClients.filter(c => c.rcas.some(r => rcasSet.has(r)));
-            } else {
-                // Implicit Filter: If no supervisor selected, include only clients belonging to KNOWN Supervisors.
-                // This prevents "orphan" clients (without supervisor) from polluting the Global Total.
-                const allSupervisors = Array.from(optimizedData.rcasBySupervisor.keys());
-                const rcasSet = new Set();
-                allSupervisors.forEach(sup => {
                     (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
                 });
                 activeClients = activeClients.filter(c => c.rcas.some(r => rcasSet.has(r)));
