@@ -4081,13 +4081,6 @@
              return calculateMetricsForClients(clients);
         }
 
-                let sumClients = 0;
-                m.monthlyClientsSets.forEach(set => sumClients += set.size);
-                m.avgClients = sumClients / QUARTERLY_DIVISOR;
-            }
-            return metricsMap;
-        }
-
         function getSellerNaturalCount(sellerName, category) {
             const sellerCode = optimizedData.rcaCodeByName.get(sellerName);
             if (!sellerCode) return 0;
