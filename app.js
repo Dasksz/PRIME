@@ -14184,6 +14184,35 @@ const supervisorGroups = new Map();
                 try {
                     let countRev = 0;
                     let countPos = 0;
+
+                    // --- PURGE GHOST DATA ---
+                    // Remove residual goals for Supervisors/Ghosts that might have been auto-generated based on history
+                    const ghostNames = new Set(['INATIVOS', 'N/A', 'BALCAO', 'BALCÃO', 'TOTAL', 'GERAL']);
+                    // Add Supervisors to Ghost List
+                    optimizedData.rcasBySupervisor.forEach((_, supName) => ghostNames.add(supName));
+
+                    ghostNames.forEach(ghostName => {
+                        // 1. Remove from Seller Targets
+                        if (goalsSellerTargets.has(ghostName)) {
+                            goalsSellerTargets.delete(ghostName);
+                        }
+
+                        // 2. Remove from Client Goals (Purge Distributed Targets)
+                        // Resolve Name -> Code -> Clients
+                        const ghostCode = optimizedData.rcaCodeByName.get(ghostName);
+                        if (ghostCode) {
+                            const clients = optimizedData.clientsByRca.get(ghostCode);
+                            if (clients) {
+                                clients.forEach(c => {
+                                    const codCli = String(c['Código'] || c['codigo_cliente']);
+                                    if (globalClientGoals.has(codCli)) {
+                                        globalClientGoals.delete(codCli);
+                                    }
+                                });
+                            }
+                        }
+                    });
+                    // ------------------------
                     
                     // 1. Process Manual Updates (Imported)
                     pendingImportUpdates.forEach(u => {
