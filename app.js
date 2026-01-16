@@ -14185,33 +14185,11 @@ const supervisorGroups = new Map();
                     let countRev = 0;
                     let countPos = 0;
 
-                    // --- PURGE GHOST DATA ---
-                    // Remove residual goals for Supervisors/Ghosts that might have been auto-generated based on history
-                    const ghostNames = new Set(['INATIVOS', 'N/A', 'BALCAO', 'BALCÃO', 'TOTAL', 'GERAL']);
-                    // Add Supervisors to Ghost List
-                    optimizedData.rcasBySupervisor.forEach((_, supName) => ghostNames.add(supName));
-
-                    ghostNames.forEach(ghostName => {
-                        // 1. Remove from Seller Targets
-                        if (goalsSellerTargets.has(ghostName)) {
-                            goalsSellerTargets.delete(ghostName);
-                        }
-
-                        // 2. Remove from Client Goals (Purge Distributed Targets)
-                        // Resolve Name -> Code -> Clients
-                        const ghostCode = optimizedData.rcaCodeByName.get(ghostName);
-                        if (ghostCode) {
-                            const clients = optimizedData.clientsByRca.get(ghostCode);
-                            if (clients) {
-                                clients.forEach(c => {
-                                    const codCli = String(c['Código'] || c['codigo_cliente']);
-                                    if (globalClientGoals.has(codCli)) {
-                                        globalClientGoals.delete(codCli);
-                                    }
-                                });
-                            }
-                        }
-                    });
+                    // --- FULL RESET (Purge Everything) ---
+                    // To guarantee no ghost data from Supervisors or previous states persists, we clear all targets.
+                    // Only active sellers (backfilled) and imported sellers will remain.
+                    goalsSellerTargets.clear();
+                    globalClientGoals.clear();
                     // ------------------------
                     
                     // 1. Process Manual Updates (Imported)
@@ -14234,15 +14212,21 @@ const supervisorGroups = new Map();
                     // 2. Backfill Defaults for ALL Active Sellers
                     // Iterate all active sellers to ensure their calculated "Suggestions" are saved if not manually set.
                     // We get active sellers from optimizedData.rcasBySupervisor
+                    // 2. Backfill Defaults for ALL Active Sellers
+                    // Iterate all active sellers to ensure their calculated "Suggestions" are saved if not manually set.
+                    // We get active sellers from optimizedData.rcasBySupervisor
                     const activeSellerNames = new Set();
                     const forbiddenBackfill = ['INATIVOS', 'N/A', 'BALCAO', 'BALCÃO', 'TOTAL', 'GERAL'];
+                    const supervisorNames = new Set(optimizedData.rcasBySupervisor.keys());
 
                     optimizedData.rcasBySupervisor.forEach(rcas => {
                         rcas.forEach(code => {
                             const name = optimizedData.rcaNameByCode.get(code);
                             if (name) {
                                 const upper = name.toUpperCase();
-                                if (!forbiddenBackfill.some(f => upper.includes(f))) {
+                                // Ensure we exclude supervisors themselves from being treated as sellers
+                                // and exclude forbidden keywords
+                                if (!forbiddenBackfill.some(f => upper.includes(f)) && !supervisorNames.has(name)) {
                                     activeSellerNames.add(name);
                                 }
                             }
