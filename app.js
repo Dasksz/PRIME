@@ -3178,23 +3178,6 @@
                 });
             }
 
-            // Implement Supplier Filter Logic (Virtual IDs for Foods) - Step 7
-            // Filter clients if supplier filter is active?
-            // Usually we filter SALES, not clients list, because a client might buy multiple brands.
-            // But 'getMetaRealizadoFilteredData' returns 'goalsBySeller' and 'salesBySeller'.
-            // Filtering 'clients' here only filters the BASE for Goal calculation if Goal is derived from Client List?
-            // Yes, Goals are derived from `globalClientGoals`.
-            // If I filter clients here, I remove their goals from the sum.
-            // Requirement: "filter the Realized, but not the Goals".
-            // "ele filtra o que foi realizado, mas não filtra as metas." (He said "filters realized, BUT NOT goals").
-            // Wait, re-reading: "ele filtra o que foi realizado, mas não filtra as metas. ( fazendo a alteração para consertar o filtro...)"
-            // "consertar o filtro" implies it SHOULD filter goals too?
-            // " quando eu aplico um filtro... ele filtra o que foi realizado, mas não filtra as metas." -> This is the BUG report.
-            // "fazendo a alteração para consertar o filtro" -> This implies fixing the behavior.
-            // Usually, if I filter by "Toddynho", I want to see "Toddynho Goal vs Toddynho Realized".
-            // So YES, I should filter Goals too.
-            // To filter Goals, I need to adjust `goalKeys` loop below based on `suppliersSet`.
-
             const filteredClientCodes = new Set(clients.map(c => String(c['Código'] || c['codigo_cliente'])));
 
             // 2. Goals Aggregation (By Seller)
@@ -3208,44 +3191,17 @@
                 const rcaCode = String(client.rca1 || '');
                 const rcaName = optimizedData.rcaNameByCode.get(rcaCode) || rcaCode; // Map code to name for grouping
 
-                // Filtering "Garbage" Sellers to fix Total Positivação (1965 vs 1977)
                 if (!rcaName || rcaName === 'INATIVOS') return;
-                const upperName = rcaName.toUpperCase();
-                if (upperName === 'BALCAO' || upperName === 'BALCÃO' || upperName.includes('TOTAL') || upperName.includes('GERAL') || upperName.includes('AMERICANAS')) return;
 
                 // Determine Goal Keys based on Pasta
                 let goalKeys = [];
-
-                // If Supplier Filter is Active, restricting goals to selected supplier ONLY
-                if (suppliersSet.size > 0) {
-                    // Map selections to goal keys
-                    suppliersSet.forEach(sup => {
-                        // Virtual IDs are already goal keys (1119_TODDYNHO)
-                        // Raw IDs (707) are also goal keys
-                        // Just push them
-                        // Filter validation: Ensure they belong to current Pasta
-                        let valid = false;
-                        if (pasta === 'PEPSICO') valid = true;
-                        else if (pasta === 'ELMA') valid = ['707', '708', '752'].includes(sup);
-                        else if (pasta === 'FOODS') valid = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'].includes(sup) || sup === '1119'; // 1119 covers all foods if not virtual
-
-                        if (valid) {
-                            if (sup === '1119') { // If somehow raw 1119 is selected (legacy), include all food keys
-                                goalKeys.push('1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO');
-                            } else {
-                                goalKeys.push(sup);
-                            }
-                        }
-                    });
-                } else {
-                    // Default Pasta Groups
-                    if (pasta === 'PEPSICO') {
-                        goalKeys = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
-                    } else if (pasta === 'ELMA') {
-                        goalKeys = ['707', '708', '752'];
-                    } else if (pasta === 'FOODS') {
-                        goalKeys = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
-                    }
+                if (pasta === 'PEPSICO') {
+                    // Include all Pepsico keys
+                    goalKeys = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+                } else if (pasta === 'ELMA') {
+                    goalKeys = ['707', '708', '752'];
+                } else if (pasta === 'FOODS') {
+                    goalKeys = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
                 }
 
                 if (globalClientGoals.has(codCli)) {
@@ -3275,29 +3231,11 @@
             });
 
             // Apply Positivation Overrides from goalsSellerTargets (Imported Absolute Values)
-            // Apply Positivation Overrides from goalsSellerTargets (Imported Absolute Values)
             goalsBySeller.forEach((goals, sellerName) => {
                 let overrideKey = null;
-                // Check pepsico_all first (new standard)
-                if (pasta === 'PEPSICO') {
-                    const targets = goalsSellerTargets.get(sellerName);
-                    if (targets && targets['pepsico_all'] !== undefined) overrideKey = 'pepsico_all';
-                    else overrideKey = 'GERAL';
-                }
+                if (pasta === 'PEPSICO') overrideKey = 'GERAL';
                 else if (pasta === 'ELMA') overrideKey = 'total_elma';
                 else if (pasta === 'FOODS') overrideKey = 'total_foods';
-
-                // Check for supplier-specific overrides if pasta is PEPSICO but supplier filter is active
-                // If a specific supplier (e.g. EXTRUSADOS/707) is selected, use that key
-                if (suppliersSet.size === 1) {
-                    const sup = [...suppliersSet][0];
-
-                    // Map Virtual IDs back to Standard Goal Keys for Override Lookup
-                    if (sup === '1119_TODDYNHO') overrideKey = '1119_TODDYNHO';
-                    else if (sup === '1119_TODDY') overrideKey = '1119_TODDY';
-                    else if (sup === '1119_QUAKER') overrideKey = '1119_QUAKER_KEROCOCO';
-                    else overrideKey = sup; // 707, 708, etc.
-                }
 
                 if (overrideKey && goalsSellerTargets.has(sellerName)) {
                     const targets = goalsSellerTargets.get(sellerName);
@@ -3952,13 +3890,13 @@
             }
         }
 
-        function calculateMetricsForClients(clientsList) {
+        function getMetricsForSupervisors(supervisorsList) {
             // Helper to init metrics structure
             const createMetric = () => ({
                 fat: 0, vol: 0, prevFat: 0, prevVol: 0,
                 prevClientsSet: new Set(),
-                quarterlyPosClientsSet: new Set(),
-                monthlyClientsSets: new Map()
+                quarterlyPosClientsSet: new Set(), // New Set for Quarter Active
+                monthlyClientsSets: new Map() // Map<MonthKey, Set<CodCli>>
             });
 
             const metricsMap = {
@@ -3978,15 +3916,30 @@
             const prevMonthIndex = prevMonthDate.getUTCMonth();
             const prevMonthYear = prevMonthDate.getUTCFullYear();
 
-            const clientCodes = new Set(clientsList.map(c => String(c['Código'] || c['codigo_cliente'])));
+            // Filter clients to match the "Active Structure" definition (Same as Coverage/Goals Table)
+            let activeClients = allClientsData.filter(c => isActiveClient(c));
 
-            clientCodes.forEach(codCli => {
-                const historyIds = optimizedData.indices.history.byClient.get(codCli);
-                const clientTotals = {};
+            // Filter by Supervisors if provided
+            if (supervisorsList && supervisorsList.length > 0) {
+                const supervisorsSet = new Set(supervisorsList);
+                const rcasSet = new Set();
+                supervisorsSet.forEach(sup => {
+                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
+                });
+                activeClients = activeClients.filter(c => c.rcas.some(r => rcasSet.has(r)));
+            }
 
-                if (historyIds) {
-                    historyIds.forEach(id => {
+            activeClients.forEach(client => {
+                const codCli = String(client['Código'] || client['codigo_cliente']);
+                const clientHistoryIds = optimizedData.indices.history.byClient.get(codCli);
+
+                // Temp accumulation for this client to ensure Positive Balance check
+                const clientTotals = {}; // key -> { prevFat: 0, monthlyFat: Map<MonthKey, val> }
+
+                if (clientHistoryIds) {
+                    clientHistoryIds.forEach(id => {
                         const sale = optimizedData.historyById.get(id);
+                        // EXCEPTION: Exclude Balcão (53) sales for Client 9569 from Summary Metrics
                         if (String(codCli).trim() === '9569' && (String(sale.CODUSUR).trim() === '53' || String(sale.CODUSUR).trim() === '053')) return;
 
                         let key = null;
@@ -4005,6 +3958,7 @@
                         const keysToProcess = [];
                         if (key && metricsMap[key]) keysToProcess.push(key);
 
+                        // Direct calculation for Groups to ensure correct Net Total logic (handling returns across brands)
                         if (['707', '708', '752'].includes(codFor)) keysToProcess.push('ELMA_ALL');
                         if (codFor === '1119') keysToProcess.push('FOODS_ALL');
                         if (['707', '708', '752', '1119'].includes(codFor)) keysToProcess.push('PEPSICO_ALL');
@@ -4013,6 +3967,7 @@
                             const d = parseDate(sale.DTPED);
                             const isPrevMonth = d && d.getUTCMonth() === prevMonthIndex && d.getUTCFullYear() === prevMonthYear;
 
+                            // 1. Revenue/Volume metrics (Types 1 & 9) - Global Sums
                             if (sale.TIPOVENDA === '1' || sale.TIPOVENDA === '9') {
                                 metricsMap[procKey].fat += sale.VLVENDA;
                                 metricsMap[procKey].vol += sale.TOTPESOLIQ;
@@ -4022,11 +3977,14 @@
                                     metricsMap[procKey].prevVol += sale.TOTPESOLIQ;
                                 }
 
+                                // 2. Accumulate for Client Count Check (Balance per period)
+                                // Standardized Logic: Track GLOBAL FAT sum regardless of date validity for positivation
                                 if (!clientTotals[procKey]) clientTotals[procKey] = { prevFat: 0, monthlyFat: new Map(), globalFat: 0 };
                                 clientTotals[procKey].globalFat += sale.VLVENDA;
 
                                 if (d) {
                                     if (isPrevMonth) clientTotals[procKey].prevFat += sale.VLVENDA;
+
                                     const monthKey = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
                                     const currentMVal = clientTotals[procKey].monthlyFat.get(monthKey) || 0;
                                     clientTotals[procKey].monthlyFat.set(monthKey, currentMVal + sale.VLVENDA);
@@ -4036,50 +3994,40 @@
                     });
                 }
 
+                // Check thresholds for this client
                 for (const key in clientTotals) {
                     const t = clientTotals[key];
-                    if (t.globalFat >= 1) metricsMap[key].quarterlyPosClientsSet.add(codCli);
-                    if (t.prevFat >= 1) metricsMap[key].prevClientsSet.add(codCli);
+
+                    // Calculate Total Quarter Fat for this client/key to determine Meta Pos
+                    // MODIFIED: Use globalFat (Sum of ALL sales, including invalid dates) to match PEPSICO Logic
+                    if (t.globalFat >= 1) {
+                        metricsMap[key].quarterlyPosClientsSet.add(codCli);
+                    }
+
+                    if (t.prevFat >= 1) {
+                        metricsMap[key].prevClientsSet.add(codCli);
+                    }
                     t.monthlyFat.forEach((val, mKey) => {
                         if (val >= 1) {
-                            if (!metricsMap[key].monthlyClientsSets.has(mKey)) metricsMap[key].monthlyClientsSets.set(mKey, new Set());
+                            if (!metricsMap[key].monthlyClientsSets.has(mKey)) {
+                                metricsMap[key].monthlyClientsSets.set(mKey, new Set());
+                            }
                             metricsMap[key].monthlyClientsSets.get(mKey).add(codCli);
                         }
                     });
                 }
             });
 
-            const finalMetrics = {};
+            // Calculate Averages and Finalize
             for (const key in metricsMap) {
                 const m = metricsMap[key];
-                let sumClients = 0;
-                m.monthlyClientsSets.forEach(set => sumClients += set.size);
 
-                finalMetrics[key] = {
-                    avgFat: m.fat / QUARTERLY_DIVISOR,
-                    avgVol: m.vol / QUARTERLY_DIVISOR,
-                    prevFat: m.prevFat,
-                    prevVol: m.prevVol,
-                    prevClients: m.prevClientsSet.size,
-                    avgClients: sumClients / QUARTERLY_DIVISOR
-                };
-            }
-            return finalMetrics;
-        }
+                m.avgFat = m.fat / QUARTERLY_DIVISOR;
+                m.avgVol = m.vol / QUARTERLY_DIVISOR; // Kg
+                m.prevVol = m.prevVol; // Kg
 
-        // Wrapper for compatibility
-        function getMetricsForSupervisors(supervisorsList) {
-             let clients = allClientsData;
-             if (supervisorsList && supervisorsList.length > 0) {
-                 const rcas = new Set();
-                 supervisorsList.forEach(sup => {
-                     (optimizedData.rcasBySupervisor.get(sup) || []).forEach(r => rcas.add(r));
-                 });
-                 clients = clients.filter(c => c.rcas.some(r => rcas.has(r)));
-             }
-             clients = clients.filter(c => isActiveClient(c));
-             return calculateMetricsForClients(clients);
-        }
+                m.prevClients = m.prevClientsSet.size;
+                m.quarterlyPos = m.quarterlyPosClientsSet.size; // New Metric
 
                 let sumClients = 0;
                 m.monthlyClientsSets.forEach(set => sumClients += set.size);
@@ -4151,6 +4099,9 @@
             const container = document.getElementById('goals-summary-grid');
             if (!container) return;
 
+            // Use the independent summary filter for Display Metrics (Avg/Prev)
+            const displayMetrics = getMetricsForSupervisors(selectedGoalsSummarySupervisors);
+
             // 1. Identify active sellers in the current summary filter
             let filteredSummaryClients = allClientsData;
 
@@ -4172,33 +4123,6 @@
                 });
                 filteredSummaryClients = filteredSummaryClients.filter(c => c.rcas.some(r => rcasSet.has(r)));
             }
-
-            // Apply Seller Filter
-            if (selectedGoalsSummarySellers.length > 0) {
-                const sellersSet = new Set(selectedGoalsSummarySellers);
-                // selectedGoalsSummarySellers contains Names.
-                // Map names to codes to filter clients.rcas
-                const sellerCodes = new Set();
-                sellersSet.forEach(name => {
-                    const code = optimizedData.rcaCodeByName.get(name);
-                    if (code) sellerCodes.add(code);
-                });
-                filteredSummaryClients = filteredSummaryClients.filter(c => c.rcas.some(r => sellerCodes.has(r)));
-            }
-
-            // Calculate Metrics based on filtered clients
-            // Since getMetricsForSupervisors only handles supervisor list, we need to rebuild metrics from scratch for arbitrary client list?
-            // Or adapt getMetricsForSupervisors to accept client list?
-            // getMetricsForSupervisors is a helper function I assume exists nearby? No, I don't see it in the grep.
-            // Let's check if `getMetricsForSupervisors` exists. If not, the previous code block might have been hallucinated or I missed it.
-            // Ah, line 4103: `const displayMetrics = getMetricsForSupervisors(selectedGoalsSummarySupervisors);`
-            // Since I am modifying the filtering logic, I should likely implement a `getMetricsForClients(filteredSummaryClients)` or similar.
-            // But let's look at `getMetricsForSupervisors` implementation first. It likely iterates `globalGoalsMetrics`?
-            // No, `globalGoalsMetrics` is keyed by Product Category (707, etc.), NOT by Supervisor.
-            // So `getMetricsForSupervisors` must be aggregating `globalClientGoals` for the filtered clients.
-
-            // Let's assume we need to calculate display metrics from the filtered client list.
-            const displayMetrics = calculateMetricsForClients(filteredSummaryClients);
 
             const activeSellersInSummary = new Set();
             filteredSummaryClients.forEach(c => {
@@ -4903,72 +4827,6 @@
         }
 
 
-        function exportGoalsGvPDF() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('landscape');
-            const data = goalsTableState.filteredData;
-
-            if (!data || data.length === 0) {
-                alert('Sem dados para exportar.');
-                return;
-            }
-
-            const generationDate = new Date().toLocaleString('pt-BR');
-            const supervisor = document.getElementById('goals-gv-supervisor-filter-text').textContent;
-            const seller = document.getElementById('goals-gv-seller-filter-text').textContent;
-
-            doc.setFontSize(18);
-            doc.text('Relatório Rateio de Metas (GV)', 14, 22);
-            doc.setFontSize(10);
-            doc.setTextColor(100);
-            doc.text(`Data de Emissão: ${generationDate}`, 14, 30);
-            doc.text(`Filtros: Supervisor: ${supervisor} | Vendedor: ${seller}`, 14, 36);
-
-            const monthLabels = quarterMonths.map(m => m.label);
-            const head = [[
-                'CÓD', 'CLIENTE', 'VEND',
-                ...monthLabels,
-                'MÉDIA R$', 'SHARE %', 'META R$',
-                'META KG', 'MIX PDV'
-            ]];
-
-            const body = data.map(item => [
-                item.cod,
-                (item.name || '').substring(0, 25),
-                getFirstName(item.seller),
-                ...quarterMonths.map(m => (item.monthlyValues[m.key] || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})),
-                item.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
-                (item.shareFat * 100).toFixed(2) + '%',
-                item.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
-                item.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3}),
-                (item.mixPdv || 0).toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})
-            ]);
-
-            doc.autoTable({
-                head: head,
-                body: body,
-                startY: 45,
-                theme: 'grid',
-                styles: { fontSize: 7, cellPadding: 1, textColor: [0, 0, 0], halign: 'right' },
-                headStyles: { fillColor: [20, 184, 166], textColor: 255, fontStyle: 'bold', fontSize: 8, halign: 'center' },
-                columnStyles: {
-                    0: { halign: 'center', cellWidth: 12 },
-                    1: { halign: 'left', cellWidth: 40 },
-                    2: { halign: 'left', cellWidth: 20 },
-                    // Dynamic styling for months?
-                },
-                didParseCell: function(data) {
-                    if (data.section === 'body' && data.column.index === head[0].length - 1) { // Mix PDV Column
-                        data.cell.styles.fontStyle = 'bold';
-                        data.cell.styles.textColor = [128, 0, 128]; // Purple
-                    }
-                }
-            });
-
-            const safeFileNameParam = currentGoalsSupplier.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            doc.save(`Metas_GV_${safeFileNameParam}_${new Date().toISOString().slice(0,10)}.pdf`);
-        }
-
         function exportGoalsCurrentTabXLSX() {
             const data = goalsTableState.filteredData;
             if (!data || data.length === 0) {
@@ -4984,7 +4842,7 @@
                 'CÓD', 'CLIENTE', 'VENDEDOR',
                 ...monthLabels.map(m => `${m} (FAT)`),
                 'MÉDIA FAT', '% SHARE FAT', 'META FAT',
-                'MÉDIA VOL (KG)', '% SHARE VOL', 'META VOL (KG)', 'MIX PDV'
+                'MÉDIA VOL (KG)', '% SHARE VOL', 'META VOL (KG)', 'META POS'
             ];
 
             const ws_data_flat = [flatHeaders];
@@ -5000,7 +4858,7 @@
                     item.avgVol,
                     item.shareVol,
                     item.metaVol,
-                    item.mixPdv // Export calculated Mix PDV
+                    item.metaPos
                 ];
                 ws_data_flat.push(row);
             });
@@ -5252,7 +5110,7 @@
             if (thead) {
                 const monthHeaders = quarterMonths.map(m => `<th class="px-2 py-2 text-right w-20 bg-blue-900/10 text-blue-300 border-r border-b border-slate-700/50 text-[10px]">${m.label}</th>`).join('');
                 const monthsCount = quarterMonths.length;
-                thead.innerHTML = `<tr><th rowspan="2" class="px-2 py-2 text-center w-16 border-r border-b border-slate-700">CÓD</th><th rowspan="2" class="px-3 py-2 text-left w-48 border-r border-b border-slate-700">CLIENTE</th><th rowspan="2" class="px-3 py-2 text-left w-24 border-r border-b border-slate-700">VENDEDOR</th><th colspan="${3 + monthsCount}" class="px-2 py-1 text-center bg-blue-900/30 text-blue-400 border-r border-slate-700 border-b-0">FATURAMENTO (R$)</th><th colspan="3" class="px-2 py-1 text-center bg-orange-900/30 text-orange-400 border-r border-slate-700 border-b-0">VOLUME (KG)</th><th rowspan="2" class="px-2 py-2 text-center w-16 bg-purple-900/20 text-purple-300 font-bold border-b border-slate-700">Mix PDV</th></tr><tr>${monthHeaders}<th class="px-2 py-2 text-right w-24 bg-blue-900/20 text-blue-300 border-r border-b border-slate-700/50 text-[10px]">MÉDIA</th><th class="px-2 py-2 text-center w-16 bg-blue-900/20 text-blue-300 border-r border-b border-slate-700/50 text-[10px]">% SHARE</th><th class="px-2 py-2 text-right w-24 bg-blue-900/20 text-blue-100 font-bold border-r border-b border-slate-700 text-[10px]">META AUTO</th><th class="px-2 py-2 text-right w-24 bg-orange-900/20 text-orange-300 border-r border-b border-slate-700/50 text-[10px]">MÉDIA KG</th><th class="px-2 py-2 text-center w-16 bg-orange-900/20 text-orange-300 border-r border-b border-slate-700/50 text-[10px]">% SHARE</th><th class="px-2 py-2 text-right w-24 bg-orange-900/20 text-orange-100 font-bold border-r border-b border-slate-700 text-[10px]">META KG</th></tr>`;
+                thead.innerHTML = `<tr><th rowspan="2" class="px-2 py-2 text-center w-16 border-r border-b border-slate-700">CÓD</th><th rowspan="2" class="px-3 py-2 text-left w-48 border-r border-b border-slate-700">CLIENTE</th><th rowspan="2" class="px-3 py-2 text-left w-24 border-r border-b border-slate-700">VENDEDOR</th><th colspan="${3 + monthsCount}" class="px-2 py-1 text-center bg-blue-900/30 text-blue-400 border-r border-slate-700 border-b-0">FATURAMENTO (R$)</th><th colspan="3" class="px-2 py-1 text-center bg-orange-900/30 text-orange-400 border-r border-slate-700 border-b-0">VOLUME (KG)</th><th rowspan="2" class="px-2 py-2 text-center w-16 bg-purple-900/20 text-purple-300 font-bold border-b border-slate-700">META POS.</th></tr><tr>${monthHeaders}<th class="px-2 py-2 text-right w-24 bg-blue-900/20 text-blue-300 border-r border-b border-slate-700/50 text-[10px]">MÉDIA</th><th class="px-2 py-2 text-center w-16 bg-blue-900/20 text-blue-300 border-r border-b border-slate-700/50 text-[10px]">% SHARE</th><th class="px-2 py-2 text-right w-24 bg-blue-900/20 text-blue-100 font-bold border-r border-b border-slate-700 text-[10px]">META AUTO</th><th class="px-2 py-2 text-right w-24 bg-orange-900/20 text-orange-300 border-r border-b border-slate-700/50 text-[10px]">MÉDIA KG</th><th class="px-2 py-2 text-center w-16 bg-orange-900/20 text-orange-300 border-r border-b border-slate-700/50 text-[10px]">% SHARE</th><th class="px-2 py-2 text-right w-24 bg-orange-900/20 text-orange-100 font-bold border-r border-b border-slate-700 text-[10px]">META KG</th></tr>`;
             }
 
             const filteredClients = getGoalsFilteredData();
@@ -5303,8 +5161,7 @@
                 let cSumFat = 0; let cSumVol = 0; let cPrevFat = 0; let cPrevVol = 0;
                 const monthlyActivity = new Map();
                 const monthlyValues = {};
-                const mixProducts = new Set(); // For Mix PDV Calc
-                quarterMonths.forEach(m => { monthlyValues[m.key] = 0; });
+                quarterMonths.forEach(m => monthlyValues[m.key] = 0);
 
                 if (clientHistoryIds) {
                     clientHistoryIds.forEach(id => {
@@ -5325,36 +5182,11 @@
                                     const monthKey = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
                                     monthlyActivity.set(monthKey, (monthlyActivity.get(monthKey) || 0) + sale.VLVENDA);
                                     if (monthlyValues.hasOwnProperty(monthKey)) monthlyValues[monthKey] += sale.VLVENDA;
-
-                                    // Mix Logic: Add Product Code + Month Key
-                                    // ELMA Constraint: If ELMA_ALL, only 707 and 708 are counted for Mix. 752 (Torcida) is excluded.
-                                    let includeInMix = true;
-                                    const codFor = String(sale.CODFOR);
-
-                                    if (currentGoalsSupplier === 'ELMA_ALL') {
-                                        if (codFor !== '707' && codFor !== '708') includeInMix = false;
-                                    }
-
-                                    if (includeInMix) {
-                                        mixProducts.add(`${sale.PRODUTO}_${monthKey}`);
-                                    }
                                 }
                             }
                         }
                     });
                 }
-
-                // Mix Calculation: Average Unique Products per Month
-                const monthKeys = Object.keys(monthlyValues); // Assumes last 3 months populated
-                let sumUniqueProducts = 0;
-                monthKeys.forEach(mKey => {
-                    let uniqueCount = 0;
-                    mixProducts.forEach(k => {
-                        if (k.endsWith(mKey)) uniqueCount++;
-                    });
-                    sumUniqueProducts += uniqueCount;
-                });
-                const mixPdvAvg = monthKeys.length > 0 ? sumUniqueProducts / 3 : 0; // Using 3 as quarterly divisor
 
                 let activeMonthsCount = 0;
                 monthlyActivity.forEach(val => { if(val >= 1) activeMonthsCount++; });
@@ -5396,9 +5228,6 @@
                     shareVol: (globalTotalAvgVol > 0 && avgVol > 0) ? (avgVol / globalTotalAvgVol) : 0,
                     metaFat, metaVol, metaPos, monthlyValues
                 };
-                // Add Mix PDV to Metric Object
-                metric.mixPdv = mixPdvAvg;
-
                 clientMetrics.push(metric);
 
                 // Accumulate totals
@@ -5697,7 +5526,7 @@
                 } else {
                     const rows = pageData.map(item => {
                         const monthCells = quarterMonths.map(m => `<td class="px-2 py-2 text-right text-slate-400 border-r border-slate-800/50 text-[10px] bg-blue-900/5">${(item.monthlyValues[m.key] || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`).join('');
-                        return `<tr class="hover:bg-slate-800 group transition-colors border-b border-slate-800"><td class="px-2 py-2 text-center border-r border-slate-800 bg-[#151c36] text-xs text-slate-300">${item.cod}</td><td class="px-2 py-2 text-left border-r border-slate-800 bg-[#151c36] text-xs font-bold text-white truncate max-w-[200px]" title="${item.name}">${(item.name || '').substring(0, 30)}</td><td class="px-2 py-2 text-left border-r border-slate-800 bg-[#151c36] text-[10px] text-slate-400 uppercase">${getFirstName(item.seller)}</td>${monthCells}<td class="px-2 py-2 text-right text-slate-300 font-medium bg-blue-900/10 border-r border-slate-800/50 text-xs">${item.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-2 py-2 text-center text-blue-400 text-xs bg-blue-900/10 border-r border-slate-800/50">${(item.shareFat * 100).toFixed(2)}%</td><td class="px-2 py-2 text-right font-bold text-blue-200 bg-blue-900/20 border-r border-slate-800 text-xs">${item.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-2 py-2 text-right text-slate-300 font-medium bg-orange-900/10 border-r border-slate-800/50 text-xs">${item.avgVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-2 py-2 text-center text-orange-400 text-xs bg-orange-900/10 border-r border-slate-800/50">${(item.shareVol * 100).toFixed(2)}%</td><td class="px-2 py-2 text-right font-bold text-orange-200 bg-orange-900/20 border-r border-slate-800 text-xs">${item.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-2 py-2 text-center font-bold text-purple-300 bg-purple-900/10 text-xs">${(item.mixPdv || 0).toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})}</td></tr>`;
+                        return `<tr class="hover:bg-slate-800 group transition-colors border-b border-slate-800"><td class="px-2 py-2 text-center border-r border-slate-800 bg-[#151c36] text-xs text-slate-300">${item.cod}</td><td class="px-2 py-2 text-left border-r border-slate-800 bg-[#151c36] text-xs font-bold text-white truncate max-w-[200px]" title="${item.name}">${(item.name || '').substring(0, 30)}</td><td class="px-2 py-2 text-left border-r border-slate-800 bg-[#151c36] text-[10px] text-slate-400 uppercase">${getFirstName(item.seller)}</td>${monthCells}<td class="px-2 py-2 text-right text-slate-300 font-medium bg-blue-900/10 border-r border-slate-800/50 text-xs">${item.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-2 py-2 text-center text-blue-400 text-xs bg-blue-900/10 border-r border-slate-800/50">${(item.shareFat * 100).toFixed(2)}%</td><td class="px-2 py-2 text-right font-bold text-blue-200 bg-blue-900/20 border-r border-slate-800 text-xs">${item.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-2 py-2 text-right text-slate-300 font-medium bg-orange-900/10 border-r border-slate-800/50 text-xs">${item.avgVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-2 py-2 text-center text-orange-400 text-xs bg-orange-900/10 border-r border-slate-800/50">${(item.shareVol * 100).toFixed(2)}%</td><td class="px-2 py-2 text-right font-bold text-orange-200 bg-orange-900/20 border-r border-slate-800 text-xs">${item.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-2 py-2 text-center font-bold text-purple-300 bg-purple-900/10 text-xs">${item.metaPos}</td></tr>`;
                     }).join('');
                     goalsGvTableBody.innerHTML = rows;
                     if (paginationControls) {
@@ -8391,33 +8220,9 @@ const supervisorGroups = new Map();
             if (!skipRender) {
                 const htmlParts = [];
                 for (let i = 0; i < sortedSuppliers.length; i++) {
-                    let [cod, name] = sortedSuppliers[i];
+                    const [cod, name] = sortedSuppliers[i];
                     const isChecked = selectedArray.includes(cod);
-
-                    // Display Alias Logic for Meta Realizado (Step 7)
-                    if (filterType === 'metaRealizado') {
-                        if (cod === '707') name = 'EXTRUSADOS';
-                        else if (cod === '708') name = 'NÃO EXTRUSADOS';
-                        else if (cod === '752') name = 'TORCIDA';
-
-                        // Handle Split for 1119 (FOODS)
-                        if (cod === '1119') {
-                            // Inject 3 virtual checkboxes instead of 1
-                            const subOptions = [
-                                { val: '1119_TODDYNHO', lbl: 'TODDYNHO' },
-                                { val: '1119_TODDY', lbl: 'TODDY' },
-                                { val: '1119_QUAKER', lbl: 'QUAKER/KEROCOCO' }
-                            ];
-
-                            subOptions.forEach(opt => {
-                                const isSubChecked = selectedArray.includes(opt.val);
-                                htmlParts.push(`<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" data-filter-type="${filterType}" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${opt.val}" ${isSubChecked ? 'checked' : ''}><span class="ml-2 text-xs">${opt.lbl}</span></label>`);
-                            });
-                            continue; // Skip adding the main 1119 checkbox
-                        }
-                    }
-
-                    htmlParts.push(`<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" data-filter-type="${filterType}" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${cod}" ${isChecked ? 'checked' : ''}><span class="ml-2 text-xs">${name}</span></label>`);
+                    htmlParts.push(`<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" data-filter-type="${filterType}" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${cod}" ${isChecked ? 'checked' : ''}><span class="ml-2 text-xs">${cod} - ${name}</span></label>`);
                 }
                 dropdown.innerHTML = htmlParts.join('');
             }
@@ -12798,11 +12603,7 @@ const supervisorGroups = new Map();
             // --- Summary View Independent Filters ---
             const goalsSummarySupervisorFilterBtn = document.getElementById('goals-summary-supervisor-filter-btn');
             const goalsSummarySupervisorFilterDropdown = document.getElementById('goals-summary-supervisor-filter-dropdown');
-            const goalsSummarySellerFilterBtn = document.getElementById('goals-summary-seller-filter-btn');
-            const goalsSummarySellerFilterDropdown = document.getElementById('goals-summary-seller-filter-dropdown');
             const clearGoalsSummaryFiltersBtn = document.getElementById('clear-goals-summary-filters-btn');
-
-            let selectedGoalsSummarySellers = [];
 
             if (goalsSummarySupervisorFilterBtn && goalsSummarySupervisorFilterDropdown) {
                 goalsSummarySupervisorFilterBtn.addEventListener('click', () => goalsSummarySupervisorFilterDropdown.classList.toggle('hidden'));
@@ -12813,28 +12614,7 @@ const supervisorGroups = new Map();
                         if (checked) selectedGoalsSummarySupervisors.push(value);
                         else selectedGoalsSummarySupervisors = selectedGoalsSummarySupervisors.filter(s => s !== value);
 
-                        selectedGoalsSummarySupervisors = updateSupervisorFilter(goalsSummarySupervisorFilterDropdown, document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, allSalesData, true);
-
-                        // Update Seller Filter Cascade
-                        selectedGoalsSummarySellers = [];
-                        selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, goalsSummarySellerFilterDropdown, document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData);
-
-                        updateGoalsSummaryView();
-                    }
-                });
-            }
-
-            if (goalsSummarySellerFilterBtn && goalsSummarySellerFilterDropdown) {
-                goalsSummarySellerFilterBtn.addEventListener('click', () => goalsSummarySellerFilterDropdown.classList.toggle('hidden'));
-
-                goalsSummarySellerFilterDropdown.addEventListener('change', (e) => {
-                    if (e.target.type === 'checkbox') {
-                        const { value, checked } = e.target;
-                        if (checked) {
-                            if (!selectedGoalsSummarySellers.includes(value)) selectedGoalsSummarySellers.push(value);
-                        } else {
-                            selectedGoalsSummarySellers = selectedGoalsSummarySellers.filter(s => s !== value);
-                        }
+                        updateSupervisorFilter(goalsSummarySupervisorFilterDropdown, document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, allSalesData, true);
                         updateGoalsSummaryView();
                     }
                 });
@@ -12843,9 +12623,7 @@ const supervisorGroups = new Map();
             if (clearGoalsSummaryFiltersBtn) {
                 clearGoalsSummaryFiltersBtn.addEventListener('click', () => {
                     selectedGoalsSummarySupervisors = [];
-                    selectedGoalsSummarySellers = [];
                     updateSupervisorFilter(goalsSummarySupervisorFilterDropdown, document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, allSalesData, true);
-                    updateSellerFilter(selectedGoalsSummarySupervisors, goalsSummarySellerFilterDropdown, document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData);
                     updateGoalsSummaryView();
                 });
             }
@@ -12855,11 +12633,6 @@ const supervisorGroups = new Map();
                 if (goalsSummarySupervisorFilterBtn && goalsSummarySupervisorFilterDropdown) {
                     if (!goalsSummarySupervisorFilterBtn.contains(e.target) && !goalsSummarySupervisorFilterDropdown.contains(e.target)) {
                         goalsSummarySupervisorFilterDropdown.classList.add('hidden');
-                    }
-                }
-                if (goalsSummarySellerFilterBtn && goalsSummarySellerFilterDropdown) {
-                    if (!goalsSummarySellerFilterBtn.contains(e.target) && !goalsSummarySellerFilterDropdown.contains(e.target)) {
-                        goalsSummarySellerFilterDropdown.classList.add('hidden');
                     }
                 }
             });
@@ -12963,16 +12736,6 @@ const supervisorGroups = new Map();
                     updateGoalsView();
                 }
             });
-
-            const goalsGvExportPdfBtn = document.getElementById('goals-gv-export-pdf-btn');
-            if(goalsGvExportPdfBtn) {
-                goalsGvExportPdfBtn.addEventListener('click', exportGoalsGvPDF);
-            }
-
-            const goalsGvExportXlsxBtn = document.getElementById('goals-gv-export-xlsx-btn');
-            if(goalsGvExportXlsxBtn) {
-                goalsGvExportXlsxBtn.addEventListener('click', exportGoalsCurrentTabXLSX);
-            }
             document.getElementById('goals-next-page-btn').addEventListener('click', () => {
                 if (goalsTableState.currentPage < goalsTableState.totalPages) {
                     goalsTableState.currentPage++;
