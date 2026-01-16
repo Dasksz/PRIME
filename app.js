@@ -5306,7 +5306,7 @@
                     const displayPos = absoluteOverride !== null ? absoluteOverride : (naturalTotalPos + contextAdjustment);
                     newMixInput.value = displayPos.toLocaleString('pt-BR');
 
-                    if (isSingleSeller) {
+                    if (isSingleSeller || isAggregatedTab) {
                         newMixInput.readOnly = false;
                         newMixInput.classList.remove('opacity-50', 'cursor-not-allowed');
 
@@ -5316,47 +5316,55 @@
                             newBtnDistributeMix.style.display = '';
 
                             newBtnDistributeMix.onclick = () => {
-                            const valStr = newMixInput.value;
-                            const val = parseFloat(valStr.replace(/\./g, '').replace(',', '.')) || 0;
-                            const filterDesc = getFilterDescription();
-                            // Validation: Check against PEPSICO Limit
-                            const sellerName = selectedGoalsGvSellers[0];
-                            let pepsicoNaturalPos = 0;
-                            // Calculate Natural PEPSICO Positivação for this seller
-                            const len = allClientsData.length;
-                            for(let i=0; i<len; i++) {
-                                const c = allClientsData instanceof ColumnarDataset ? allClientsData.get(i) : allClientsData[i];
+                                const valStr = newMixInput.value;
+                                const val = parseFloat(valStr.replace(/\./g, '').replace(',', '.')) || 0;
 
-                            const rca = c.rcas[0];
-                            const sName = optimizedData.rcaNameByCode.get(rca) || rca;
-                            if (sName === sellerName) {
-                            const historyIds = optimizedData.indices.history.byClient.get(c['Código']);
-                            if (historyIds) {
-                            for (let id of historyIds) {
-                            const sale = optimizedData.historyById.get(id);
-                            if ((sale.TIPOVENDA === '1' || sale.TIPOVENDA === '9') &&
-                            ['707','708','752','1119'].includes(String(sale.CODFOR))) {
-                            pepsicoNaturalPos++;
-                            break;
-                            }
-                            }
-                            }
-                            }
+                                if (isAggregatedTab) {
+                                    const contextName = currentGoalsSupplier.replace('_ALL', '');
+                                    showConfirmationModal(`Confirmar distribuição Top-Down de Positivação (${val}) para ${contextName}?`, () => {
+                                        handleDistributePositivation(val, contextKey, clientMetrics);
+                                    });
+                                } else {
+                                    const filterDesc = getFilterDescription();
+                                    // Validation: Check against PEPSICO Limit
+                                    const sellerName = selectedGoalsGvSellers[0];
+                                    let pepsicoNaturalPos = 0;
+                                    // Calculate Natural PEPSICO Positivação for this seller
+                                    const len = allClientsData.length;
+                                    for(let i=0; i<len; i++) {
+                                        const c = allClientsData instanceof ColumnarDataset ? allClientsData.get(i) : allClientsData[i];
 
-                            }
-                const pepsicoAdj = goalsPosAdjustments['PEPSICO_ALL'].get(sellerName) || 0;
-                            const pepsicoLimit = pepsicoNaturalPos + pepsicoAdj;
-                            if (currentGoalsSupplier !== 'PEPSICO_ALL' && val > pepsicoLimit) {
-                            alert(`O valor não pode ultrapassar a Meta de Positivação PEPSICO definida (${pepsicoLimit.toLocaleString('pt-BR')}).\n(Natural: ${pepsicoNaturalPos}, Ajuste PEPSICO: ${pepsicoAdj})`);
-                            return;
-                            }
-                            showConfirmationModal(`Confirmar ajuste de Meta Positivação para ${valStr} (Cliente: ${filterDesc})?`, () => {
-                            const newAdjustment = val - naturalTotalPos;
-                            if (adjustmentMap) {
-                            adjustmentMap.set(selectedGoalsGvSellers[0], newAdjustment);
-                            updateGoalsView();
-                            }
-                            });
+                                        const rca = c.rcas[0];
+                                        const sName = optimizedData.rcaNameByCode.get(rca) || rca;
+                                        if (sName === sellerName) {
+                                            const historyIds = optimizedData.indices.history.byClient.get(c['Código']);
+                                            if (historyIds) {
+                                                for (let id of historyIds) {
+                                                    const sale = optimizedData.historyById.get(id);
+                                                    if ((sale.TIPOVENDA === '1' || sale.TIPOVENDA === '9') &&
+                                                        ['707','708','752','1119'].includes(String(sale.CODFOR))) {
+                                                        pepsicoNaturalPos++;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    const pepsicoAdj = goalsPosAdjustments['PEPSICO_ALL'].get(sellerName) || 0;
+                                    const pepsicoLimit = pepsicoNaturalPos + pepsicoAdj;
+                                    if (currentGoalsSupplier !== 'PEPSICO_ALL' && val > pepsicoLimit) {
+                                        alert(`O valor não pode ultrapassar a Meta de Positivação PEPSICO definida (${pepsicoLimit.toLocaleString('pt-BR')}).\n(Natural: ${pepsicoNaturalPos}, Ajuste PEPSICO: ${pepsicoAdj})`);
+                                        return;
+                                    }
+                                    showConfirmationModal(`Confirmar ajuste de Meta Positivação para ${valStr} (Cliente: ${filterDesc})?`, () => {
+                                        const newAdjustment = val - naturalTotalPos;
+                                        if (adjustmentMap) {
+                                            adjustmentMap.set(selectedGoalsGvSellers[0], newAdjustment);
+                                            updateGoalsView();
+                                        }
+                                    });
+                                }
                             };
                         }
                     } else {
