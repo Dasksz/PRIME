@@ -13543,7 +13543,8 @@ const supervisorGroups = new Map();
                 });
 
                 // 2. Volume
-                const volCats = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+                // Metas de Volume são importadas pelos Totais (KG ELMA / KG FOODS) e distribuídas automaticamente
+                const volCats = ['tonelada_elma', 'tonelada_foods'];
                 volCats.forEach(cat => {
                     const val = getPriorityValue(cat, 'VOL');
                     if (!isNaN(val)) updates.push({ type: 'vol', seller: sellerName, category: cat, val: val });
