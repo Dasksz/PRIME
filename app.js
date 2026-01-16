@@ -4077,7 +4077,12 @@
                 const rcaCode = String(c.rca1 || '').trim();
                 if (rcaCode) {
                     const name = optimizedData.rcaNameByCode.get(rcaCode);
-                    if (name) activeSellersInSummary.add(name);
+                    if (name) {
+                        const upper = name.toUpperCase();
+                        if (upper !== 'INATIVOS' && upper !== 'N/A' && !upper.includes('TOTAL') && !upper.includes('GERAL')) {
+                            activeSellersInSummary.add(name);
+                        }
+                    }
                 }
             });
 
@@ -4095,14 +4100,23 @@
 
             filteredSummaryClients.forEach(c => {
                 const codCli = c['Código'];
-                if (globalClientGoals.has(codCli)) {
-                    const cGoals = globalClientGoals.get(codCli);
-                    cGoals.forEach((val, key) => {
-                        if (summaryGoalsSums[key]) {
-                            summaryGoalsSums[key].fat += val.fat;
-                            summaryGoalsSums[key].vol += val.vol;
-                        }
-                    });
+                // Check if client belongs to a valid active seller
+                const rcaCode = String(c.rca1 || '').trim();
+                let sellerName = null;
+                if (rcaCode) sellerName = optimizedData.rcaNameByCode.get(rcaCode);
+                
+                // If seller name is found, verify it's in the valid set
+                // If not found, skip (likely inactive/ghost)
+                if (sellerName && activeSellersInSummary.has(sellerName)) {
+                    if (globalClientGoals.has(codCli)) {
+                        const cGoals = globalClientGoals.get(codCli);
+                        cGoals.forEach((val, key) => {
+                            if (summaryGoalsSums[key]) {
+                                summaryGoalsSums[key].fat += val.fat;
+                                summaryGoalsSums[key].vol += val.vol;
+                            }
+                        });
+                    }
                 }
             });
 
@@ -14192,10 +14206,17 @@ const supervisorGroups = new Map();
                     // Iterate all active sellers to ensure their calculated "Suggestions" are saved if not manually set.
                     // We get active sellers from optimizedData.rcasBySupervisor
                     const activeSellerNames = new Set();
+                    const forbiddenBackfill = ['INATIVOS', 'N/A', 'BALCAO', 'BALCÃO', 'TOTAL', 'GERAL'];
+                    
                     optimizedData.rcasBySupervisor.forEach(rcas => {
                         rcas.forEach(code => {
                             const name = optimizedData.rcaNameByCode.get(code);
-                            if (name) activeSellerNames.add(name);
+                            if (name) {
+                                const upper = name.toUpperCase();
+                                if (!forbiddenBackfill.some(f => upper.includes(f))) {
+                                    activeSellerNames.add(name);
+                                }
+                            }
                         });
                     });
 
