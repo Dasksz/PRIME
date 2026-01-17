@@ -4958,8 +4958,17 @@
                 }
             });
 
-            const safeFileNameParam = currentGoalsSupplier.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            doc.save(`Metas_GV_${safeFileNameParam}_${new Date().toISOString().slice(0,10)}.pdf`);
+            let nameParam = '';
+            if (selectedGoalsGvSellers && selectedGoalsGvSellers.length > 0) {
+                const firstName = getFirstName(selectedGoalsGvSellers[0]);
+                if (firstName) nameParam = '_' + firstName.toUpperCase();
+            } else if (selectedGoalsGvSupervisors && selectedGoalsGvSupervisors.length > 0) {
+                const firstName = getFirstName(selectedGoalsGvSupervisors[0]);
+                if (firstName) nameParam = '_' + firstName.toUpperCase();
+            }
+
+            const safeFileNameParam = currentGoalsSupplier.replace(/[^a-z0-9]/gi, '_').toUpperCase();
+            doc.save(`Metas_GV_${safeFileNameParam}${nameParam}.pdf`);
         }
 
         function exportGoalsCurrentTabXLSX() {
@@ -5058,7 +5067,18 @@
             }
 
             XLSX.utils.book_append_sheet(wb, ws_flat, "Metas GV");
-            XLSX.writeFile(wb, `Metas_GV_${currentGoalsSupplier}_${new Date().toISOString().slice(0,10)}.xlsx`);
+
+            let nameParam = '';
+            if (selectedGoalsGvSellers && selectedGoalsGvSellers.length > 0) {
+                const firstName = getFirstName(selectedGoalsGvSellers[0]);
+                if (firstName) nameParam = '_' + firstName.toUpperCase();
+            } else if (selectedGoalsGvSupervisors && selectedGoalsGvSupervisors.length > 0) {
+                const firstName = getFirstName(selectedGoalsGvSupervisors[0]);
+                if (firstName) nameParam = '_' + firstName.toUpperCase();
+            }
+
+            const safeFileNameParam = currentGoalsSupplier.replace(/[^a-z0-9]/gi, '_').toUpperCase();
+            XLSX.writeFile(wb, `Metas_GV_${safeFileNameParam}${nameParam}.xlsx`);
         }
 
         function getSellerTargetOverride(sellerName, metricType, context) {
