@@ -13173,6 +13173,7 @@ const supervisorGroups = new Map();
                     } else {
                         selectedMetaRealizadoSuppliers = selectedMetaRealizadoSuppliers.filter(s => s !== value);
                     }
+                    selectedMetaRealizadoSuppliers = updateSupplierFilter(metaRealizadoSupplierFilterDropdown, document.getElementById('meta-realizado-supplier-filter-text'), selectedMetaRealizadoSuppliers, pepsicoSuppliersSource, 'metaRealizado', true);
                     debouncedUpdateMetaRealizado();
                 }
             });
