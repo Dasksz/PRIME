@@ -984,8 +984,10 @@
             });
         }
 
+        let sellerDetailsMap = new Map();
+
         function initializeOptimizedDataStructures() {
-            const sellerDetailsMap = new Map();
+            sellerDetailsMap = new Map();
             const sellerLastSaleDateMap = new Map(); // Track latest date per seller
             const clientToCurrentSellerMap = new Map();
             let americanasCodCli = null;
@@ -3243,7 +3245,7 @@
                 // Filtering "Garbage" Sellers to fix Total Positivação (1965 vs 1977)
                 if (!rcaName || rcaName === 'INATIVOS') return;
                 const upperName = rcaName.toUpperCase();
-                if (upperName === 'BALCAO' || upperName === 'BALCÃO' || upperName.includes('TOTAL') || upperName.includes('GERAL') || upperName.includes('AMERICANAS')) return;
+                if (upperName === 'BALCAO' || upperName === 'BALCÃO' || upperName.includes('TOTAL') || upperName.includes('GERAL')) return;
 
                 // Goal Keys are now determined at function scope (hoisted)
 
@@ -3275,6 +3277,23 @@
 
             // Apply Positivation Overrides from goalsSellerTargets (Imported Absolute Values)
             // Apply Overrides from goalsSellerTargets (Imported Absolute Values for Pos, Fat, Vol)
+
+            // --- FIX: Ensure all sellers with Manual Targets are present in goalsBySeller ---
+            goalsSellerTargets.forEach((targets, sellerName) => {
+                // Check if seller matches current filters
+                if (supervisorsSet.size > 0) {
+                    const supervisorName = (sellerDetailsMap.get(optimizedData.rcaCodeByName.get(sellerName) || '') || {}).supervisor;
+                    if (!supervisorName || !supervisorsSet.has(supervisorName)) return;
+                }
+                if (sellersSet.size > 0 && !sellersSet.has(sellerName)) return;
+
+                // Add to map if missing
+                if (!goalsBySeller.has(sellerName)) {
+                    goalsBySeller.set(sellerName, { totalFat: 0, totalVol: 0, totalPos: 0 });
+                }
+            });
+            // ---------------------------------------------------------------------------------
+
             goalsBySeller.forEach((goals, sellerName) => {
                 const targets = goalsSellerTargets.get(sellerName);
                 if (targets) {
