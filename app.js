@@ -1897,6 +1897,7 @@
         let selectedGoalsGvSellers = [];
         let selectedGoalsSvSupervisors = [];
         let selectedGoalsSummarySupervisors = [];
+        let selectedGoalsSummarySellers = [];
 
         let selectedMetaRealizadoSupervisors = [];
         let selectedMetaRealizadoSellers = [];
@@ -12939,8 +12940,6 @@ const supervisorGroups = new Map();
             const goalsSummarySellerFilterDropdown = document.getElementById('goals-summary-seller-filter-dropdown');
             const clearGoalsSummaryFiltersBtn = document.getElementById('clear-goals-summary-filters-btn');
 
-            let selectedGoalsSummarySellers = [];
-
             if (goalsSummarySupervisorFilterBtn && goalsSummarySupervisorFilterDropdown) {
                 goalsSummarySupervisorFilterBtn.addEventListener('click', () => goalsSummarySupervisorFilterDropdown.classList.toggle('hidden'));
 
@@ -13157,6 +13156,7 @@ const supervisorGroups = new Map();
                     } else {
                         selectedMetaRealizadoSellers = selectedMetaRealizadoSellers.filter(s => s !== value);
                     }
+                    selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, metaRealizadoSellerFilterDropdown, document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData], true);
                     debouncedUpdateMetaRealizado();
                 }
             });
