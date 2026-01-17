@@ -3144,6 +3144,38 @@
             const suppliersSet = new Set(selectedMetaRealizadoSuppliers);
             const pasta = currentMetaRealizadoPasta;
 
+            // Determine Goal Keys based on Pasta (Moved to top level scope)
+            let goalKeys = [];
+            
+            // If Supplier Filter is Active, restricting goals to selected supplier ONLY
+            if (suppliersSet.size > 0) {
+                // Map selections to goal keys
+                suppliersSet.forEach(sup => {
+                    // Filter validation: Ensure they belong to current Pasta
+                    let valid = false;
+                    if (pasta === 'PEPSICO') valid = true;
+                    else if (pasta === 'ELMA') valid = ['707', '708', '752'].includes(sup);
+                    else if (pasta === 'FOODS') valid = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'].includes(sup) || sup === '1119'; 
+                    
+                    if (valid) {
+                        if (sup === '1119') { 
+                            goalKeys.push('1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO');
+                        } else {
+                            goalKeys.push(sup);
+                        }
+                    }
+                });
+            } else {
+                // Default Pasta Groups
+                if (pasta === 'PEPSICO') {
+                    goalKeys = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+                } else if (pasta === 'ELMA') {
+                    goalKeys = ['707', '708', '752'];
+                } else if (pasta === 'FOODS') {
+                    goalKeys = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+                }
+            }
+
             // 1. Clients Filter
             let clients = allClientsData.filter(c => {
                 const rca1 = String(c.rca1 || '').trim();
@@ -3213,40 +3245,7 @@
                 const upperName = rcaName.toUpperCase();
                 if (upperName === 'BALCAO' || upperName === 'BALCÃO' || upperName.includes('TOTAL') || upperName.includes('GERAL') || upperName.includes('AMERICANAS')) return;
 
-                // Determine Goal Keys based on Pasta
-                let goalKeys = [];
-                
-                // If Supplier Filter is Active, restricting goals to selected supplier ONLY
-                if (suppliersSet.size > 0) {
-                    // Map selections to goal keys
-                    suppliersSet.forEach(sup => {
-                        // Virtual IDs are already goal keys (1119_TODDYNHO)
-                        // Raw IDs (707) are also goal keys
-                        // Just push them
-                        // Filter validation: Ensure they belong to current Pasta
-                        let valid = false;
-                        if (pasta === 'PEPSICO') valid = true;
-                        else if (pasta === 'ELMA') valid = ['707', '708', '752'].includes(sup);
-                        else if (pasta === 'FOODS') valid = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'].includes(sup) || sup === '1119'; // 1119 covers all foods if not virtual
-                        
-                        if (valid) {
-                            if (sup === '1119') { // If somehow raw 1119 is selected (legacy), include all food keys
-                                goalKeys.push('1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO');
-                            } else {
-                                goalKeys.push(sup);
-                            }
-                        }
-                    });
-                } else {
-                    // Default Pasta Groups
-                    if (pasta === 'PEPSICO') {
-                        goalKeys = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
-                    } else if (pasta === 'ELMA') {
-                        goalKeys = ['707', '708', '752'];
-                    } else if (pasta === 'FOODS') {
-                        goalKeys = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
-                    }
-                }
+                // Goal Keys are now determined at function scope (hoisted)
 
                 if (globalClientGoals.has(codCli)) {
                     const clientGoals = globalClientGoals.get(codCli);
@@ -3289,7 +3288,7 @@
                     else if (pasta === 'FOODS') overrideKey = 'total_foods';
 
                     if (suppliersSet.size === 1) {
-                        const sup = [...suppliersSet][0];
+                        const sup = [...suppliersSet][0]; 
                         if (sup === '1119_TODDYNHO') overrideKey = '1119_TODDYNHO';
                         else if (sup === '1119_TODDY') overrideKey = '1119_TODDY';
                         else if (sup === '1119_QUAKER') overrideKey = '1119_QUAKER_KEROCOCO';
@@ -3326,7 +3325,7 @@
                             // Import sets totals or individual categories.
                             // If user imported Total Elma and Total Foods, use those.
                             // If user imported Individual Categories, sum those.
-
+                            
                             // Strategy: Sum all matching components found in goalKeys
                             goalKeys.forEach(k => {
                                 if (targets[`${k}_FAT`] !== undefined) { overrideFat += targets[`${k}_FAT`]; hasOverrideFat = true; }
@@ -3368,7 +3367,7 @@
                                     if (targets[`${k}_VOL`] !== undefined) { overrideVol += targets[`${k}_VOL`]; hasOverrideVol = true; }
                                 });
                             }
-
+                            
                             // Fat
                             goalKeys.forEach(k => {
                                 if (targets[`${k}_FAT`] !== undefined) { overrideFat += targets[`${k}_FAT`]; hasOverrideFat = true; }
