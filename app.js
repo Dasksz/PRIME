@@ -984,8 +984,10 @@
             });
         }
 
+        let sellerDetailsMap = new Map();
+
         function initializeOptimizedDataStructures() {
-            const sellerDetailsMap = new Map();
+            sellerDetailsMap = new Map();
             const sellerLastSaleDateMap = new Map(); // Track latest date per seller
             const clientToCurrentSellerMap = new Map();
             let americanasCodCli = null;
@@ -3243,7 +3245,7 @@
                 // Filtering "Garbage" Sellers to fix Total Positivação (1965 vs 1977)
                 if (!rcaName || rcaName === 'INATIVOS') return;
                 const upperName = rcaName.toUpperCase();
-                if (upperName === 'BALCAO' || upperName === 'BALCÃO' || upperName.includes('TOTAL') || upperName.includes('GERAL') || upperName.includes('AMERICANAS')) return;
+                if (upperName === 'BALCAO' || upperName === 'BALCÃO' || upperName.includes('TOTAL') || upperName.includes('GERAL')) return;
 
                 // Goal Keys are now determined at function scope (hoisted)
 
@@ -3275,6 +3277,23 @@
 
             // Apply Positivation Overrides from goalsSellerTargets (Imported Absolute Values)
             // Apply Overrides from goalsSellerTargets (Imported Absolute Values for Pos, Fat, Vol)
+
+            // --- FIX: Ensure all sellers with Manual Targets are present in goalsBySeller ---
+            goalsSellerTargets.forEach((targets, sellerName) => {
+                // Check if seller matches current filters
+                if (supervisorsSet.size > 0) {
+                    const supervisorName = (sellerDetailsMap.get(optimizedData.rcaCodeByName.get(sellerName) || '') || {}).supervisor;
+                    if (!supervisorName || !supervisorsSet.has(supervisorName)) return; 
+                }
+                if (sellersSet.size > 0 && !sellersSet.has(sellerName)) return;
+
+                // Add to map if missing
+                if (!goalsBySeller.has(sellerName)) {
+                    goalsBySeller.set(sellerName, { totalFat: 0, totalVol: 0, totalPos: 0 });
+                }
+            });
+            // ---------------------------------------------------------------------------------
+
             goalsBySeller.forEach((goals, sellerName) => {
                 const targets = goalsSellerTargets.get(sellerName);
                 if (targets) {
@@ -3331,6 +3350,24 @@
                                 if (targets[`${k}_FAT`] !== undefined) { overrideFat += targets[`${k}_FAT`]; hasOverrideFat = true; }
                                 if (targets[`${k}_VOL`] !== undefined) { overrideVol += targets[`${k}_VOL`]; hasOverrideVol = true; }
                             });
+
+                            // Fallback/Augment for FAT (Revenue): Check Aggregates (total_elma_FAT, total_foods_FAT)
+                            if (targets['total_elma_FAT'] !== undefined) {
+                                const elmaKeys = ['707', '708', '752'];
+                                const hasIndividualElmaFat = elmaKeys.some(k => targets[`${k}_FAT`] !== undefined);
+                                if (!hasIndividualElmaFat) {
+                                    overrideFat += targets['total_elma_FAT'];
+                                    hasOverrideFat = true;
+                                }
+                            }
+                            if (targets['total_foods_FAT'] !== undefined) {
+                                const foodsKeys = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+                                const hasIndividualFoodsFat = foodsKeys.some(k => targets[`${k}_FAT`] !== undefined);
+                                if (!hasIndividualFoodsFat) {
+                                    overrideFat += targets['total_foods_FAT'];
+                                    hasOverrideFat = true;
+                                }
+                            }
 
                             // Fallback/Augment: If individual keys missing but Aggregates present?
                             // This is complex. Let's assume Import provided consistent level.
