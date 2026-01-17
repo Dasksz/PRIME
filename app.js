@@ -3351,6 +3351,24 @@
                                 if (targets[`${k}_VOL`] !== undefined) { overrideVol += targets[`${k}_VOL`]; hasOverrideVol = true; }
                             });
 
+                            // Fallback/Augment for FAT (Revenue): Check Aggregates (total_elma_FAT, total_foods_FAT)
+                            if (targets['total_elma_FAT'] !== undefined) {
+                                const elmaKeys = ['707', '708', '752'];
+                                const hasIndividualElmaFat = elmaKeys.some(k => targets[`${k}_FAT`] !== undefined);
+                                if (!hasIndividualElmaFat) {
+                                    overrideFat += targets['total_elma_FAT'];
+                                    hasOverrideFat = true;
+                                }
+                            }
+                            if (targets['total_foods_FAT'] !== undefined) {
+                                const foodsKeys = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+                                const hasIndividualFoodsFat = foodsKeys.some(k => targets[`${k}_FAT`] !== undefined);
+                                if (!hasIndividualFoodsFat) {
+                                    overrideFat += targets['total_foods_FAT'];
+                                    hasOverrideFat = true;
+                                }
+                            }
+
                             // Fallback/Augment: If individual keys missing but Aggregates present?
                             // This is complex. Let's assume Import provided consistent level.
                             // However, Volume is often imported as 'tonelada_elma'.
