@@ -8522,6 +8522,21 @@ const supervisorGroups = new Map();
                     suppliers.set(s.CODFOR, s.FORNECEDOR);
                 }
             });
+
+            // Special Handling for Meta Realizado: Inject Virtual Categories
+            if (filterType === 'metaRealizado') {
+                if (suppliers.has('707')) suppliers.set('707', 'EXTRUSADOS');
+                if (suppliers.has('708')) suppliers.set('708', 'NÃO EXTRUSADOS');
+                if (suppliers.has('752')) suppliers.set('752', 'TORCIDA');
+
+                if (suppliers.has('1119')) {
+                    suppliers.delete('1119');
+                    suppliers.set('1119_TODDYNHO', 'TODDYNHO');
+                    suppliers.set('1119_TODDY', 'TODDY');
+                    suppliers.set('1119_QUAKER', 'QUAKER/KEROCOCO');
+                }
+            }
+
             const sortedSuppliers = [...suppliers.entries()].sort((a, b) => a[1].localeCompare(b[1]));
 
             selectedArray = selectedArray.filter(cod => suppliers.has(cod));
@@ -8532,29 +8547,6 @@ const supervisorGroups = new Map();
                     let [cod, name] = sortedSuppliers[i];
                     const isChecked = selectedArray.includes(cod);
                     
-                    // Display Alias Logic for Meta Realizado (Step 7)
-                    if (filterType === 'metaRealizado') {
-                        if (cod === '707') name = 'EXTRUSADOS';
-                        else if (cod === '708') name = 'NÃO EXTRUSADOS';
-                        else if (cod === '752') name = 'TORCIDA';
-                        
-                        // Handle Split for 1119 (FOODS)
-                        if (cod === '1119') {
-                            // Inject 3 virtual checkboxes instead of 1
-                            const subOptions = [
-                                { val: '1119_TODDYNHO', lbl: 'TODDYNHO' },
-                                { val: '1119_TODDY', lbl: 'TODDY' },
-                                { val: '1119_QUAKER', lbl: 'QUAKER/KEROCOCO' }
-                            ];
-                            
-                            subOptions.forEach(opt => {
-                                const isSubChecked = selectedArray.includes(opt.val);
-                                htmlParts.push(`<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" data-filter-type="${filterType}" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${opt.val}" ${isSubChecked ? 'checked' : ''}><span class="ml-2 text-xs">${opt.lbl}</span></label>`);
-                            });
-                            continue; // Skip adding the main 1119 checkbox
-                        }
-                    }
-
                     htmlParts.push(`<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" data-filter-type="${filterType}" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${cod}" ${isChecked ? 'checked' : ''}><span class="ml-2 text-xs">${name}</span></label>`);
                 }
                 dropdown.innerHTML = htmlParts.join('');
