@@ -1518,7 +1518,10 @@
                                     <button class="sidebar-toggle text-white focus:outline-none">
                                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
                                     </button>
-                                    <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Meta Vs. Realizado</p></div>
+                                    <div class="flex-1 flex flex-col sm:flex-row justify-between items-center gap-4">
+                                        <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Meta Vs. Realizado</p></div>
+                                        <button id="export-meta-realizado-pdf-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Exportar PDF</button>
+                                    </div>
                                 </div>
                             </header>
                             
@@ -1622,10 +1625,18 @@
                                     </table>
                                 </div>
                                 <!-- Paginação da Tabela Clientes Meta Realizado -->
-                                <div id="meta-realizado-clients-pagination-controls" class="hidden mt-4 flex justify-between items-center">
-                                    <button id="meta-realizado-clients-prev-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Anterior</button>
-                                    <span id="meta-realizado-clients-page-info-text" class="text-slate-400">Página 1 de 1</span>
-                                    <button id="meta-realizado-clients-next-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Próxima</button>
+                                <div id="meta-realizado-clients-pagination-controls" class="hidden mt-4 flex flex-col sm:flex-row justify-between items-center gap-4 p-4 bg-[#161e3d] border-t border-slate-700 rounded-b-lg">
+                                    <div class="flex gap-2">
+                                        <button id="export-meta-realizado-pdf-btn-bottom" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-xs flex items-center gap-2">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                            Exportar PDF
+                                        </button>
+                                    </div>
+                                    <div class="flex items-center gap-4">
+                                        <button id="meta-realizado-clients-prev-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Anterior</button>
+                                        <span id="meta-realizado-clients-page-info-text" class="text-slate-400">Página 1 de 1</span>
+                                        <button id="meta-realizado-clients-next-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Próxima</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>

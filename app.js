@@ -1,4 +1,5 @@
         const embeddedData = window.embeddedData;
+        let metaRealizadoDataForExport = { sellers: [], clients: [], weeks: [] };
 
         // --- OPTIMIZATION: Lazy Columnar Accessor with Write-Back Support ---
         class ColumnarDataset {
@@ -3790,6 +3791,13 @@
 
             // 4. Clients Table Processing
             const clientsData = getMetaRealizadoClientsData(weeks);
+
+            // 5. Save Data for Export
+            metaRealizadoDataForExport = {
+                sellers: rowData,
+                clients: clientsData,
+                weeks: weeks
+            };
 
             metaRealizadoClientsTableState.filteredData = clientsData;
             metaRealizadoClientsTableState.totalPages = Math.ceil(clientsData.length / metaRealizadoClientsTableState.itemsPerPage);
@@ -13287,6 +13295,9 @@ const supervisorGroups = new Map();
                     updateMetaRealizadoView();
                 }
             });
+
+            document.getElementById('export-meta-realizado-pdf-btn').addEventListener('click', exportMetaRealizadoPDF);
+            document.getElementById('export-meta-realizado-pdf-btn-bottom').addEventListener('click', exportMetaRealizadoPDF);
             document.getElementById('meta-realizado-clients-next-page-btn').addEventListener('click', () => {
                 if (metaRealizadoClientsTableState.currentPage < metaRealizadoClientsTableState.totalPages) {
                     metaRealizadoClientsTableState.currentPage++;
@@ -13717,6 +13728,7 @@ const supervisorGroups = new Map();
             navigateTo('dashboard');
         }
         renderTable(aggregatedOrders);
+
         // Helper to redistribute weekly goals
         function calculateAdjustedWeeklyGoals(totalGoal, realizedByWeek, weeks) {
             let adjustedGoals = new Array(weeks.length).fill(0);
@@ -14822,4 +14834,151 @@ const supervisorGroups = new Map();
                     importConfirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
                 }
             });
+        }
+        async function exportMetaRealizadoPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('landscape');
+
+            const supervisor = document.getElementById('meta-realizado-supervisor-filter-text').textContent;
+            const vendedor = document.getElementById('meta-realizado-vendedor-filter-text').textContent;
+            const supplier = document.getElementById('meta-realizado-supplier-filter-text').textContent;
+            const pasta = currentMetaRealizadoPasta;
+            const generationDate = new Date().toLocaleString('pt-BR');
+
+            // --- Header ---
+            doc.setFontSize(18);
+            doc.text('Painel Meta vs Realizado', 14, 22);
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text(`Data de Emissão: ${generationDate}`, 14, 30);
+            doc.text(`Filtros: Supervisor: ${supervisor} | Vendedor: ${vendedor} | Fornecedor: ${supplier} | Pasta: ${pasta}`, 14, 36);
+
+            // --- Table 1: Sellers Summary ---
+            // Build dynamic headers based on weeks
+            const weeksHeaders = [];
+            metaRealizadoDataForExport.weeks.forEach((w, i) => {
+                weeksHeaders.push({ content: `Semana ${i + 1}`, colSpan: 2, styles: { halign: 'center' } });
+            });
+
+            const weeksSubHeaders = [];
+            metaRealizadoDataForExport.weeks.forEach(() => {
+                weeksSubHeaders.push('Meta');
+                weeksSubHeaders.push('Real.');
+            });
+
+            const sellersHead = [
+                [
+                    { content: 'Vendedor', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
+                    { content: 'Geral', colSpan: 2, styles: { halign: 'center' } },
+                    ...weeksHeaders,
+                    { content: 'Positivação', colSpan: 2, styles: { halign: 'center' } }
+                ],
+                [
+                    'Meta Total', 'Real. Total',
+                    ...weeksSubHeaders,
+                    'Meta', 'Real.'
+                ]
+            ];
+
+            const sellersBody = metaRealizadoDataForExport.sellers.map(row => {
+                const weekCells = [];
+                row.weekData.forEach(w => {
+                    weekCells.push(w.meta.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+                    weekCells.push(w.real.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+                });
+                return [
+                    getFirstName(row.name),
+                    row.metaTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                    row.realTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                    ...weekCells,
+                    row.posGoal,
+                    row.posRealized
+                ];
+            });
+
+            doc.autoTable({
+                head: sellersHead,
+                body: sellersBody,
+                startY: 45,
+                theme: 'grid',
+                styles: { fontSize: 7, cellPadding: 1, textColor: [0, 0, 0], halign: 'center' },
+                headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', lineWidth: 0.1, lineColor: [200, 200, 200] },
+                alternateRowStyles: { fillColor: [240, 240, 240] },
+                columnStyles: {
+                    0: { halign: 'left', fontStyle: 'bold' } // Vendedor Name
+                },
+                didParseCell: function(data) {
+                    if (data.section === 'body' && data.column.index > 2) {
+                        // Highlight Logic if needed (e.g. Red for Past weeks deficit)
+                    }
+                }
+            });
+
+            // --- Table 2: Clients Detail ---
+            doc.addPage();
+            doc.setFontSize(14);
+            doc.text('Detalhamento por Cliente', 14, 20);
+
+            const clientsHead = [
+                [
+                    { content: 'Cód', rowSpan: 2, styles: { valign: 'middle' } },
+                    { content: 'Cliente', rowSpan: 2, styles: { valign: 'middle' } },
+                    { content: 'Vendedor', rowSpan: 2, styles: { valign: 'middle' } },
+                    { content: 'Cidade', rowSpan: 2, styles: { valign: 'middle' } },
+                    { content: 'Geral', colSpan: 2, styles: { halign: 'center' } },
+                    ...weeksHeaders
+                ],
+                [
+                    'Meta', 'Real.',
+                    ...weeksSubHeaders
+                ]
+            ];
+
+            const clientsBody = metaRealizadoDataForExport.clients.map(row => {
+                const weekCells = [];
+                row.weekData.forEach(w => {
+                    weekCells.push(w.meta.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+                    weekCells.push(w.real.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+                });
+                return [
+                    row.codcli,
+                    row.razaoSocial,
+                    getFirstName(row.vendedor),
+                    row.cidade,
+                    row.metaTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                    row.realTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                    ...weekCells
+                ];
+            });
+
+            doc.autoTable({
+                head: clientsHead,
+                body: clientsBody,
+                startY: 25,
+                theme: 'grid',
+                styles: { fontSize: 6, cellPadding: 1, textColor: [0, 0, 0], halign: 'right' },
+                headStyles: { fillColor: [22, 30, 61], textColor: 255, fontStyle: 'bold' },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 15 },
+                    1: { halign: 'left', cellWidth: 40 },
+                    2: { halign: 'left', cellWidth: 20 },
+                    3: { halign: 'left', cellWidth: 20 },
+                }
+            });
+
+            // Add Page Numbers
+            const pageCount = doc.internal.getNumberOfPages();
+            for(let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.setTextColor(150);
+                doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 10, { align: 'center' });
+            }
+
+            let fileNameParam = 'geral';
+            if (selectedMetaRealizadoSellers.length === 1) {
+                fileNameParam = getFirstName(selectedMetaRealizadoSellers[0]);
+            }
+            const safeFileNameParam = fileNameParam.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            doc.save(`meta_vs_realizado_${safeFileNameParam}_${new Date().toISOString().slice(0,10)}.pdf`);
         }
