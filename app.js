@@ -14482,140 +14482,179 @@ const supervisorGroups = new Map();
                 contentDiv.innerHTML = '<p class="text-slate-400 animate-pulse">A Inteligência Artificial está analisando os dados de importação e comparando com o histórico de vendas...</p>';
 
                 try {
-                    // 1. Prepare Data Context (Enhanced with History)
+                    // 1. Prepare Data Context (Enhanced with History and Grouped by Supervisor)
                     const summary = {
                         total_fat_diff: 0,
-                        total_vol_diff: 0,
-                        top_growths: [],
-                        top_drops: []
+                        total_vol_diff: 0
                     };
 
-                    const detailedContext = pendingImportUpdates.map(u => {
-                        const current = getSellerCurrentGoal(u.seller, u.category, u.type);
-                        const diff = u.val - current;
-                        const pct = current > 0 ? (diff / current) * 100 : 100;
-                        
-                        if (u.type === 'rev') summary.total_fat_diff += diff;
-                        if (u.type === 'vol') summary.total_vol_diff += diff;
+                    const supervisorsMap = new Map(); // Map<SupervisorName, { total_fat_diff, sellers: Map<SellerName, metrics> }>
 
-                        // --- FIX: Filter out Supervisor/Aggregate names from AI Analysis Context ---
-                        const upperUName = u.seller.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-                        if (upperUName === 'BALCAO' || upperUName === 'BALCÃO' || 
-                            upperUName.includes('TOTAL') || upperUName.includes('SUPERVISOR') || upperUName.includes('GERAL') ||
-                            optimizedData.rcasBySupervisor.has(upperUName) || optimizedData.rcasBySupervisor.has(u.seller)) {
-                            return null;
+                    // Helper to get or create supervisor entry
+                    const getSupervisorEntry = (supervisorName) => {
+                        if (!supervisorsMap.has(supervisorName)) {
+                            supervisorsMap.set(supervisorName, {
+                                name: supervisorName,
+                                total_fat_diff: 0,
+                                sellers: []
+                            });
                         }
+                        return supervisorsMap.get(supervisorName);
+                    };
 
-                        // Fetch Historical Context (History is critical for validation)
+                    // Helper to process history (shared logic)
+                    const getSellerHistory = (sellerName, type, category) => {
                         let historyAvg = 0;
                         let lastMonth = 0;
                         
-                        // We can get this from globalMetrics if cached, or recalculate.
-                        // Simplest robust way: Recalculate context for this specific seller/category slice.
-                        // (Reusing logic from getSellerCurrentGoal but for history)
-                        if (u.type === 'rev' || u.type === 'vol') {
-                            const sellerCode = optimizedData.rcaCodeByName.get(u.seller);
-                            if (sellerCode) {
-                                const clients = optimizedData.clientsByRca.get(sellerCode) || [];
-                                const activeClients = clients.filter(c => {
-                                    const cod = String(c['Código'] || c['codigo_cliente']);
-                                    const rca1 = String(c.rca1 || '').trim();
-                                    const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                                    return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
-                                });
-                                
-                                const leafCategories = resolveGoalCategory(u.category);
-                                const isHistoryColumnar = optimizedData.historyById instanceof IndexMap;
-                                const historyValues = isHistoryColumnar ? optimizedData.historyById._source.values : null;
+                        const sellerCode = optimizedData.rcaCodeByName.get(sellerName);
+                        if (!sellerCode) return { historyAvg, lastMonth };
 
-                                const currentDate = lastSaleDate;
-                                const prevMonthDate = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth() - 1, 1));
-                                const prevMonthIndex = prevMonthDate.getUTCMonth();
-                                const prevMonthYear = prevMonthDate.getUTCFullYear();
+                        const clients = optimizedData.clientsByRca.get(sellerCode) || [];
+                        const activeClients = clients.filter(c => {
+                            const cod = String(c['Código'] || c['codigo_cliente']);
+                            const rca1 = String(c.rca1 || '').trim();
+                            const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
+                            return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
+                        });
 
-                                activeClients.forEach(client => {
-                                    const codCli = String(client['Código'] || client['codigo_cliente']);
-                                    const clientHistoryIds = optimizedData.indices.history.byClient.get(codCli);
-                                    if (clientHistoryIds) {
-                                        clientHistoryIds.forEach(id => {
-                                            const idx = isHistoryColumnar ? optimizedData.historyById.getIndex(id) : id;
-                                            const sale = isHistoryColumnar ? null : optimizedData.historyById.get(id); // If not columnar
-                                            
-                                            // Helper to get val
-                                            const getV = (prop) => isHistoryColumnar ? historyValues[prop][idx] : sale[prop];
-                                            
-                                            const codFor = String(getV('CODFOR'));
-                                            const desc = normalize(getV('DESCRICAO') || '');
-                                            let isMatch = false;
-                                            leafCategories.forEach(cat => {
-                                                if (cat === '707' && codFor === '707') isMatch = true;
-                                                else if (cat === '708' && codFor === '708') isMatch = true;
-                                                else if (cat === '752' && codFor === '752') isMatch = true;
-                                                else if (codFor === '1119') {
-                                                    if (cat === '1119_TODDYNHO' && desc.includes('TODDYNHO')) isMatch = true;
-                                                    else if (cat === '1119_TODDY' && desc.includes('TODDY')) isMatch = true;
-                                                    else if (cat === '1119_QUAKER_KEROCOCO' && (desc.includes('QUAKER') || desc.includes('KEROCOCO'))) isMatch = true;
-                                                }
-                                            });
+                        const leafCategories = resolveGoalCategory(category);
+                        const isHistoryColumnar = optimizedData.historyById instanceof IndexMap;
+                        const historyValues = isHistoryColumnar ? optimizedData.historyById._source.values : null;
 
-                                            if (isMatch) {
-                                                const val = u.type === 'rev' ? (Number(getV('VLVENDA')) || 0) : (Number(getV('TOTPESOLIQ')) || 0);
-                                                
-                                                historyAvg += val; // Total sum for quarter
-                                                
-                                                const dtPed = getV('DTPED');
-                                                const d = typeof dtPed === 'number' ? new Date(dtPed) : parseDate(dtPed);
-                                                if (d && d.getUTCMonth() === prevMonthIndex && d.getUTCFullYear() === prevMonthYear) {
-                                                    lastMonth += val;
-                                                }
-                                            }
-                                        });
+                        const currentDate = lastSaleDate;
+                        const prevMonthDate = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth() - 1, 1));
+                        const prevMonthIndex = prevMonthDate.getUTCMonth();
+                        const prevMonthYear = prevMonthDate.getUTCFullYear();
+
+                        activeClients.forEach(client => {
+                            const codCli = String(client['Código'] || client['codigo_cliente']);
+                            const clientHistoryIds = optimizedData.indices.history.byClient.get(codCli);
+                            if (clientHistoryIds) {
+                                clientHistoryIds.forEach(id => {
+                                    const idx = isHistoryColumnar ? optimizedData.historyById.getIndex(id) : id;
+                                    const sale = isHistoryColumnar ? null : optimizedData.historyById.get(id);
+                                    const getV = (prop) => isHistoryColumnar ? historyValues[prop][idx] : sale[prop];
+
+                                    const codFor = String(getV('CODFOR'));
+                                    const desc = normalize(getV('DESCRICAO') || '');
+                                    let isMatch = false;
+                                    leafCategories.forEach(cat => {
+                                        if (cat === '707' && codFor === '707') isMatch = true;
+                                        else if (cat === '708' && codFor === '708') isMatch = true;
+                                        else if (cat === '752' && codFor === '752') isMatch = true;
+                                        else if (codFor === '1119') {
+                                            if (cat === '1119_TODDYNHO' && desc.includes('TODDYNHO')) isMatch = true;
+                                            else if (cat === '1119_TODDY' && desc.includes('TODDY')) isMatch = true;
+                                            else if (cat === '1119_QUAKER_KEROCOCO' && (desc.includes('QUAKER') || desc.includes('KEROCOCO'))) isMatch = true;
+                                        }
+                                    });
+
+                                    if (isMatch) {
+                                        const val = type === 'rev' ? (Number(getV('VLVENDA')) || 0) : (Number(getV('TOTPESOLIQ')) || 0);
+                                        historyAvg += val;
+                                        const dtPed = getV('DTPED');
+                                        const d = typeof dtPed === 'number' ? new Date(dtPed) : parseDate(dtPed);
+                                        if (d && d.getUTCMonth() === prevMonthIndex && d.getUTCFullYear() === prevMonthYear) {
+                                            lastMonth += val;
+                                        }
                                     }
                                 });
-                                historyAvg = historyAvg / 3; // Approximate Quarterly Average
                             }
+                        });
+                        historyAvg = historyAvg / 3;
+                        return { historyAvg, lastMonth };
+                    };
+
+                    // Process Updates
+                    for (const u of pendingImportUpdates) {
+                        // Filter out supervisors/aggregates
+                        const upperUName = u.seller.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+                        if (upperUName === 'BALCAO' || upperUName === 'BALCÃO' ||
+                            upperUName.includes('TOTAL') || upperUName.includes('SUPERVISOR') || upperUName.includes('GERAL') ||
+                            optimizedData.rcasBySupervisor.has(upperUName) || optimizedData.rcasBySupervisor.has(u.seller)) {
+                            continue;
                         }
 
-                        return {
-                            seller: u.seller,
+                        // Determine Supervisor
+                        const sellerCode = optimizedData.rcaCodeByName.get(u.seller);
+                        let supervisorName = 'Sem Supervisor';
+                        if (sellerCode) {
+                            const details = sellerDetailsMap.get(sellerCode);
+                            if (details && details.supervisor) supervisorName = details.supervisor;
+                        }
+
+                        // Aggregate Global Stats
+                        const current = getSellerCurrentGoal(u.seller, u.category, u.type);
+                        const diff = u.val - current;
+
+                        if (u.type === 'rev') summary.total_fat_diff += diff;
+                        if (u.type === 'vol') summary.total_vol_diff += diff;
+
+                        // Add to Supervisor Group
+                        const supervisorEntry = getSupervisorEntry(supervisorName);
+                        if (u.type === 'rev') supervisorEntry.total_fat_diff += diff;
+
+                        // Add Seller Detail
+                        // Check if seller already exists in this supervisor group
+                        let sellerEntry = supervisorEntry.sellers.find(s => s.name === u.seller);
+                        if (!sellerEntry) {
+                            sellerEntry = { name: u.seller, changes: [] };
+                            supervisorEntry.sellers.push(sellerEntry);
+                        }
+
+                        // Get History for Context
+                        let historyData = { historyAvg: 0, lastMonth: 0 };
+                        if (u.type === 'rev' || u.type === 'vol') {
+                            historyData = getSellerHistory(u.seller, u.type, u.category);
+                        }
+
+                        sellerEntry.changes.push({
                             category: u.category,
                             type: u.type,
-                            current_goal: current,
-                            proposed_goal: u.val,
-                            history_avg: historyAvg,
-                            last_month: lastMonth,
-                            diff_vs_current: diff,
-                            diff_vs_history: u.val - historyAvg,
-                            pct_growth_vs_avg: historyAvg > 0 ? ((u.val - historyAvg) / historyAvg) * 100 : 100
-                        };
-                    }).filter(i => i !== null); // Filter out nulls from exclusions
+                            proposed: u.val,
+                            current: current,
+                            history_avg: historyData.historyAvg,
+                            diff_vs_history: u.val - historyData.historyAvg,
+                            pct_vs_history: historyData.historyAvg > 0 ? ((u.val - historyData.historyAvg) / historyData.historyAvg) * 100 : 100
+                        });
+                    }
 
-                    // Sort by Impact (Absolute Difference) to send most relevant info
-                    detailedContext.sort((a, b) => Math.abs(b.diff_vs_current) - Math.abs(a.diff_vs_current));
-                    const topContext = detailedContext.slice(0, 30).map(i => ({
-                        ...i,
-                        pct_growth_vs_avg: i.pct_growth_vs_avg.toFixed(1) + '%'
-                    })); 
+                    // Convert Map to Array
+                    const supervisorsList = Array.from(supervisorsMap.values());
+
+                    const context = {
+                        global_summary: {
+                            total_fat_diff: summary.total_fat_diff,
+                            total_vol_diff: summary.total_vol_diff
+                        },
+                        supervisors: supervisorsList
+                    };
 
                     const promptText = `
                         Atue como um Gerente Nacional de Vendas experiente da Prime Distribuição.
-                        Analise a nova proposta de metas (Proposed Goal) comparando com o Histórico de Vendas (History Avg / Last Month).
+                        Analise a proposta de metas (Proposed Goal) comparando com o Histórico (History Avg).
                         
-                        Contexto Geral:
-                        - Diferença Total (R$) Proposta vs Atual: R$ ${summary.total_fat_diff.toLocaleString('pt-BR')}
+                        Dados: ${JSON.stringify(context)}
                         
-                        Dados Detalhados (Top Alterações):
-                        ${JSON.stringify(topContext)}
+                        Retorne um JSON VÁLIDO com a seguinte estrutura:
+                        {
+                            "general_strategy": "Texto detalhado sobre a estratégia global (ex: aumento agressivo, conservador, foco em volume). Use emojis.",
+                            "global_risks": ["Risco 1", "Risco 2"],
+                            "supervisors": [
+                                {
+                                    "name": "Nome do Supervisor",
+                                    "analysis": "Análise específica para este time. Comente sobre a agressividade da meta e consistência.",
+                                    "highlights": ["Vendedor X: Meta +40% vs Histórico (Risco Alto)", "Vendedor Y: Meta abaixo do histórico (Oportunidade)"]
+                                }
+                            ]
+                        }
                         
-                        Gere um relatório em Markdown com:
-                        1. **Estratégia Identificada**: O que a mudança sugere? (Ex: Estamos puxando muito acima da média histórica?).
-                        2. **Validação de Realismo**: Aponte metas que estão desviando muito (>20%) da média histórica (History Avg).
-                           - **Atenção:** Se a "Proposed Goal" for **MENOR** que "History Avg", isso NÃO é um risco de quebra, é uma meta conservadora/fácil.
-                           - Se "Proposed Goal" for **MAIOR** que "History Avg", isso é um desafio agressivo (Risco).
-                        3. **Risco de Quebra (Aggressive Goals)**: Aponte APENAS vendedores onde a meta proposta é MUITO MAIOR que o histórico.
-                        4. **Oportunidades (Conservative Goals)**: Aponte onde a meta proposta é MENOR que o histórico (estamos deixando dinheiro na mesa?).
-                        
-                        Seja crítico e use emojis. Não confunda meta baixa com risco.
+                        REGRAS:
+                        1. Se "Proposed" > "History Avg" (+20%): Classifique como DESAFIO/RISCO.
+                        2. Se "Proposed" < "History Avg": Classifique como OPORTUNIDADE (Meta Conservadora).
+                        3. Seja direto e analítico.
+                        4. Retorne APENAS o JSON, sem markdown.
                     `;
 
                     // 2. Call API
@@ -14646,14 +14685,74 @@ const supervisorGroups = new Map();
                     const aiText = data.choices[0].message.content;
 
                     // 3. Render Result
-                    const htmlText = aiText
-                        .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>')
-                        .replace(/^# (.*$)/gim, '<h3 class="text-xl font-bold text-teal-400 mt-4 mb-2">$1</h3>')
-                        .replace(/^## (.*$)/gim, '<h4 class="text-lg font-bold text-blue-400 mt-3 mb-1">$1</h4>')
-                        .replace(/^\* (.*$)/gim, '<li class="ml-4 list-disc text-slate-300">$1</li>')
-                        .replace(/\n/g, '<br>');
+                    try {
+                        // Attempt to parse JSON
+                        const jsonStart = aiText.indexOf('{');
+                        const jsonEnd = aiText.lastIndexOf('}');
+                        const jsonString = aiText.substring(jsonStart, jsonEnd + 1);
+                        const result = JSON.parse(jsonString);
 
-                    contentDiv.innerHTML = htmlText;
+                        // Build UI
+                        let html = `
+                            <div class="ai-strategy-card p-4 rounded-lg bg-indigo-900/30 border border-indigo-500 mb-6">
+                                <h3 class="text-xl font-bold text-white mb-2">🧠 Estratégia Identificada</h3>
+                                <p class="text-slate-300 leading-relaxed">${result.general_strategy}</p>
+                                ${result.global_risks && result.global_risks.length > 0 ? `
+                                    <div class="mt-3 flex flex-wrap gap-2">
+                                        ${result.global_risks.map(r => `<span class="px-2 py-1 bg-red-900/50 border border-red-500/50 text-red-200 text-xs rounded-full font-bold">⚠️ ${r}</span>`).join('')}
+                                    </div>
+                                ` : ''}
+                            </div>
+
+                            <h3 class="text-lg font-bold text-white mb-4">Análise por Supervisor</h3>
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        `;
+
+                        if (result.supervisors && result.supervisors.length > 0) {
+                            result.supervisors.forEach(sup => {
+                                // Find supervisor summary
+                                const supStats = summary.supervisors && summary.supervisors.find ? summary.supervisors.find(s => s.name === sup.name) : null;
+                                // Wait, 'summary' in previous block doesn't have supervisors list anymore in local scope?
+                                // Actually, we didn't export supervisors list from try block scope to here.
+                                // But we can rely on AI's output mostly.
+
+                                html += `
+                                    <div class="ai-supervisor-card bg-slate-800 p-4 rounded-lg border border-slate-700">
+                                        <div class="flex justify-between items-center mb-3 border-b border-slate-700 pb-2">
+                                            <h4 class="font-bold text-teal-400 text-lg">${sup.name}</h4>
+                                        </div>
+                                        <p class="text-sm text-slate-300 mb-4">${sup.analysis}</p>
+
+                                        ${sup.highlights && sup.highlights.length > 0 ? `
+                                            <div class="space-y-2">
+                                                ${sup.highlights.map(h => {
+                                                    const isRisk = h.toLowerCase().includes('risco') || h.toLowerCase().includes('alerta') || h.includes('⚠️');
+                                                    const badgeClass = isRisk ? 'bg-red-900/30 text-red-300 border-red-800' : 'bg-green-900/30 text-green-300 border-green-800';
+                                                    return `<div class="text-xs p-2 rounded border ${badgeClass}">${h}</div>`;
+                                                }).join('')}
+                                            </div>
+                                        ` : '<p class="text-xs text-slate-500 italic">Nenhum destaque crítico.</p>'}
+                                    </div>
+                                `;
+                            });
+                        } else {
+                            html += `<p class="text-slate-400 italic col-span-2">Nenhum detalhe por supervisor retornado.</p>`;
+                        }
+
+                        html += `</div>`;
+                        contentDiv.innerHTML = html;
+
+                    } catch (parseError) {
+                        console.warn("AI JSON Parse Failed, falling back to text:", parseError);
+                        // Fallback to Markdown Rendering
+                        const htmlText = aiText
+                            .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>')
+                            .replace(/^# (.*$)/gim, '<h3 class="text-xl font-bold text-teal-400 mt-4 mb-2">$1</h3>')
+                            .replace(/^## (.*$)/gim, '<h4 class="text-lg font-bold text-blue-400 mt-3 mb-1">$1</h4>')
+                            .replace(/^\* (.*$)/gim, '<li class="ml-4 list-disc text-slate-300">$1</li>')
+                            .replace(/\n/g, '<br>');
+                        contentDiv.innerHTML = htmlText;
+                    }
 
                     // Render Mini Chart
                     renderAiSummaryChart(summary.total_fat_diff);
