@@ -14471,27 +14471,26 @@ const supervisorGroups = new Map();
             }
 
             // --- AI Insights Logic ---
-            async function generateAiInsights() {
+                        async function generateAiInsights() {
                 const btn = document.getElementById('btn-generate-ai');
-                const container = document.getElementById('ai-insights-result');
-                const contentDiv = document.getElementById('ai-insights-content');
                 
                 if (!pendingImportUpdates || pendingImportUpdates.length === 0) return;
 
                 // UI Loading State
                 btn.disabled = true;
                 btn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Analisando...`;
-                container.classList.remove('hidden');
-                contentDiv.innerHTML = '<p class="text-slate-400 animate-pulse">A Inteligência Artificial está analisando os dados de importação e comparando com o histórico de vendas...</p>';
+                
+                // Show loading overlay
+                const pageLoader = document.getElementById('page-transition-loader');
+                const loaderText = document.getElementById('loader-text');
+                if (pageLoader && loaderText) {
+                    loaderText.textContent = "A Inteligência Artificial está analisando os dados...";
+                    pageLoader.classList.remove('hidden');
+                }
 
                 try {
-                    // 1. Prepare Data Context (Enhanced with History and Grouped by Supervisor)
-                    const summary = {
-                        total_fat_diff: 0,
-                        total_vol_diff: 0
-                    };
-
-                    const supervisorsMap = new Map(); // Map<SupervisorName, { total_fat_diff, sellers: Map<SellerName, metrics> }>
+                    // 1. Prepare Data Context (Grouped by Supervisor, Strict Types, Top 5)
+                    const supervisorsMap = new Map(); // Map<SupervisorName, { total_fat_diff, sellers: [] }>
 
                     // Helper to get or create supervisor entry
                     const getSupervisorEntry = (supervisorName) => {
@@ -14505,68 +14504,19 @@ const supervisorGroups = new Map();
                         return supervisorsMap.get(supervisorName);
                     };
 
-                    // Helper to process history (shared logic)
-                    const getSellerHistory = (sellerName, type, category) => {
-                        let historyAvg = 0;
-                        let lastMonth = 0;
-                        
-                        const sellerCode = optimizedData.rcaCodeByName.get(sellerName);
-                        if (!sellerCode) return { historyAvg, lastMonth };
-
-                        const clients = optimizedData.clientsByRca.get(sellerCode) || [];
-                        const activeClients = clients.filter(c => {
-                            const cod = String(c['Código'] || c['codigo_cliente']);
-                            const rca1 = String(c.rca1 || '').trim();
-                            const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                            return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
-                        });
-                        
-                        const leafCategories = resolveGoalCategory(category);
-                        const isHistoryColumnar = optimizedData.historyById instanceof IndexMap;
-                        const historyValues = isHistoryColumnar ? optimizedData.historyById._source.values : null;
-
-                        const currentDate = lastSaleDate;
-                        const prevMonthDate = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth() - 1, 1));
-                        const prevMonthIndex = prevMonthDate.getUTCMonth();
-                        const prevMonthYear = prevMonthDate.getUTCFullYear();
-
-                        activeClients.forEach(client => {
-                            const codCli = String(client['Código'] || client['codigo_cliente']);
-                            const clientHistoryIds = optimizedData.indices.history.byClient.get(codCli);
-                            if (clientHistoryIds) {
-                                clientHistoryIds.forEach(id => {
-                                    const idx = isHistoryColumnar ? optimizedData.historyById.getIndex(id) : id;
-                                    const sale = isHistoryColumnar ? null : optimizedData.historyById.get(id);
-                                    const getV = (prop) => isHistoryColumnar ? historyValues[prop][idx] : sale[prop];
-                                    
-                                    const codFor = String(getV('CODFOR'));
-                                    const desc = normalize(getV('DESCRICAO') || '');
-                                    let isMatch = false;
-                                    leafCategories.forEach(cat => {
-                                        if (cat === '707' && codFor === '707') isMatch = true;
-                                        else if (cat === '708' && codFor === '708') isMatch = true;
-                                        else if (cat === '752' && codFor === '752') isMatch = true;
-                                        else if (codFor === '1119') {
-                                            if (cat === '1119_TODDYNHO' && desc.includes('TODDYNHO')) isMatch = true;
-                                            else if (cat === '1119_TODDY' && desc.includes('TODDY')) isMatch = true;
-                                            else if (cat === '1119_QUAKER_KEROCOCO' && (desc.includes('QUAKER') || desc.includes('KEROCOCO'))) isMatch = true;
-                                        }
-                                    });
-
-                                    if (isMatch) {
-                                        const val = type === 'rev' ? (Number(getV('VLVENDA')) || 0) : (Number(getV('TOTPESOLIQ')) || 0);
-                                        historyAvg += val;
-                                        const dtPed = getV('DTPED');
-                                        const d = typeof dtPed === 'number' ? new Date(dtPed) : parseDate(dtPed);
-                                        if (d && d.getUTCMonth() === prevMonthIndex && d.getUTCFullYear() === prevMonthYear) {
-                                            lastMonth += val;
-                                        }
-                                    }
-                                });
-                            }
-                        });
-                        historyAvg = historyAvg / 3;
-                        return { historyAvg, lastMonth };
+                    // Helper to resolve history (simplified for context)
+                    const getSellerHistorySimple = (sellerName, type, category) => {
+                       // Note: Full history calculation is expensive. We can use the 'current' logic as baseline if history isn't cached.
+                       // For accurate comparison, we should use the same logic as renderImportTable if possible, or fetch from history data.
+                       // Here we simply return 0 if strict calculation is too heavy, relying on the 'diff' already calculated in pendingImportUpdates?
+                       // Actually pendingImportUpdates doesn't store history, it stores 'val' (new).
+                       // We can compute history on the fly for the top items only? No, we need to sort first.
+                       // Let's rely on 'getSellerCurrentGoal' as the "Old" value (which is Current Target).
+                       // The Prompt asks for comparison with "History". 
+                       // getSellerCurrentGoal returns the *Current Goal* before update. 
+                       // The AI prompt usually compares New Goal vs History Avg. 
+                       // Let's provide [Current Goal] and [New Goal]. The AI can infer "Change".
+                       return getSellerCurrentGoal(sellerName, category, type);
                     };
 
                     // Process Updates
@@ -14589,122 +14539,91 @@ const supervisorGroups = new Map();
                             if (details && details.supervisor) supervisorName = details.supervisor;
                         }
 
-                        // Aggregate Global Stats
-                        const current = getSellerCurrentGoal(u.seller, u.category, u.type);
-                        const diff = u.val - current;
-                        
-                        if (u.type === 'rev') summary.total_fat_diff += diff;
-                        if (u.type === 'vol') summary.total_vol_diff += diff;
+                        const oldVal = getSellerCurrentGoal(u.seller, u.category, u.type);
+                        const diff = u.val - oldVal;
+                        const impact = Math.abs(diff);
+
+                        // Define Unit explicitly
+                        let unit = '';
+                        if (u.type === 'rev') unit = 'R$';
+                        else if (u.type === 'vol') unit = 'Kg';
+                        else unit = 'Clientes'; // Pos and Mix count as clients
 
                         // Add to Supervisor Group
                         const supervisorEntry = getSupervisorEntry(supervisorName);
-                        if (u.type === 'rev') supervisorEntry.total_fat_diff += diff;
-
-                        // Add Seller Detail (Optimized)
-                        let sellerEntry = supervisorEntry.sellers.find(s => s.name === u.seller);
-                        if (!sellerEntry) {
-                            sellerEntry = { name: u.seller, total_impact: 0, changes: [] };
-                            supervisorEntry.sellers.push(sellerEntry);
-                        }
-
-                        // Calculate Impact for Sorting
-                        sellerEntry.total_impact += Math.abs(diff);
-
-                        // Only calculate history if change is significant (> 50 R$ or volume)
-                        // Optimization: Skip granular history for minor adjustments to save tokens
-                        if (Math.abs(diff) > 50 || u.type === 'pos' || u.type === 'mix') {
-                            let historyData = { historyAvg: 0, lastMonth: 0 };
-                            if (u.type === 'rev' || u.type === 'vol') {
-                                historyData = getSellerHistory(u.seller, u.type, u.category);
-                            }
-
-                            sellerEntry.changes.push({
-                                cat: u.category,
-                                type: u.type,
-                                new: u.val,
-                                cur: current,
-                                hist: Math.round(historyData.historyAvg),
-                                // diff_hist: Math.round(u.val - historyData.historyAvg), // Removed to save tokens
-                                pct_hist: historyData.historyAvg > 0 ? Math.round(((u.val - historyData.historyAvg) / historyData.historyAvg) * 100) : 100
-                            });
-                        }
+                        
+                        // We aggregate items per seller? Or just list variations?
+                        // Requirement: "list the main variations of 5 sellers".
+                        // It's better to list *Variations* as items.
+                        // One seller might have huge Rev change AND huge Vol change.
+                        
+                        supervisorEntry.sellers.push({
+                            seller: u.seller,
+                            category: u.category,
+                            metric_type: u.type,
+                            unit: unit,
+                            old_value: oldVal,
+                            new_value: u.val,
+                            diff: diff,
+                            impact: impact
+                        });
                     }
 
-                    // Optimize Context for Token Limit (12k tokens max)
-                    // 1. Sort sellers by impact per supervisor
-                    // 2. Take top 15 sellers per supervisor
-                    // 3. Summarize the rest
-                    const optimizedSupervisorsList = [];
-                    
+                    const optimizedContext = { supervisors: [] };
+
                     supervisorsMap.forEach(sup => {
-                        sup.sellers.sort((a, b) => b.total_impact - a.total_impact);
+                        // Sort by Impact (Magnitude of change)
+                        sup.sellers.sort((a, b) => b.impact - a.impact);
                         
-                        const topSellers = sup.sellers.slice(0, 15); // Top 15 Impactful Sellers
-                        const remainingCount = sup.sellers.length - 15;
-                        
-                        const optimizedSellers = topSellers.map(s => ({
-                            name: s.name,
-                            changes: s.changes
+                        // Take Top 5 Variations
+                        const topVariations = sup.sellers.slice(0, 5).map(v => ({
+                            seller: v.seller,
+                            metric: v.unit === 'R$' ? 'Faturamento' : (v.unit === 'Kg' ? 'Volume' : 'Positivação'),
+                            details: `${v.unit} ${Math.round(v.old_value)} -> ${Math.round(v.new_value)} (Diff: ${v.diff > 0 ? '+' : ''}${Math.round(v.diff)})`
                         }));
 
-                        if (remainingCount > 0) {
-                            optimizedSellers.push({
-                                name: `+ ${remainingCount} outros vendedores com ajustes menores`,
-                                changes: []
-                            });
-                        }
-
-                        optimizedSupervisorsList.push({
+                        optimizedContext.supervisors.push({
                             name: sup.name,
-                            total_fat_diff: Math.round(sup.total_fat_diff),
-                            sellers: optimizedSellers
+                            top_variations: topVariations
                         });
                     });
 
-                    const context = {
-                        summary: {
-                            fat_diff: Math.round(summary.total_fat_diff),
-                            vol_diff: Math.round(summary.total_vol_diff)
-                        },
-                        supervisors: optimizedSupervisorsList
-                    };
-
                     const promptText = `
-                        Atue como um Gerente Nacional de Vendas experiente da Prime Distribuição.
-                        Analise a proposta de metas (Proposed Goal) comparando com o Histórico (History Avg).
+                        Atue como um Gerente Nacional de Vendas da Prime Distribuição.
+                        Analise as alterações de metas propostas (Proposed Goals).
                         
-                        Dados: ${JSON.stringify(context)}
+                        Dados: ${JSON.stringify(optimizedContext)}
                         
-                        Retorne um JSON VÁLIDO com a seguinte estrutura:
+                        Gere um relatório JSON estritamente com esta estrutura:
                         {
-                            "general_strategy": "Texto detalhado sobre a estratégia global (ex: aumento agressivo, conservador, foco em volume). Use emojis.",
-                            "global_risks": ["Risco 1", "Risco 2"],
+                            "global_summary": "Resumo executivo da estratégia geral percebida nas alterações. Use emojis.",
                             "supervisors": [
                                 {
                                     "name": "Nome do Supervisor",
-                                    "analysis": "Análise específica para este time. Comente sobre a agressividade da meta (Faturamento e Volume).",
-                                    "highlights": ["Vendedor X: Meta R$ 50k (vs Hist R$ 40k, +25%) - Desafio Agressivo", "Vendedor Y: Meta Mix abaixo do histórico - Oportunidade"]
+                                    "analysis": "Parágrafo de análise estratégica sobre este time. Identifique se o foco é agressividade em vendas, recuperação de volume ou cobertura.",
+                                    "variations": [
+                                        {
+                                            "seller": "Nome Vendedor",
+                                            "metric": "Faturamento/Volume/Positivação",
+                                            "change_display": "Texto ex: R$ 50k -> R$ 60k (+10k)",
+                                            "insight": "Comentário curto sobre o impacto (ex: 'Aumento agressivo', 'Ajuste conservador')"
+                                        }
+                                    ]
                                 }
                             ]
                         }
                         
-                        REGRAS:
-                        1. Destaques (highlights) DEVEM incluir os valores (ex: "R$ 670k vs Hist R$ 536k") e percentuais.
-                        2. Se "Proposed" > "History Avg" (+20%): Classifique como DESAFIO/RISCO.
-                        3. Se "Proposed" < "History Avg": Classifique como OPORTUNIDADE (Meta Conservadora).
-                        4. Analise também Volume, Positivação e Mix se houver dados.
-                        5. Seja direto e analítico.
-                        6. Retorne APENAS o JSON, sem markdown.
+                        Regras:
+                        1. "variations" deve conter EXATAMENTE os itens enviados no contexto (Top 5).
+                        2. Diferencie claramente R$ (Faturamento), Kg (Volume) e Clientes (Positivação).
+                        3. Retorne APENAS o JSON.
                     `;
 
                     // 2. Call API
-                    // Key retrieved from Supabase metadata or fallback to provided key
                     const metaEntry = embeddedData.metadata ? embeddedData.metadata.find(m => m.key === 'groq_api_key') : null;
                     const API_KEY = metaEntry ? metaEntry.value : null;
 
-                    if (!API_KEY) {
-                        throw new Error("Chave de API (groq_api_key) não encontrada na tabela de metadados.");
-                    }
+                    if (!API_KEY) throw new Error("Chave de API não configurada.");
 
                     const response = await fetch(`https://api.groq.com/openai/v1/chat/completions`, {
                         method: 'POST',
@@ -14719,90 +14638,31 @@ const supervisorGroups = new Map();
                     });
 
                     const data = await response.json();
-                    
                     if (data.error) throw new Error(data.error.message);
                     
                     const aiText = data.choices[0].message.content;
-
-                    // 3. Render Result
+                    
+                    // 3. Render Output
+                    let result;
                     try {
-                        // Attempt to parse JSON
                         const jsonStart = aiText.indexOf('{');
                         const jsonEnd = aiText.lastIndexOf('}');
-                        const jsonString = aiText.substring(jsonStart, jsonEnd + 1);
-                        const result = JSON.parse(jsonString);
-
-                        // Build UI
-                        let html = `
-                            <div class="ai-strategy-card p-4 rounded-lg bg-indigo-900/30 border border-indigo-500 mb-6">
-                                <h3 class="text-xl font-bold text-white mb-2">🧠 Estratégia Identificada</h3>
-                                <p class="text-slate-300 leading-relaxed">${result.general_strategy}</p>
-                                ${result.global_risks && result.global_risks.length > 0 ? `
-                                    <div class="mt-3 flex flex-wrap gap-2">
-                                        ${result.global_risks.map(r => `<span class="px-2 py-1 bg-red-900/50 border border-red-500/50 text-red-200 text-xs rounded-full font-bold">⚠️ ${r}</span>`).join('')}
-                                    </div>
-                                ` : ''}
-                            </div>
-                            
-                            <h3 class="text-lg font-bold text-white mb-4">Análise por Supervisor</h3>
-                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        `;
-
-                        if (result.supervisors && result.supervisors.length > 0) {
-                            result.supervisors.forEach(sup => {
-                                // Find supervisor summary
-                                const supStats = summary.supervisors && summary.supervisors.find ? summary.supervisors.find(s => s.name === sup.name) : null;
-                                // Wait, 'summary' in previous block doesn't have supervisors list anymore in local scope?
-                                // Actually, we didn't export supervisors list from try block scope to here.
-                                // But we can rely on AI's output mostly.
-                                
-                                html += `
-                                    <div class="ai-supervisor-card bg-slate-800 p-4 rounded-lg border border-slate-700">
-                                        <div class="flex justify-between items-center mb-3 border-b border-slate-700 pb-2">
-                                            <h4 class="font-bold text-teal-400 text-lg">${sup.name}</h4>
-                                        </div>
-                                        <p class="text-sm text-slate-300 mb-4">${sup.analysis}</p>
-                                        
-                                        ${sup.highlights && sup.highlights.length > 0 ? `
-                                            <div class="space-y-2">
-                                                ${sup.highlights.map(h => {
-                                                    const isRisk = h.toLowerCase().includes('risco') || h.toLowerCase().includes('alerta') || h.includes('⚠️');
-                                                    const badgeClass = isRisk ? 'bg-red-900/30 text-red-300 border-red-800' : 'bg-green-900/30 text-green-300 border-green-800';
-                                                    return `<div class="text-xs p-2 rounded border ${badgeClass}">${h}</div>`;
-                                                }).join('')}
-                                            </div>
-                                        ` : '<p class="text-xs text-slate-500 italic">Nenhum destaque crítico.</p>'}
-                                    </div>
-                                `;
-                            });
-                        } else {
-                            html += `<p class="text-slate-400 italic col-span-2">Nenhum detalhe por supervisor retornado.</p>`;
-                        }
-
-                        html += `</div>`;
-                        contentDiv.innerHTML = html;
-
-                    } catch (parseError) {
-                        console.warn("AI JSON Parse Failed, falling back to text:", parseError);
-                        // Fallback to Markdown Rendering
-                        const htmlText = aiText
-                            .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>')
-                            .replace(/^# (.*$)/gim, '<h3 class="text-xl font-bold text-teal-400 mt-4 mb-2">$1</h3>')
-                            .replace(/^## (.*$)/gim, '<h4 class="text-lg font-bold text-blue-400 mt-3 mb-1">$1</h4>')
-                            .replace(/^\* (.*$)/gim, '<li class="ml-4 list-disc text-slate-300">$1</li>')
-                            .replace(/\n/g, '<br>');
-                        contentDiv.innerHTML = htmlText;
+                        result = JSON.parse(aiText.substring(jsonStart, jsonEnd + 1));
+                    } catch (e) {
+                        console.error("AI JSON Parse Error", e);
+                        // Fallback simple structure
+                        result = { global_summary: aiText, supervisors: [] };
                     }
 
-                    // Render Mini Chart
-                    renderAiSummaryChart(summary.total_fat_diff);
+                    renderAiFullPage(result);
 
                 } catch (err) {
                     console.error("AI Error:", err);
-                    contentDiv.innerHTML = `<div class="p-4 bg-red-900/30 border border-red-500 rounded text-red-200">Erro ao gerar insights: ${err.message}</div>`;
+                    alert(`Erro na análise: ${err.message}`);
                 } finally {
                     btn.disabled = false;
-                    btn.innerHTML = `✨ Regenerar Insights`;
+                    btn.innerHTML = `✨ Gerar Insights`;
+                    if (pageLoader) pageLoader.classList.add('hidden');
                 }
             }
 
@@ -15153,3 +15013,154 @@ const supervisorGroups = new Map();
             const safeFileNameParam = fileNameParam.replace(/[^a-z0-9]/gi, '_').toLowerCase();
             doc.save(`meta_vs_realizado_${safeFileNameParam}_${new Date().toISOString().slice(0,10)}.pdf`);
         }
+
+            function renderAiFullPage(data) {
+                const fullPage = document.getElementById('ai-insights-full-page');
+                const contentDiv = document.getElementById('ai-insights-full-content');
+                const mainWrapper = document.getElementById('content-wrapper'); // This wraps dashboard
+                const modal = document.getElementById('import-goals-modal'); // Close the modal
+
+                if (!fullPage || !contentDiv) return;
+
+                // Close Import Modal
+                if (modal) modal.classList.add('hidden');
+
+                // Hide Main Dashboard / Content Wrapper
+                // Note: index.html structure shows content-wrapper wraps everything *except* the new page which I inserted *inside*?
+                // Let's check where I inserted it. 
+                // "Insert the new full-screen AI insights container into index.html... inside content-wrapper"
+                // If it is inside content-wrapper, hiding content-wrapper hides it too.
+                // Wait, in my previous step I used  to insert it *before* Goals View.
+                //  is inside .
+                // So  IS inside .
+                // Therefore, I should hide the *siblings* (dashboard, goals-view, etc) explicitly, NOT the wrapper.
+                
+                // Hide all main views
+                ['main-dashboard', 'city-view', 'weekly-view', 'comparison-view', 'stock-view', 'coverage-view', 'goals-view', 'meta-realizado-view', 'mix-view', 'innovations-month-view'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.classList.add('hidden');
+                });
+
+                // Show AI Page
+                fullPage.classList.remove('hidden');
+                
+                // Render Content
+                let html = `
+                    <div class="bg-gradient-to-r from-slate-800 to-slate-900 rounded-lg p-6 border border-slate-700 shadow-lg mb-8">
+                        <h2 class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-blue-400 mb-4">
+                            🌍 Resumo Estratégico Global
+                        </h2>
+                        <p class="text-lg text-slate-300 leading-relaxed">${data.global_summary || 'Análise indisponível.'}</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                `;
+
+                if (data.supervisors) {
+                    data.supervisors.forEach(sup => {
+                        html += `
+                            <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-md flex flex-col">
+                                <div class="p-5 border-b border-slate-700 bg-slate-800/50">
+                                    <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                                        <div class="w-2 h-8 bg-blue-500 rounded-full"></div>
+                                        ${sup.name}
+                                    </h3>
+                                </div>
+                                <div class="p-6 flex-1">
+                                    <div class="mb-6">
+                                        <h4 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Análise do Time</h4>
+                                        <p class="text-slate-300 text-sm leading-relaxed">${sup.analysis}</p>
+                                    </div>
+                                    
+                                    <div>
+                                        <h4 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">Principais Variações (Top 5)</h4>
+                                        <div class="overflow-x-auto">
+                                            <table class="w-full text-sm text-left text-slate-300">
+                                                <thead class="text-xs text-slate-500 uppercase bg-slate-900/50">
+                                                    <tr>
+                                                        <th class="px-3 py-2 rounded-l-lg">Vendedor</th>
+                                                        <th class="px-3 py-2">Métrica</th>
+                                                        <th class="px-3 py-2">Alteração</th>
+                                                        <th class="px-3 py-2 rounded-r-lg">Insight</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody class="divide-y divide-slate-700/50">
+                        `;
+                        
+                        if (sup.variations) {
+                            sup.variations.forEach(v => {
+                                // Determine color based on change text if possible, or just neutral
+                                html += `
+                                    <tr class="hover:bg-slate-700/30 transition-colors">
+                                        <td class="px-3 py-3 font-medium text-white">${v.seller}</td>
+                                        <td class="px-3 py-3 text-slate-400">${v.metric}</td>
+                                        <td class="px-3 py-3 font-mono text-xs">${v.change_display}</td>
+                                        <td class="px-3 py-3 text-blue-300 italic">${v.insight}</td>
+                                    </tr>
+                                `;
+                            });
+                        }
+
+                        html += `
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+
+                html += `</div>`;
+                contentDiv.innerHTML = html;
+                
+                // Scroll to top
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
+            // Export to HTML Function
+            document.getElementById('ai-insights-export-btn')?.addEventListener('click', () => {
+                const content = document.getElementById('ai-insights-full-content').innerHTML;
+                const timestamp = new Date().toLocaleString();
+                
+                const fullHtml = `
+                    <!DOCTYPE html>
+                    <html lang="pt-br">
+                    <head>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <title>Relatório de Insights IA - ${timestamp}</title>
+                        <script src="https://cdn.tailwindcss.com"></script>
+                        <style>body { background-color: #0f172a; color: #cbd5e1; font-family: sans-serif; }</style>
+                    </head>
+                    <body class="p-8">
+                        <div class="max-w-7xl mx-auto">
+                            <h1 class="text-3xl font-bold text-white mb-2">Relatório de Insights IA</h1>
+                            <p class="text-slate-400 mb-8">Gerado em: ${timestamp}</p>
+                            ${content}
+                        </div>
+                    </body>
+                    </html>
+                `;
+                
+                const blob = new Blob([fullHtml], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `insights_ia_${new Date().toISOString().slice(0,10)}.html`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+
+            // Back Button Logic
+            document.getElementById('ai-insights-back-btn')?.addEventListener('click', () => {
+                document.getElementById('ai-insights-full-page').classList.add('hidden');
+                // Restore Dashboard (or Goals View specifically since we came from there)
+                // Default to Goals View since the Import Modal is there
+                navigateTo('goals');
+                // Also ensure the modal is closed (it was closed in render, but just in case)
+            });
+
