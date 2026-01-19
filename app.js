@@ -15161,6 +15161,9 @@ const supervisorGroups = new Map();
                 // Restore Dashboard (or Goals View specifically since we came from there)
                 // Default to Goals View since the Import Modal is there
                 navigateTo('goals');
-                // Also ensure the modal is closed (it was closed in render, but just in case)
+                
+                // Re-open the Import Modal to preserve context/flow
+                const modal = document.getElementById('import-goals-modal');
+                if (modal) modal.classList.remove('hidden');
             });
 
