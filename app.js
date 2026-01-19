@@ -11709,6 +11709,29 @@ const supervisorGroups = new Map();
                         data.metadata.push({ key: 'last_update', value: now.toISOString() });
                     }
 
+                    // --- PRESERVE MANUAL KEYS (FIX) ---
+                    try {
+                        const keysToPreserve = ['groq_api_key']; // Add other manual keys here if needed
+                        const { data: currentMetadata } = await window.supabaseClient
+                            .from('data_metadata')
+                            .select('*')
+                            .in('key', keysToPreserve);
+
+                        if (currentMetadata && currentMetadata.length > 0) {
+                            currentMetadata.forEach(item => {
+                                // Check if it's already in the new dataset (unlikely but safe check)
+                                const existsInNew = data.metadata.some(newM => newM.key === item.key);
+                                if (!existsInNew) {
+                                    data.metadata.push(item);
+                                    console.log(`[Upload] Preserving key: ${item.key}`);
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        console.warn("[Upload] Failed to preserve manual keys:", e);
+                    }
+                    // -----------------------------------
+
                     await clearTable('data_metadata', 'key');
                     await uploadArrayBatch('data_metadata', data.metadata);
 
