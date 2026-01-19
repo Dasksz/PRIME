@@ -14595,40 +14595,73 @@ const supervisorGroups = new Map();
                         const supervisorEntry = getSupervisorEntry(supervisorName);
                         if (u.type === 'rev') supervisorEntry.total_fat_diff += diff;
 
-                        // Add Seller Detail
-                        // Check if seller already exists in this supervisor group
+                        // Add Seller Detail (Optimized)
                         let sellerEntry = supervisorEntry.sellers.find(s => s.name === u.seller);
                         if (!sellerEntry) {
-                            sellerEntry = { name: u.seller, changes: [] };
+                            sellerEntry = { name: u.seller, total_impact: 0, changes: [] };
                             supervisorEntry.sellers.push(sellerEntry);
                         }
 
-                        // Get History for Context
-                        let historyData = { historyAvg: 0, lastMonth: 0 };
-                        if (u.type === 'rev' || u.type === 'vol') {
-                            historyData = getSellerHistory(u.seller, u.type, u.category);
-                        }
+                        // Calculate Impact for Sorting
+                        sellerEntry.total_impact += Math.abs(diff);
 
-                        sellerEntry.changes.push({
-                            category: u.category,
-                            type: u.type,
-                            proposed: u.val,
-                            current: current,
-                            history_avg: historyData.historyAvg,
-                            diff_vs_history: u.val - historyData.historyAvg,
-                            pct_vs_history: historyData.historyAvg > 0 ? ((u.val - historyData.historyAvg) / historyData.historyAvg) * 100 : 100
-                        });
+                        // Only calculate history if change is significant (> 50 R$ or volume)
+                        // Optimization: Skip granular history for minor adjustments to save tokens
+                        if (Math.abs(diff) > 50 || u.type === 'pos' || u.type === 'mix') {
+                            let historyData = { historyAvg: 0, lastMonth: 0 };
+                            if (u.type === 'rev' || u.type === 'vol') {
+                                historyData = getSellerHistory(u.seller, u.type, u.category);
+                            }
+
+                            sellerEntry.changes.push({
+                                cat: u.category,
+                                type: u.type,
+                                new: u.val,
+                                cur: current,
+                                hist: Math.round(historyData.historyAvg),
+                                // diff_hist: Math.round(u.val - historyData.historyAvg), // Removed to save tokens
+                                pct_hist: historyData.historyAvg > 0 ? Math.round(((u.val - historyData.historyAvg) / historyData.historyAvg) * 100) : 100
+                            });
+                        }
                     }
 
-                    // Convert Map to Array
-                    const supervisorsList = Array.from(supervisorsMap.values());
+                    // Optimize Context for Token Limit (12k tokens max)
+                    // 1. Sort sellers by impact per supervisor
+                    // 2. Take top 15 sellers per supervisor
+                    // 3. Summarize the rest
+                    const optimizedSupervisorsList = [];
+
+                    supervisorsMap.forEach(sup => {
+                        sup.sellers.sort((a, b) => b.total_impact - a.total_impact);
+
+                        const topSellers = sup.sellers.slice(0, 15); // Top 15 Impactful Sellers
+                        const remainingCount = sup.sellers.length - 15;
+
+                        const optimizedSellers = topSellers.map(s => ({
+                            name: s.name,
+                            changes: s.changes
+                        }));
+
+                        if (remainingCount > 0) {
+                            optimizedSellers.push({
+                                name: `+ ${remainingCount} outros vendedores com ajustes menores`,
+                                changes: []
+                            });
+                        }
+
+                        optimizedSupervisorsList.push({
+                            name: sup.name,
+                            total_fat_diff: Math.round(sup.total_fat_diff),
+                            sellers: optimizedSellers
+                        });
+                    });
 
                     const context = {
-                        global_summary: {
-                            total_fat_diff: summary.total_fat_diff,
-                            total_vol_diff: summary.total_vol_diff
+                        summary: {
+                            fat_diff: Math.round(summary.total_fat_diff),
+                            vol_diff: Math.round(summary.total_vol_diff)
                         },
-                        supervisors: supervisorsList
+                        supervisors: optimizedSupervisorsList
                     };
 
                     const promptText = `
