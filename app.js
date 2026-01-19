@@ -14562,6 +14562,9 @@ const supervisorGroups = new Map();
                         const diff = u.val - oldVal;
                         const impact = Math.abs(diff);
 
+                        // FILTER: Ignore 0 variation for BALCAO
+                        if (supervisorName === 'BALCAO' && diff === 0) continue;
+
                         // Define Unit explicitly
                         let unit = '';
                         if (u.type === 'rev') unit = 'R$';
@@ -14594,8 +14597,9 @@ const supervisorGroups = new Map();
                         // Sort by Impact (Magnitude of change)
                         sup.sellers.sort((a, b) => b.impact - a.impact);
                         
-                        // Take Top 5 Variations
-                        const topVariations = sup.sellers.slice(0, 5).map(v => {
+                        // Take Top 10 Variations (Top 5 for BALCAO)
+                        const limit = sup.name === 'BALCAO' ? 5 : 10;
+                        const topVariations = sup.sellers.slice(0, limit).map(v => {
                             const catName = resolveCategoryName(v.category);
                             let metricName = '';
                             if (v.unit === 'R$') metricName = `Faturamento (${catName})`;
@@ -15104,35 +15108,48 @@ const supervisorGroups = new Map();
                                     </div>
                                     
                                     <div>
-                                        <h4 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">Principais Variações (Top 5)</h4>
-                                        <div class="overflow-x-auto">
+                                        <div class="flex justify-between items-center mb-3">
+                                            <h4 class="text-sm font-bold text-slate-400 uppercase tracking-wider">Detalhamento por Vendedor</h4>
+                                            <span class="text-xs text-slate-500 bg-slate-800 border border-slate-700 px-2 py-1 rounded-full">Top ${sup.variations ? sup.variations.length : 0} Variações</span>
+                                        </div>
+                                        <div class="overflow-x-auto rounded-lg border border-slate-700/50">
                                             <table class="w-full text-sm text-left text-slate-300">
-                                                <thead class="text-xs text-slate-500 uppercase bg-slate-900/50">
+                                                <thead class="text-xs text-slate-400 uppercase bg-slate-900/80">
                                                     <tr>
-                                                        <th class="px-3 py-2 rounded-l-lg">Vendedor</th>
-                                                        <th class="px-3 py-2">Métrica</th>
-                                                        <th class="px-3 py-2">Alteração</th>
-                                                        <th class="px-3 py-2 rounded-r-lg">Insight</th>
+                                                        <th class="px-4 py-3 font-semibold tracking-wide">Vendedor</th>
+                                                        <th class="px-4 py-3 font-semibold tracking-wide">Métrica</th>
+                                                        <th class="px-4 py-3 font-semibold tracking-wide text-right">Alteração</th>
+                                                        <th class="px-4 py-3 font-semibold tracking-wide">Insight</th>
                                                     </tr>
                                                 </thead>
-                                                <tbody class="divide-y divide-slate-700/50">
+                                                <tbody class="divide-y divide-slate-700/50 bg-slate-800/30">
                         `;
                         
                         if (sup.variations) {
                             sup.variations.forEach(v => {
-                                // Enhance change display with colors
+                                // Enhance change display with colors and icons
                                 let coloredChange = v.change_display;
-                                // Regex for (+...) -> Green
-                                coloredChange = coloredChange.replace(/(\(\+[^)]+\))/g, '<span class="text-green-400 font-bold">$1</span>');
-                                // Regex for (-...) -> Red
-                                coloredChange = coloredChange.replace(/(\(-[^)]+\))/g, '<span class="text-red-400 font-bold">$1</span>');
+                                
+                                // Regex for (+...) -> Green with arrow up
+                                if (coloredChange.includes('(+')) {
+                                    coloredChange = coloredChange.replace(/(\(\+[^)]+\))/g, '<span class="text-emerald-400 font-bold bg-emerald-400/10 px-1.5 py-0.5 rounded ml-1 text-xs">$1</span>');
+                                } else if (coloredChange.includes('(-')) {
+                                    coloredChange = coloredChange.replace(/(\(-[^)]+\))/g, '<span class="text-rose-400 font-bold bg-rose-400/10 px-1.5 py-0.5 rounded ml-1 text-xs">$1</span>');
+                                }
+
+                                // Format metric with bold prefix
+                                const metricParts = v.metric.split('(');
+                                let formattedMetric = v.metric;
+                                if (metricParts.length > 1) {
+                                    formattedMetric = `<span class="text-slate-300 font-medium">${metricParts[0]}</span> <span class="text-slate-500 text-xs">(${metricParts[1]}</span>`;
+                                }
 
                                 html += `
-                                    <tr class="hover:bg-slate-700/30 transition-colors">
-                                        <td class="px-3 py-3 font-medium text-white">${v.seller}</td>
-                                        <td class="px-3 py-3 text-slate-400">${v.metric}</td>
-                                        <td class="px-3 py-3 font-mono text-xs">${coloredChange}</td>
-                                        <td class="px-3 py-3 text-blue-300 italic">${v.insight}</td>
+                                    <tr class="hover:bg-slate-700/40 transition-colors group">
+                                        <td class="px-4 py-3 font-medium text-white group-hover:text-blue-300 transition-colors">${v.seller}</td>
+                                        <td class="px-4 py-3 text-slate-400">${formattedMetric}</td>
+                                        <td class="px-4 py-3 font-mono text-xs text-right whitespace-nowrap">${coloredChange}</td>
+                                        <td class="px-4 py-3 text-blue-300/90 text-xs italic border-l border-slate-700/50 pl-4">"${v.insight}"</td>
                                     </tr>
                                 `;
                             });
