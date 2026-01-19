@@ -14504,6 +14504,25 @@ const supervisorGroups = new Map();
                         return supervisorsMap.get(supervisorName);
                     };
 
+                    // Helper to resolve human-readable category name
+                    const resolveCategoryName = (catCode) => {
+                        const map = {
+                            '707': 'Extrusados',
+                            '708': 'Batata/Amendoim',
+                            '752': 'Torcida',
+                            '1119_TODDYNHO': 'Toddynho',
+                            '1119_TODDY': 'Toddy',
+                            '1119_QUAKER_KEROCOCO': 'Quaker/Kero Coco',
+                            'tonelada_elma': 'Elma Chips',
+                            'tonelada_foods': 'Foods',
+                            'total_elma': 'Elma Chips',
+                            'total_foods': 'Foods',
+                            'mix_salty': 'Mix Salty',
+                            'mix_foods': 'Mix Foods'
+                        };
+                        return map[catCode] || catCode;
+                    };
+
                     // Helper to resolve history (simplified for context)
                     const getSellerHistorySimple = (sellerName, type, category) => {
                        // Note: Full history calculation is expensive. We can use the 'current' logic as baseline if history isn't cached.
@@ -14576,11 +14595,19 @@ const supervisorGroups = new Map();
                         sup.sellers.sort((a, b) => b.impact - a.impact);
 
                         // Take Top 5 Variations
-                        const topVariations = sup.sellers.slice(0, 5).map(v => ({
-                            seller: v.seller,
-                            metric: v.unit === 'R$' ? 'Faturamento' : (v.unit === 'Kg' ? 'Volume' : 'Positivação'),
-                            details: `${v.unit} ${Math.round(v.old_value)} -> ${Math.round(v.new_value)} (Diff: ${v.diff > 0 ? '+' : ''}${Math.round(v.diff)})`
-                        }));
+                        const topVariations = sup.sellers.slice(0, 5).map(v => {
+                            const catName = resolveCategoryName(v.category);
+                            let metricName = '';
+                            if (v.unit === 'R$') metricName = `Faturamento (${catName})`;
+                            else if (v.unit === 'Kg') metricName = `Volume (${catName})`;
+                            else metricName = `Positivação (${catName})`;
+
+                            return {
+                                seller: v.seller,
+                                metric: metricName,
+                                details: `${v.unit} ${Math.round(v.old_value)} -> ${Math.round(v.new_value)} (Diff: ${v.diff > 0 ? '+' : ''}${Math.round(v.diff)})`
+                            };
+                        });
 
                         optimizedContext.supervisors.push({
                             name: sup.name,
@@ -14604,7 +14631,7 @@ const supervisorGroups = new Map();
                                     "variations": [
                                         {
                                             "seller": "Nome Vendedor",
-                                            "metric": "Faturamento/Volume/Positivação",
+                                            "metric": "O nome completo da métrica (ex: Faturamento (Extrusados))",
                                             "change_display": "Texto ex: R$ 50k -> R$ 60k (+10k)",
                                             "insight": "Comentário curto sobre o impacto (ex: 'Aumento agressivo', 'Ajuste conservador')"
                                         }
@@ -14615,7 +14642,7 @@ const supervisorGroups = new Map();
                         
                         Regras:
                         1. "variations" deve conter EXATAMENTE os itens enviados no contexto (Top 5).
-                        2. Diferencie claramente R$ (Faturamento), Kg (Volume) e Clientes (Positivação).
+                        2. Use o nome COMPLETO da métrica fornecido no input (ex: "Faturamento (Extrusados)"). NÃO simplifique para apenas "Faturamento".
                         3. Retorne APENAS o JSON.
                     `;
 
@@ -15053,6 +15080,10 @@ const supervisorGroups = new Map();
                         <p class="text-lg text-slate-300 leading-relaxed">${data.global_summary || 'Análise indisponível.'}</p>
                     </div>
 
+                    <div id="ai-full-page-chart-container" class="mt-8 mb-8 h-80 bg-slate-800 rounded-xl p-4 border border-slate-700 relative">
+                        <canvas id="aiFullPageSummaryChart"></canvas>
+                    </div>
+
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
                 `;
 
@@ -15089,12 +15120,18 @@ const supervisorGroups = new Map();
 
                         if (sup.variations) {
                             sup.variations.forEach(v => {
-                                // Determine color based on change text if possible, or just neutral
+                                // Enhance change display with colors
+                                let coloredChange = v.change_display;
+                                // Regex for (+...) -> Green
+                                coloredChange = coloredChange.replace(/(\(\+[^)]+\))/g, '<span class="text-green-400 font-bold">$1</span>');
+                                // Regex for (-...) -> Red
+                                coloredChange = coloredChange.replace(/(\(-[^)]+\))/g, '<span class="text-red-400 font-bold">$1</span>');
+
                                 html += `
                                     <tr class="hover:bg-slate-700/30 transition-colors">
                                         <td class="px-3 py-3 font-medium text-white">${v.seller}</td>
                                         <td class="px-3 py-3 text-slate-400">${v.metric}</td>
-                                        <td class="px-3 py-3 font-mono text-xs">${v.change_display}</td>
+                                        <td class="px-3 py-3 font-mono text-xs">${coloredChange}</td>
                                         <td class="px-3 py-3 text-blue-300 italic">${v.insight}</td>
                                     </tr>
                                 `;
@@ -15115,8 +15152,83 @@ const supervisorGroups = new Map();
                 html += `</div>`;
                 contentDiv.innerHTML = html;
 
+                // Render Chart
+                setTimeout(renderFullPageSummaryChart, 100);
+
                 // Scroll to top
                 window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
+            function renderFullPageSummaryChart() {
+                const ctx = document.getElementById('aiFullPageSummaryChart');
+                if (!ctx) return;
+
+                // Calculate Totals
+                let totalCurrent = 0;
+                let totalProposed = 0;
+
+                // Ensure we have updates
+                if (pendingImportUpdates) {
+                    pendingImportUpdates.forEach(u => {
+                        if (u.type === 'rev') {
+                            const cur = getSellerCurrentGoal(u.seller, u.category, u.type);
+                            totalCurrent += cur;
+                            totalProposed += u.val;
+                        }
+                    });
+                }
+
+                const diff = totalProposed - totalCurrent;
+                const diffColor = diff >= 0 ? '#22c55e' : '#ef4444';
+
+                if (window.aiFullPageChartInstance) {
+                    window.aiFullPageChartInstance.destroy();
+                }
+
+                window.aiFullPageChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Meta Atual', 'Nova Proposta'],
+                        datasets: [{
+                            label: 'Faturamento Total (R$)',
+                            data: [totalCurrent, totalProposed],
+                            backgroundColor: ['#64748b', diffColor],
+                            borderRadius: 6,
+                            barPercentage: 0.5
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            title: {
+                                display: true,
+                                text: `Comparativo Global de Faturamento (Diferença: ${diff > 0 ? '+' : ''}${diff.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})})`,
+                                color: '#fff',
+                                font: { size: 16 }
+                            },
+                            datalabels: {
+                                color: '#fff',
+                                anchor: 'end',
+                                align: 'top',
+                                formatter: (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                                font: { weight: 'bold' }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                grid: { color: '#334155' },
+                                ticks: { color: '#94a3b8' }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { color: '#fff', font: { size: 14, weight: 'bold' } }
+                            }
+                        }
+                    }
+                });
             }
 
             // Export to HTML Function
