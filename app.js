@@ -1014,6 +1014,13 @@
 
             optimizedData.clientsByRca = new Map();
             optimizedData.searchIndices.clients = new Array(allClientsData.length);
+            optimizedData.rcasBySupervisor = new Map();
+            optimizedData.productsBySupplier = new Map();
+            optimizedData.salesByProduct = { current: new Map(), history: new Map() };
+            optimizedData.rcaCodeByName = new Map();
+            optimizedData.rcaNameByCode = new Map();
+            optimizedData.supervisorCodeByName = new Map();
+            optimizedData.productPastaMap = new Map();
 
             // Access via accessor method for potential ColumnarDataset
             const getClient = (i) => allClientsData instanceof ColumnarDataset ? allClientsData.get(i) : allClientsData[i];
@@ -1082,13 +1089,6 @@
                 optimizedData.searchIndices.clients[i] = { code: codCli, nameLower: (client.nomeCliente || '').toLowerCase(), cityLower: (client.cidade || '').toLowerCase() };
             }
 
-            optimizedData.rcasBySupervisor = new Map();
-            optimizedData.productsBySupplier = new Map();
-            optimizedData.salesByProduct = { current: new Map(), history: new Map() };
-            optimizedData.rcaCodeByName = new Map();
-            optimizedData.rcaNameByCode = new Map();
-            optimizedData.supervisorCodeByName = new Map();
-            optimizedData.productPastaMap = new Map();
             const supervisorToRcaMap = new Map();
             const workingDaysSet = new Set();
 
