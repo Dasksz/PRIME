@@ -1048,6 +1048,9 @@
                     client.rca1 = '1001';
                     client.rcas = ['1001'];
                     americanasCodCli = codCli;
+                    // Ensure global mapping for Import/Analysis lookup
+                    optimizedData.rcaCodeByName.set('AMERICANAS', '1001');
+                    sellerDetailsMap.set('1001', { name: 'AMERICANAS', supervisor: 'BALCAO' });
                 }
                 // Removed INATIVOS logic as per request
 
@@ -14579,7 +14582,9 @@ const supervisorGroups = new Map();
                         // Determine Supervisor
                         const sellerCode = optimizedData.rcaCodeByName.get(u.seller);
                         let supervisorName = 'Sem Supervisor';
-                        if (sellerCode) {
+                        if (u.seller === 'AMERICANAS') {
+                            supervisorName = 'BALCAO';
+                        } else if (sellerCode) {
                             const details = sellerDetailsMap.get(sellerCode);
                             if (details && details.supervisor) supervisorName = details.supervisor;
                         }
@@ -14677,17 +14682,19 @@ const supervisorGroups = new Map();
                             "supervisors": [
                                 {
                                     "name": "Nome do Supervisor",
-                                    "analysis": "Análise específica para este time. Comente sobre a agressividade da meta e consistência.",
-                                    "highlights": ["Vendedor X: Meta +40% vs Histórico (Risco Alto)", "Vendedor Y: Meta abaixo do histórico (Oportunidade)"]
+                                    "analysis": "Análise específica para este time. Comente sobre a agressividade da meta (Faturamento e Volume).",
+                                    "highlights": ["Vendedor X: Meta R$ 50k (vs Hist R$ 40k, +25%) - Desafio Agressivo", "Vendedor Y: Meta Mix abaixo do histórico - Oportunidade"]
                                 }
                             ]
                         }
                         
                         REGRAS:
-                        1. Se "Proposed" > "History Avg" (+20%): Classifique como DESAFIO/RISCO.
-                        2. Se "Proposed" < "History Avg": Classifique como OPORTUNIDADE (Meta Conservadora).
-                        3. Seja direto e analítico.
-                        4. Retorne APENAS o JSON, sem markdown.
+                        1. Destaques (highlights) DEVEM incluir os valores (ex: "R$ 670k vs Hist R$ 536k") e percentuais.
+                        2. Se "Proposed" > "History Avg" (+20%): Classifique como DESAFIO/RISCO.
+                        3. Se "Proposed" < "History Avg": Classifique como OPORTUNIDADE (Meta Conservadora).
+                        4. Analise também Volume, Positivação e Mix se houver dados.
+                        5. Seja direto e analítico.
+                        6. Retorne APENAS o JSON, sem markdown.
                     `;
 
                     // 2. Call API
@@ -14841,7 +14848,16 @@ const supervisorGroups = new Map();
                             title: { display: true, text: 'Comparativo de Faturamento Total', color: '#fff' }
                         },
                         scales: {
-                            y: { beginAtZero: false, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                            y: { 
+                                beginAtZero: false, 
+                                grid: { color: '#334155' }, 
+                                ticks: { 
+                                    color: '#94a3b8',
+                                    callback: function(value) {
+                                        return new Intl.NumberFormat('pt-BR', { notation: "compact", maximumFractionDigits: 1 }).format(value);
+                                    }
+                                } 
+                            },
                             x: { grid: { display: false }, ticks: { color: '#fff' } }
                         }
                     }
