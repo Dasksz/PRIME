@@ -922,7 +922,7 @@
             };
 
             // Use FETCH directly to allow service_role key without "Forbidden" error in browser
-            const response = await fetch(`${SUPABASE_URL}/rest/v1/goals_distribution`, {
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/goals_distribution?on_conflict=month_key,supplier,brand`, {
                 method: 'POST',
                 headers: {
                     'apikey': SUPABASE_ANON_KEY,
