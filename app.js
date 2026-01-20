@@ -14508,7 +14508,7 @@ const supervisorGroups = new Map();
                     const resolveCategoryName = (catCode) => {
                         const map = {
                             '707': 'Extrusados',
-                            '708': 'Batata/Amendoim',
+                            '708': 'Não Extrusados',
                             '752': 'Torcida',
                             '1119_TODDYNHO': 'Toddynho',
                             '1119_TODDY': 'Toddy',
