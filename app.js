@@ -3075,6 +3075,65 @@
             return clients;
         }
 
+        function getHistoricalMix(sellerName, type) {
+            const sellerCode = optimizedData.rcaCodeByName.get(sellerName);
+            if (!sellerCode) return 0;
+
+            const clients = optimizedData.clientsByRca.get(sellerCode) || [];
+            // Filter active clients same as main view
+            const activeClients = clients.filter(c => {
+                const cod = String(c['Código'] || c['codigo_cliente']);
+                const rca1 = String(c.rca1 || '').trim();
+                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
+                return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
+            });
+
+            // Iterate Active Clients
+            let totalMixMonths = 0;
+            const targetCategories = type === 'salty' ? MIX_SALTY_CATEGORIES : MIX_FOODS_CATEGORIES;
+
+            activeClients.forEach(client => {
+                const codCli = String(client['Código'] || client['codigo_cliente']);
+                const historyIds = optimizedData.indices.history.byClient.get(codCli);
+
+                if (historyIds) {
+                    // Bucket by Month
+                    const monthlySales = new Map(); // Map<MonthKey, Set<Brand>>
+
+                    historyIds.forEach(id => {
+                        const sale = optimizedData.historyById.get(id);
+                        // Using same date parsing as elsewhere
+                        let dateObj = null;
+                        if (typeof sale.DTPED === 'number') dateObj = new Date(sale.DTPED);
+                        else dateObj = parseDate(sale.DTPED);
+
+                        if (dateObj) {
+                            const monthKey = `${dateObj.getUTCFullYear()}-${dateObj.getUTCMonth()}`;
+                            if (!monthlySales.has(monthKey)) monthlySales.set(monthKey, new Set());
+
+                            // Check brand/category match
+                            const desc = normalize(sale.DESCRICAO || '');
+                            targetCategories.forEach(cat => {
+                                if (desc.includes(cat)) {
+                                    monthlySales.get(monthKey).add(cat);
+                                }
+                            });
+                        }
+                    });
+
+                    // Count Successful Months
+                    monthlySales.forEach(brandsSet => {
+                        const achieved = targetCategories.every(cat => brandsSet.has(cat));
+                        if (achieved) totalMixMonths++;
+                    });
+                }
+            });
+
+            // Return Average (Total Mix Months / 3)
+            // Assuming Quarter History is 3 months.
+            return totalMixMonths / 3;
+        }
+
         function parseInputMoney(id) {
             const el = document.getElementById(id);
             if (!el) return 0;
@@ -5381,6 +5440,40 @@
             updateGoalsView();
         }
 
+        function handleDistributeMix(totalGoal, type, contextKey, filteredClientMetrics) {
+            let targetKey = type === 'salty' ? 'mix_salty' : 'mix_foods';
+
+            // 1. Calculate Total History for THESE sellers in THIS context
+            let totalHistoryMix = 0;
+            const sellersHistory = [];
+
+            const uniqueSellers = new Set(filteredClientMetrics.map(c => c.seller));
+
+            uniqueSellers.forEach(seller => {
+                const hist = getHistoricalMix(seller, type);
+                sellersHistory.push({ seller, hist });
+                totalHistoryMix += hist;
+            });
+
+            // 2. Distribute Total Goal
+            sellersHistory.forEach(item => {
+                let share = 0;
+                if (totalHistoryMix > 0) {
+                    share = item.hist / totalHistoryMix;
+                }
+
+                const sellerTarget = Math.round(totalGoal * share);
+
+                // Update Primary Target
+                if (!goalsSellerTargets.has(item.seller)) goalsSellerTargets.set(item.seller, {});
+                const t = goalsSellerTargets.get(item.seller);
+                t[targetKey] = sellerTarget;
+            });
+
+            // Trigger View Update
+            updateGoalsView();
+        }
+
         function updateGoalsView() {
             goalsRenderId++;
             const currentRenderId = goalsRenderId;
@@ -5785,10 +5878,31 @@
                         if(input) {
                             input.value = displayVal.toLocaleString('pt-BR');
 
-                            if (isSingleSeller) {
+                            if (isSingleSeller || isAggregatedTab) {
                                 input.readOnly = false;
                                 input.classList.remove('opacity-50', 'cursor-not-allowed');
-                                if(btn) btn.style.display = '';
+                                if(btn) {
+                                    const newBtn = btn.cloneNode(true);
+                                    btn.parentNode.replaceChild(newBtn, btn);
+                                    newBtn.style.display = '';
+
+                                    newBtn.onclick = () => {
+                                        const valStr = input.value;
+                                        const val = parseFloat(valStr.replace(/\./g, '').replace(',', '.')) || 0;
+
+                                        if (isAggregatedTab) {
+                                            const contextName = currentGoalsSupplier.replace('_ALL', '');
+                                            showConfirmationModal(`Confirmar distribuição Proporcional de Mix ${type === 'salty' ? 'Salty' : 'Foods'} (${val}) para ${contextName}? (Base: Histórico)`, () => {
+                                                handleDistributeMix(val, type, contextKey, clientMetrics);
+                                            });
+                                        } else {
+                                            const sellerName = selectedGoalsGvSellers[0];
+                                            showConfirmationModal(`Confirmar ajuste de Meta Mix ${type === 'salty' ? 'Salty' : 'Foods'} para ${valStr} (Vendedor: ${getFirstName(sellerName)})?`, () => {
+                                                saveMixAdjustment(type, val, sellerName);
+                                            });
+                                        }
+                                    };
+                                }
                             } else {
                                 input.readOnly = true;
                                 input.classList.add('opacity-50', 'cursor-not-allowed');
