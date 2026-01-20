@@ -11652,6 +11652,7 @@ const supervisorGroups = new Map();
             await hideLoader();
         }
 
+
         async function enviarDadosParaSupabase(data) {
             const supabaseUrl = document.getElementById('supabase-url').value;
 
@@ -11670,9 +11671,6 @@ const supervisorGroups = new Map();
                 return;
             }
 
-            // Removido: const sbClient = supabase.createClient(supabaseUrl, supabaseKey);
-            // Motivo: "Forbidden use of secret API key in browser"
-
             const statusText = document.getElementById('status-text');
             const progressBar = document.getElementById('progress-bar');
             const statusContainer = document.getElementById('status-container');
@@ -11683,167 +11681,193 @@ const supervisorGroups = new Map();
                 progressBar.style.width = `${percent}%`;
             };
 
-            const BATCH_SIZE = 1000;
+            // --- OPTIMIZATION: Increased Batch Size & Concurrency ---
+            const BATCH_SIZE = 4000;
+            const CONCURRENT_REQUESTS = 10;
 
-            const performUpsert = async (table, batch) => {
-                const response = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
-                    method: 'POST',
-                    headers: {
-                        'apikey': apiKeyHeader,
-                        'Authorization': `Bearer ${authToken}`,
-                        'Content-Type': 'application/json',
-                        'Prefer': 'resolution=merge-duplicates'
-                    },
-                    body: JSON.stringify(batch)
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Erro Supabase (${response.status}): ${errorText}`);
+            const retryOperation = async (operation, retries = 3, delay = 1000) => {
+                for (let i = 0; i < retries; i++) {
+                    try {
+                        return await operation();
+                    } catch (error) {
+                        if (i === retries - 1) throw error;
+                        console.warn(`Tentativa ${i + 1} falhou. Retentando em ${delay}ms...`, error);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2; // Exponential backoff
+                    }
                 }
             };
 
-            const clearTable = async (table, pkColumn = 'id') => {
-                // Tenta limpar usando a função RPC 'truncate_table' (muito mais rápido e sem timeout)
-                // Isso resolve o erro "canceling statement due to statement timeout" em tabelas grandes
-                try {
-                    const rpcResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/truncate_table`, {
+            const performUpsert = async (table, batch) => {
+                await retryOperation(async () => {
+                    const response = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
                         method: 'POST',
                         headers: {
                             'apikey': apiKeyHeader,
                             'Authorization': `Bearer ${authToken}`,
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
+                            'Prefer': 'resolution=merge-duplicates'
                         },
-                        body: JSON.stringify({ table_name: table })
+                        body: JSON.stringify(batch)
                     });
 
-                    if (rpcResponse.ok) {
-                        return; // Sucesso com TRUNCATE
-                    } else {
-                        // Se falhar (ex: função não existe), faz fallback para o método antigo
-                        const errorText = await rpcResponse.text();
-                        console.warn(`RPC truncate_table falhou para ${table} (Status: ${rpcResponse.status}). Msg: ${errorText}. Tentando DELETE convencional...`);
-                    }
-                } catch (e) {
-                    console.warn(`Erro ao chamar RPC truncate_table para ${table}, tentando DELETE convencional...`, e);
-                }
-
-                // Fallback: Deleta todas as linhas da tabela (onde pkColumn não é nulo)
-                const response = await fetch(`${supabaseUrl}/rest/v1/${table}?${pkColumn}=not.is.null`, {
-                    method: 'DELETE',
-                    headers: {
-                        'apikey': apiKeyHeader,
-                        'Authorization': `Bearer ${authToken}`,
-                        'Content-Type': 'application/json'
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Erro Supabase (${response.status}): ${errorText}`);
                     }
                 });
+            };
 
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Erro ao limpar tabela ${table}: ${errorText}`);
-                }
+            const clearTable = async (table, pkColumn = 'id') => {
+                await retryOperation(async () => {
+                    // Tenta limpar usando a função RPC 'truncate_table' (muito mais rápido e sem timeout)
+                    try {
+                        const rpcResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/truncate_table`, {
+                            method: 'POST',
+                            headers: {
+                                'apikey': apiKeyHeader,
+                                'Authorization': `Bearer ${authToken}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ table_name: table })
+                        });
+
+                        if (rpcResponse.ok) {
+                            return; // Sucesso com TRUNCATE
+                        } else {
+                            const errorText = await rpcResponse.text();
+                            console.warn(`RPC truncate_table falhou para ${table} (Status: ${rpcResponse.status}). Msg: ${errorText}. Tentando DELETE convencional...`);
+                        }
+                    } catch (e) {
+                        console.warn(`Erro ao chamar RPC truncate_table para ${table}, tentando DELETE convencional...`, e);
+                    }
+
+                    // Fallback: Deleta todas as linhas da tabela
+                    const response = await fetch(`${supabaseUrl}/rest/v1/${table}?${pkColumn}=not.is.null`, {
+                        method: 'DELETE',
+                        headers: {
+                            'apikey': apiKeyHeader,
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Erro ao limpar tabela ${table}: ${errorText}`);
+                    }
+                });
             };
 
             // List of columns that are dates and need conversion from timestamp (ms) to ISO String
             const dateColumns = new Set(['dtped', 'dtsaida', 'ultimacompra', 'datacadastro', 'dtcadastro', 'updated_at']);
 
             const formatValue = (key, value) => {
-                // If it's a date column and value is a number, convert to ISO string
                 if (dateColumns.has(key) && typeof value === 'number') {
-                    // Check for valid timestamp (not 0 or crazy value) if needed,
-                    // but usually new Date(val).toISOString() handles valid ms numbers.
-                    // Postgres timestamp range: 4713 BC to 294276 AD.
-                    // 1764720000000 is year 2025, which is fine.
                     try {
                         return new Date(value).toISOString();
                     } catch (e) {
-                        return null; // Fallback for invalid dates
+                        return null;
                     }
                 }
                 return value;
             };
 
-            const uploadColumnarBatch = async (table, columnarData) => {
-                const totalRows = columnarData.length;
-                const columns = columnarData.columns;
+            // --- Unified Parallel Uploader ---
+            const uploadBatchParallel = async (table, dataObj, isColumnar) => {
+                const totalRows = isColumnar ? dataObj.length : dataObj.length;
+                if (totalRows === 0) return;
 
-                for (let i = 0; i < totalRows; i += BATCH_SIZE) {
+                const totalBatches = Math.ceil(totalRows / BATCH_SIZE);
+                let processedBatches = 0;
+
+                const processChunk = async (chunkIndex) => {
+                    const start = chunkIndex * BATCH_SIZE;
+                    const end = Math.min(start + BATCH_SIZE, totalRows);
                     const batch = [];
-                    const end = Math.min(i + BATCH_SIZE, totalRows);
 
-                    for (let j = i; j < end; j++) {
-                        const row = {};
-                        for (const col of columns) {
-                            // OPTION B: Convert keys to lowercase to match Supabase DB schema
-                            const lowerKey = col.toLowerCase();
-                            const val = columnarData.values[col][j];
-                            row[lowerKey] = formatValue(lowerKey, val);
+                    if (isColumnar) {
+                        const columns = dataObj.columns;
+                        const values = dataObj.values;
+                        // Pre-calculate lower keys to avoid repeated toLowerCase()
+                        const colKeys = columns.map(c => c.toLowerCase());
+
+                        for (let j = start; j < end; j++) {
+                            const row = {};
+                            for (let k = 0; k < columns.length; k++) {
+                                const col = columns[k];
+                                const lowerKey = colKeys[k];
+                                row[lowerKey] = formatValue(lowerKey, values[col][j]);
+                            }
+                            batch.push(row);
                         }
-                        batch.push(row);
+                    } else {
+                        // Array of Objects
+                        for (let j = start; j < end; j++) {
+                            const item = dataObj[j];
+                            const newItem = {};
+                            for (const key in item) {
+                                const lowerKey = key.toLowerCase();
+                                newItem[lowerKey] = formatValue(lowerKey, item[key]);
+                            }
+                            batch.push(newItem);
+                        }
                     }
 
                     await performUpsert(table, batch);
-
-                    const progress = Math.round((i / totalRows) * 100);
+                    processedBatches++;
+                    const progress = Math.round((processedBatches / totalBatches) * 100);
                     updateStatus(`Enviando ${table}: ${progress}%`, progress);
-                }
+                };
+
+                // Queue worker pattern
+                const queue = Array.from({ length: totalBatches }, (_, i) => i);
+                const worker = async () => {
+                    while (queue.length > 0) {
+                        const index = queue.shift();
+                        await processChunk(index);
+                    }
+                };
+
+                const workers = Array.from({ length: Math.min(CONCURRENT_REQUESTS, totalBatches) }, worker);
+                await Promise.all(workers);
             };
-
-            const uploadArrayBatch = async (table, arrayData) => {
-                for (let i = 0; i < arrayData.length; i += BATCH_SIZE) {
-                    const rawBatch = arrayData.slice(i, i + BATCH_SIZE);
-
-                    // OPTION B: Convert keys to lowercase for Supabase
-                    const batch = rawBatch.map(item => {
-                        const newItem = {};
-                        for (const key in item) {
-                            const lowerKey = key.toLowerCase();
-                            newItem[lowerKey] = formatValue(lowerKey, item[key]);
-                        }
-                        return newItem;
-                    });
-
-                    await performUpsert(table, batch);
-                     const progress = Math.round((i / arrayData.length) * 100);
-                    updateStatus(`Enviando ${table}: ${progress}%`, progress);
-                }
-            }
 
             try {
                 if (data.detailed && data.detailed.length > 0) {
                     await clearTable('data_detailed');
-                    await uploadColumnarBatch('data_detailed', data.detailed);
+                    await uploadBatchParallel('data_detailed', data.detailed, true);
                 }
                 if (data.history && data.history.length > 0) {
                     await clearTable('data_history');
-                    await uploadColumnarBatch('data_history', data.history);
+                    await uploadBatchParallel('data_history', data.history, true);
                 }
                 if (data.byOrder && data.byOrder.length > 0) {
                     await clearTable('data_orders');
-                    await uploadArrayBatch('data_orders', data.byOrder);
+                    await uploadBatchParallel('data_orders', data.byOrder, false);
                 }
                 if (data.clients && data.clients.length > 0) {
                     await clearTable('data_clients');
-                    await uploadColumnarBatch('data_clients', data.clients);
+                    await uploadBatchParallel('data_clients', data.clients, true);
                 }
                 if (data.stock && data.stock.length > 0) {
                     await clearTable('data_stock');
-                    await uploadArrayBatch('data_stock', data.stock);
+                    await uploadBatchParallel('data_stock', data.stock, false);
                 }
                 if (data.innovations && data.innovations.length > 0) {
                     await clearTable('data_innovations');
-                    await uploadArrayBatch('data_innovations', data.innovations);
+                    await uploadBatchParallel('data_innovations', data.innovations, false);
                 }
                 if (data.product_details && data.product_details.length > 0) {
                     await clearTable('data_product_details', 'code');
-                    await uploadArrayBatch('data_product_details', data.product_details);
+                    await uploadBatchParallel('data_product_details', data.product_details, false);
                 }
                 if (data.active_products && data.active_products.length > 0) {
                     await clearTable('data_active_products', 'code');
-                    await uploadArrayBatch('data_active_products', data.active_products);
+                    await uploadBatchParallel('data_active_products', data.active_products, false);
                 }
                 if (data.metadata && data.metadata.length > 0) {
-                    // Update last_update timestamp to current time (successful upload time)
+                    // Update last_update timestamp
                     const now = new Date();
                     const lastUpdateIdx = data.metadata.findIndex(m => m.key === 'last_update');
                     if (lastUpdateIdx !== -1) {
@@ -11852,9 +11876,9 @@ const supervisorGroups = new Map();
                         data.metadata.push({ key: 'last_update', value: now.toISOString() });
                     }
 
-                    // --- PRESERVE MANUAL KEYS (FIX) ---
+                    // --- PRESERVE MANUAL KEYS ---
                     try {
-                        const keysToPreserve = ['groq_api_key']; // Add other manual keys here if needed
+                        const keysToPreserve = ['groq_api_key'];
                         const { data: currentMetadata } = await window.supabaseClient
                             .from('data_metadata')
                             .select('*')
@@ -11862,23 +11886,19 @@ const supervisorGroups = new Map();
 
                         if (currentMetadata && currentMetadata.length > 0) {
                             currentMetadata.forEach(item => {
-                                // Check if it's already in the new dataset (unlikely but safe check)
                                 const existsInNew = data.metadata.some(newM => newM.key === item.key);
                                 if (!existsInNew) {
                                     data.metadata.push(item);
-                                    console.log(`[Upload] Preserving key: ${item.key}`);
                                 }
                             });
                         }
                     } catch (e) {
                         console.warn("[Upload] Failed to preserve manual keys:", e);
                     }
-                    // -----------------------------------
 
                     await clearTable('data_metadata', 'key');
-                    await uploadArrayBatch('data_metadata', data.metadata);
+                    await uploadBatchParallel('data_metadata', data.metadata, false);
 
-                    // Update UI immediately
                     const lastUpdateText = document.getElementById('last-update-text');
                     if (lastUpdateText) {
                         lastUpdateText.textContent = `Dados atualizados em: ${now.toLocaleString('pt-BR')}`;
@@ -11886,13 +11906,12 @@ const supervisorGroups = new Map();
                 }
 
                 updateStatus('Upload Concluído com Sucesso!', 100);
-                alert('Dados enviados com sucesso!');
+                alert('Dados enviados com sucesso! (Modo Turbo Ativado)');
                 setTimeout(() => statusContainer.classList.add('hidden'), 3000);
 
             } catch (error) {
                 console.error(error);
                 let msg = error.message;
-                // Detecta erros de permissão comuns
                 if (msg.includes('403') || msg.includes('row-level security') || msg.includes('violates row-level security policy') || msg.includes('Access denied')) {
                      msg = "Permissão negada. Verifique se seu usuário tem permissão de 'adm' no Supabase. " + msg;
                 }
@@ -11900,7 +11919,6 @@ const supervisorGroups = new Map();
                 alert('Erro durante o upload: ' + msg);
             }
         }
-
         function setupEventListeners() {
             // Uploader Logic
             const openAdminBtn = document.getElementById('open-admin-btn');
