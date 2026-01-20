@@ -3095,11 +3095,11 @@
             activeClients.forEach(client => {
                 const codCli = String(client['Código'] || client['codigo_cliente']);
                 const historyIds = optimizedData.indices.history.byClient.get(codCli);
-
+                
                 if (historyIds) {
                     // Bucket by Month
                     const monthlySales = new Map(); // Map<MonthKey, Set<Brand>>
-
+                    
                     historyIds.forEach(id => {
                         const sale = optimizedData.historyById.get(id);
                         // Using same date parsing as elsewhere
@@ -3110,7 +3110,7 @@
                         if (dateObj) {
                             const monthKey = `${dateObj.getUTCFullYear()}-${dateObj.getUTCMonth()}`;
                             if (!monthlySales.has(monthKey)) monthlySales.set(monthKey, new Set());
-
+                            
                             // Check brand/category match
                             const desc = normalize(sale.DESCRICAO || '');
                             targetCategories.forEach(cat => {
@@ -5436,19 +5436,36 @@
                 distributeDown(item.seller, targetKey, sellerTarget);
             });
 
-            // Trigger View Update
-            updateGoalsView();
+            // Auto-Redistribute Mix for PEPSICO_ALL context
+            if (contextKey === 'PEPSICO_ALL') {
+                const newSalty = Math.round(totalGoal * 0.50);
+                const newFoods = Math.round(totalGoal * 0.30);
+                
+                // Update UI Inputs
+                const inputSalty = document.getElementById('goal-global-mix-salty');
+                const inputFoods = document.getElementById('goal-global-mix-foods');
+                if(inputSalty) inputSalty.value = newSalty.toLocaleString('pt-BR');
+                if(inputFoods) inputFoods.value = newFoods.toLocaleString('pt-BR');
+
+                // Distribute Mix Targets
+                // Note: handleDistributeMix calls updateGoalsView at the end.
+                handleDistributeMix(newSalty, 'salty', contextKey, filteredClientMetrics);
+                handleDistributeMix(newFoods, 'foods', contextKey, filteredClientMetrics);
+            } else {
+                // Trigger View Update normally
+                updateGoalsView();
+            }
         }
 
         function handleDistributeMix(totalGoal, type, contextKey, filteredClientMetrics) {
             let targetKey = type === 'salty' ? 'mix_salty' : 'mix_foods';
-
+            
             // 1. Calculate Total History for THESE sellers in THIS context
             let totalHistoryMix = 0;
             const sellersHistory = [];
 
             const uniqueSellers = new Set(filteredClientMetrics.map(c => c.seller));
-
+            
             uniqueSellers.forEach(seller => {
                 const hist = getHistoricalMix(seller, type);
                 sellersHistory.push({ seller, hist });
@@ -5461,9 +5478,9 @@
                 if (totalHistoryMix > 0) {
                     share = item.hist / totalHistoryMix;
                 }
-
+                
                 const sellerTarget = Math.round(totalGoal * share);
-
+                
                 // Update Primary Target
                 if (!goalsSellerTargets.has(item.seller)) goalsSellerTargets.set(item.seller, {});
                 const t = goalsSellerTargets.get(item.seller);
@@ -5885,11 +5902,11 @@
                                     const newBtn = btn.cloneNode(true);
                                     btn.parentNode.replaceChild(newBtn, btn);
                                     newBtn.style.display = '';
-
+                                    
                                     newBtn.onclick = () => {
                                         const valStr = input.value;
                                         const val = parseFloat(valStr.replace(/\./g, '').replace(',', '.')) || 0;
-
+                                        
                                         if (isAggregatedTab) {
                                             const contextName = currentGoalsSupplier.replace('_ALL', '');
                                             showConfirmationModal(`Confirmar distribuição Proporcional de Mix ${type === 'salty' ? 'Salty' : 'Foods'} (${val}) para ${contextName}? (Base: Histórico)`, () => {
@@ -8672,7 +8689,16 @@ const supervisorGroups = new Map();
                     let [cod, name] = sortedSuppliers[i];
                     const isChecked = selectedArray.includes(cod);
                     
-                    htmlParts.push(`<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" data-filter-type="${filterType}" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${cod}" ${isChecked ? 'checked' : ''}><span class="ml-2 text-xs">${name}</span></label>`);
+                    let displayName = name;
+                    // For all pages except 'Meta Vs. Realizado', prefix Code to Name
+                    if (filterType !== 'metaRealizado') {
+                        // Ensure we don't double prefix if name already starts with code (rare but possible in data)
+                        if (!name.startsWith(cod)) {
+                            displayName = `${cod} ${name}`;
+                        }
+                    }
+
+                    htmlParts.push(`<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" data-filter-type="${filterType}" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${cod}" ${isChecked ? 'checked' : ''}><span class="ml-2 text-xs">${displayName}</span></label>`);
                 }
                 dropdown.innerHTML = htmlParts.join('');
             }
