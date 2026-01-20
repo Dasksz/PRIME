@@ -14562,8 +14562,8 @@ const supervisorGroups = new Map();
                         const diff = u.val - oldVal;
                         const impact = Math.abs(diff);
 
-                        // FILTER: Ignore 0 variation for BALCAO
-                        if (supervisorName === 'BALCAO' && diff === 0) continue;
+                        // FILTER: Ignore 0 variation globally (Irrelevant info)
+                        if (Math.abs(diff) < 0.01) continue;
 
                         // Define Unit explicitly
                         let unit = '';
@@ -14597,18 +14597,34 @@ const supervisorGroups = new Map();
                         // Sort by Impact (Magnitude of change)
                         sup.sellers.sort((a, b) => b.impact - a.impact);
                         
-                        // Take Top 10 Variations (Top 5 for BALCAO)
-                        const limit = sup.name === 'BALCAO' ? 5 : 10;
-                        const topVariations = sup.sellers.slice(0, limit).map(v => {
+                        // Deduplicate Variations (same seller + same metric)
+                        const seen = new Set();
+                        const uniqueVariations = [];
+                        
+                        for (const v of sup.sellers) {
                             const catName = resolveCategoryName(v.category);
                             let metricName = '';
                             if (v.unit === 'R$') metricName = `Faturamento (${catName})`;
                             else if (v.unit === 'Kg') metricName = `Volume (${catName})`;
                             else metricName = `Positivação (${catName})`;
+                            
+                            // Create unique signature
+                            const sig = `${v.seller}|${metricName}`;
+                            
+                            if (!seen.has(sig)) {
+                                seen.add(sig);
+                                // Attach resolved metric name for later use
+                                v._resolvedMetricName = metricName; 
+                                uniqueVariations.push(v);
+                            }
+                        }
 
+                        // Apply Limits: 5 for BALCAO, 10 for Others
+                        const limit = sup.name === 'BALCAO' ? 5 : 10;
+                        const topVariations = uniqueVariations.slice(0, limit).map(v => {
                             return {
                                 seller: v.seller,
-                                metric: metricName,
+                                metric: v._resolvedMetricName,
                                 details: `${v.unit} ${Math.round(v.old_value)} -> ${Math.round(v.new_value)} (Diff: ${v.diff > 0 ? '+' : ''}${Math.round(v.diff)})`
                             };
                         });
