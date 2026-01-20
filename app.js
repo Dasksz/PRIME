@@ -14661,7 +14661,7 @@ const supervisorGroups = new Map();
                         }
                         
                         Regras:
-                        1. "variations" deve conter EXATAMENTE os itens enviados no contexto (Top 5).
+                        1. "variations" deve conter EXATAMENTE os itens enviados no contexto.
                         2. Use o nome COMPLETO da métrica fornecido no input (ex: "Faturamento (Extrusados)"). NÃO simplifique para apenas "Faturamento".
                         3. Retorne APENAS o JSON.
                     `;
@@ -14695,6 +14695,35 @@ const supervisorGroups = new Map();
                         const jsonStart = aiText.indexOf('{');
                         const jsonEnd = aiText.lastIndexOf('}');
                         result = JSON.parse(aiText.substring(jsonStart, jsonEnd + 1));
+
+                        // Deduplicate Variations (Post-Processing)
+                        if (result.supervisors) {
+                            result.supervisors.forEach(sup => {
+                                if (sup.variations) {
+                                    const uniqueMap = new Map();
+                                    const cleanVariations = [];
+
+                                    sup.variations.forEach(v => {
+                                        // Create signature: Seller + Metric Name
+                                        // Normalize strings to avoid case/space issues
+                                        const sig = `${v.seller}_${v.metric}`.trim().toLowerCase();
+
+                                        if (!uniqueMap.has(sig)) {
+                                            uniqueMap.set(sig, true);
+                                            cleanVariations.push(v);
+                                        }
+                                    });
+
+                                    // Enforce Limits (Safety Net)
+                                    // If AI hallucinates or context structure varies, ensure BALCAO/Americanas is capped at 5
+                                    // Other supervisors can show up to 10
+                                    const isBalcao = sup.name && (sup.name.toUpperCase() === 'BALCAO' || sup.name.toUpperCase().includes('AMERICANAS'));
+                                    const limit = isBalcao ? 5 : 10;
+
+                                    sup.variations = cleanVariations.slice(0, limit);
+                                }
+                            });
+                        }
                     } catch (e) {
                         console.error("AI JSON Parse Error", e);
                         // Fallback simple structure
