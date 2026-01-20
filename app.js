@@ -5436,8 +5436,25 @@
                 distributeDown(item.seller, targetKey, sellerTarget);
             });
 
-            // Trigger View Update
-            updateGoalsView();
+            // Auto-Redistribute Mix for PEPSICO_ALL context
+            if (contextKey === 'PEPSICO_ALL') {
+                const newSalty = Math.round(totalGoal * 0.50);
+                const newFoods = Math.round(totalGoal * 0.30);
+
+                // Update UI Inputs
+                const inputSalty = document.getElementById('goal-global-mix-salty');
+                const inputFoods = document.getElementById('goal-global-mix-foods');
+                if(inputSalty) inputSalty.value = newSalty.toLocaleString('pt-BR');
+                if(inputFoods) inputFoods.value = newFoods.toLocaleString('pt-BR');
+
+                // Distribute Mix Targets
+                // Note: handleDistributeMix calls updateGoalsView at the end.
+                handleDistributeMix(newSalty, 'salty', contextKey, filteredClientMetrics);
+                handleDistributeMix(newFoods, 'foods', contextKey, filteredClientMetrics);
+            } else {
+                // Trigger View Update normally
+                updateGoalsView();
+            }
         }
 
         function handleDistributeMix(totalGoal, type, contextKey, filteredClientMetrics) {
@@ -8672,7 +8689,16 @@ const supervisorGroups = new Map();
                     let [cod, name] = sortedSuppliers[i];
                     const isChecked = selectedArray.includes(cod);
                     
-                    htmlParts.push(`<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" data-filter-type="${filterType}" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${cod}" ${isChecked ? 'checked' : ''}><span class="ml-2 text-xs">${name}</span></label>`);
+                    let displayName = name;
+                    // For all pages except 'Meta Vs. Realizado', prefix Code to Name
+                    if (filterType !== 'metaRealizado') {
+                        // Ensure we don't double prefix if name already starts with code (rare but possible in data)
+                        if (!name.startsWith(cod)) {
+                            displayName = `${cod} ${name}`;
+                        }
+                    }
+
+                    htmlParts.push(`<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" data-filter-type="${filterType}" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${cod}" ${isChecked ? 'checked' : ''}><span class="ml-2 text-xs">${displayName}</span></label>`);
                 }
                 dropdown.innerHTML = htmlParts.join('');
             }
