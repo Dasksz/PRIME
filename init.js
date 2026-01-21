@@ -1,3 +1,4 @@
+    console.log("App Version 5.2.2 loaded");
     const SUPABASE_URL = 'https://dhozwhfmrwiumwpcqabi.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRob3p3aGZtcndpdW13cGNxYWJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyNjMzNjAsImV4cCI6MjA3NzgzOTM2MH0.syWqcBCbfH5Ey5AB4NGrsF2-ZuBw4W3NZAPIAZb6Bq4';
 
@@ -719,7 +720,7 @@
                     card.innerHTML = `
                         <h2 style="margin-top: 0; font-size: 1.5rem; font-weight: 600;">Carregando...</h2>
                         <p style="color: #a0aec0;">Verificando credenciais.</p>
-                        <p style="color: #4a5568; font-size: 0.75rem; margin-top: 1rem;">v5.2.1</p>
+                        <p style="color: #4a5568; font-size: 0.75rem; margin-top: 1rem;">v5.2.2</p>
                     `;
                 }
                 telaLoading.classList.remove('hidden');
@@ -785,7 +786,7 @@
                             <button id="retry-connection-btn" class="gatekeeper-btn" style="background-color: #2d3748; border-color: #4a5568;">
                                 Tentar Novamente
                             </button>
-                            <p style="color: #4a5568; font-size: 0.75rem; margin-top: 1rem;">v5.2.1</p>
+                            <p style="color: #4a5568; font-size: 0.75rem; margin-top: 1rem;">v5.2.2</p>
                         `;
                         // Re-bind retry button
                         const retryBtn = document.getElementById('retry-connection-btn');
