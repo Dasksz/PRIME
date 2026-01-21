@@ -13860,6 +13860,7 @@ const supervisorGroups = new Map();
         // Initialize Summary Supervisor Filter
         if(document.getElementById('goals-summary-supervisor-filter-dropdown')) {
             selectedGoalsSummarySupervisors = updateSupervisorFilter(document.getElementById('goals-summary-supervisor-filter-dropdown'), document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, allSalesData);
+            updateSellerFilter(selectedGoalsSummarySupervisors, document.getElementById('goals-summary-seller-filter-dropdown'), document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData);
         }
         if(document.getElementById('goals-summary-seller-filter-dropdown')) {
             selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, document.getElementById('goals-summary-seller-filter-dropdown'), document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData);
