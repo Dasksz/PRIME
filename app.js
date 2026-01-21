@@ -13861,9 +13861,6 @@ const supervisorGroups = new Map();
         if(document.getElementById('goals-summary-supervisor-filter-dropdown')) {
             selectedGoalsSummarySupervisors = updateSupervisorFilter(document.getElementById('goals-summary-supervisor-filter-dropdown'), document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, allSalesData);
         }
-        if(document.getElementById('goals-summary-seller-filter-dropdown')) {
-            selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, document.getElementById('goals-summary-seller-filter-dropdown'), document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData);
-        }
 
         // Initialize Meta Vs Realizado Filters
         selectedMetaRealizadoSupervisors = updateSupervisorFilter(document.getElementById('meta-realizado-supervisor-filter-dropdown'), document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
@@ -15517,4 +15514,3 @@ const supervisorGroups = new Map();
                 const modal = document.getElementById('import-goals-modal');
                 if (modal) modal.classList.remove('hidden');
             });
-
