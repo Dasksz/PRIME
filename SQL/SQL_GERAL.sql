@@ -238,7 +238,8 @@ BEGIN
   IF table_name NOT IN (
     'data_detailed', 'data_history', 'data_clients', 'data_orders', 
     'data_product_details', 'data_active_products', 'data_stock', 
-    'data_innovations', 'data_metadata', 'goals_distribution'
+    'data_innovations', 'data_metadata', 'goals_distribution',
+    'dim_supervisores', 'dim_vendedores', 'dim_fornecedores', 'dim_produtos'
   ) THEN
     RAISE EXCEPTION 'Invalid table name.';
   END IF;
