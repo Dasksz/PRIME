@@ -466,14 +466,28 @@ GRANT INSERT, UPDATE, DELETE ON public.dim_fornecedores TO authenticated;
 GRANT INSERT, UPDATE, DELETE ON public.dim_produtos TO authenticated;
 
 -- Policies for Dimensions
+DROP POLICY IF EXISTS "Public Read Dimensions" ON public.dim_supervisores;
 CREATE POLICY "Public Read Dimensions" ON public.dim_supervisores FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Public Read Dimensions V" ON public.dim_vendedores;
 CREATE POLICY "Public Read Dimensions V" ON public.dim_vendedores FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Public Read Dimensions F" ON public.dim_fornecedores;
 CREATE POLICY "Public Read Dimensions F" ON public.dim_fornecedores FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Public Read Dimensions P" ON public.dim_produtos;
 CREATE POLICY "Public Read Dimensions P" ON public.dim_produtos FOR SELECT TO authenticated USING (true);
 
+DROP POLICY IF EXISTS "Admin Write Dimensions" ON public.dim_supervisores;
 CREATE POLICY "Admin Write Dimensions" ON public.dim_supervisores FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Admin Write Dimensions V" ON public.dim_vendedores;
 CREATE POLICY "Admin Write Dimensions V" ON public.dim_vendedores FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Admin Write Dimensions F" ON public.dim_fornecedores;
 CREATE POLICY "Admin Write Dimensions F" ON public.dim_fornecedores FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Admin Write Dimensions P" ON public.dim_produtos;
 CREATE POLICY "Admin Write Dimensions P" ON public.dim_produtos FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 -- ==============================================================================
