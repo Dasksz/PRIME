@@ -51,6 +51,11 @@
             }
         };
 
+        const dimSupervisors = new Map();
+        const dimVendors = new Map();
+        const dimProviders = new Map();
+        const dimProducts = new Map();
+
         function parseDate(dateString) {
             if (!dateString) return null;
             if (dateString instanceof Date) {
@@ -600,6 +605,11 @@
              });
         };
         self.onmessage = async (event) => {
+            dimSupervisors.clear();
+            dimVendors.clear();
+            dimProviders.clear();
+            dimProducts.clear();
+
             const { salesFile, clientsFile, productsFile, historyFile, innovationsFile } = event.data;
 
             try {
