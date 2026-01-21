@@ -13171,6 +13171,7 @@ const supervisorGroups = new Map();
                         } else {
                             selectedGoalsSummarySellers = selectedGoalsSummarySellers.filter(s => s !== value);
                         }
+                        selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, goalsSummarySellerFilterDropdown, document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData, true);
                         updateGoalsSummaryView();
                     }
                 });
