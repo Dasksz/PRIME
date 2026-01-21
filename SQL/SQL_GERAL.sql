@@ -418,8 +418,11 @@ create policy "Acesso Total Unificado" on public.goals_distribution for all to a
   public.is_admin ()
   or public.is_approved ()
 )
-with
-  check (
+  with check (
+    public.is_admin ()
+    or public.is_approved ()
+  );
+
 -- ==============================================================================
 -- 1.13. DIMENSION TABLES (OPTIMIZATION)
 -- ==============================================================================
@@ -471,9 +474,6 @@ CREATE POLICY "Admin Write Dimensions" ON public.dim_supervisores FOR ALL TO aut
 CREATE POLICY "Admin Write Dimensions V" ON public.dim_vendedores FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 CREATE POLICY "Admin Write Dimensions F" ON public.dim_fornecedores FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 CREATE POLICY "Admin Write Dimensions P" ON public.dim_produtos FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
-    public.is_admin ()
-    or public.is_approved ()
-  );
 
 -- ==============================================================================
 -- 5. SECURITY FIXES (DYNAMIC SEARCH PATH)
@@ -523,7 +523,7 @@ BEGIN
   -- This function is called after bulk uploads to materialize/index complex views if needed.
   -- For now, it serves as a placeholder for any post-processing.
   -- The optimization logic is now handled by the JOINs in the SELECT queries.
-
+  
   -- Example: Ensure statistics are updated
   ANALYZE public.data_detailed;
   ANALYZE public.data_history;
@@ -558,7 +558,7 @@ RETURNS TABLE (
 ) as $$
 BEGIN
     RETURN QUERY
-    SELECT
+    SELECT 
         d.ped,
         d.codcli,
         d.dtped,
@@ -606,7 +606,7 @@ RETURNS TABLE (
 ) as $$
 BEGIN
     RETURN QUERY
-    SELECT
+    SELECT 
         h.ped,
         h.codcli,
         h.dtped,
@@ -635,18 +635,14 @@ set search_path = public;
 -- ==============================================================================
 -- 1.14. ALTER FACT TABLES TO ALLOW NULLS (NORMALIZATION SUPPORT)
 -- ==============================================================================
--- Since we are stripping text columns from uploads to save bandwidth,
+-- Since we are stripping text columns from uploads to save bandwidth, 
 -- these columns must be nullable in the database.
 ALTER TABLE public.data_detailed ALTER COLUMN nome DROP NOT NULL;
 ALTER TABLE public.data_detailed ALTER COLUMN superv DROP NOT NULL;
 ALTER TABLE public.data_detailed ALTER COLUMN descricao DROP NOT NULL;
 ALTER TABLE public.data_detailed ALTER COLUMN fornecedor DROP NOT NULL;
-ALTER TABLE public.data_detailed ALTER COLUMN cliente_nome DROP NOT NULL;
-ALTER TABLE public.data_detailed ALTER COLUMN bairro DROP NOT NULL;
 
 ALTER TABLE public.data_history ALTER COLUMN nome DROP NOT NULL;
 ALTER TABLE public.data_history ALTER COLUMN superv DROP NOT NULL;
 ALTER TABLE public.data_history ALTER COLUMN descricao DROP NOT NULL;
 ALTER TABLE public.data_history ALTER COLUMN fornecedor DROP NOT NULL;
-ALTER TABLE public.data_history ALTER COLUMN cliente_nome DROP NOT NULL;
-ALTER TABLE public.data_history ALTER COLUMN bairro DROP NOT NULL;
