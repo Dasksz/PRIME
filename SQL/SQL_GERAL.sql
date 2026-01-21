@@ -474,9 +474,6 @@ CREATE POLICY "Admin Write Dimensions" ON public.dim_supervisores FOR ALL TO aut
 CREATE POLICY "Admin Write Dimensions V" ON public.dim_vendedores FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 CREATE POLICY "Admin Write Dimensions F" ON public.dim_fornecedores FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 CREATE POLICY "Admin Write Dimensions P" ON public.dim_produtos FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
-    public.is_admin ()
-    or public.is_approved ()
-  );
 
 -- ==============================================================================
 -- 5. SECURITY FIXES (DYNAMIC SEARCH PATH)
@@ -644,12 +641,8 @@ ALTER TABLE public.data_detailed ALTER COLUMN nome DROP NOT NULL;
 ALTER TABLE public.data_detailed ALTER COLUMN superv DROP NOT NULL;
 ALTER TABLE public.data_detailed ALTER COLUMN descricao DROP NOT NULL;
 ALTER TABLE public.data_detailed ALTER COLUMN fornecedor DROP NOT NULL;
-ALTER TABLE public.data_detailed ALTER COLUMN cliente_nome DROP NOT NULL;
-ALTER TABLE public.data_detailed ALTER COLUMN bairro DROP NOT NULL;
 
 ALTER TABLE public.data_history ALTER COLUMN nome DROP NOT NULL;
 ALTER TABLE public.data_history ALTER COLUMN superv DROP NOT NULL;
 ALTER TABLE public.data_history ALTER COLUMN descricao DROP NOT NULL;
 ALTER TABLE public.data_history ALTER COLUMN fornecedor DROP NOT NULL;
-ALTER TABLE public.data_history ALTER COLUMN cliente_nome DROP NOT NULL;
-ALTER TABLE public.data_history ALTER COLUMN bairro DROP NOT NULL;
