@@ -418,8 +418,11 @@ create policy "Acesso Total Unificado" on public.goals_distribution for all to a
   public.is_admin ()
   or public.is_approved ()
 )
-with
-  check (
+  with check (
+    public.is_admin ()
+    or public.is_approved ()
+  );
+
 -- ==============================================================================
 -- 1.13. DIMENSION TABLES (OPTIMIZATION)
 -- ==============================================================================
