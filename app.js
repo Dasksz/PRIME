@@ -11831,19 +11831,19 @@ const supervisorGroups = new Map();
                 };
 
                 if (data.dim_supervisores && data.dim_supervisores.length > 0) {
-                    await clearTable("dim_supervisores", "CODSUPERVISOR");
+                    await clearTable("dim_supervisores", "codsupervisor");
                     await uploadBatchParallel("dim_supervisores", data.dim_supervisores, false);
                 }
                 if (data.dim_vendedores && data.dim_vendedores.length > 0) {
-                    await clearTable("dim_vendedores", "CODUSUR");
+                    await clearTable("dim_vendedores", "codusur");
                     await uploadBatchParallel("dim_vendedores", data.dim_vendedores, false);
                 }
                 if (data.dim_fornecedores && data.dim_fornecedores.length > 0) {
-                    await clearTable("dim_fornecedores", "CODFOR");
+                    await clearTable("dim_fornecedores", "codfor");
                     await uploadBatchParallel("dim_fornecedores", data.dim_fornecedores, false);
                 }
                 if (data.dim_produtos && data.dim_produtos.length > 0) {
-                    await clearTable("dim_produtos", "PRODUTO");
+                    await clearTable("dim_produtos", "produto");
                     await uploadBatchParallel("dim_produtos", data.dim_produtos, false);
                 }
                 const workers = Array.from({ length: Math.min(CONCURRENT_REQUESTS, totalBatches) }, worker);
