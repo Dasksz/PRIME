@@ -569,6 +569,36 @@
             return { columns, values, length: data.length };
         }
 
+        const collectDimensions = (salesArray) => {
+            salesArray.forEach(sale => {
+                if (sale.CODSUPERVISOR && sale.SUPERV) dimSupervisors.set(sale.CODSUPERVISOR, sale.SUPERV);
+                if (sale.CODUSUR && sale.NOME) dimVendors.set(sale.CODUSUR, sale.NOME);
+                if (sale.CODFOR && sale.FORNECEDOR) dimProviders.set(sale.CODFOR, sale.FORNECEDOR);
+                if (sale.PRODUTO && !dimProducts.has(sale.PRODUTO)) {
+                    dimProducts.set(sale.PRODUTO, { descricao: sale.DESCRICAO, codfor: sale.CODFOR });
+                }
+            });
+        };
+
+        const finalizeSalesData = (salesArray, isHistory = false) => {
+             return salesArray.map(sale => {
+                let newSale = { ...sale };
+                delete newSale.CLIENTE_NOME;
+                delete newSale.BAIRRO;
+                delete newSale.DESCRICAO;
+                delete newSale.OBSERVACAOFOR;
+                delete newSale.SUPERV;
+                delete newSale.NOME;
+                delete newSale.FORNECEDOR;
+                if (isHistory) {
+                    delete newSale.PEDIDO;
+                    delete newSale.ESTOQUEUNIT;
+                    delete newSale.POSICAO;
+                    delete newSale.QTVENDA_EMBALAGEM_MASTER;
+                }
+                return newSale;
+             });
+        };
         self.onmessage = async (event) => {
             const { salesFile, clientsFile, productsFile, historyFile, innovationsFile } = event.data;
 
@@ -838,6 +868,12 @@
                 finalSalesData = applyTiagoRule(finalSalesData);
                 finalHistoryData = applyTiagoRule(finalHistoryData);
 
+                collectDimensions(finalSalesData);
+                collectDimensions(finalHistoryData);
+
+                finalSalesData = finalizeSalesData(finalSalesData, false);
+                finalHistoryData = finalizeSalesData(finalHistoryData, true);
+
 
                 self.postMessage({ type: 'progress', status: 'Atualizando datas de compra...', percentage: 80 });
                 const latestSaleDateByClient = new Map();
@@ -869,12 +905,13 @@
                         const row = data[i];
                         if (!row.PEDIDO) continue;
                         if (!orders.has(row.PEDIDO)) {
-                            // Restore Client Info for Order Header (needed for Modal)
                             const client = clientMap.get(row.CODCLI);
                             orders.set(row.PEDIDO, {
                                 ...row,
-                                TIPOVENDA: String(row.TIPOVENDA || 'N/A'),
-                                CLIENTE_NOME: client ? (client.nomeCliente || client.fantasia) : 'N/A',
+                                TIPOVENDA: String(row.TIPOVENDA || "N/A"),
+                                CLIENTE_NOME: client ? (client.nomeCliente || client.fantasia) : "N/A",
+                                NOME: dimVendors.get(row.CODUSUR) || "N/A",
+                                SUPERV: dimSupervisors.get(row.CODSUPERVISOR) || "N/A",
                                 CIDADE: client ? client.cidade : 'N/A',
                                 QTVENDA: 0,
                                 VLVENDA: 0,
@@ -991,7 +1028,11 @@
                         productDetails: Object.fromEntries(productDetailsMap),
                         passedWorkingDaysCurrentMonth: passedWorkingDaysCurrentMonth,
                         lastSaleDate: String(maxTs),
-                        isColumnar: true
+                        isColumnar: true,
+                        dim_supervisores: Array.from(dimSupervisors.entries()).map(([k,v]) => ({ CODSUPERVISOR: k, SUPERV: v })),
+                        dim_vendedores: Array.from(dimVendors.entries()).map(([k,v]) => ({ CODUSUR: k, NOME: v })),
+                        dim_fornecedores: Array.from(dimProviders.entries()).map(([k,v]) => ({ CODFOR: k, FORNECEDOR: v })),
+                        dim_produtos: Array.from(dimProducts.entries()).map(([k,v]) => ({ PRODUTO: k, DESCRICAO: v.descricao, CODFOR: v.codfor })),
                     }
                 });
 

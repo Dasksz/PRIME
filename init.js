@@ -485,7 +485,11 @@
                 const colsStock = 'id,product_code,filial,stock_qty';
                 const colsOrders = 'id,pedido,codcli,cliente_nome,cidade,nome,superv,fornecedores_str,dtped,dtsaida,posicao,vlvenda,totpesoliq,filial,tipovenda,fornecedores_list,codfors_list';
 
-                const [detailedUpper, historyUpper, clientsUpper, productsFetched, activeProdsFetched, stockFetched, innovationsFetched, metadataFetched, ordersUpper, clientCoordinatesFetched] = await Promise.all([
+                const [dimSup, dimVend, dimProv, dimProd, detailedUpper, historyUpper, clientsUpper, productsFetched, activeProdsFetched, stockFetched, innovationsFetched, metadataFetched, ordersUpper, clientCoordinatesFetched] = await Promise.all([
+                    fetchAll("dim_supervisores", null, null, "object", "codsupervisor"),
+                    fetchAll("dim_vendedores", null, null, "object", "codusur"),
+                    fetchAll("dim_fornecedores", null, null, "object", "codfor"),
+                    fetchAll("dim_produtos", null, null, "object", "produto"),
                     fetchAll('data_detailed', colsDetailed, 'sales', 'columnar', 'id'),
                     fetchAll('data_history', colsDetailed, 'history', 'columnar', 'id'),
                     fetchAll('data_clients', colsClients, 'clients', 'columnar', 'id'),
@@ -506,6 +510,52 @@
                 stock = stockFetched;
                 innovations = innovationsFetched;
                 metadata = metadataFetched;
+                // Helper to hydrate columnar data using dimensions
+                const hydrateColumnar = (columnarData, dSup, dVend, dProv, dProd) => {
+                    if (!columnarData || !columnarData.values) return;
+                    const count = columnarData.length;
+
+                    // Create Maps for fast lookup
+                    const mapSup = new Map(dSup.map(d => [d.codsupervisor, d.superv]));
+                    const mapVend = new Map(dVend.map(d => [d.codusur, d.nome]));
+                    const mapProv = new Map(dProv.map(d => [d.codfor, d.fornecedor]));
+                    const mapProd = new Map(dProd.map(d => [d.produto, { desc: d.descricao, codfor: d.codfor }]));
+
+                    // Initialize or reuse arrays
+                    if (!columnarData.values["SUPERV"]) columnarData.values["SUPERV"] = new Array(count);
+                    if (!columnarData.values["NOME"]) columnarData.values["NOME"] = new Array(count);
+                    if (!columnarData.values["FORNECEDOR"]) columnarData.values["FORNECEDOR"] = new Array(count);
+                    if (!columnarData.values["DESCRICAO"]) columnarData.values["DESCRICAO"] = new Array(count);
+
+                    const colCodSup = columnarData.values["CODSUPERVISOR"];
+                    const colCodUsur = columnarData.values["CODUSUR"];
+                    const colCodFor = columnarData.values["CODFOR"];
+                    const colProd = columnarData.values["PRODUTO"];
+
+                    for (let i = 0; i < count; i++) {
+                        const cSup = colCodSup ? colCodSup[i] : null;
+                        const cUsur = colCodUsur ? colCodUsur[i] : null;
+                        const cFor = colCodFor ? colCodFor[i] : null;
+                        const cProd = colProd ? colProd[i] : null;
+
+                        // Hydrate
+                        columnarData.values["SUPERV"][i] = mapSup.get(cSup) || "N/A";
+                        columnarData.values["NOME"][i] = mapVend.get(cUsur) || "N/A";
+                        columnarData.values["FORNECEDOR"][i] = mapProv.get(cFor) || "N/A";
+
+                        const pInfo = mapProd.get(cProd);
+                        columnarData.values["DESCRICAO"][i] = pInfo ? pInfo.desc : "N/A";
+
+                        // Fallback for Fornecedor via Product Dimension if missing
+                        if ((!columnarData.values["FORNECEDOR"][i] || columnarData.values["FORNECEDOR"][i] === "N/A") && pInfo && pInfo.codfor) {
+                            columnarData.values["FORNECEDOR"][i] = mapProv.get(pInfo.codfor) || "N/A";
+                        }
+                    }
+                };
+
+                // Apply Hydration
+                if (detailedUpper) hydrateColumnar(detailedUpper, dimSup, dimVend, dimProv, dimProd);
+                if (historyUpper) hydrateColumnar(historyUpper, dimSup, dimVend, dimProv, dimProd);
                 orders = ordersUpper;
                 clientCoordinates = clientCoordinatesFetched;
 

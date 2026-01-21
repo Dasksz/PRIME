@@ -11829,6 +11829,22 @@ const supervisorGroups = new Map();
                     }
                 };
 
+                if (data.dim_supervisores && data.dim_supervisores.length > 0) {
+                    await clearTable("dim_supervisores", "CODSUPERVISOR");
+                    await uploadBatchParallel("dim_supervisores", data.dim_supervisores, false);
+                }
+                if (data.dim_vendedores && data.dim_vendedores.length > 0) {
+                    await clearTable("dim_vendedores", "CODUSUR");
+                    await uploadBatchParallel("dim_vendedores", data.dim_vendedores, false);
+                }
+                if (data.dim_fornecedores && data.dim_fornecedores.length > 0) {
+                    await clearTable("dim_fornecedores", "CODFOR");
+                    await uploadBatchParallel("dim_fornecedores", data.dim_fornecedores, false);
+                }
+                if (data.dim_produtos && data.dim_produtos.length > 0) {
+                    await clearTable("dim_produtos", "PRODUTO");
+                    await uploadBatchParallel("dim_produtos", data.dim_produtos, false);
+                }
                 const workers = Array.from({ length: Math.min(CONCURRENT_REQUESTS, totalBatches) }, worker);
                 await Promise.all(workers);
             };
