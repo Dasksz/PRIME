@@ -1,3 +1,4 @@
+(function() {
         const embeddedData = window.embeddedData;
         let metaRealizadoDataForExport = { sellers: [], clients: [], weeks: [] };
 
@@ -11979,7 +11980,7 @@ const supervisorGroups = new Map();
                     }
 
                     // Initialize Worker
-                    const worker = new Worker('worker.js');
+                    const worker = new Worker('worker.js?v=' + Date.now());
 
                     document.getElementById('status-container').classList.remove('hidden');
                     document.getElementById('status-text').textContent = "Processando arquivos...";
@@ -15519,3 +15520,5 @@ const supervisorGroups = new Map();
                 if (modal) modal.classList.remove('hidden');
             });
 
+
+})();
