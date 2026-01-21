@@ -1039,10 +1039,10 @@
                         passedWorkingDaysCurrentMonth: passedWorkingDaysCurrentMonth,
                         lastSaleDate: String(maxTs),
                         isColumnar: true,
-                        dim_supervisores: Array.from(dimSupervisors.entries()).map(([k,v]) => ({ CODSUPERVISOR: k, SUPERV: v })),
-                        dim_vendedores: Array.from(dimVendors.entries()).map(([k,v]) => ({ CODUSUR: k, NOME: v })),
-                        dim_fornecedores: Array.from(dimProviders.entries()).map(([k,v]) => ({ CODFOR: k, FORNECEDOR: v })),
-                        dim_produtos: Array.from(dimProducts.entries()).map(([k,v]) => ({ PRODUTO: k, DESCRICAO: v.descricao, CODFOR: v.codfor })),
+                        dim_supervisores: Array.from(dimSupervisors.entries()).map(([k,v]) => ({ codsupervisor: k, superv: v })),
+                        dim_vendedores: Array.from(dimVendors.entries()).map(([k,v]) => ({ codusur: k, nome: v })),
+                        dim_fornecedores: Array.from(dimProviders.entries()).map(([k,v]) => ({ codfor: k, fornecedor: v })),
+                        dim_produtos: Array.from(dimProducts.entries()).map(([k,v]) => ({ produto: k, descricao: v.descricao, codfor: v.codfor })),
                     }
                 });
 
