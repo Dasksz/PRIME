@@ -414,15 +414,21 @@ drop policy IF exists "Acesso Total Unificado" on public.goals_distribution;
 drop policy IF exists "Enable read access for all users" on public.goals_distribution;
 
 -- Unified Policy (Read/Write for Admins AND Approved users - per requirements)
-create policy "Acesso Total Unificado" on public.goals_distribution for all to authenticated using (
+-- UPDATE: Segregated into Read (Approved/Admin) and Write (Admin Only) for security.
+
+-- 1. Read Access (SELECT)
+create policy "Goals Read Access" on public.goals_distribution
+for select
+to authenticated using (
   public.is_admin ()
   or public.is_approved ()
-)
-with
-  check (
-    public.is_admin ()
-    or public.is_approved ()
-  );
+);
+
+-- 2. Write Access (INSERT, UPDATE, DELETE) - Admin Only
+create policy "Goals Write Access" on public.goals_distribution
+for all
+to authenticated using (public.is_admin ())
+with check (public.is_admin ());
 
 -- ==============================================================================
 -- 5. SECURITY FIXES (DYNAMIC SEARCH PATH)
