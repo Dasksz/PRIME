@@ -11655,10 +11655,19 @@ const supervisorGroups = new Map();
 
 
         async function enviarDadosParaSupabase(data) {
+            const statusText = document.getElementById('status-text');
+            const progressBar = document.getElementById('progress-bar');
+            const statusContainer = document.getElementById('status-container');
+
+            if (statusContainer) statusContainer.classList.remove('hidden');
+            if (statusText) statusText.textContent = "Verificando autenticação...";
+
             const supabaseUrl = document.getElementById('supabase-url').value;
 
             // Tentamos obter a sessão atual do usuário
             const { data: { session } } = await supabaseClient.auth.getSession();
+
+            if (statusText) statusText.textContent = "Sessão obtida. Iniciando...";
 
             // Definição da chave de autenticação (Token)
             // Agora usa estritamente o token de sessão do usuário logado
@@ -11669,14 +11678,10 @@ const supervisorGroups = new Map();
 
             if (!supabaseUrl || !authToken) {
                 alert("Você precisa estar logado como Administrador para enviar dados.");
+                if (statusText) statusText.textContent = "Erro: Não autenticado.";
                 return;
             }
 
-            const statusText = document.getElementById('status-text');
-            const progressBar = document.getElementById('progress-bar');
-            const statusContainer = document.getElementById('status-container');
-
-            statusContainer.classList.remove('hidden');
             const updateStatus = (msg, percent) => {
                 statusText.textContent = msg;
                 progressBar.style.width = `${percent}%`;
@@ -11993,8 +11998,12 @@ const supervisorGroups = new Map();
                             document.getElementById('status-text').textContent = status;
                             document.getElementById('progress-bar').style.width = percentage + '%';
                         } else if (type === 'result') {
-                            enviarDadosParaSupabase(data);
-                            worker.terminate();
+                            document.getElementById('status-text').textContent = "Iniciando transmissão...";
+                            // Pequeno delay para garantir que a UI atualize antes de travar no processamento pesado
+                            setTimeout(() => {
+                                enviarDadosParaSupabase(data);
+                                worker.terminate();
+                            }, 50);
                         } else if (type === 'error') {
                             alert('Erro no processamento: ' + message);
                             worker.terminate();
