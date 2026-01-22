@@ -11682,7 +11682,7 @@ const supervisorGroups = new Map();
             };
 
             // --- OPTIMIZATION: Increased Batch Size & Concurrency ---
-            const BATCH_SIZE = 4000;
+            const BATCH_SIZE = 5000;
             const CONCURRENT_REQUESTS = 10;
 
             const retryOperation = async (operation, retries = 3, delay = 1000) => {
