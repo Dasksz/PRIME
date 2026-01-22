@@ -3566,7 +3566,26 @@
                 
                 if (supervisorsSet.size > 0 && !supervisorsSet.has(s.SUPERV)) continue;
                 if (sellersSet.size > 0 && !sellersSet.has(s.NOME)) continue;
-                if (suppliersSet.size > 0 && !suppliersSet.has(s.CODFOR)) continue;
+                
+                // Enhanced Supplier Logic to handle Virtual Foods Categories
+                if (suppliersSet.size > 0) {
+                    let supplierMatch = false;
+                    const codFor = String(s.CODFOR);
+                    
+                    // 1. Direct Match (Regular Suppliers)
+                    if (suppliersSet.has(codFor)) {
+                        supplierMatch = true;
+                    } 
+                    // 2. Virtual Category Logic for 1119 (Foods)
+                    else if (codFor === '1119') {
+                        const desc = normalize(s.DESCRICAO || '');
+                        if (suppliersSet.has('1119_TODDYNHO') && desc.includes('TODDYNHO')) supplierMatch = true;
+                        else if (suppliersSet.has('1119_TODDY') && desc.includes('TODDY') && !desc.includes('TODDYNHO')) supplierMatch = true;
+                        else if (suppliersSet.has('1119_QUAKER_KEROCOCO') && (desc.includes('QUAKER') || desc.includes('KEROCOCO'))) supplierMatch = true;
+                    }
+
+                    if (!supplierMatch) continue;
+                }
 
                 const sellerName = s.NOME;
                 const valFat = Number(s.VLVENDA) || 0;
