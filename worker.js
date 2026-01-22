@@ -559,7 +559,6 @@
                 self.postMessage({ type: 'progress', status: 'Mapeando produtos e criando lista de ativos...', percentage: 30 });
                 const productMasterMap = new Map();
                 const activeProductCodesFromCadastro = new Set();
-                const productDetailsMap = new Map();
 
                 productsDataRaw.forEach(prod => {
                     const productCode = String(prod['Código'] || '').trim();
@@ -568,17 +567,8 @@
                     let qtdeMaster = parseInt(prod['Qtde embalagem master(Compra)'], 10);
                     if (isNaN(qtdeMaster) || qtdeMaster <= 0) qtdeMaster = 1;
                     productMasterMap.set(productCode, qtdeMaster);
-                    if (!productDetailsMap.has(productCode)) {
-                            const dtCad = parseDate(prod['Dt.Cadastro']);
-                            productDetailsMap.set(productCode, {
-                                code: productCode,
-                                descricao: String(prod['Descrição'] || `Produto ${productCode}`),
-                                fornecedor: String(prod['Nome do fornecedor'] || 'N/A'),
-                                codfor: String(prod['Fornecedor'] || 'N/A'),
-                                dtCadastro: dtCad ? dtCad.getTime() : null,
-                                pasta: null
-                            });
-                        }
+                    // The productDetailsMap is already populated from all sources,
+                    // so we don't need to do it again here.
                 });
 
 
