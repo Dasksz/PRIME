@@ -8675,7 +8675,7 @@ const supervisorGroups = new Map();
                     suppliers.delete('1119');
                     suppliers.set('1119_TODDYNHO', 'TODDYNHO');
                     suppliers.set('1119_TODDY', 'TODDY');
-                    suppliers.set('1119_QUAKER', 'QUAKER/KEROCOCO');
+                    suppliers.set('1119_QUAKER_KEROCOCO', 'QUAKER/KEROCOCO');
                 }
             }
 
@@ -13155,6 +13155,7 @@ const supervisorGroups = new Map();
                         } else {
                             selectedGoalsSummarySellers = selectedGoalsSummarySellers.filter(s => s !== value);
                         }
+                        selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, goalsSummarySellerFilterDropdown, document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData, true);
                         updateGoalsSummaryView();
                     }
                 });
