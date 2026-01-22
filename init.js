@@ -553,8 +553,8 @@
                     ...order,
                     nome: vendedorMap.get(order.codusur) || 'N/A',
                     superv: supervisorMap.get(order.codsupervisor) || 'N/A',
-                    fornecedores_str: Array.from(new Set(order.codfors_list.map(cf => fornecedorMap.has(cf) ? fornecedorMap.get(cf).observacaofor : null).filter(Boolean))).join(', '),
-                    fornecedores_list: Array.from(new Set(order.codfors_list.map(cf => fornecedorMap.has(cf) ? fornecedorMap.get(cf).observacaofor : null).filter(Boolean))),
+                    fornecedores_str: Array.from(new Set((order.codfors_list || []).map(cf => fornecedorMap.has(cf) ? fornecedorMap.get(cf).observacaofor : null).filter(Boolean))).join(', '),
+                    fornecedores_list: Array.from(new Set((order.codfors_list || []).map(cf => fornecedorMap.has(cf) ? fornecedorMap.get(cf).observacaofor : null).filter(Boolean))),
                 }));
 
                 detailed = detailedUpper;
