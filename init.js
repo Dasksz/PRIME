@@ -480,24 +480,16 @@
                     clientCoordinates = cachedData.clientCoordinates || [];
                 }
             } else {
-                const colsDetailed = 'id,pedido,codcli,codsupervisor,produto,codfor,codusur,qtvenda,vlvenda,vlbonific,totpesoliq,dtped,dtsaida,posicao,estoqueunit,tipovenda,filial,qtvenda_embalagem_master';
+                const colsDetailed = 'id,pedido,codcli,nome,superv,codsupervisor,produto,descricao,fornecedor,observacaofor,codfor,codusur,qtvenda,vlvenda,vlbonific,totpesoliq,dtped,dtsaida,posicao,estoqueunit,tipovenda,filial,qtvenda_embalagem_master';
                 const colsClients = 'id,codigo_cliente,rca1,rca2,rcas,cidade,nomecliente,bairro,razaosocial,fantasia,cnpj_cpf,endereco,numero,cep,telefone,email,ramo,ultimacompra,datacadastro,bloqueio,inscricaoestadual';
                 const colsStock = 'id,product_code,filial,stock_qty';
-                const colsOrders = 'id,pedido,codcli,cliente_nome,cidade,codusur,codsupervisor,dtped,dtsaida,posicao,vlvenda,totpesoliq,filial,tipovenda,codfors_list';
+                const colsOrders = 'id,pedido,codcli,cliente_nome,cidade,nome,superv,fornecedores_str,dtped,dtsaida,posicao,vlvenda,totpesoliq,filial,tipovenda,fornecedores_list,codfors_list';
 
-                const [
-                    detailedFact, historyFact, clientsUpper, productsFetched,
-                    vendedores, supervisores, fornecedores, activeProdsFetched,
-                    stockFetched, innovationsFetched, metadataFetched,
-                    ordersFact, clientCoordinatesFetched
-                ] = await Promise.all([
+                const [detailedUpper, historyUpper, clientsUpper, productsFetched, activeProdsFetched, stockFetched, innovationsFetched, metadataFetched, ordersUpper, clientCoordinatesFetched] = await Promise.all([
                     fetchAll('data_detailed', colsDetailed, 'sales', 'columnar', 'id'),
                     fetchAll('data_history', colsDetailed, 'history', 'columnar', 'id'),
                     fetchAll('data_clients', colsClients, 'clients', 'columnar', 'id'),
-                    fetchAll('dim_produtos', null, null, 'object', 'code'),
-                    fetchAll('dim_vendedores', null, null, 'object', 'codusur'),
-                    fetchAll('dim_supervisores', null, null, 'object', 'codsupervisor'),
-                    fetchAll('dim_fornecedores', null, null, 'object', 'codfor'),
+                    fetchAll('data_product_details', null, null, 'object', 'code'),
                     fetchAll('data_active_products', null, null, 'object', 'code'),
                     fetchAll('data_stock', colsStock, 'stock', 'columnar', 'id'),
                     fetchAll('data_innovations', null, null, 'object', 'id'),
@@ -505,57 +497,6 @@
                     fetchAll('data_orders', colsOrders, 'orders', 'object', 'id'),
                     fetchAll('data_client_coordinates', null, null, 'object', 'client_code')
                 ]);
-
-                // Criar mapas de busca para as dimensões
-                const vendedorMap = new Map(vendedores.map(v => [v.codusur, v.nome]));
-                const supervisorMap = new Map(supervisores.map(s => [s.codsupervisor, s.superv]));
-                const fornecedorMap = new Map(fornecedores.map(f => [f.codfor, { fornecedor: f.fornecedor, observacaofor: f.observacaofor }]));
-                const produtoMap = new Map(productsFetched.map(p => [p.code, p.descricao]));
-
-                // Função para enriquecer os dados de vendas (fatos) com as dimensões
-                const enrichSalesData = (salesColumnar) => {
-                    if (!salesColumnar || salesColumnar.length === 0) return salesColumnar;
-
-                    const enrichedValues = { ...salesColumnar.values };
-                    const length = salesColumnar.length;
-
-                    enrichedValues['NOME'] = new Array(length);
-                    enrichedValues['SUPERV'] = new Array(length);
-                    enrichedValues['FORNECEDOR'] = new Array(length);
-                    enrichedValues['OBSERVACAOFOR'] = new Array(length);
-                    enrichedValues['DESCRICAO'] = new Array(length);
-
-                    for (let i = 0; i < length; i++) {
-                        const codusur = salesColumnar.values['CODUSUR'][i];
-                        const codsupervisor = salesColumnar.values['CODSUPERVISOR'][i];
-                        const codfor = salesColumnar.values['CODFOR'][i];
-                        const produtoCode = salesColumnar.values['PRODUTO'][i];
-
-                        enrichedValues['NOME'][i] = vendedorMap.get(codusur) || 'N/A';
-                        enrichedValues['SUPERV'][i] = supervisorMap.get(codsupervisor) || 'N/A';
-                        const fornecedorInfo = fornecedorMap.get(codfor);
-                        enrichedValues['FORNECEDOR'][i] = fornecedorInfo ? fornecedorInfo.fornecedor : 'N/A';
-                        enrichedValues['OBSERVACAOFOR'][i] = fornecedorInfo ? fornecedorInfo.observacaofor : 'N/A';
-                        enrichedValues['DESCRICAO'][i] = produtoMap.get(produtoCode) || 'N/A';
-                    }
-
-                    return {
-                        ...salesColumnar,
-                        columns: [...salesColumnar.columns, 'NOME', 'SUPERV', 'FORNECEDOR', 'OBSERVACAOFOR', 'DESCRICAO'],
-                        values: enrichedValues,
-                    };
-                };
-                
-                const detailedUpper = enrichSalesData(detailedFact);
-                const historyUpper = enrichSalesData(historyFact);
-                
-                const ordersUpper = ordersFact.map(order => ({
-                    ...order,
-                    nome: vendedorMap.get(order.codusur) || 'N/A',
-                    superv: supervisorMap.get(order.codsupervisor) || 'N/A',
-                    fornecedores_str: Array.from(new Set((order.codfors_list || []).map(cf => fornecedorMap.has(cf) ? fornecedorMap.get(cf).observacaofor : null).filter(Boolean))).join(', '),
-                    fornecedores_list: Array.from(new Set((order.codfors_list || []).map(cf => fornecedorMap.has(cf) ? fornecedorMap.get(cf).observacaofor : null).filter(Boolean))),
-                }));
 
                 detailed = detailedUpper;
                 history = historyUpper;
