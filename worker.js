@@ -376,7 +376,17 @@
                 if (filialValue === '5') filialValue = '05';
                 if (filialValue === '8') filialValue = '08';
 
+                if (String(clientInfo.razaoSocial || '').toUpperCase().includes("AMERICANAS S.A.")) {
+                    codUsur = '9998';
+                    codSupervisor = '9998';
+                }
+                 if (String(clientInfo.razaoSocial || '').toUpperCase().includes("INATIVOS")) {
+                    codUsur = '9999';
+                    codSupervisor = '9999';
+                }
+
                 return {
+                    CLIENTE_NOME: clientInfo.nomeCliente || 'N/A',
                     PEDIDO: pedido,
                     PRODUTO: productCode,
                     CODFOR: codFor,
