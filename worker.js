@@ -344,111 +344,15 @@
                 let codCliStr = codCliOriginal;
                 const clientInfo = clientMap.get(codCliStr) || {};
 
-                // --- INÍCIO DA MODIFICAÇÃO: LÓGICA DE ATRIBUIÇÃO DE VENDEDOR ---
-
-                // 1. Pega os valores padrão da linha de venda
-                let vendorName = String(rawRow['NOME'] || '').trim();
-                let supervisorName = String(rawRow['SUPERV'] || '').trim();
-                let codUsur = String(rawRow['CODUSUR'] || '').trim(); // Este é o 'codUsurVenda'
-                let codSupervisor = String(rawRow['CODSUPERVISOR'] || '').trim();
                 const pedido = String(rawRow['PEDIDO'] || '');
-                let isAmericanas = false;
-
-                // 2. Regra de Prioridade 1: AMERICANAS S.A (Como estava antes)
-                const nomeClienteParaLogica = (clientInfo.razaoSocial || clientInfo.fantasia || clientInfo.nomeCliente || '').toUpperCase();
-                if (nomeClienteParaLogica.includes('AMERICANAS S.A')) {
-                    vendorName = 'AMERICANAS';
-                    codUsur = '1001';
-                    supervisorName = 'BALCAO';
-                    codSupervisor = '';
-                    isAmericanas = true;
-
-                    if (clientInfo.rcas) {
-                         clientInfo.rca1 = '1001';
-                         if (!clientInfo.rcas.includes('1001')) {
-                            clientInfo.rcas.unshift('1001');
-                         }
-                    }
-                }
-
-                // 3. Regra de Prioridade 2: Se NÃO for Americanas, usa a nova lógica
-                // EXCEÇÃO: Vendas do Cliente 9569 para RCA 53 (Balcão) com Tipo 1 ou 9 devem permanecer no RCA 53
-                const codUsurVendaCheck = String(rawRow['CODUSUR'] || '').trim();
-                const tipoVendaCheck = String(rawRow['TIPOVENDA'] || 'N/A').trim();
-
-                // Lógica para preservar RCA original em vendas do mês atual
-                const isCurrentSales = stockLinesCollector !== null;
-                const clientExists = clientMap.has(codCliStr);
-                const rca1Cliente = (clientInfo.rca1 || '').trim();
-                const isClientMissingOrRca53 = (!clientExists || rca1Cliente === '53' || rca1Cliente === '053');
-                
-                // Se for venda atual E (cliente não existe OU cliente é RCA 53), preserva o RCA original da venda
-                const shouldPreserveOriginalRca = isCurrentSales && isClientMissingOrRca53;
-
-                // Normalize CodCli for 9569 check as well
-                if (!isAmericanas && !(codCliStr === '9569' && (codUsurVendaCheck === '53' || codUsurVendaCheck === '053') && (tipoVendaCheck === '1' || tipoVendaCheck === '9'))) {
-                    const codUsurVenda = codUsur; // Guarda o CODUSUR original da linha de venda
-
-                    // Prioriza o RCA 1 do cadastro de clientes. Se não tiver (ou se deve preservar original), usa o RCA da linha de venda.
-                    let codUsurParaBusca;
-                    
-                    if (shouldPreserveOriginalRca) {
-                        codUsurParaBusca = codUsurVenda;
-                    } else {
-                        codUsurParaBusca = rca1Cliente || codUsurVenda;
-                    }
-
-                    const rcaInfo = newRcaSupervisorMap.get(codUsurParaBusca);
-
-                    if (rcaInfo) {
-                        // Encontrou informações no mapa mestre (usando RCA1 do cliente ou RCA da venda)
-                        vendorName = rcaInfo.NOME;
-                        supervisorName = rcaInfo.SUPERV;
-                        codSupervisor = rcaInfo.CODSUPERVISOR;
-                        codUsur = codUsurParaBusca; // Define o CODUSUR final
-                    }
-                    else if (rca1Cliente && rca1Cliente !== codUsurVenda && !shouldPreserveOriginalRca) {
-                        // Usou o RCA1 do cliente, não achou. Tenta um fallback com o RCA da linha de venda.
-                        // Mas apenas se não estamos forçando a preservação do original (embora se shouldPreserveOriginalRca fosse true, rca1Cliente seria ignorado acima)
-                        const fallbackInfo = newRcaSupervisorMap.get(codUsurVenda);
-                        if (fallbackInfo) {
-                            vendorName = fallbackInfo.NOME;
-                            supervisorName = fallbackInfo.SUPERV;
-                            codSupervisor = fallbackInfo.CODSUPERVISOR;
-                            codUsur = codUsurVenda; // Define o CODUSUR final como o da venda (fallback)
-                        } else {
-                            // Não achou em lugar nenhum, mantém os dados da linha (já definidos no passo 1)
-                            codUsur = codUsurVenda;
-                        }
-                    }
-                    else {
-                        // Se rca1Cliente estava vazio, codUsurParaBusca == codUsurVenda.
-                        // Se não achou rcaInfo, significa que o codUsurVenda não está no mapa.
-                        // Mantém os dados da linha (já definidos no passo 1) e o codUsur da venda.
-                        codUsur = codUsurVenda;
-                    }
-                }
-                // --- FIM DA MODIFICAÇÃO ---
-
-
-                // --- INICIO DA MODIFICAÇÃO: REGRA INATIVOS ---
-                // Se o cliente não tiver RCA1 cadastrado na planilha de clientes, rotular como INATIVOS
-                // (Isso substitui o vendedor original da venda, pois a carteira está 'sem dono')
-                // EXCEÇÃO: Se deve preservar original (venda atual de cliente sem cadastro/RCA 53), não aplica INATIVOS.
-                if (!shouldPreserveOriginalRca && !isAmericanas && (!clientInfo || !clientInfo.rca1 || clientInfo.rca1.trim() === '')) {
-                    vendorName = 'INATIVOS';
-                    supervisorName = 'INATIVOS'; // Alterado de BALCAO para INATIVOS
-                    codSupervisor = '99'; // Alterado de 8 para 99 para separar do Balcão
-                }
-                // --- FIM DA MODIFICAÇÃO ---
-
-                const supervisorUpper = (supervisorName || '').trim().toUpperCase();
-                if (supervisorUpper === 'BALCAO' || supervisorUpper === 'BALCÃO') supervisorName = 'BALCAO';
+                const codUsur = String(rawRow['CODUSUR'] || '').trim();
+                const codSupervisor = String(rawRow['CODSUPERVISOR'] || '').trim();
+                const productCode = String(rawRow['PRODUTO'] || '').trim();
+                const codFor = String(rawRow['CODFOR'] || '').trim();
 
                 let dtPed = rawRow['DTPED'];
                 const dtSaida = rawRow['DTSAIDA'];
 
-                // --- OPTIMIZATION: Parse Dates to Timestamp here in Worker ---
                 let parsedDtPed = parseDate(dtPed);
                 const parsedDtSaida = parseDate(dtSaida);
 
@@ -456,59 +360,40 @@
                     parsedDtPed = parsedDtSaida;
                 }
 
-                // Convert to Timestamp (Number) for lighter JSON and faster parsing in main thread
                 const tsDtPed = parsedDtPed ? parsedDtPed.getTime() : null;
                 const tsDtSaida = parsedDtSaida ? parsedDtSaida.getTime() : null;
 
-                const productCode = String(rawRow['PRODUTO'] || '').trim();
                 let qtdeMaster = productMasterMap.get(productCode);
                 if (!qtdeMaster || qtdeMaster <= 0) qtdeMaster = 1;
                 const qtVenda = parseInt(String(rawRow['QTVENDA'] || '0').trim(), 10) || 0;
-
-                // --- INÍCIO DA MODIFICAÇÃO: REGRA TIPOVENDA ---
-                // Captura o tipo de venda primeiro
                 const tipoVenda = String(rawRow['TIPOVENDA'] || 'N/A').trim();
-
-                // Apenas TIPOVENDA '1' e '9' contam para faturamento e peso
                 const isFaturamento = (tipoVenda === '1' || tipoVenda === '9');
-
-                // Captura os valores originais
                 const vlVendaOriginal = parseBrazilianNumber(rawRow['VLVENDA']);
                 const vlBonificOriginal = parseBrazilianNumber(rawRow['VLBONIFIC']);
                 const pesoOriginal = parseBrazilianNumber(rawRow['TOTPESOLIQ']);
-                // --- FIM DA MODIFICAÇÃO ---
 
                 let filialValue = String(rawRow['FILIAL'] || '').trim();
                 if (filialValue === '5') filialValue = '05';
                 if (filialValue === '8') filialValue = '08';
 
                 return {
-                    PEDIDO: pedido, NOME: vendorName, SUPERV: supervisorName, PRODUTO: productCode,
-                    DESCRICAO: String(rawRow['DESCRICAO'] || ''), FORNECEDOR: String(rawRow['FORNECEDOR'] || ''),
-                    OBSERVACAOFOR: observacaoFor, CODFOR: String(rawRow['CODFOR'] || '').trim(),
-                    CODUSUR: codUsur, CODCLI: codCliStr,
-                    // OPTIMIZATION: Removed CLIENTE_NOME, CIDADE, BAIRRO to save file size (Lookup in runtime)
+                    PEDIDO: pedido,
+                    PRODUTO: productCode,
+                    CODFOR: codFor,
+                    CODUSUR: codUsur,
+                    CODCLI: codCliStr,
                     QTVENDA: qtVenda,
-                    CODSUPERVISOR: codSupervisor, // Added to ensure supervisor code is available for indexing
-
-                    // --- INÍCIO DA MODIFICAÇÃO: APLICAÇÃO DA REGRA ---
-                    // Se não for faturamento (1 ou 9), VLVENDA é 0
+                    CODSUPERVISOR: codSupervisor,
                     VLVENDA: isFaturamento ? vlVendaOriginal : 0,
-
-                    // Se não for faturamento, soma o que veio em VLVENDA (indevidamente) ao VLBONIFIC
                     VLBONIFIC: isFaturamento ? vlBonificOriginal : (vlVendaOriginal + vlBonificOriginal),
-
-                    // Peso (tonelada) - [Instrução do usuário: Deve somar sempre, mesmo não sendo faturamento]
                     TOTPESOLIQ: pesoOriginal,
-                    DTPED: tsDtPed, DTSAIDA: tsDtSaida, // Optimized: Numbers
+                    DTPED: tsDtPed,
+                    DTSAIDA: tsDtSaida,
                     POSICAO: String(rawRow['POSICAO'] || ''),
                     ESTOQUEUNIT: parseBrazilianNumber(rawRow['ESTOQUEUNIT']),
                     QTVENDA_EMBALAGEM_MASTER: isNaN(qtdeMaster) || qtdeMaster === 0 ? 0 : qtVenda / qtdeMaster,
-                    // Garante que o tipo de venda correto é passado
                     TIPOVENDA: tipoVenda,
-                    // Adiciona a filial normalizada para permitir filtragem
                     FILIAL: filialValue
-                    // --- FIM DA MODIFICAÇÃO ---
                 };
             }).filter(item => item !== null);
         };
@@ -582,44 +467,26 @@
                     readFile(innovationsFile, 'innovations')
                 ]);
 
+                self.postMessage({ type: 'progress', status: 'Extraindo dados de dimensão...', percentage: 20 });
+                const allSalesForDimensions = [...salesDataRaw, ...historyDataRaw];
+                const vendedorMap = new Map();
+                const supervisorMap = new Map();
+                const fornecedorMap = new Map();
 
+                allSalesForDimensions.forEach(row => {
+                    const codusur = String(row['CODUSUR'] || '').trim();
+                    if (codusur) vendedorMap.set(codusur, { codusur, nome: String(row['NOME'] || '') });
 
-                self.postMessage({ type: 'progress', status: 'Criando mapa mestre de supervisores...', percentage: 20 });
-                const newRcaSupervisorMap = new Map();
-                const lastSaleDateMap = new Map();
+                    const codsupervisor = String(row['CODSUPERVISOR'] || '').trim();
+                    if (codsupervisor) supervisorMap.set(codsupervisor, { codsupervisor, superv: String(row['SUPERV'] || '') });
 
-                // --- INÍCIO DA MODIFICAÇÃO: Usar vendas atuais E históricas para o mapa mestre ---
-                const allSalesForMap = [...salesDataRaw, ...historyDataRaw];
-
-                allSalesForMap.forEach(row => {
-                // --- FIM DA MODIFICAÇÃO ---
-                    try {
-                        const codUsur = String(row['CODUSUR'] || '').trim();
-                        // Filter out headers that might have slipped through
-                        const supervCheck = String(row['SUPERV'] || '').trim().toUpperCase();
-                        if (codUsur.toUpperCase() === 'CODUSUR' || codUsur.toUpperCase() === 'COD USUR' || supervCheck === 'SUPERV' || supervCheck === 'SUPERVISOR' || isNaN(parseInt(codUsur))) return;
-
-                        if (codUsur === '1001') return;
-
-                        const dtPed = row['DTPED'];
-                        if (!codUsur || !dtPed) return;
-
-                        const saleDate = parseDate(dtPed);
-                        if (!saleDate || isNaN(saleDate.getTime())) return;
-
-                        const lastDate = lastSaleDateMap.get(codUsur);
-                        if (!lastDate || saleDate >= lastDate) {
-                            lastSaleDateMap.set(codUsur, saleDate);
-                            newRcaSupervisorMap.set(codUsur, {
-                                NOME: String(row['NOME'] || ''),
-                                SUPERV: String(row['SUPERV'] || ''),
-                                CODSUPERVISOR: String(row['CODSUPERVISOR'] || '').trim()
-                            });
-                        }
-                    } catch (e) {
-                        console.error('Erro ao processar linha para mapa mestre:', e, row);
-                    }
+                    const codfor = String(row['CODFOR'] || '').trim();
+                    if (codfor) fornecedorMap.set(codfor, { codfor, fornecedor: String(row['FORNECEDOR'] || ''), observacaofor: String(row['OBSERVACAOFOR'] || '') });
                 });
+
+                const vendedores = Array.from(vendedorMap.values());
+                const supervisores = Array.from(supervisorMap.values());
+                const fornecedores = Array.from(fornecedorMap.values());
 
                 self.postMessage({ type: 'progress', status: 'Extraindo estoque do arquivo de vendas...', percentage: 25 });
                 const stockMap05 = new Map();
@@ -749,9 +616,9 @@
                 const stockLinesCollector = [];
 
                 // Pass collector and maxDate to processSalesData
-                const processedSalesData = processSalesData(salesDataRaw, clientMap, productMasterMap, newRcaSupervisorMap, stockLinesCollector, maxSalesDate).filter(item => item !== null);
+                const processedSalesData = processSalesData(salesDataRaw, clientMap, productMasterMap, null, stockLinesCollector, maxSalesDate).filter(item => item !== null);
                 // History data usually doesn't have stock lines, but passing null/null is safe or consistent
-                const processedHistoryData = processSalesData(historyDataRaw, clientMap, productMasterMap, newRcaSupervisorMap, null, null).filter(item => item !== null);
+                const processedHistoryData = processSalesData(historyDataRaw, clientMap, productMasterMap, null, null, null).filter(item => item !== null);
 
                 // Update productMasterMap / productDetailsMap with info from stockLines (if missing)
                 // This ensures "Lost Products" table has Description/Supplier even if product is not in the Products File
@@ -899,18 +766,15 @@
                             CODCLI: order.CODCLI,
                             CLIENTE_NOME: order.CLIENTE_NOME,
                             CIDADE: order.CIDADE,
-                            NOME: order.NOME,
-                            SUPERV: order.SUPERV,
-                            FORNECEDORES_STR: Array.from(order.FORNECEDORES).join(', '),
+                            CODUSUR: order.CODUSUR,
+                            CODSUPERVISOR: order.CODSUPERVISOR,
                             DTPED: order.DTPED,
                             DTSAIDA: order.DTSAIDA,
                             POSICAO: order.POSICAO,
                             VLVENDA: order.VLVENDA,
                             TOTPESOLIQ: order.TOTPESOLIQ,
                             FILIAL: order.FILIAL,
-                            // Added for Filtering
                             TIPOVENDA: String(order.TIPOVENDA || 'N/A'),
-                            FORNECEDORES_LIST: Array.from(order.FORNECEDORES),
                             CODFORS_LIST: Array.from(order.CODFORS)
                         };
                     });
@@ -972,19 +836,20 @@
                         history: columnarHistory,
                         byOrder: aggregatedByOrder,
                         clients: columnarClients,
-                        // Upload Support Arrays
+
+                        // Tabelas de Dimensão para upload
+                        dim_vendedores: vendedores,
+                        dim_supervisores: supervisores,
+                        dim_fornecedores: fornecedores,
+                        dim_produtos: finalProductDetailsData,
+
+                        // Outras tabelas de suporte
                         stock: finalStockData,
                         innovations: finalInnovationsData,
-                        product_details: finalProductDetailsData,
                         active_products: finalActiveProductsData,
                         metadata: finalMetadata,
 
-                        // Legacy Maps for Frontend (if needed, or logic script handles it)
-                        // The logic script (report-logic-script) seems to expect stockMap05/08 in 'embeddedData'.
-                        // But wait, the uploader Worker sends data to 'enviarDadosParaSupabase', NOT to the dashboard logic directly.
-                        // The dashboard logic reads from Supabase via 'carregarDadosDoSupabase'.
-                        // So the Worker ONLY needs to satisfy the Uploader requirements.
-                        // However, keeping the Maps might be useful if we ever wanted to hydrate locally.
+                        // Manter estes para compatibilidade com a hidratação local se necessário
                         stockMap05: Object.fromEntries(stockMap05),
                         stockMap08: Object.fromEntries(stockMap08),
                         activeProductCodes: Array.from(activeProductCodesFromCadastro),
