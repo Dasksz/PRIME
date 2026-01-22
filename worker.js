@@ -478,21 +478,58 @@
                 ]);
 
                 self.postMessage({ type: 'progress', status: 'Extraindo dados de dimensão...', percentage: 20 });
-                const allSalesForDimensions = [...salesDataRaw, ...historyDataRaw];
                 const vendedorMap = new Map();
                 const supervisorMap = new Map();
                 const fornecedorMap = new Map();
+                const productDetailsMap = new Map();
 
-                allSalesForDimensions.forEach(row => {
+                // Unificar todas as fontes de dados para extração de dimensões
+                const allDataSources = [...salesDataRaw, ...historyDataRaw, ...productsDataRaw];
+
+                allDataSources.forEach(row => {
                     const codusur = String(row['CODUSUR'] || '').trim();
-                    if (codusur) vendedorMap.set(codusur, { codusur, nome: String(row['NOME'] || '') });
+                    const nome = String(row['NOME'] || '').trim();
+                    if (codusur && nome && !vendedorMap.has(codusur)) {
+                        vendedorMap.set(codusur, { codusur, nome });
+                    }
 
                     const codsupervisor = String(row['CODSUPERVISOR'] || '').trim();
-                    if (codsupervisor) supervisorMap.set(codsupervisor, { codsupervisor, superv: String(row['SUPERV'] || '') });
+                    const superv = String(row['SUPERV'] || '').trim();
+                    if (codsupervisor && superv && !supervisorMap.has(codsupervisor)) {
+                        supervisorMap.set(codsupervisor, { codsupervisor, superv });
+                    }
 
-                    const codfor = String(row['CODFOR'] || '').trim();
-                    if (codfor) fornecedorMap.set(codfor, { codfor, fornecedor: String(row['FORNECEDOR'] || ''), observacaofor: String(row['OBSERVACAOFOR'] || '') });
+                    const codfor = String(row['Fornecedor'] || row['CODFOR'] || '').trim();
+                    const fornecedor = String(row['Nome do fornecedor'] || row['FORNECEDOR'] || '').trim();
+                    let observacaofor = String(row['OBSERVACAOFOR'] || '').trim();
+                    if (!observacaofor) {
+                        observacaofor = fornecedor.toUpperCase().includes('PEPSICO') ? 'PEPSICO' : 'MULTIMARCAS';
+                    }
+                    if (codfor && fornecedor && !fornecedorMap.has(codfor)) {
+                        fornecedorMap.set(codfor, { codfor, fornecedor, observacaofor });
+                    }
+
+                    const productCode = String(row['Código'] || row['PRODUTO'] || '').trim();
+                    const descricao = String(row['Descrição'] || row['DESCRICAO'] || '').trim();
+                    if (productCode && descricao && !productDetailsMap.has(productCode)) {
+                        const dtCad = parseDate(row['Dt.Cadastro'] || row['DTPED']);
+                        productDetailsMap.set(productCode, {
+                            code: productCode,
+                            descricao: descricao,
+                            fornecedor: fornecedor,
+                            codfor: codfor,
+                            dtCadastro: dtCad ? dtCad.getTime() : null,
+                            pasta: observacaofor
+                        });
+                    }
                 });
+
+                // Adicionar entradas especiais para 'INATIVOS' e 'AMERICANAS'
+                if (!vendedorMap.has('9999')) vendedorMap.set('9999', { codusur: '9999', nome: 'INATIVOS' });
+                if (!supervisorMap.has('9999')) supervisorMap.set('9999', { codsupervisor: '9999', superv: 'INATIVOS' });
+                if (!vendedorMap.has('9998')) vendedorMap.set('9998', { codusur: '9998', nome: 'AMERICANAS' });
+                if (!supervisorMap.has('9998')) supervisorMap.set('9998', { codsupervisor: '9998', superv: 'AMERICANAS' });
+
 
                 const vendedores = Array.from(vendedorMap.values());
                 const supervisores = Array.from(supervisorMap.values());
