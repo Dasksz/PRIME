@@ -11906,7 +11906,7 @@ const supervisorGroups = new Map();
                 }
 
                 updateStatus('Upload Concluído com Sucesso!', 100);
-                alert('Dados enviados com sucesso! (Modo Turbo Ativado)');
+                alert('Dados enviados com sucesso!');
                 setTimeout(() => statusContainer.classList.add('hidden'), 3000);
 
             } catch (error) {
