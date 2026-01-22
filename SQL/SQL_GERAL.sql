@@ -417,6 +417,7 @@ drop policy IF exists "Enable read access for all users" on public.goals_distrib
 -- UPDATE: Segregated into Read (Approved/Admin) and Write (Admin Only) for security.
 
 -- 1. Read Access (SELECT)
+DROP POLICY IF EXISTS "Goals Read Access" ON public.goals_distribution;
 create policy "Goals Read Access" on public.goals_distribution
 for select
 to authenticated using (
@@ -425,6 +426,7 @@ to authenticated using (
 );
 
 -- 2. Write Access (INSERT, UPDATE, DELETE) - Admin Only
+DROP POLICY IF EXISTS "Goals Write Access" ON public.goals_distribution;
 create policy "Goals Write Access" on public.goals_distribution
 for all
 to authenticated using (public.is_admin ())
