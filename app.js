@@ -1,4 +1,3 @@
-(function() {
         const embeddedData = window.embeddedData;
         let metaRealizadoDataForExport = { sellers: [], clients: [], weeks: [] };
 
@@ -11830,22 +11829,6 @@ const supervisorGroups = new Map();
                     }
                 };
 
-                if (data.dim_supervisores && data.dim_supervisores.length > 0) {
-                    await clearTable("dim_supervisores", "codsupervisor");
-                    await uploadBatchParallel("dim_supervisores", data.dim_supervisores, false);
-                }
-                if (data.dim_vendedores && data.dim_vendedores.length > 0) {
-                    await clearTable("dim_vendedores", "codusur");
-                    await uploadBatchParallel("dim_vendedores", data.dim_vendedores, false);
-                }
-                if (data.dim_fornecedores && data.dim_fornecedores.length > 0) {
-                    await clearTable("dim_fornecedores", "codfor");
-                    await uploadBatchParallel("dim_fornecedores", data.dim_fornecedores, false);
-                }
-                if (data.dim_produtos && data.dim_produtos.length > 0) {
-                    await clearTable("dim_produtos", "produto");
-                    await uploadBatchParallel("dim_produtos", data.dim_produtos, false);
-                }
                 const workers = Array.from({ length: Math.min(CONCURRENT_REQUESTS, totalBatches) }, worker);
                 await Promise.all(workers);
             };
@@ -11980,7 +11963,7 @@ const supervisorGroups = new Map();
                     }
 
                     // Initialize Worker
-                    const worker = new Worker('worker.js?v=' + Date.now());
+                    const worker = new Worker('worker.js');
 
                     document.getElementById('status-container').classList.remove('hidden');
                     document.getElementById('status-text').textContent = "Processando arquivos...";
@@ -13172,7 +13155,6 @@ const supervisorGroups = new Map();
                         } else {
                             selectedGoalsSummarySellers = selectedGoalsSummarySellers.filter(s => s !== value);
                         }
-                        selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, goalsSummarySellerFilterDropdown, document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData, true);
                         updateGoalsSummaryView();
                     }
                 });
@@ -13862,9 +13844,6 @@ const supervisorGroups = new Map();
         // Initialize Summary Supervisor Filter
         if(document.getElementById('goals-summary-supervisor-filter-dropdown')) {
             selectedGoalsSummarySupervisors = updateSupervisorFilter(document.getElementById('goals-summary-supervisor-filter-dropdown'), document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, allSalesData);
-        }
-        if(document.getElementById('goals-summary-seller-filter-dropdown')) {
-            selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, document.getElementById('goals-summary-seller-filter-dropdown'), document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData);
         }
 
         // Initialize Meta Vs Realizado Filters
@@ -15519,6 +15498,3 @@ const supervisorGroups = new Map();
                 const modal = document.getElementById('import-goals-modal');
                 if (modal) modal.classList.remove('hidden');
             });
-
-
-})();
