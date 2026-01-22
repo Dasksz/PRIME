@@ -193,8 +193,9 @@ create table if not exists public.data_client_coordinates (
 -- Migração e Limpeza de Esquema Antigo
 do $$
 BEGIN
-    -- Renomeia a tabela de detalhes de produtos para o novo padrão de dimensão
-    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'data_product_details' AND table_schema = 'public') THEN
+    -- Renomeia a tabela de detalhes de produtos para o novo padrão de dimensão, se 'dim_produtos' ainda não existir.
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'data_product_details' AND table_schema = 'public') AND
+       NOT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'dim_produtos' AND table_schema = 'public') THEN
         ALTER TABLE public.data_product_details RENAME TO dim_produtos;
     END IF;
 
