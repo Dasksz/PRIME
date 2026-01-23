@@ -1,3 +1,4 @@
+(function() {
         const embeddedData = window.embeddedData;
         let metaRealizadoDataForExport = { sellers: [], clients: [], weeks: [] };
 
@@ -15519,3 +15520,5 @@ const supervisorGroups = new Map();
                 const modal = document.getElementById('import-goals-modal');
                 if (modal) modal.classList.remove('hidden');
             });
+
+})();
