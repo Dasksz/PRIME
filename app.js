@@ -8474,6 +8474,58 @@ const supervisorGroups = new Map();
             return Math.ceil(day / 7);
         }
 
+        function getWorkingMonthWeeks(year, month) {
+            const weeks = [];
+            const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0));
+            lastDayOfMonth.setUTCHours(23, 59, 59, 999);
+
+            // Start looking from Day 1
+            let currentDate = new Date(Date.UTC(year, month, 1));
+
+            // Advance to first working day (Mon-Fri)
+            // 0=Sun, 6=Sat
+            while (currentDate.getUTCDay() === 0 || currentDate.getUTCDay() === 6) {
+                currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+                // Safety: if month has no working days (impossible usually)
+                if (currentDate > lastDayOfMonth) return [];
+            }
+
+            // Now currentDate is the start of Week 1
+            let weekCount = 1;
+
+            while (currentDate <= lastDayOfMonth) {
+                // Determine End of this week bucket
+                // Standard: Ends on Sunday.
+
+                let weekEnd = new Date(currentDate);
+                const day = weekEnd.getUTCDay(); // 1=Mon ... 5=Fri
+
+                // Distance to next Sunday (0)
+                // If Mon(1), need +6. If Sun(0), need +0.
+                // (7 - 1) % 7 = 6. (7 - 0) % 7 = 0.
+                const distToSunday = (7 - day) % 7;
+
+                weekEnd.setUTCDate(weekEnd.getUTCDate() + distToSunday);
+                weekEnd.setUTCHours(23, 59, 59, 999);
+
+                // Cap at end of month
+                if (weekEnd > lastDayOfMonth) weekEnd = new Date(lastDayOfMonth);
+
+                weeks.push({
+                    start: new Date(currentDate),
+                    end: weekEnd,
+                    id: weekCount++
+                });
+
+                // Next week starts day after weekEnd
+                currentDate = new Date(weekEnd);
+                currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+                currentDate.setUTCHours(0, 0, 0, 0);
+            }
+
+            return weeks;
+        }
+
         function calculateHistoricalBests() {
             const salesBySupervisorByDay = {};
             const mostRecentSaleDate = allSalesData.map(s => parseDate(s.DTPED)).filter(Boolean).reduce((a, b) => a > b ? a : b, new Date(0));
@@ -8530,10 +8582,47 @@ const supervisorGroups = new Map();
             const monthSales = dataForGeneralCharts.filter(d => { if (!d.DTPED) return false; const saleDate = parseDate(d.DTPED); return saleDate && saleDate.getUTCMonth() === currentMonth && saleDate.getUTCFullYear() === currentYear; });
             const totalMes = monthSales.reduce((sum, item) => sum + item.VLVENDA, 0);
             totalMesSemanalEl.textContent = totalMes.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            const salesByWeekAndDay = {}; const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-            monthSales.forEach(sale => { const saleDate = parseDate(sale.DTPED); if (!saleDate) return; const weekNum = getWeekOfMonth(saleDate); const dayName = dayNames[saleDate.getUTCDay()]; if (!salesByWeekAndDay[weekNum]) salesByWeekAndDay[weekNum] = {}; if (!salesByWeekAndDay[weekNum][dayName]) salesByWeekAndDay[weekNum][dayName] = 0; salesByWeekAndDay[weekNum][dayName] += sale.VLVENDA; });
+
+            // --- NEW WORKING WEEK BUCKET LOGIC ---
+            const currentMonthWeeks = getWorkingMonthWeeks(currentYear, currentMonth);
+            const salesByWeekAndDay = {};
+            const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+            // Initialize buckets for all determined working weeks
+            currentMonthWeeks.forEach((w, i) => {
+                salesByWeekAndDay[w.id] = {};
+                // Only care about Mon-Fri for the chart bars
+                // Mon=1, Fri=5
+                for(let d=1; d<=5; d++) {
+                    salesByWeekAndDay[w.id][dayNames[d]] = 0;
+                }
+            });
+
+            monthSales.forEach(sale => {
+                const saleDate = parseDate(sale.DTPED);
+                if (!saleDate) return;
+
+                // Determine bucket
+                const wIdx = currentMonthWeeks.findIndex(w => saleDate >= w.start && saleDate <= w.end);
+
+                if (wIdx !== -1) {
+                    const weekId = currentMonthWeeks[wIdx].id;
+                    const dayName = dayNames[saleDate.getUTCDay()];
+
+                    // Only accumulate to daily breakdown if it's a Weekday (Mon-Fri)
+                    // If Saturday/Sunday, it contributes to TOTAL (already calculated) but doesn't appear in chart bars.
+                    // However, user said "somado no total". totalMes already has it.
+                    // Chart is "Faturamento Mensal por Dia da Semana". Bars are Mon-Fri.
+                    // Sat/Sun sales are effectively hidden from the bars.
+
+                    if (salesByWeekAndDay[weekId] && salesByWeekAndDay[weekId][dayName] !== undefined) {
+                        salesByWeekAndDay[weekId][dayName] += sale.VLVENDA;
+                    }
+                }
+            });
+
             const weekLabels = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
-            const weekNumbers = Object.keys(salesByWeekAndDay).sort((a,b) => a - b);
+            const weekNumbers = Object.keys(salesByWeekAndDay).sort((a,b) => parseInt(a) - parseInt(b));
             const professionalPalette = ['#14b8a6', '#6366f1', '#ec4899', '#f97316', '#8b5cf6'];
             const currentMonthDatasets = weekNumbers.map((weekNum, index) => ({ label: `Semana ${weekNum}`, data: weekLabels.map(day => salesByWeekAndDay[weekNum][day] || 0), backgroundColor: professionalPalette[index % professionalPalette.length] }));
             // Note: Calculate "Melhor Dia Mês Anterior" dynamically based on current filters
