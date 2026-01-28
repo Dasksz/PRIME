@@ -7187,7 +7187,7 @@ const supervisorGroups = new Map();
 
                 const totalBoxesFiltered = filteredTableData.reduce((sum, item) => sum + item.boxesSoldCurrentMonth, 0);
                 if (coverageTotalBoxesEl) {
-                    coverageTotalBoxesEl.textContent = totalBoxesFiltered.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+                    coverageTotalBoxesEl.textContent = totalBoxesFiltered.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
                 }
 
                 coverageTableDataForExport = filteredTableData;
