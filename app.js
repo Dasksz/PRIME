@@ -461,8 +461,8 @@
                 minOpacity: 0.05, // More transparent
                 max: 20.0, // Increased max to prevent saturation and allow transparency
                 gradient: {
-                    0.2: 'rgba(0, 0, 255, 0.35)',
-                    0.5: 'rgba(0, 255, 0, 0.35)',
+                    0.2: 'rgba(0, 0, 255, 0.35)', 
+                    0.5: 'rgba(0, 255, 0, 0.35)', 
                     1.0: 'rgba(255, 0, 0, 0.35)'
                 }
             }).addTo(leafletMap);
@@ -541,41 +541,41 @@
             const bairro = client.bairro || client.BAIRRO || '';
             const cidade = client.cidade || client.CIDADE || '';
             const nome = client.nomeCliente || client.nome || '';
-
+            
             const parts = [];
             const isValid = (s) => s && s !== 'N/A' && s !== '0' && String(s).toUpperCase() !== 'S/N' && String(s).trim() !== '';
-
+            
             // Level 0 (POI - Business Name): Name + Bairro + City
-            if (level === 0) {
+            if (level === 0) { 
                 if(isValid(nome)) parts.push(nome);
                 if(isValid(bairro)) parts.push(bairro);
                 if(isValid(cidade)) parts.push(cidade);
-            }
+            } 
             // Level 1 (Address Full - Street + Number): Street + Number + Bairro + City
-            else if (level === 1) {
+            else if (level === 1) { 
                 if(isValid(endereco)) parts.push(endereco);
                 if(isValid(numero)) parts.push(numero);
                 if(isValid(bairro)) parts.push(bairro);
                 if(isValid(cidade)) parts.push(cidade);
-            }
+            } 
             // Level 2 (Street): Street + Bairro + City
-            else if (level === 2) {
+            else if (level === 2) { 
                 if(isValid(endereco)) parts.push(endereco);
                 if(isValid(bairro)) parts.push(bairro);
                 if(isValid(cidade)) parts.push(cidade);
-            }
+            } 
             // Level 3 (Neighborhood): Bairro + City
-            else if (level === 3) {
+            else if (level === 3) { 
                 if(isValid(bairro)) parts.push(bairro);
                 if(isValid(cidade)) parts.push(cidade);
-            }
+            } 
             // Level 4 (City): City only
-            else if (level === 4) {
+            else if (level === 4) { 
                 if(isValid(cidade)) parts.push(cidade);
             }
-
+            
             if (parts.length === 0) return null;
-
+            
             // Append Context if not CEP only - Enforce Bahia
             parts.push("Bahia");
             parts.push("Brasil");
@@ -598,12 +598,12 @@
                 const client = item.client;
                 // Determine level (default 0)
                 let level = item.level !== undefined ? item.level : 0;
-
+                
                 // Construct address or use legacy
                 let address = item.address;
                 if (!address) {
                     address = buildAddress(client, level);
-
+                    
                     // If address is null (e.g. invalid level data), auto-advance
                     if (!address && level < 4) {
                         nominatimQueue.unshift({ client, level: level + 1 });
@@ -692,7 +692,7 @@
                 // Validate minimal info (City)
                 const cidade = client.cidade || client.CIDADE || '';
                 const cep = client.cep || client.CEP || '';
-
+                
                 // CEP Validation: Must be Bahia (40xxx to 48xxx)
                 const cleanCep = cep.replace(/\D/g, '');
                 const cepVal = parseInt(cleanCep);
@@ -852,7 +852,7 @@
                         mix = { elma: false, foods: false };
                         currentClientMixStatus.set(cod, mix);
                     }
-
+                    
                     const codFor = String(s.CODFOR);
                     // Elma: 707, 708, 752
                     if (codFor === '707' || codFor === '708' || codFor === '752') {
@@ -988,326 +988,6 @@
 
         let sellerDetailsMap = new Map();
 
-        // --- HIERARCHY FILTER SYSTEM ---
-        const hierarchyState = {}; // Map<viewPrefix, { coords: Set, cocoords: Set, promotors: Set }>
-
-        function getHierarchyFilteredClients(viewPrefix, sourceClients = allClientsData) {
-            const state = hierarchyState[viewPrefix];
-            if (!state) return sourceClients; // Should not happen
-
-            const { coords, cocoords, promotors } = state;
-            // If no filters active, return all (subject to User Context, which is pre-filtered? No, User Context restricts dropdowns, so active filters will reflect restrictions)
-            // Actually, if user is restricted, the dropdowns are initialized with their restrictions selected?
-            // Or we just strictly filter here using User Context AND Selection.
-            // Let's rely on Selection (which we force-init for restricted users).
-
-            // Optimization: If sets are empty, implies "All Available" (which might be restricted by context)
-            // But wait, if I am Admin, empty set means All.
-            // If I am Coord, empty set means All My Team.
-            // Logic:
-            // 1. Filter by Coord Set (if not empty)
-            // 2. Filter by CoCoord Set (if not empty)
-            // 3. Filter by Promotor Set (if not empty)
-
-            // However, we need to handle the "All" case.
-            // If I am Coord, and I select nothing, I should see my whole team.
-            // If I am Coord, and I select one CoCoord, I see only that.
-
-            // The dropdown initialization will handle what is *available* to select.
-            // If the user selects nothing, `state.coords` is empty.
-            // We need to fallback to `userHierarchyContext`.
-
-            let effectiveCoords = new Set(coords);
-            let effectiveCoCoords = new Set(cocoords);
-            let effectivePromotors = new Set(promotors);
-
-            // Apply User Context Constraints implicitly?
-            // If user is Coord, they effectively filter by themselves always.
-            if (userHierarchyContext.role === 'coord') effectiveCoords.add(userHierarchyContext.coord);
-            if (userHierarchyContext.role === 'cocoord') {
-                effectiveCoords.add(userHierarchyContext.coord);
-                effectiveCoCoords.add(userHierarchyContext.cocoord);
-            }
-            if (userHierarchyContext.role === 'promotor') {
-                effectiveCoords.add(userHierarchyContext.coord);
-                effectiveCoCoords.add(userHierarchyContext.cocoord);
-                effectivePromotors.add(userHierarchyContext.promotor);
-            }
-
-            // Filtering
-            // We use 'allClientsData' (or source) and check 'clientHierarchyMap'
-            // Support ColumnarDataset? 'sourceClients' might be one.
-            const isColumnar = sourceClients instanceof ColumnarDataset;
-            const result = [];
-
-            const len = sourceClients.length;
-            for(let i=0; i<len; i++) {
-                const client = isColumnar ? sourceClients.get(i) : sourceClients[i];
-                const codCli = String(client['Código'] || client['codigo_cliente']);
-                const node = optimizedData.clientHierarchyMap.get(codCli);
-
-                if (!node) {
-                    // Client has no promotor.
-                    // If filters are active, usually exclude?
-                    // Or if "All" is selected?
-                    // User requirement: "filters... supervisor... seller".
-                    // If no supervisor assigned, it usually falls into "Sem Supervisor".
-                    // Here, if no hierarchy, we assume strict filter excludes it UNLESS no filters are applied at all?
-                    // Let's assume strict filtering: If I select a Coordinator, I want their clients. If client has no coord, exclude.
-                    continue; 
-                }
-
-                // Check Coord
-                if (effectiveCoords.size > 0 && !effectiveCoords.has(node.coord.code)) continue;
-                // Check CoCoord
-                if (effectiveCoCoords.size > 0 && !effectiveCoCoords.has(node.cocoord.code)) continue;
-                // Check Promotor
-                if (effectivePromotors.size > 0 && !effectivePromotors.has(node.promotor.code)) continue;
-
-                result.push(client);
-            }
-            return result;
-        }
-
-        function updateFilterButtonText(element, selectedSet, defaultLabel) {
-            if (!element) return;
-            if (selectedSet.size === 0) {
-                element.textContent = defaultLabel;
-            } else if (selectedSet.size === 1) {
-                // Find the label for the single selected value?
-                // We don't have the label map easily accessible here without passing it.
-                // For simplicity, showing count or generic text.
-                // Or if we want the label, we'd need to lookup in optimizedData maps.
-                // Let's iterate the set to get the value.
-                const val = selectedSet.values().next().value;
-                // Try to resolve name
-                let name = val;
-                if (optimizedData.coordMap.has(val)) name = optimizedData.coordMap.get(val);
-                else if (optimizedData.cocoordMap.has(val)) name = optimizedData.cocoordMap.get(val);
-                else if (optimizedData.promotorMap.has(val)) name = optimizedData.promotorMap.get(val);
-                
-                element.textContent = name;
-            } else {
-                element.textContent = `${selectedSet.size} selecionados`;
-            }
-        }
-
-        function updateHierarchyDropdown(viewPrefix, level) {
-            const state = hierarchyState[viewPrefix];
-            const els = {
-                coord: { dd: document.getElementById(`${viewPrefix}-coord-filter-dropdown`), text: document.getElementById(`${viewPrefix}-coord-filter-text`) },
-                cocoord: { dd: document.getElementById(`${viewPrefix}-cocoord-filter-dropdown`), text: document.getElementById(`${viewPrefix}-cocoord-filter-text`) },
-                promotor: { dd: document.getElementById(`${viewPrefix}-promotor-filter-dropdown`), text: document.getElementById(`${viewPrefix}-promotor-filter-text`) }
-            };
-
-            const target = els[level];
-            if (!target.dd) return;
-
-            let options = [];
-            // Determine available options based on parent selection
-            if (level === 'coord') {
-                // Show all Coords (or restricted)
-                if (userHierarchyContext.role === 'adm') {
-                    options = Array.from(optimizedData.coordMap.entries()).map(([k, v]) => ({ value: k, label: v }));
-                } else {
-                    // Restricted: Only show own
-                    if (userHierarchyContext.coord) {
-                        options = [{ value: userHierarchyContext.coord, label: optimizedData.coordMap.get(userHierarchyContext.coord) || userHierarchyContext.coord }];
-                    }
-                }
-            } else if (level === 'cocoord') {
-                // Show CoCoords belonging to selected Coords
-                let parentCoords = state.coords;
-                // If no parent selected, and ADM, show ALL. If restricted, show allowed.
-                // If restricted, state.coords might be empty initially, but user context implies restriction.
-                
-                let allowedCoords = parentCoords;
-                if (allowedCoords.size === 0) {
-                    if (userHierarchyContext.role === 'adm') {
-                        // All coords
-                        allowedCoords = new Set(optimizedData.coordMap.keys());
-                    } else if (userHierarchyContext.coord) {
-                        allowedCoords = new Set([userHierarchyContext.coord]);
-                    }
-                }
-
-                const validCodes = new Set();
-                allowedCoords.forEach(c => {
-                    const children = optimizedData.cocoordsByCoord.get(c);
-                    if(children) children.forEach(child => validCodes.add(child));
-                });
-
-                // Apply User Context Restriction for CoCoord level
-                if (userHierarchyContext.role === 'cocoord' || userHierarchyContext.role === 'promotor') {
-                    // Restrict to own cocoord
-                    if (userHierarchyContext.cocoord && validCodes.has(userHierarchyContext.cocoord)) {
-                        validCodes.clear();
-                        validCodes.add(userHierarchyContext.cocoord);
-                    } else {
-                        validCodes.clear(); // Should not happen if data consistent
-                    }
-                }
-
-                options = Array.from(validCodes).map(c => ({ value: c, label: optimizedData.cocoordMap.get(c) || c }));
-            } else if (level === 'promotor') {
-                // Show Promotors belonging to selected CoCoords
-                let parentCoCoords = state.cocoords;
-                
-                let allowedCoCoords = parentCoCoords;
-                if (allowedCoCoords.size === 0) {
-                    // Need to resolve relevant CoCoords from relevant Coords
-                    let relevantCoords = state.coords;
-                    if (relevantCoords.size === 0) {
-                         if (userHierarchyContext.role === 'adm') relevantCoords = new Set(optimizedData.coordMap.keys());
-                         else if (userHierarchyContext.coord) relevantCoords = new Set([userHierarchyContext.coord]);
-                    }
-
-                    const validCoCoords = new Set();
-                    relevantCoords.forEach(c => {
-                        const children = optimizedData.cocoordsByCoord.get(c);
-                        if(children) children.forEach(child => validCoCoords.add(child));
-                    });
-                    
-                    // Filter by User Context
-                    if (userHierarchyContext.role === 'cocoord' || userHierarchyContext.role === 'promotor') {
-                         if (userHierarchyContext.cocoord) {
-                             // Only keep own
-                             if (validCoCoords.has(userHierarchyContext.cocoord)) {
-                                 validCoCoords.clear();
-                                 validCoCoords.add(userHierarchyContext.cocoord);
-                             }
-                         }
-                    }
-                    allowedCoCoords = validCoCoords;
-                }
-
-                const validCodes = new Set();
-                allowedCoCoords.forEach(c => {
-                    const children = optimizedData.promotorsByCocoord.get(c);
-                    if(children) children.forEach(child => validCodes.add(child));
-                });
-
-                // Apply User Context Restriction for Promotor level
-                if (userHierarchyContext.role === 'promotor') {
-                    if (userHierarchyContext.promotor && validCodes.has(userHierarchyContext.promotor)) {
-                        validCodes.clear();
-                        validCodes.add(userHierarchyContext.promotor);
-                    }
-                }
-
-                options = Array.from(validCodes).map(c => ({ value: c, label: optimizedData.promotorMap.get(c) || c }));
-            }
-
-            // Sort
-            options.sort((a, b) => a.label.localeCompare(b.label));
-
-            // Render
-            let html = '';
-            const selectedSet = state[level + 's']; // coords, cocoords, promotors
-            options.forEach(opt => {
-                const checked = selectedSet.has(opt.value) ? 'checked' : '';
-                html += `
-                    <label class="flex items-center justify-between p-2 hover:bg-slate-700 rounded cursor-pointer">
-                        <span class="text-xs text-slate-300 truncate mr-2">${opt.label}</span>
-                        <input type="checkbox" value="${opt.value}" ${checked} class="form-checkbox h-4 w-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500 focus:ring-offset-slate-800">
-                    </label>
-                `;
-            });
-            target.dd.innerHTML = html;
-            
-            // Update Text Label
-            let label = 'Todos';
-            if (level === 'coord') label = 'Coordenador';
-            if (level === 'cocoord') label = 'Co-Coord';
-            if (level === 'promotor') label = 'Promotor';
-
-            updateFilterButtonText(target.text, selectedSet, label);
-        }
-
-        function setupHierarchyFilters(viewPrefix, onUpdate) {
-            // Init State
-            if (!hierarchyState[viewPrefix]) {
-                hierarchyState[viewPrefix] = { coords: new Set(), cocoords: new Set(), promotors: new Set() };
-            }
-            const state = hierarchyState[viewPrefix];
-
-            const els = {
-                coord: { btn: document.getElementById(`${viewPrefix}-coord-filter-btn`), dd: document.getElementById(`${viewPrefix}-coord-filter-dropdown`) },
-                cocoord: { btn: document.getElementById(`${viewPrefix}-cocoord-filter-btn`), dd: document.getElementById(`${viewPrefix}-cocoord-filter-dropdown`) },
-                promotor: { btn: document.getElementById(`${viewPrefix}-promotor-filter-btn`), dd: document.getElementById(`${viewPrefix}-promotor-filter-dropdown`) }
-            };
-
-            const bindToggle = (el) => {
-                if (el.btn && el.dd) {
-                    el.btn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        // Close others
-                        Object.values(els).forEach(x => { if(x.dd && x !== el) x.dd.classList.add('hidden'); });
-                        el.dd.classList.toggle('hidden');
-                    });
-                }
-            };
-            bindToggle(els.coord);
-            bindToggle(els.cocoord);
-            bindToggle(els.promotor);
-
-            const bindChange = (level, nextLevel, nextNextLevel) => {
-                const el = els[level];
-                if (el && el.dd) {
-                    el.dd.addEventListener('change', (e) => {
-                        if (e.target.type === 'checkbox') {
-                            const val = e.target.value;
-                            const set = state[level + 's'];
-                            if (e.target.checked) set.add(val); else set.delete(val);
-                            
-                            // Update Button Text
-                            updateHierarchyDropdown(viewPrefix, level); // Re-render self? No, just text. But re-rendering handles text.
-                            
-                            // Cascade Clear
-                            if (nextLevel) {
-                                state[nextLevel + 's'].clear();
-                                updateHierarchyDropdown(viewPrefix, nextLevel);
-                            }
-                            if (nextNextLevel) {
-                                state[nextNextLevel + 's'].clear();
-                                updateHierarchyDropdown(viewPrefix, nextNextLevel);
-                            }
-
-                            if (onUpdate) onUpdate();
-                        }
-                    });
-                }
-            };
-
-            bindChange('coord', 'cocoord', 'promotor');
-            bindChange('cocoord', 'promotor', null);
-            bindChange('promotor', null, null);
-
-            // Initial Population
-            updateHierarchyDropdown(viewPrefix, 'coord');
-            updateHierarchyDropdown(viewPrefix, 'cocoord');
-            updateHierarchyDropdown(viewPrefix, 'promotor');
-            
-            // Auto-select for restricted users?
-            // If I am Coord, my Coord ID is userHierarchyContext.coord.
-            // Should I pre-select it?
-            // If I pre-select it, `getHierarchyFilteredClients` uses it.
-            // If I DON'T pre-select it (empty set), `getHierarchyFilteredClients` applies it anyway via context.
-            // Visually, it's better if it shows "My Name" instead of "Coordenador" (which implies All/None).
-            // So yes, let's pre-select.
-            
-            if (userHierarchyContext.role !== 'adm') {
-                if (userHierarchyContext.coord) state.coords.add(userHierarchyContext.coord);
-                if (userHierarchyContext.cocoord) state.cocoords.add(userHierarchyContext.cocoord);
-                if (userHierarchyContext.promotor) state.promotors.add(userHierarchyContext.promotor);
-                
-                // Refresh UI to show checkmarks and text
-                updateHierarchyDropdown(viewPrefix, 'coord');
-                updateHierarchyDropdown(viewPrefix, 'cocoord');
-                updateHierarchyDropdown(viewPrefix, 'promotor');
-            }
-        }
-
         function initializeOptimizedDataStructures() {
             sellerDetailsMap = new Map();
             const sellerLastSaleDateMap = new Map(); // Track latest date per seller
@@ -1342,60 +1022,6 @@
             optimizedData.rcaNameByCode = new Map();
             optimizedData.supervisorCodeByName = new Map();
             optimizedData.productPastaMap = new Map();
-
-            // --- HIERARCHY LOGIC START ---
-            optimizedData.hierarchyMap = new Map(); // Promotor Code -> Hierarchy Node
-            optimizedData.clientHierarchyMap = new Map(); // Client Code -> Hierarchy Node
-            optimizedData.coordMap = new Map(); // Coord Code -> Name
-            optimizedData.cocoordMap = new Map(); // CoCoord Code -> Name
-            optimizedData.promotorMap = new Map(); // Promotor Code -> Name
-            optimizedData.coordsByCocoord = new Map(); // CoCoord Code -> Coord Code
-            optimizedData.cocoordsByCoord = new Map(); // Coord Code -> Set<CoCoord Code>
-            optimizedData.promotorsByCocoord = new Map(); // CoCoord Code -> Set<Promotor Code>
-
-            if (embeddedData.hierarchy) {
-                embeddedData.hierarchy.forEach(h => {
-                    const coordCode = String(h.cod_coord || '').trim().toUpperCase();
-                    const coordName = (h.nome_coord || coordCode).toUpperCase();
-                    const cocoordCode = String(h.cod_cocoord || '').trim().toUpperCase();
-                    const cocoordName = (h.nome_cocoord || cocoordCode).toUpperCase();
-                    const promotorCode = String(h.cod_promotor || '').trim().toUpperCase();
-                    const promotorName = (h.nome_promotor || promotorCode).toUpperCase();
-
-                    if (coordCode) {
-                        optimizedData.coordMap.set(coordCode, coordName);
-                        if (!optimizedData.cocoordsByCoord.has(coordCode)) optimizedData.cocoordsByCoord.set(coordCode, new Set());
-                        if (cocoordCode) optimizedData.cocoordsByCoord.get(coordCode).add(cocoordCode);
-                    }
-                    if (cocoordCode) {
-                        optimizedData.cocoordMap.set(cocoordCode, cocoordName);
-                        if (coordCode) optimizedData.coordsByCocoord.set(cocoordCode, coordCode);
-                        if (!optimizedData.promotorsByCocoord.has(cocoordCode)) optimizedData.promotorsByCocoord.set(cocoordCode, new Set());
-                        if (promotorCode) optimizedData.promotorsByCocoord.get(cocoordCode).add(promotorCode);
-                    }
-                    if (promotorCode) optimizedData.promotorMap.set(promotorCode, promotorName);
-
-                    if (promotorCode) {
-                        optimizedData.hierarchyMap.set(promotorCode, {
-                            coord: { code: coordCode, name: coordName },
-                            cocoord: { code: cocoordCode, name: cocoordName },
-                            promotor: { code: promotorCode, name: promotorName }
-                        });
-                    }
-                });
-            }
-
-            if (embeddedData.clientPromoters) {
-                embeddedData.clientPromoters.forEach(cp => {
-                    const clientCode = String(cp.client_code).trim();
-                    const promotorCode = String(cp.promoter_code).trim().toUpperCase();
-                    const hierarchyNode = optimizedData.hierarchyMap.get(promotorCode);
-                    if (hierarchyNode) {
-                        optimizedData.clientHierarchyMap.set(clientCode, hierarchyNode);
-                    }
-                });
-            }
-            // --- HIERARCHY LOGIC END ---
 
             // Access via accessor method for potential ColumnarDataset
             const getClient = (i) => allClientsData instanceof ColumnarDataset ? allClientsData.get(i) : allClientsData[i];
@@ -1441,7 +1067,7 @@
 
                 // Handle RCAS array (could be 'rcas' or 'RCAS')
                 let rcas = client.rcas || client.RCAS;
-
+                
                 // Sanitize RCAS: Filter out invalid values like "rcas" (header leak)
                 if (Array.isArray(rcas)) {
                     rcas = rcas.filter(r => r && String(r).toLowerCase() !== 'rcas');
@@ -1688,7 +1314,9 @@
         const fornecedorToggleContainerEl = document.getElementById('fornecedor-toggle-container');
 
         const citySupervisorFilter = document.getElementById('city-supervisor-filter');
+        const cityVendedorFilterBtn = document.getElementById('city-vendedor-filter-btn');
         const cityVendedorFilterText = document.getElementById('city-vendedor-filter-text');
+        const cityVendedorFilterDropdown = document.getElementById('city-vendedor-filter-dropdown');
         const citySupplierFilterBtn = document.getElementById('city-supplier-filter-btn');
         const citySupplierFilterText = document.getElementById('city-supplier-filter-text');
         const citySupplierFilterDropdown = document.getElementById('city-supplier-filter-dropdown');
@@ -1698,7 +1326,7 @@
                 const codcli = String(c['Código'] || c['codigo_cliente']);
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-
+                
                 // Logic identical to 'updateCoverageView' active clients KPI
                 return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(codcli));
             });
@@ -1720,14 +1348,20 @@
         const cityTipoVendaFilterText = document.getElementById('city-tipo-venda-filter-text');
         const cityTipoVendaFilterDropdown = document.getElementById('city-tipo-venda-filter-dropdown');
 
+        const weeklySupervisorFilterBtn = document.getElementById('weekly-supervisor-filter-btn');
         const weeklySupervisorFilterText = document.getElementById('weekly-supervisor-filter-text');
+        const weeklySupervisorFilterDropdown = document.getElementById('weekly-supervisor-filter-dropdown');
+        const weeklyVendedorFilterBtn = document.getElementById('weekly-vendedor-filter-btn');
         const weeklyVendedorFilterText = document.getElementById('weekly-vendedor-filter-text');
+        const weeklyVendedorFilterDropdown = document.getElementById('weekly-vendedor-filter-dropdown');
         const clearWeeklyFiltersBtn = document.getElementById('clear-weekly-filters-btn');
         const totalMesSemanalEl = document.getElementById('total-mes-semanal');
         const weeklyFornecedorToggleContainer = document.getElementById('weekly-fornecedor-toggle-container');
 
         const comparisonSupervisorFilter = document.getElementById('comparison-supervisor-filter');
+        const comparisonVendedorFilterBtn = document.getElementById('comparison-vendedor-filter-btn');
         const comparisonVendedorFilterText = document.getElementById('comparison-vendedor-filter-text');
+        const comparisonVendedorFilterDropdown = document.getElementById('comparison-vendedor-filter-dropdown');
         const comparisonFornecedorToggleContainer = document.getElementById('comparison-fornecedor-toggle-container');
         const comparisonFilialFilter = document.getElementById('comparison-filial-filter');
 
@@ -1766,7 +1400,9 @@
         const stockRedeFilterDropdown = document.getElementById('stock-rede-filter-dropdown');
         const stockFornecedorToggleContainer = document.getElementById('stock-fornecedor-toggle-container');
         const stockSupervisorFilter = document.getElementById('stock-supervisor-filter');
+        const stockVendedorFilterBtn = document.getElementById('stock-vendedor-filter-btn');
         const stockVendedorFilterText = document.getElementById('stock-vendedor-filter-text');
+        const stockVendedorFilterDropdown = document.getElementById('stock-vendedor-filter-dropdown');
         const stockSupplierFilterBtn = document.getElementById('stock-supplier-filter-btn');
         const stockSupplierFilterText = document.getElementById('stock-supplier-filter-text');
         const stockSupplierFilterDropdown = document.getElementById('stock-supplier-filter-dropdown');
@@ -1791,7 +1427,9 @@
         const innovationsMonthTableBody = document.getElementById('innovations-month-table-body');
         const innovationsMonthCategoryFilter = document.getElementById('innovations-month-category-filter');
         const innovationsMonthSupervisorFilter = document.getElementById('innovations-month-supervisor-filter');
+        const innovationsMonthVendedorFilterBtn = document.getElementById('innovations-month-vendedor-filter-btn');
         const innovationsMonthVendedorFilterText = document.getElementById('innovations-month-vendedor-filter-text');
+        const innovationsMonthVendedorFilterDropdown = document.getElementById('innovations-month-vendedor-filter-dropdown');
         const innovationsMonthCityFilter = document.getElementById('innovations-month-city-filter');
         const innovationsMonthCitySuggestions = document.getElementById('innovations-month-city-suggestions');
         const clearInnovationsMonthFiltersBtn = document.getElementById('clear-innovations-month-filters-btn');
@@ -1817,7 +1455,9 @@
         const viewCoverageBtn = document.getElementById('viewCoverageBtn');
         const backToMainFromCoverageBtn = document.getElementById('back-to-main-from-coverage-btn');
         const coverageSupervisorFilter = document.getElementById('coverage-supervisor-filter');
+        const coverageVendedorFilterBtn = document.getElementById('coverage-vendedor-filter-btn');
         const coverageVendedorFilterText = document.getElementById('coverage-vendedor-filter-text');
+        const coverageVendedorFilterDropdown = document.getElementById('coverage-vendedor-filter-dropdown');
         const coverageSupplierFilterBtn = document.getElementById('coverage-supplier-filter-btn');
         const coverageSupplierFilterText = document.getElementById('coverage-supplier-filter-text');
         const coverageSupplierFilterDropdown = document.getElementById('coverage-supplier-filter-dropdown');
@@ -1848,14 +1488,20 @@
         const goalsGvTableBody = document.getElementById('goals-gv-table-body');
         const goalsGvTotalValueEl = document.getElementById('goals-gv-total-value');
 
+        const goalsGvSupervisorFilterBtn = document.getElementById('goals-gv-supervisor-filter-btn');
         const goalsGvSupervisorFilterText = document.getElementById('goals-gv-supervisor-filter-text');
+        const goalsGvSupervisorFilterDropdown = document.getElementById('goals-gv-supervisor-filter-dropdown');
 
+        const goalsGvSellerFilterBtn = document.getElementById('goals-gv-seller-filter-btn');
         const goalsGvSellerFilterText = document.getElementById('goals-gv-seller-filter-text');
+        const goalsGvSellerFilterDropdown = document.getElementById('goals-gv-seller-filter-dropdown');
 
         const goalsGvCodcliFilter = document.getElementById('goals-gv-codcli-filter');
         const clearGoalsGvFiltersBtn = document.getElementById('clear-goals-gv-filters-btn');
 
+        const goalsSvSupervisorFilterBtn = document.getElementById('goals-sv-supervisor-filter-btn');
         const goalsSvSupervisorFilterText = document.getElementById('goals-sv-supervisor-filter-text');
+        const goalsSvSupervisorFilterDropdown = document.getElementById('goals-sv-supervisor-filter-dropdown');
 
 
         const modal = document.getElementById('order-details-modal');
@@ -1915,46 +1561,18 @@
         let comparisonChartType = 'weekly';
         let comparisonMonthlyMetric = 'faturamento';
         let activeClientsForExport = [];
-        let selectedMainCoords = [];
-        let selectedMainCoCoords = [];
-        let selectedMainPromotors = [];
-        let selectedCityCoords = [];
-        let selectedCityCoCoords = [];
-        let selectedCityPromotors = [];
-        let selectedWeeklyCoords = [];
-        let selectedWeeklyCoCoords = [];
-        let selectedWeeklyPromotors = [];
-        let selectedComparisonCoords = [];
-        let selectedComparisonCoCoords = [];
-        let selectedComparisonPromotors = [];
-        let selectedStockCoords = [];
-        let selectedStockCoCoords = [];
-        let selectedStockPromotors = [];
-        let selectedInnovationsCoords = [];
-        let selectedInnovationsCoCoords = [];
-        let selectedInnovationsPromotors = [];
-        let selectedMixCoords = [];
-        let selectedMixCoCoords = [];
-        let selectedMixPromotors = [];
-        let selectedCoverageCoords = [];
-        let selectedCoverageCoCoords = [];
-        let selectedCoveragePromotors = [];
-        let selectedGoalsGvCoords = [];
-        let selectedGoalsGvCoCoords = [];
-        let selectedGoalsGvPromotors = [];
-        let selectedGoalsSvCoords = [];
-        let selectedGoalsSvCoCoords = [];
-        let selectedGoalsSvPromotors = [];
-        let selectedGoalsSummaryCoords = [];
-        let selectedGoalsSummaryCoCoords = [];
-        let selectedGoalsSummaryPromotors = [];
-        let selectedMetaRealizadoCoords = [];
-        let selectedMetaRealizadoCoCoords = [];
-        let selectedMetaRealizadoPromotors = [];
         let inactiveClientsForExport = [];
+        let selectedSellers = [];
+        let selectedMainSupervisors = [];
         let selectedMainSuppliers = [];
         let selectedTiposVenda = [];
+        var selectedCitySellers = [];
         var selectedCitySuppliers = [];
+        var selectedCitySupervisors = [];
+        let selectedComparisonSellers = [];
+        let selectedComparisonSupervisors = [];
+        let selectedStockSellers = [];
+        let selectedStockSupervisors = [];
         let selectedComparisonSuppliers = [];
         let selectedComparisonProducts = [];
         let selectedStockSuppliers = [];
@@ -1969,6 +1587,8 @@
 
         let selectedMainRedes = [];
         let selectedCityRedes = [];
+        let selectedWeeklySupervisors = [];
+        let selectedWeeklySellers = [];
         let selectedComparisonRedes = [];
         let selectedStockRedes = [];
 
@@ -1977,8 +1597,12 @@
         let comparisonRedeGroupFilter = '';
         let stockRedeGroupFilter = '';
 
+        let selectedInnovationsMonthSellers = [];
+        let selectedInnovationsSupervisors = [];
         let selectedInnovationsMonthTiposVenda = [];
 
+        let selectedMixSupervisors = [];
+        let selectedMixSellers = [];
         let selectedMixRedes = [];
         let mixRedeGroupFilter = '';
         let selectedMixTiposVenda = [];
@@ -2274,7 +1898,14 @@
                 m.avgClients = sumClients / QUARTERLY_DIVISOR;
             }
         }
+        let selectedGoalsGvSupervisors = [];
+        let selectedGoalsGvSellers = [];
+        let selectedGoalsSvSupervisors = [];
+        let selectedGoalsSummarySupervisors = [];
+        let selectedGoalsSummarySellers = [];
 
+        let selectedMetaRealizadoSupervisors = [];
+        let selectedMetaRealizadoSellers = [];
         let selectedMetaRealizadoSuppliers = [];
         let currentMetaRealizadoPasta = 'PEPSICO'; // Default
         let currentMetaRealizadoMetric = 'valor'; // 'valor' or 'peso'
@@ -2291,8 +1922,12 @@
 
         let calendarState = { year: lastSaleDate.getUTCFullYear(), month: lastSaleDate.getUTCMonth() };
 
+        let selectedCoverageSellers = [];
         let selectedCoverageSuppliers = [];
+        let selectedCoverageSupervisors = [];
         let selectedCoverageProducts = [];
+        let selectedCoverageDateRange = null;
+        let coverageDateFilterInstance = null;
         let coverageUnitPriceFilter = null;
         let customWorkingDaysCoverage = 0;
         let coverageTrendFilter = 'all';
@@ -2367,12 +2002,13 @@
         function getMixFilteredData(options = {}) {
             const { excludeFilter = null } = options;
 
+            const sellersSet = new Set(selectedMixSellers);
+            const supervisorsSet = new Set(selectedMixSupervisors);
             const tiposVendaSet = new Set(selectedMixTiposVenda);
             const city = document.getElementById('mix-city-filter').value.trim().toLowerCase();
             const filial = document.getElementById('mix-filial-filter').value;
 
-            // New Hierarchy Logic
-            let clients = getHierarchyFilteredClients('mix', allClientsData);
+            let clients = allClientsData;
 
             if (excludeFilter !== 'rede') {
                  if (mixRedeGroupFilter === 'com_rede') {
@@ -2390,7 +2026,22 @@
                 clients = clients.filter(c => clientLastBranch.get(c['Código']) === filial);
             }
 
-            // Removed Supervisor/Seller checks
+            if (excludeFilter !== 'supervisor' && selectedMixSupervisors.length > 0) {
+                const rcasSet = new Set();
+                selectedMixSupervisors.forEach(sup => {
+                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
+                });
+                clients = clients.filter(c => c.rcas.some(r => rcasSet.has(r)));
+            }
+
+            if (excludeFilter !== 'seller' && sellersSet.size > 0) {
+                const rcasSet = new Set();
+                sellersSet.forEach(name => {
+                    const code = optimizedData.rcaCodeByName.get(name);
+                    if(code) rcasSet.add(code);
+                });
+                clients = clients.filter(c => c.rcas.some(r => rcasSet.has(r)));
+            }
 
             if (excludeFilter !== 'supplier' && selectedCitySuppliers.length > 0) {
                  // No filtering of clients list based on supplier for now.
@@ -2410,6 +2061,8 @@
             const clientCodes = new Set(clients.map(c => c['Código']));
 
             const filters = {
+                supervisor: supervisorsSet,
+                seller: sellersSet,
                 city: city,
                 filial: filial,
                 tipoVenda: tiposVendaSet,
@@ -2424,7 +2077,13 @@
         function updateAllMixFilters(options = {}) {
             const { skipFilter = null } = options;
 
-            // Supervisor/Seller filters managed by setupHierarchyFilters
+            if (skipFilter !== 'supervisor') {
+                const { sales } = getMixFilteredData({ excludeFilter: 'supervisor' });
+                selectedMixSupervisors = updateSupervisorFilter(document.getElementById('mix-supervisor-filter-dropdown'), document.getElementById('mix-supervisor-filter-text'), selectedMixSupervisors, sales);
+            }
+
+            const { sales: salesSeller } = getMixFilteredData({ excludeFilter: 'seller' });
+            selectedMixSellers = updateSellerFilter(selectedMixSupervisors, document.getElementById('mix-vendedor-filter-dropdown'), document.getElementById('mix-vendedor-filter-text'), selectedMixSellers, salesSeller, skipFilter === 'seller');
 
             const { sales: salesTV } = getMixFilteredData({ excludeFilter: 'tipoVenda' });
             selectedMixTiposVenda = updateTipoVendaFilter(document.getElementById('mix-tipo-venda-filter-dropdown'), document.getElementById('mix-tipo-venda-filter-text'), selectedMixTiposVenda, salesTV, skipFilter === 'tipoVenda');
@@ -2446,6 +2105,10 @@
         }
 
         function resetMixFilters() {
+            selectedMixSupervisors = [];
+            document.getElementById('mix-city-filter').value = '';
+            document.getElementById('mix-filial-filter').value = 'ambas';
+            selectedMixSellers = [];
             selectedMixTiposVenda = [];
             selectedMixRedes = [];
             mixRedeGroupFilter = '';
@@ -2796,7 +2459,8 @@
             }
 
             let fileNameParam = 'geral';
-            if (hierarchyState['mix'] && hierarchyState['mix'].promotors.size === 1) {
+            if (selectedMixSellers.length === 1) {
+                fileNameParam = getFirstName(selectedMixSellers[0]);
             } else if (city) {
                 fileNameParam = city;
             }
@@ -2813,7 +2477,7 @@
         async function saveGoalsToSupabase() {
             try {
                 const monthKey = new Date().toISOString().slice(0, 7);
-
+                
                 // Serialize globalClientGoals (Map<CodCli, Map<Key, {fat: 0, vol: 0}>>)
                 const clientsObj = {};
                 for (const [clientId, clientMap] of globalClientGoals) {
@@ -2885,7 +2549,7 @@
             activeClients.forEach(client => {
                 const codCli = String(client['Código'] || client['codigo_cliente']);
                 const historyIds = optimizedData.indices.history.byClient.get(codCli);
-
+                
                 if (!clientSubCatHistory.has(codCli)) clientSubCatHistory.set(codCli, new Map());
                 const subCatMap = clientSubCatHistory.get(codCli);
 
@@ -2894,7 +2558,7 @@
                         const sale = optimizedData.historyById.get(id);
                         const codFor = String(sale.CODFOR);
                         const desc = normalize(sale.DESCRICAO || '');
-
+                        
                         // Check against all target categories
                         targetCategories.forEach(subCat => {
                             let isMatch = false;
@@ -2921,7 +2585,7 @@
 
             // 2. Distribute
             // NewGoal(Client, SubCat) = NewTotalValue * (ClientSubCatHistory / TotalSellerHistory)
-
+            
             const clientCount = activeClients.length;
             const subCatCount = targetCategories.length;
 
@@ -2943,7 +2607,7 @@
                     // Update Global
                     if (!globalClientGoals.has(codCli)) globalClientGoals.set(codCli, new Map());
                     const cGoals = globalClientGoals.get(codCli);
-
+                    
                     if (!cGoals.has(subCat)) cGoals.set(subCat, { fat: 0, vol: 0 });
                     const target = cGoals.get(subCat);
 
@@ -3127,7 +2791,7 @@
 
                                 rowData.push({ t: 'n', v: d.metaFat, f: formulaFat, s: { ...aggCellStyle, numFmt: fmtMoney }, z: fmtMoney });
                                 rowData.push(createCell(d.metaPos, readOnlyStyle, fmtInt));
-
+                                
                                 // Positivation (Aggregate): Use Stored Target
                                 let posVal = d.metaPos;
                                 if (goalsSellerTargets.has(seller.name)) {
@@ -3140,7 +2804,7 @@
                                 // Editable Cells
                                 rowData.push(createCell(d.metaFat, cellStyle, fmtMoney));
                                 rowData.push(createCell(d.metaPos, readOnlyStyle, fmtInt));
-
+                                
                                 // Positivation (Standard): Use Stored Target
                                 let posVal = d.metaPos;
                                 if (goalsSellerTargets.has(seller.name)) {
@@ -3372,10 +3036,39 @@
         }
 
         function getGoalsFilteredData() {
+            const sellersSet = new Set(selectedGoalsGvSellers);
+            const supervisorsSet = new Set(selectedGoalsGvSupervisors);
             const codCli = goalsGvCodcliFilter.value.trim();
 
-            // Apply Hierarchy Filter + "Active" Filter logic
-            let clients = getHierarchyFilteredClients('goals-gv', allClientsData).filter(c => isActiveClient(c));
+            let clients = allClientsData;
+
+            // Apply "Active" Filter logic
+            clients = clients.filter(c => isActiveClient(c));
+
+            // Filter by Supervisor
+            if (supervisorsSet.size > 0) {
+                const rcasSet = new Set();
+                supervisorsSet.forEach(sup => {
+                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
+                });
+                clients = clients.filter(c => {
+                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
+                    return clientRcas.some(r => rcasSet.has(r));
+                });
+            }
+
+            // Filter by Seller
+            if (sellersSet.size > 0) {
+                const rcasSet = new Set();
+                sellersSet.forEach(name => {
+                    const code = optimizedData.rcaCodeByName.get(name);
+                    if(code) rcasSet.add(code);
+                });
+                clients = clients.filter(c => {
+                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
+                    return clientRcas.some(r => rcasSet.has(r));
+                });
+            }
 
             // Filter by Client Code
             if (codCli) {
@@ -3405,11 +3098,11 @@
             activeClients.forEach(client => {
                 const codCli = String(client['Código'] || client['codigo_cliente']);
                 const historyIds = optimizedData.indices.history.byClient.get(codCli);
-
+                
                 if (historyIds) {
                     // Bucket by Month
                     const monthlySales = new Map(); // Map<MonthKey, Set<Brand>>
-
+                    
                     historyIds.forEach(id => {
                         const sale = optimizedData.historyById.get(id);
                         // Using same date parsing as elsewhere
@@ -3420,7 +3113,7 @@
                         if (dateObj) {
                             const monthKey = `${dateObj.getUTCFullYear()}-${dateObj.getUTCMonth()}`;
                             if (!monthlySales.has(monthKey)) monthlySales.set(monthKey, new Set());
-
+                            
                             // Check brand/category match
                             const desc = normalize(sale.DESCRICAO || '');
                             targetCategories.forEach(cat => {
@@ -3454,7 +3147,7 @@
         function getMonthWeeksDistribution(date) {
             const year = date.getUTCFullYear();
             const month = date.getUTCMonth();
-
+            
             // Start of Month
             const startDate = new Date(Date.UTC(year, month, 1));
             // End of Month
@@ -3475,14 +3168,14 @@
                 // However, user said "reconhecer as semanas pelo calendário... De segunda a sexta".
                 // Let's define week chunks.
                 // Logic: A week ends on Saturday (or Sunday).
-
+                
                 // Find next Sunday (or End of Month)
                 let dayOfWeek = currentWeekStart.getUTCDay(); // 0=Sun, 1=Mon...
                 let daysToSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-
+                
                 let currentWeekEnd = new Date(currentWeekStart);
                 currentWeekEnd.setUTCDate(currentWeekStart.getUTCDate() + daysToSunday);
-
+                
                 if (currentWeekEnd > endDate) currentWeekEnd = new Date(endDate);
 
                 // Count Working Days in this chunk
@@ -3515,13 +3208,14 @@
         }
 
         function getMetaRealizadoFilteredData() {
-            // New Hierarchy:
+            const supervisorsSet = new Set(selectedMetaRealizadoSupervisors);
+            const sellersSet = new Set(selectedMetaRealizadoSellers);
             const suppliersSet = new Set(selectedMetaRealizadoSuppliers);
             const pasta = currentMetaRealizadoPasta;
 
             // Determine Goal Keys based on Pasta (Moved to top level scope)
             let goalKeys = [];
-
+            
             // If Supplier Filter is Active, restricting goals to selected supplier ONLY
             if (suppliersSet.size > 0) {
                 // Map selections to goal keys
@@ -3530,10 +3224,10 @@
                     let valid = false;
                     if (pasta === 'PEPSICO') valid = true;
                     else if (pasta === 'ELMA') valid = ['707', '708', '752'].includes(sup);
-                    else if (pasta === 'FOODS') valid = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'].includes(sup) || sup === '1119';
-
+                    else if (pasta === 'FOODS') valid = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'].includes(sup) || sup === '1119'; 
+                    
                     if (valid) {
-                        if (sup === '1119') {
+                        if (sup === '1119') { 
                             goalKeys.push('1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO');
                         } else {
                             goalKeys.push(sup);
@@ -3552,8 +3246,7 @@
             }
 
             // 1. Clients Filter
-            // Apply Hierarchy Logic + "Active" Filter logic
-            let clients = getHierarchyFilteredClients('meta-realizado', allClientsData).filter(c => {
+            let clients = allClientsData.filter(c => {
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
                 // Same active logic as Goals
@@ -3562,6 +3255,29 @@
                 if (rca1 === '') return false;
                 return true;
             });
+
+            if (supervisorsSet.size > 0) {
+                const rcasSet = new Set();
+                supervisorsSet.forEach(sup => {
+                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
+                });
+                clients = clients.filter(c => {
+                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
+                    return clientRcas.some(r => rcasSet.has(r));
+                });
+            }
+
+            if (sellersSet.size > 0) {
+                const rcasSet = new Set();
+                sellersSet.forEach(name => {
+                    const code = optimizedData.rcaCodeByName.get(name);
+                    if (code) rcasSet.add(code);
+                });
+                clients = clients.filter(c => {
+                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
+                    return clientRcas.some(r => rcasSet.has(r));
+                });
+            }
 
             // Implement Supplier Filter Logic (Virtual IDs for Foods) - Step 7
             // Filter clients if supplier filter is active?
@@ -3619,7 +3335,7 @@
                         goalsBySeller.set(rcaName, { totalFat: 0, totalVol: 0, totalPos: 0 });
                     }
                     const sellerGoals = goalsBySeller.get(rcaName);
-
+                    
                     if (clientTotalFatGoal > 0) sellerGoals.totalFat += clientTotalFatGoal;
                     if (clientTotalVolGoal > 0) sellerGoals.totalVol += clientTotalVolGoal;
                     if (hasGoal) sellerGoals.totalPos += 1; // Count client as 1 target
@@ -3634,7 +3350,7 @@
                 // Check if seller matches current filters
                 if (supervisorsSet.size > 0) {
                     const supervisorName = (sellerDetailsMap.get(optimizedData.rcaCodeByName.get(sellerName) || '') || {}).supervisor;
-                    if (!supervisorName || !supervisorsSet.has(supervisorName)) return;
+                    if (!supervisorName || !supervisorsSet.has(supervisorName)) return; 
                 }
                 if (sellersSet.size > 0 && !sellersSet.has(sellerName)) return;
 
@@ -3658,7 +3374,7 @@
                     else if (pasta === 'FOODS') overrideKey = 'total_foods';
 
                     if (suppliersSet.size === 1) {
-                        const sup = [...suppliersSet][0];
+                        const sup = [...suppliersSet][0]; 
                         if (sup === '1119_TODDYNHO') overrideKey = '1119_TODDYNHO';
                         else if (sup === '1119_TODDY') overrideKey = '1119_TODDY';
                         else if (sup === '1119_QUAKER') overrideKey = '1119_QUAKER_KEROCOCO';
@@ -3695,7 +3411,7 @@
                             // Import sets totals or individual categories.
                             // If user imported Total Elma and Total Foods, use those.
                             // If user imported Individual Categories, sum those.
-
+                            
                             // Strategy: Sum all matching components found in goalKeys
                             goalKeys.forEach(k => {
                                 if (targets[`${k}_FAT`] !== undefined) { overrideFat += targets[`${k}_FAT`]; hasOverrideFat = true; }
@@ -3755,7 +3471,7 @@
                                     if (targets[`${k}_VOL`] !== undefined) { overrideVol += targets[`${k}_VOL`]; hasOverrideVol = true; }
                                 });
                             }
-
+                            
                             // Fat
                             goalKeys.forEach(k => {
                                 if (targets[`${k}_FAT`] !== undefined) { overrideFat += targets[`${k}_FAT`]; hasOverrideFat = true; }
@@ -3810,7 +3526,7 @@
 
             for(let i=0; i<allSalesData.length; i++) {
                 const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
-
+                
                 // Date Filter
                 const d = typeof s.DTPED === 'number' ? new Date(s.DTPED) : parseDate(s.DTPED);
                 if (!d || d.getUTCMonth() !== currentMonthIndex || d.getUTCFullYear() !== currentYear) continue;
@@ -3834,7 +3550,7 @@
                 // If filter is PEPSICO, we include everything (since we already filtered for PEPSICO above)
                 // If filter is ELMA, we check CODFOR 707, 708, 752
                 // If filter is FOODS, we check CODFOR 1119 (or specific sub-brands if needed, but usually 1119 is Foods)
-
+                
                 const codFor = String(s.CODFOR);
                 if (pasta === 'ELMA') {
                     if (!['707', '708', '752'].includes(codFor)) continue;
@@ -3850,19 +3566,19 @@
                 // "Meta Vs Realizado" implies comparing the same entity.
                 // If I filter Supervisor "X", I show Seller Goals for X and Seller Sales for X.
                 // Let's use the standard filter logic:
-
+                
                 if (supervisorsSet.size > 0 && !supervisorsSet.has(s.SUPERV)) continue;
                 if (sellersSet.size > 0 && !sellersSet.has(s.NOME)) continue;
-
+                
                 // Enhanced Supplier Logic to handle Virtual Foods Categories
                 if (suppliersSet.size > 0) {
                     let supplierMatch = false;
                     const codFor = String(s.CODFOR);
-
+                    
                     // 1. Direct Match (Regular Suppliers)
                     if (suppliersSet.has(codFor)) {
                         supplierMatch = true;
-                    }
+                    } 
                     // 2. Virtual Category Logic for 1119 (Foods)
                     else if (codFor === '1119') {
                         const desc = normalize(s.DESCRICAO || '');
@@ -3883,10 +3599,10 @@
                     salesBySeller.set(sellerName, { totalFat: 0, totalVol: 0, weeksFat: [0, 0, 0, 0, 0], weeksVol: [0, 0, 0, 0, 0], totalPos: 0 });
                 }
                 const entry = salesBySeller.get(sellerName);
-
+                
                 entry.totalFat += valFat;
                 entry.totalVol += valVol;
-
+                
                 if (weekIdx !== -1 && weekIdx < 5) {
                     entry.weeksFat[weekIdx] += valFat;
                     entry.weeksVol[weekIdx] += valVol;
@@ -3910,7 +3626,7 @@
         function renderMetaRealizadoTable(data, weeks, totalWorkingDays) {
             const tableHead = document.getElementById('meta-realizado-table-head');
             const tableBody = document.getElementById('meta-realizado-table-body');
-
+            
             // Build Headers
             let headerHTML = `
                 <tr>
@@ -3939,7 +3655,7 @@
                 `;
             });
             headerHTML += `</tr>`;
-
+            
             tableHead.innerHTML = headerHTML;
 
             // Build Body
@@ -3947,7 +3663,7 @@
             const rowsHTML = data.map(row => {
                 const metaTotalStr = row.metaTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 const realTotalStr = row.realTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
+                
                 let cells = `
                     <td class="px-3 py-2 font-medium text-slate-200 border-r border-b border-slate-700 sticky left-0 bg-[#1d2347] z-30 truncate" title="${row.name}">${getFirstName(row.name)}</td>
                     <td class="px-2 py-2 text-right bg-blue-900/10 text-teal-400 border-r border-b border-slate-700/50 text-xs">${metaTotalStr}</td>
@@ -3957,7 +3673,7 @@
                 row.weekData.forEach(w => {
                     const wMetaStr = w.meta.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                     const wRealStr = w.real.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
+                    
                     // Simple logic: Green if Real >= Meta, Red if Real < Meta (only if week has passed? Or always?)
                     // Let's keep it neutral for now or simple colors.
                     const realClass = w.real >= w.meta ? 'text-green-400' : 'text-slate-300';
@@ -3982,13 +3698,13 @@
             // Destroy previous chart if exists (assume we store it in charts object)
             // Wait, createChart helper handles destruction if we pass ID. But here we have container ID.
             // Let's use a canvas inside the container.
-
+            
             let canvas = ctx.querySelector('canvas');
             if (!canvas) {
                 canvas = document.createElement('canvas');
                 ctx.appendChild(canvas);
             }
-
+            
             const chartId = 'metaRealizadoChartInstance';
             if (charts[chartId]) {
                 charts[chartId].destroy();
@@ -4000,7 +3716,7 @@
 
             // Adjust formatting based on metric
             const isVolume = currentMetaRealizadoMetric === 'peso';
-
+            
             // If Volume, display in Tons (input was Kg)
             const displayTotalMeta = isVolume ? totalMeta / 1000 : totalMeta;
             const displayTotalReal = isVolume ? totalReal / 1000 : totalReal;
@@ -4092,7 +3808,7 @@
         function updateMetaRealizadoView() {
             // 1. Get Data
             const { goalsBySeller, salesBySeller, weeks } = getMetaRealizadoFilteredData();
-
+            
             // Re-calculate Total Working Days
             let totalWorkingDays = weeks.reduce((sum, w) => sum + w.workingDays, 0);
             if (totalWorkingDays === 0) totalWorkingDays = 1;
@@ -4104,12 +3820,12 @@
             allSellers.forEach(sellerName => {
                 const goals = goalsBySeller.get(sellerName) || { totalFat: 0, totalVol: 0, totalPos: 0 };
                 const sales = salesBySeller.get(sellerName) || { totalFat: 0, totalVol: 0, weeksFat: [], weeksVol: [], totalPos: 0 };
-
+                
                 // Determine which metric to use for the main chart/table
                 // Note: The Table logic (renderMetaRealizadoTable) seems built for ONE metric (previously just Revenue).
                 // If we want the Table to also toggle or show both, we need to adjust it.
                 // Given the requirement "toggle button for R$/Ton", let's make the Table adhere to that too.
-
+                
                 let targetTotalGoal = 0;
                 let targetRealizedTotal = 0;
                 let targetRealizedWeeks = [];
@@ -4180,13 +3896,16 @@
         }
 
         function getMetaRealizadoClientsData(weeks) {
-            // New Hierarchy Logic
+            const supervisorsSet = new Set(selectedMetaRealizadoSupervisors);
+            const sellersSet = new Set(selectedMetaRealizadoSellers);
+            // Suppliers already filtered in getMetaRealizadoFilteredData logic for Sellers,
+            // but we need to re-apply logic for Client List generation.
+            // Actually, we can reuse similar filtering logic.
             const suppliersSet = new Set(selectedMetaRealizadoSuppliers);
             const pasta = currentMetaRealizadoPasta;
 
             // 1. Identify Target Clients (Active/Americanas/etc + Filtered)
-            // Apply Hierarchy Logic + "Active" Filter logic
-            let clients = getHierarchyFilteredClients('meta-realizado', allClientsData).filter(c => {
+            let clients = allClientsData.filter(c => {
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
                 if (isAmericanas) return true;
@@ -4194,6 +3913,30 @@
                 if (rca1 === '') return false;
                 return true;
             });
+
+            // Apply Filters (Supervisor/Seller)
+            if (supervisorsSet.size > 0) {
+                const rcasSet = new Set();
+                supervisorsSet.forEach(sup => {
+                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
+                });
+                clients = clients.filter(c => {
+                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
+                    return clientRcas.some(r => rcasSet.has(r));
+                });
+            }
+
+            if (sellersSet.size > 0) {
+                const rcasSet = new Set();
+                sellersSet.forEach(name => {
+                    const code = optimizedData.rcaCodeByName.get(name);
+                    if (code) rcasSet.add(code);
+                });
+                clients = clients.filter(c => {
+                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
+                    return clientRcas.some(r => rcasSet.has(r));
+                });
+            }
 
             // Optimization: Create Set of Client Codes
             const allowedClientCodes = new Set(clients.map(c => String(c['Código'] || c['codigo_cliente'])));
@@ -4456,7 +4199,7 @@
 
             clientCodes.forEach(codCli => {
                 const historyIds = optimizedData.indices.history.byClient.get(codCli);
-                const clientTotals = {};
+                const clientTotals = {}; 
 
                 if (historyIds) {
                     historyIds.forEach(id => {
@@ -4528,7 +4271,7 @@
                 const m = metricsMap[key];
                 let sumClients = 0;
                 m.monthlyClientsSets.forEach(set => sumClients += set.size);
-
+                
                 finalMetrics[key] = {
                     avgFat: m.fat / QUARTERLY_DIVISOR,
                     avgVol: m.vol / QUARTERLY_DIVISOR,
@@ -4571,7 +4314,7 @@
 
             activeClients.forEach(client => {
                 const codCli = String(client['Código'] || client['codigo_cliente']);
-
+                
                 // For Mix Salty/Foods, we exclude Americanas from the base count (Seller 1001)
                 const rca1 = String(client.rca1 || '').trim();
                 if ((category === 'mix_salty' || category === 'mix_foods') && rca1 === '1001') return;
@@ -4579,7 +4322,7 @@
                 const historyIds = optimizedData.indices.history.byClient.get(codCli);
                 if (historyIds) {
                     let hasSale = false;
-
+                    
                     for (const id of historyIds) {
                         if (hasSale) break;
                         const sale = optimizedData.historyById.get(id);
@@ -4619,7 +4362,7 @@
             if (!container) return;
 
             // 1. Identify active sellers in the current summary filter
-            let filteredSummaryClients = getHierarchyFilteredClients('goals-summary', allClientsData);
+            let filteredSummaryClients = allClientsData;
 
             // Apply "Active" Filter logic
             filteredSummaryClients = filteredSummaryClients.filter(c => {
@@ -4627,9 +4370,31 @@
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
                 if (isAmericanas) return true;
                 if (rca1 === '53') return false;
-                if (rca1 === '') return false;
+                if (rca1 === '') return false; 
                 return true;
             });
+
+            if (selectedGoalsSummarySupervisors.length > 0) {
+                const supervisorsSet = new Set(selectedGoalsSummarySupervisors);
+                const rcasSet = new Set();
+                supervisorsSet.forEach(sup => {
+                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
+                });
+                filteredSummaryClients = filteredSummaryClients.filter(c => c.rcas.some(r => rcasSet.has(r)));
+            }
+
+            // Apply Seller Filter
+            if (selectedGoalsSummarySellers.length > 0) {
+                const sellersSet = new Set(selectedGoalsSummarySellers);
+                // selectedGoalsSummarySellers contains Names.
+                // Map names to codes to filter clients.rcas
+                const sellerCodes = new Set();
+                sellersSet.forEach(name => {
+                    const code = optimizedData.rcaCodeByName.get(name);
+                    if (code) sellerCodes.add(code);
+                });
+                filteredSummaryClients = filteredSummaryClients.filter(c => c.rcas.some(r => sellerCodes.has(r)));
+            }
 
             // Calculate Metrics based on filtered clients
             // Since getMetricsForSupervisors only handles supervisor list, we need to rebuild metrics from scratch for arbitrary client list?
@@ -4641,7 +4406,7 @@
             // But let's look at `getMetricsForSupervisors` implementation first. It likely iterates `globalGoalsMetrics`?
             // No, `globalGoalsMetrics` is keyed by Product Category (707, etc.), NOT by Supervisor.
             // So `getMetricsForSupervisors` must be aggregating `globalClientGoals` for the filtered clients.
-
+            
             // Let's assume we need to calculate display metrics from the filtered client list.
             const displayMetrics = calculateMetricsForClients(filteredSummaryClients);
 
@@ -4674,7 +4439,7 @@
                 const rcaCode = String(c.rca1 || '').trim();
                 let sellerName = null;
                 if (rcaCode) sellerName = optimizedData.rcaNameByCode.get(rcaCode);
-
+                
                 if (sellerName && activeSellersInSummary.has(sellerName)) {
                     if (globalClientGoals.has(codCli)) {
                         const cGoals = globalClientGoals.get(codCli);
@@ -4695,7 +4460,7 @@
                 activeSellersInSummary.forEach(sellerName => {
                     // Check for explicit target in `goalsSellerTargets`
                     const targets = goalsSellerTargets.get(sellerName);
-
+                    
                     // If target exists (and is not null/undefined), use it.
                     // Note: Import logic sets targets.
                     if (targets && targets[category] !== undefined && targets[category] !== null) {
@@ -5268,8 +5033,11 @@
         }
 
         function getFilterDescription() {
-            if (hierarchyState['goals-gv'] && (hierarchyState['goals-gv'].coords.size > 0 || hierarchyState['goals-gv'].promotors.size > 0)) {
-                 // return 'filtro hierarquia';
+            if (selectedGoalsGvSupervisors.length > 0) {
+                return selectedGoalsGvSupervisors.length === 1 ? `Supervisor "${selectedGoalsGvSupervisors[0]}"` : "Supervisores selecionados";
+            }
+            if (selectedGoalsGvSellers.length > 0) {
+                return selectedGoalsGvSellers.length === 1 ? `Vendedor "${getFirstName(selectedGoalsGvSellers[0])}"` : "Vendedores selecionados";
             }
             if (goalsGvCodcliFilter.value) {
                 return `Cliente "${goalsGvCodcliFilter.value}"`;
@@ -5408,7 +5176,13 @@
             });
 
             let nameParam = '';
-            // Simplified name param for now
+            if (selectedGoalsGvSellers && selectedGoalsGvSellers.length > 0) {
+                const firstName = getFirstName(selectedGoalsGvSellers[0]);
+                if (firstName) nameParam = '_' + firstName.toUpperCase();
+            } else if (selectedGoalsGvSupervisors && selectedGoalsGvSupervisors.length > 0) {
+                const firstName = getFirstName(selectedGoalsGvSupervisors[0]);
+                if (firstName) nameParam = '_' + firstName.toUpperCase();
+            }
 
             const safeFileNameParam = currentGoalsSupplier.replace(/[^a-z0-9]/gi, '_').toUpperCase();
             doc.save(`Metas_GV_${safeFileNameParam}${nameParam}.pdf`);
@@ -5512,7 +5286,13 @@
             XLSX.utils.book_append_sheet(wb, ws_flat, "Metas GV");
 
             let nameParam = '';
-            // Simplified name param for now
+            if (selectedGoalsGvSellers && selectedGoalsGvSellers.length > 0) {
+                const firstName = getFirstName(selectedGoalsGvSellers[0]);
+                if (firstName) nameParam = '_' + firstName.toUpperCase();
+            } else if (selectedGoalsGvSupervisors && selectedGoalsGvSupervisors.length > 0) {
+                const firstName = getFirstName(selectedGoalsGvSupervisors[0]);
+                if (firstName) nameParam = '_' + firstName.toUpperCase();
+            }
 
             const safeFileNameParam = currentGoalsSupplier.replace(/[^a-z0-9]/gi, '_').toUpperCase();
             XLSX.writeFile(wb, `Metas_GV_${safeFileNameParam}${nameParam}.xlsx`);
@@ -5562,7 +5342,7 @@
                 if (category === 'pepsico_all') return ['707', '708', '752', '1119'].includes(codFor);
                 if (category === 'total_elma') return ['707', '708', '752'].includes(codFor);
                 if (category === 'total_foods') return codFor === '1119';
-
+                
                 // Specifics
                 if (category === '707') return codFor === '707';
                 if (category === '708') return codFor === '708';
@@ -5570,7 +5350,7 @@
                 if (category === '1119_TODDYNHO') return codFor === '1119' && desc.includes('TODDYNHO');
                 if (category === '1119_TODDY') return codFor === '1119' && desc.includes('TODDY') && !desc.includes('TODDYNHO');
                 if (category === '1119_QUAKER_KEROCOCO') return codFor === '1119' && (desc.includes('QUAKER') || desc.includes('KEROCOCO'));
-
+                
                 return false;
             };
 
@@ -5583,7 +5363,7 @@
                         const sale = optimizedData.historyById.get(id);
                         const codFor = String(sale.CODFOR);
                         const desc = normalize(sale.DESCRICAO || '');
-
+                        
                         // Check Rev Type only? Usually yes for Positivação.
                         if ((sale.TIPOVENDA === '1' || sale.TIPOVENDA === '9') && checkSale(codFor, desc)) {
                             count++;
@@ -5601,7 +5381,7 @@
             if (parentCategory === 'pepsico_all') children = ['total_elma', 'total_foods'];
             else if (parentCategory === 'total_elma') children = ['707', '708', '752'];
             else if (parentCategory === 'total_foods') children = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
-
+            
             if (children.length === 0) return;
 
             // 1. Get History for Children
@@ -5611,16 +5391,16 @@
             }));
 
             const parentHistory = getHistoricalPositivation(sellerName, parentCategory);
-
+            
             childHistories.forEach(item => {
                 let ratio = 0;
                 if (parentHistory > 0) {
                     ratio = item.hist / parentHistory;
                 }
-
+                
                 // New Target
                 const childTarget = Math.round(parentTargetValue * ratio);
-
+                
                 // Update Seller Targets
                 if (!goalsSellerTargets.has(sellerName)) goalsSellerTargets.set(sellerName, {});
                 const t = goalsSellerTargets.get(sellerName);
@@ -5634,7 +5414,7 @@
         function handleDistributePositivation(totalGoal, contextKey, filteredClientMetrics) {
             // filteredClientMetrics contains the list of sellers currently visible/active
             // We should distribute ONLY to them.
-
+            
             // Map Context Key (Tab) to Target Key
             let targetKey = contextKey;
             if (contextKey === 'PEPSICO_ALL') targetKey = 'pepsico_all';
@@ -5648,7 +5428,7 @@
             // Group by Seller to avoid duplicates if clientMetrics has multiple rows per seller?
             // clientMetrics is PER CLIENT. So we need to aggregate unique sellers first.
             const uniqueSellers = new Set(filteredClientMetrics.map(c => c.seller));
-
+            
             uniqueSellers.forEach(seller => {
                 const hist = getHistoricalPositivation(seller, targetKey);
                 sellersHistory.push({ seller, hist });
@@ -5657,18 +5437,18 @@
 
             // 2. Distribute Total Goal
             // We use Largest Remainder Method or simple rounding? Simple rounding for now.
-
+            
             sellersHistory.forEach(item => {
                 let share = 0;
                 if (totalHistoryPos > 0) {
                     share = item.hist / totalHistoryPos;
                 }
-
-                // If totalHistory is 0 but we have a Goal, distribute evenly?
+                
+                // If totalHistory is 0 but we have a Goal, distribute evenly? 
                 // Or leave 0? User said "proporcional". 0 history -> 0 share seems fair.
-
+                
                 const sellerTarget = Math.round(totalGoal * share);
-
+                
                 // Update Primary Target
                 if (!goalsSellerTargets.has(item.seller)) goalsSellerTargets.set(item.seller, {});
                 const t = goalsSellerTargets.get(item.seller);
@@ -5682,7 +5462,7 @@
             if (contextKey === 'PEPSICO_ALL') {
                 const newSalty = Math.round(totalGoal * 0.50);
                 const newFoods = Math.round(totalGoal * 0.30);
-
+                
                 // Update UI Inputs
                 const inputSalty = document.getElementById('goal-global-mix-salty');
                 const inputFoods = document.getElementById('goal-global-mix-foods');
@@ -5701,13 +5481,13 @@
 
         function handleDistributeMix(totalGoal, type, contextKey, filteredClientMetrics) {
             let targetKey = type === 'salty' ? 'mix_salty' : 'mix_foods';
-
+            
             // 1. Calculate Total History for THESE sellers in THIS context
             let totalHistoryMix = 0;
             const sellersHistory = [];
 
             const uniqueSellers = new Set(filteredClientMetrics.map(c => c.seller));
-
+            
             uniqueSellers.forEach(seller => {
                 const hist = getHistoricalMix(seller, type);
                 sellersHistory.push({ seller, hist });
@@ -5720,9 +5500,9 @@
                 if (totalHistoryMix > 0) {
                     share = item.hist / totalHistoryMix;
                 }
-
+                
                 const sellerTarget = Math.round(totalGoal * share);
-
+                
                 // Update Primary Target
                 if (!goalsSellerTargets.has(item.seller)) goalsSellerTargets.set(item.seller, {});
                 const t = goalsSellerTargets.get(item.seller);
@@ -5746,10 +5526,7 @@
             if (quarterMonths.length === 0) identifyQuarterMonths();
 
             // Calculate Metrics for Current View (Supervisor Filter)
-            // Use hierarchy state to filter clients for metrics calculation
-            let filteredMetricsClients = getHierarchyFilteredClients('goals-gv', allClientsData);
-            filteredMetricsClients = filteredMetricsClients.filter(c => isActiveClient(c));
-            const displayMetrics = calculateMetricsForClients(filteredMetricsClients);
+            const displayMetrics = getMetricsForSupervisors(selectedGoalsGvSupervisors);
 
             // Update Header (Dynamic) - Same as before
             const thead = document.querySelector('#goals-table-container table thead');
@@ -5829,16 +5606,16 @@
                                     const monthKey = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
                                     monthlyActivity.set(monthKey, (monthlyActivity.get(monthKey) || 0) + sale.VLVENDA);
                                     if (monthlyValues.hasOwnProperty(monthKey)) monthlyValues[monthKey] += sale.VLVENDA;
-
+                                    
                                     // Mix Logic: Add Product Code + Month Key
                                     // ELMA Constraint: If ELMA_ALL, only 707 and 708 are counted for Mix. 752 (Torcida) is excluded.
                                     let includeInMix = true;
                                     const codFor = String(sale.CODFOR);
-
+                                    
                                     if (currentGoalsSupplier === 'ELMA_ALL') {
                                         if (codFor !== '707' && codFor !== '708') includeInMix = false;
                                     }
-
+                                    
                                     if (includeInMix) {
                                         mixProducts.add(`${sale.PRODUTO}_${monthKey}`);
                                     }
@@ -5902,7 +5679,7 @@
                 };
                 // Add Mix PDV to Metric Object
                 metric.mixPdv = mixPdvAvg;
-
+                
                 clientMetrics.push(metric);
 
                 // Accumulate totals
@@ -5953,7 +5730,7 @@
                 const goalMixInput = document.getElementById('goal-global-mix');
                 const btnDistributeMix = document.getElementById('btn-distribute-mix');
                 const naturalTotalPos = clientMetrics.reduce((sum, item) => sum + item.metaPos, 0);
-                const isSingleSeller = hierarchyState['goals-gv'] && hierarchyState['goals-gv'].promotors.size === 1;
+                const isSingleSeller = selectedGoalsGvSellers.length === 1;
 
                 if (goalMixInput) {
                     const newMixInput = goalMixInput.cloneNode(true);
@@ -5966,9 +5743,11 @@
 
                     if (isSingleSeller) {
                         // Check for Absolute Override from Import
+                        absoluteOverride = getSellerTargetOverride(selectedGoalsGvSellers[0], 'pos', contextKey);
 
                         if (absoluteOverride === null && adjustmentMap) {
                             // Specific Seller Context (Fallback)
+                            contextAdjustment = adjustmentMap.get(selectedGoalsGvSellers[0]) || 0;
                         }
                     } else {
                         // Aggregate Logic for Multiple Sellers (Supervisor/Global)
@@ -6023,6 +5802,7 @@
                                 } else {
                                     const filterDesc = getFilterDescription();
                                     // Validation: Check against PEPSICO Limit
+                                    const sellerName = selectedGoalsGvSellers[0];
                                     let pepsicoNaturalPos = 0;
                                     // Calculate Natural PEPSICO Positivação for this seller
                                     const len = allClientsData.length;
@@ -6045,7 +5825,7 @@
                                             }
                                         }
                                     }
-
+                                    
                                     const pepsicoAdj = goalsPosAdjustments['PEPSICO_ALL'].get(sellerName) || 0;
                                     const pepsicoLimit = pepsicoNaturalPos + pepsicoAdj;
                                     if (currentGoalsSupplier !== 'PEPSICO_ALL' && val > pepsicoLimit) {
@@ -6055,6 +5835,7 @@
                                     showConfirmationModal(`Confirmar ajuste de Meta Positivação para ${valStr} (Cliente: ${filterDesc})?`, () => {
                                         const newAdjustment = val - naturalTotalPos;
                                         if (adjustmentMap) {
+                                            adjustmentMap.set(selectedGoalsGvSellers[0], newAdjustment);
                                             updateGoalsView();
                                         }
                                     });
@@ -6094,7 +5875,9 @@
                         let absOverride = null;
 
                         if (isSingleSeller) {
+                            absOverride = getSellerTargetOverride(selectedGoalsGvSellers[0], type === 'salty' ? 'mix_salty' : 'mix_foods', contextKey);
                             if (absOverride === null) {
+                                adj = adjustmentsMap.get(selectedGoalsGvSellers[0]) || 0;
                             }
                         } else {
                             // Aggregate Logic for Multiple Sellers (Mix)
@@ -6141,17 +5924,18 @@
                                     const newBtn = btn.cloneNode(true);
                                     btn.parentNode.replaceChild(newBtn, btn);
                                     newBtn.style.display = '';
-
+                                    
                                     newBtn.onclick = () => {
                                         const valStr = input.value;
                                         const val = parseFloat(valStr.replace(/\./g, '').replace(',', '.')) || 0;
-
+                                        
                                         if (isAggregatedTab) {
                                             const contextName = currentGoalsSupplier.replace('_ALL', '');
                                             showConfirmationModal(`Confirmar distribuição Proporcional de Mix ${type === 'salty' ? 'Salty' : 'Foods'} (${val}) para ${contextName}? (Base: Histórico)`, () => {
                                                 handleDistributeMix(val, type, contextKey, clientMetrics);
                                             });
                                         } else {
+                                            const sellerName = selectedGoalsGvSellers[0];
                                             showConfirmationModal(`Confirmar ajuste de Meta Mix ${type === 'salty' ? 'Salty' : 'Foods'} para ${valStr} (Vendedor: ${getFirstName(sellerName)})?`, () => {
                                                 saveMixAdjustment(type, val, sellerName);
                                             });
@@ -6174,8 +5958,8 @@
 
                     // Bugfix: If table is empty (e.g. no active clients) but we have a specific seller filter,
                     // use the filter to prevent getElmaTargetBase from returning global counts (empty set bypass).
-                    if (visibleSellersSet.size === 0 && hierarchyState['goals-gv'] && hierarchyState['goals-gv'].promotors.size > 0) {
-                         visibleSellersSet = new Set(hierarchyState['goals-gv'].promotors);
+                    if (visibleSellersSet.size === 0 && selectedGoalsGvSellers.length > 0) {
+                         visibleSellersSet = new Set(selectedGoalsGvSellers);
                     }
 
                     const elmaTargetBase = getElmaTargetBase(displayMetrics, goalsPosAdjustments, visibleSellersSet);
@@ -6244,8 +6028,9 @@
         }
 
         function getGoalsSvFilteredData() {
-            // Apply Hierarchy Logic
-            let clients = getHierarchyFilteredClients('goals-sv', allClientsData);
+            const supervisorsSet = new Set(selectedGoalsSvSupervisors);
+
+            let clients = allClientsData;
 
             clients = clients.filter(c => {
                 const rca1 = String(c.rca1 || '').trim();
@@ -6961,6 +6746,8 @@ const supervisorGroups = new Map();
                 // Update Seller Filter options based on Supervisor
                 // Get all clients matching supervisor filter, extract sellers.
                 // This is slightly different from sales-based filtering.
+                // But we can stick to standard updateSellerFilter using 'allSalesData' or 'allClientsData'?
+                // updateSellerFilter uses a sales/data array.
                 // Let's use allSalesData for consistency with other views to populate seller lists.
 
                 updateGoalsView();
@@ -6968,6 +6755,12 @@ const supervisorGroups = new Map();
         }
 
         function resetGoalsGvFilters() {
+            selectedGoalsGvSupervisors = [];
+            selectedGoalsGvSellers = [];
+            goalsGvCodcliFilter.value = '';
+
+            selectedGoalsGvSupervisors = updateSupervisorFilter(goalsGvSupervisorFilterDropdown, goalsGvSupervisorFilterText, selectedGoalsGvSupervisors, allSalesData);
+            selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, allSalesData);
 
             updateGoalsView();
         }
@@ -6978,42 +6771,79 @@ const supervisorGroups = new Map();
             const { excludeFilter = null } = options;
             const isExcluded = (f) => excludeFilter === f || (Array.isArray(excludeFilter) && excludeFilter.includes(f));
 
+            // Define filter sets from UI state
+            const sellersNameSet = new Set(selectedCoverageSellers);
+            const supervisorsSet = new Set(selectedCoverageSupervisors);
             const city = coverageCityFilter.value.trim().toLowerCase();
             const filial = coverageFilialFilter.value;
             const suppliersSet = new Set(selectedCoverageSuppliers);
             const productsSet = new Set(selectedCoverageProducts);
             const tiposVendaSet = new Set(selectedCoverageTiposVenda);
 
-            // New Hierarchy Logic applied to Active Clients
-            let clients = getHierarchyFilteredClients('coverage', getActiveClientsData());
+            // --- Client Filtering (Universe for KPIs) ---
+            // Use active clients data defined by coverage logic
+            let clients = getActiveClientsData();
 
-            if (filial !== 'ambas' || city) {
+            if (filial !== 'ambas' || supervisorsSet.size > 0 || sellersNameSet.size > 0 || city) {
+                const rcasOfSupervisor = new Set();
+                if (!isExcluded('supervisor') && supervisorsSet.size > 0) {
+                    supervisorsSet.forEach(sup => {
+                        (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasOfSupervisor.add(rca));
+                    });
+                }
+                const rcasOfSellers = new Set();
+                if (!isExcluded('seller') && sellersNameSet.size > 0) {
+                     sellersNameSet.forEach(sellerName => {
+                        const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
+                        if (rcaCode) rcasOfSellers.add(rcaCode);
+                    });
+                }
                 clients = clients.filter(c => {
-                    let pass = true;
-                    if (filial !== 'ambas') {
-                        if (clientLastBranch.get(c['Código']) !== filial) pass = false;
-                    }
-                    if (pass && !isExcluded('city') && city) {
-                        if ((c.cidade || '').toLowerCase() !== city) pass = false;
-                    }
-                    return pass;
+                    if (filial !== 'ambas' && clientLastBranch.get(c['Código']) !== filial) return false;
+                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
+                    if (rcasOfSupervisor.size > 0 && !clientRcas.some(rca => rcasOfSupervisor.has(rca))) return false;
+                    if (rcasOfSellers.size > 0 && !clientRcas.some(rca => rcasOfSellers.has(rca))) return false;
+                    if (!isExcluded('city') && city && (!c.cidade || c.cidade.toLowerCase() !== city)) return false;
+                    return true;
                 });
             }
-
             const clientCodes = new Set(clients.map(c => c['Código']));
 
+            // --- Sales Filtering (Optimized via Indices) ---
             const filters = {
-                filial,
-                city,
-                tipoVenda: tiposVendaSet,
+                supervisor: supervisorsSet,
+                seller: sellersNameSet,
                 supplier: suppliersSet,
                 product: productsSet,
-                clientCodes
+                tipoVenda: tiposVendaSet,
+                city: city,
+                filial: filial,
+                clientCodes: clientCodes // Pass client universe to correctly scope sales
             };
 
             let sales = getFilteredDataFromIndices(optimizedData.indices.current, optimizedData.salesById, filters, excludeFilter);
             let history = getFilteredDataFromIndices(optimizedData.indices.history, optimizedData.historyById, filters, excludeFilter);
 
+            // --- Date Filtering ---
+            if (selectedCoverageDateRange && selectedCoverageDateRange.length === 2) {
+                const startDate = selectedCoverageDateRange[0];
+                const endDate = selectedCoverageDateRange[1];
+                // Ensure boundaries
+                const startTs = new Date(startDate).setHours(0,0,0,0);
+                const endTs = new Date(endDate).setHours(23,59,59,999);
+
+                const filterByDate = (item) => {
+                    const dt = item.DTPED;
+                    if (!dt) return false;
+                    const ts = (typeof dt === 'number') ? dt : (dt instanceof Date ? dt.getTime() : parseDate(dt)?.getTime());
+                    return ts >= startTs && ts <= endTs;
+                };
+
+                sales = sales.filter(filterByDate);
+                history = history.filter(filterByDate);
+            }
+
+            // Post-filtering for logic not supported by indices
             const unitPriceInput = document.getElementById('coverage-unit-price-filter');
             const unitPrice = unitPriceInput && unitPriceInput.value ? parseFloat(unitPriceInput.value) : null;
             if (unitPrice !== null) {
@@ -7027,6 +6857,15 @@ const supervisorGroups = new Map();
 
         function updateAllCoverageFilters(options = {}) {
             const { skipFilter = null } = options;
+
+            if (skipFilter !== 'supervisor') {
+                const { sales: salesSup, history: historySup } = getCoverageFilteredData({ excludeFilter: 'supervisor' });
+                const combinedDataSup = [...salesSup, ...historySup];
+                selectedCoverageSupervisors = updateSupervisorFilter(document.getElementById('coverage-supervisor-filter-dropdown'), document.getElementById('coverage-supervisor-filter-text'), selectedCoverageSupervisors, combinedDataSup);
+            }
+
+            const { sales: salesSeller, history: historySeller } = getCoverageFilteredData({ excludeFilter: 'seller' });
+            selectedCoverageSellers = updateSellerFilter(selectedCoverageSupervisors, coverageVendedorFilterDropdown, coverageVendedorFilterText, selectedCoverageSellers, [...salesSeller, ...historySeller], skipFilter === 'seller');
 
             const { sales: salesSupplier, history: historySupplier } = getCoverageFilteredData({ excludeFilter: ['supplier', 'product'] });
             selectedCoverageSuppliers = updateSupplierFilter(coverageSupplierFilterDropdown, coverageSupplierFilterText, selectedCoverageSuppliers, [...salesSupplier, ...historySupplier], 'coverage', skipFilter === 'supplier');
@@ -7048,6 +6887,9 @@ const supervisorGroups = new Map();
         }
 
         function resetCoverageFilters() {
+            selectedCoverageSupervisors = [];
+            selectedCoverageDateRange = null;
+            if (coverageDateFilterInstance) coverageDateFilterInstance.clear();
             coverageCityFilter.value = '';
             coverageFilialFilter.value = 'ambas';
 
@@ -7057,6 +6899,7 @@ const supervisorGroups = new Map();
             const workingDaysInput = document.getElementById('coverage-working-days-input');
             if(workingDaysInput) workingDaysInput.value = customWorkingDaysCoverage;
 
+            selectedCoverageSellers = [];
             selectedCoverageSuppliers = [];
             selectedCoverageProducts = [];
             selectedCoverageTiposVenda = [];
@@ -7072,7 +6915,26 @@ const supervisorGroups = new Map();
             const { clients, sales, history } = getCoverageFilteredData();
             const productsToAnalyze = [...new Set([...sales.map(s => s.PRODUTO), ...history.map(s => s.PRODUTO)])];
 
-            const activeClientsForCoverage = clients;
+            const sellers = selectedCoverageSellers;
+            const sellerRcaCodes = new Set();
+            if (sellers.length > 0) {
+                sellers.forEach(sellerName => {
+                    const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
+                    if (rcaCode) sellerRcaCodes.add(rcaCode);
+                });
+            } else if (selectedCoverageSupervisors.length > 0) {
+                selectedCoverageSupervisors.forEach(sup => {
+                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => sellerRcaCodes.add(rca));
+                });
+            }
+
+            const activeClientsForCoverage = clients.filter(c => {
+                const codcli = c['Código'];
+                const rca1 = String(c.rca1 || '').trim();
+
+                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
+                return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(codcli));
+            });
             const activeClientsCount = activeClientsForCoverage.length;
             const activeClientCodes = new Set(activeClientsForCoverage.map(c => c['Código']));
 
@@ -7454,7 +7316,6 @@ const supervisorGroups = new Map();
         function calculateSummaryFromData(data, isFiltered, clientBaseForPositivacao) {
             const summary = {
                 totalFaturamento: 0, totalPeso: 0, vendasPorVendedor: {}, vendasPorSupervisor: {},
-                vendasPorCoord: {}, vendasPorCoCoord: {}, vendasPorPromotor: {}, // New Hierarchy Aggregation
                 top10ProdutosFaturamento: [], top10ProdutosPeso: [], faturamentoPorFornecedor: {},
                 skuPdv: 0, positivacaoCount: 0, positivacaoPercent: 0
             };
@@ -7524,22 +7385,6 @@ const supervisorGroups = new Map();
                 const supervisor = item.SUPERV || 'N/A';
                 if (!isForbidden(supervisor)) {
                     summary.vendasPorSupervisor[supervisor] = (summary.vendasPorSupervisor[supervisor] || 0) + vlVenda;
-                }
-
-                // New Hierarchy Aggregation
-                const hierarchy = optimizedData.clientHierarchyMap.get(item.CODCLI);
-                if (hierarchy) {
-                    const c = hierarchy.coord.name;
-                    const cc = hierarchy.cocoord.name;
-                    const p = hierarchy.promotor.name;
-                    if (c) summary.vendasPorCoord[c] = (summary.vendasPorCoord[c] || 0) + vlVenda;
-                    if (cc) summary.vendasPorCoCoord[cc] = (summary.vendasPorCoCoord[cc] || 0) + vlVenda;
-                    if (p) summary.vendasPorPromotor[p] = (summary.vendasPorPromotor[p] || 0) + vlVenda;
-                } else {
-                    const unk = 'Sem Estrutura';
-                    summary.vendasPorCoord[unk] = (summary.vendasPorCoord[unk] || 0) + vlVenda;
-                    summary.vendasPorCoCoord[unk] = (summary.vendasPorCoCoord[unk] || 0) + vlVenda;
-                    summary.vendasPorPromotor[unk] = (summary.vendasPorPromotor[unk] || 0) + vlVenda;
                 }
 
                 const produto = item.DESCRICAO || 'N/A';
@@ -7924,19 +7769,24 @@ const supervisorGroups = new Map();
                         return [];
                     }
                 }
-
-                // Hierarchy Filter
-                const hierarchyClients = getHierarchyFilteredClients('main');
-                if (hierarchyClients.length < allClientsData.length) {
-                    hasFilter = true;
-                    const hierarchyIds = new Set();
-                    hierarchyClients.forEach(c => {
-                        const code = String(c['Código'] || c['codigo_cliente']);
-                        const ids = indices.byClient.get(code);
-                        if (ids) ids.forEach(id => hierarchyIds.add(id));
-                    });
-                    setsToIntersect.push(hierarchyIds);
-                }
+                    if (selectedMainSupervisors.length > 0) {
+                        hasFilter = true;
+                        const supIds = new Set();
+                        selectedMainSupervisors.forEach(sup => {
+                            if (indices.bySupervisor.has(sup)) {
+                                (indices.bySupervisor.get(sup) || []).forEach(id => supIds.add(id));
+                            }
+                        });
+                        setsToIntersect.push(supIds);
+                    }
+                    if (selectedSellers.length > 0) {
+                        hasFilter = true;
+                        const sellerIds = new Set();
+                        selectedSellers.forEach(seller => {
+                            (indices.byRca.get(seller) || []).forEach(id => sellerIds.add(id));
+                        });
+                        setsToIntersect.push(sellerIds);
+                    }
 
                 if (selectedTiposVenda.length > 0) {
                     hasFilter = true;
@@ -8013,10 +7863,6 @@ const supervisorGroups = new Map();
             const filteredSalesData = getFilteredIds(optimizedData.indices.current, optimizedData.salesById);
             const filteredHistoryData = getFilteredIds(optimizedData.indices.history, optimizedData.historyById);
 
-            const hierarchyClientsForTable = getHierarchyFilteredClients('main');
-            const hierarchyClientCodes = new Set(hierarchyClientsForTable.map(c => String(c['Código'] || c['codigo_cliente'])));
-            const isHierarchyFiltered = hierarchyClientsForTable.length < allClientsData.length;
-
             const filteredTableData = aggregatedOrders.filter(order => {
                 let matches = true;
                 if (mainRedeGroupFilter) {
@@ -8024,7 +7870,8 @@ const supervisorGroups = new Map();
                 }
                 if (codcli) matches = matches && order.CODCLI === codcli;
                 else {
-                    if (isHierarchyFiltered) matches = matches && hierarchyClientCodes.has(order.CODCLI);
+                    if (selectedMainSupervisors.length > 0) matches = matches && selectedMainSupervisors.includes(order.SUPERV);
+                    if (selectedSellers.length > 0) matches = matches && selectedSellers.includes(order.NOME);
                 }
                 // Robust filtering with existence checks
                 if (selectedTiposVenda.length > 0) matches = matches && order.TIPOVENDA && selectedTiposVenda.includes(order.TIPOVENDA);
@@ -8034,7 +7881,7 @@ const supervisorGroups = new Map();
                 return matches;
             });
 
-            const isFiltered = isHierarchyFiltered || !!codcli || !!currentFornecedor || !!mainRedeGroupFilter || selectedMainSuppliers.length > 0 || !!posicao || selectedTiposVenda.length > 0;
+            const isFiltered = selectedMainSupervisors.length > 0 || selectedSellers.length > 0 || !!codcli || !!currentFornecedor || !!mainRedeGroupFilter || selectedMainSuppliers.length > 0 || !!posicao || selectedTiposVenda.length > 0;
 
             const summary = calculateSummaryFromData(filteredSalesData, isFiltered, clientBaseForCoverage);
 
@@ -8051,23 +7898,15 @@ const supervisorGroups = new Map();
 
             if (!chartView.classList.contains('hidden')) {
                 updateTrendChart(filteredSalesData, filteredHistoryData);
-                let chartData = summary.vendasPorCoord;
-                let chartTitle = 'Performance por Coordenador';
-                const mainState = hierarchyState['main'];
-                
-                if (mainState.cocoords.size > 0) {
-                    chartData = summary.vendasPorPromotor;
-                    chartTitle = 'Performance por Promotor';
-                } else if (mainState.coords.size > 0) {
-                    chartData = summary.vendasPorCoCoord;
-                    chartTitle = 'Performance por Co-Coordenador';
-                }
-
-                const totalForPercentage = Object.values(chartData).reduce((a, b) => a + b, 0);
+                const totalForPercentage = selectedMainSupervisors.length > 0 ? Object.values(summary.vendasPorVendedor).reduce((a, b) => a + b, 0) : Object.values(summary.vendasPorSupervisor).reduce((a, b) => a + b, 0);
                 const personChartTooltipOptions = { plugins: { tooltip: { callbacks: { label: function(context) { let label = context.dataset.label || ''; if (label) label += ': '; const value = context.parsed.y; if (value !== null) { label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); if (totalForPercentage > 0) { const percentage = ((value / totalForPercentage) * 100).toFixed(2); label += ` (${percentage}%)`; } } return label; } } } } };
-                
-                salesByPersonTitle.textContent = chartTitle;
-                createChart('salesByPersonChart', 'bar', Object.keys(chartData).map(getFirstName), Object.values(chartData), personChartTooltipOptions);
+                if (selectedMainSupervisors.length > 0) {
+                    salesByPersonTitle.textContent = 'Vendas por Vendedor';
+                    createChart('salesByPersonChart', 'bar', Object.keys(summary.vendasPorVendedor).map(getFirstName), Object.values(summary.vendasPorVendedor), personChartTooltipOptions);
+                } else {
+                    salesByPersonTitle.textContent = 'Vendas por Supervisor';
+                    createChart('salesByPersonChart', 'bar', Object.keys(summary.vendasPorSupervisor), Object.values(summary.vendasPorSupervisor), personChartTooltipOptions);
+                }
 
                 document.getElementById('faturamentoPorFornecedorTitle').textContent = isFiltered ? 'Faturamento por Fornecedor' : 'Faturamento por Categoria';
                 const faturamentoPorFornecedorData = summary.faturamentoPorFornecedor;
@@ -8080,9 +7919,58 @@ const supervisorGroups = new Map();
             }
         }
 
+        function updateSupervisorFilter(dropdown, filterText, selectedArray, dataSource, skipRender = false) {
+            if (!dropdown || !filterText) return selectedArray;
+            const forbidden = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR'];
+            const supervisors = [...new Set(dataSource.map(item => item.SUPERV).filter(s => s && !forbidden.includes(s.toUpperCase())))].sort();
+
+            selectedArray = selectedArray.filter(sup => supervisors.includes(sup));
+
+            if (!skipRender) {
+                const htmlParts = [];
+                for (let i = 0; i < supervisors.length; i++) {
+                    const sup = supervisors[i];
+                    const isChecked = selectedArray.includes(sup);
+                    htmlParts.push(`<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${sup}" ${isChecked ? 'checked' : ''}><span class="ml-2">${sup}</span></label>`);
+                }
+                dropdown.innerHTML = htmlParts.join('');
+            }
+
+            if (selectedArray.length === 0 || selectedArray.length === supervisors.length) filterText.textContent = 'Todos';
+            else if (selectedArray.length === 1) filterText.textContent = selectedArray[0];
+            else filterText.textContent = `${selectedArray.length} selecionados`;
+            return selectedArray;
+        }
+
+        function updateSellerFilter(supervisors, dropdown, filterText, selectedArray, dataSource, skipRender = false) {
+            const forbidden = ['NOME', 'VENDEDOR', 'SUPERV', 'CODUSUR', 'CODCLI', 'SUPERVISOR', 'INATIVOS'];
+            let sellersToShow;
+            if (supervisors && supervisors.length > 0) {
+                const supSet = new Set(supervisors);
+                sellersToShow = [...new Set(dataSource.filter(s => supSet.has(s.SUPERV)).map(s => s.NOME).filter(n => n && !forbidden.includes(n.toUpperCase())))].sort();
+            } else {
+                sellersToShow = [...new Set(dataSource.map(item => item.NOME).filter(n => n && !forbidden.includes(n.toUpperCase())))].sort();
+            }
+
+            selectedArray = selectedArray.filter(seller => sellersToShow.includes(seller));
+
+            if (!skipRender) {
+                const htmlParts = [];
+                for (let i = 0; i < sellersToShow.length; i++) {
+                    const s = sellersToShow[i];
+                    const isChecked = selectedArray.includes(s);
+                    htmlParts.push(`<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${s}" ${isChecked ? 'checked' : ''}><span class="ml-2">${s}</span></label>`);
+                }
+                dropdown.innerHTML = htmlParts.join('');
+            }
+
+            if (selectedArray.length === 0 || selectedArray.length === sellersToShow.length) filterText.textContent = 'Todos Vendedores';
+            else if (selectedArray.length === 1) filterText.textContent = selectedArray[0];
+            else filterText.textContent = `${selectedArray.length} vendedores selecionados`;
+            return selectedArray;
+        }
 
         function updateTipoVendaFilter(dropdown, filterText, selectedArray, dataSource, skipRender = false) {
-            if (!dropdown || !filterText) return selectedArray;
             // Collect unique types from data source
             const forbidden = ['TIPOVENDA', 'TIPO VENDA', 'TIPO', 'CODUSUR', 'CODCLI', 'SUPERV', 'NOME'];
             const uniqueTypes = new Set(dataSource.map(item => item.TIPOVENDA).filter(t => t && !forbidden.includes(t.toUpperCase())));
@@ -8115,7 +8003,6 @@ const supervisorGroups = new Map();
         }
 
         function updateRedeFilter(dropdown, buttonTextElement, selectedArray, dataSource, baseText = 'Com Rede') {
-            if (!dropdown || !buttonTextElement) return selectedArray;
             const forbidden = ['RAMO', 'RAMO DE ATIVIDADE', 'RAMO_ATIVIDADE', 'DESCRICAO', 'ATIVIDADE'];
             const redesToShow = [...new Set(dataSource.map(item => item.ramo).filter(r => r && r !== 'N/A' && !forbidden.includes(r.toUpperCase())))].sort();
             const validSelected = selectedArray.filter(rede => redesToShow.includes(rede));
@@ -8137,6 +8024,90 @@ const supervisorGroups = new Map();
         }
 
         function resetMainFilters() {
+            selectedMainSupervisors = [];
+            selectedMainSuppliers = [];
+            posicaoFilter.value = '';
+            codcliFilter.value = '';
+            currentFornecedor = '';
+            selectedSellers = [];
+            selectedTiposVenda = [];
+            mainRedeGroupFilter = '';
+            selectedMainRedes = [];
+            mainTableState.currentPage = 1;
+
+            mainRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            mainRedeGroupContainer.querySelector('button[data-group=""]').classList.add('active');
+            updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
+
+            document.querySelectorAll('#fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
+            selectedMainSupervisors = updateSupervisorFilter(document.getElementById('supervisor-filter-dropdown'), document.getElementById('supervisor-filter-text'), selectedMainSupervisors, allSalesData);
+            selectedMainSuppliers = updateSupplierFilter(document.getElementById('fornecedor-filter-dropdown'), document.getElementById('fornecedor-filter-text'), selectedMainSuppliers, [...allSalesData, ...allHistoryData], 'main');
+            selectedSellers = updateSellerFilter(selectedMainSupervisors, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
+            selectedTiposVenda = updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
+            updateAllVisuals();
+        }
+
+        function resetCityFilters() {
+            selectedCitySupervisors = [];
+            cityNameFilter.value = '';
+            cityCodCliFilter.value = '';
+            selectedCitySellers = [];
+            selectedCityRedes = [];
+            cityRedeGroupFilter = '';
+            selectedCityTiposVenda = [];
+            selectedCitySuppliers = [];
+
+            selectedCitySupervisors = updateSupervisorFilter(document.getElementById('city-supervisor-filter-dropdown'), document.getElementById('city-supervisor-filter-text'), selectedCitySupervisors, allSalesData);
+            selectedCitySellers = updateSellerFilter(selectedCitySupervisors, cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData);
+            selectedCityTiposVenda = updateTipoVendaFilter(cityTipoVendaFilterDropdown, cityTipoVendaFilterText, selectedCityTiposVenda, allSalesData);
+            selectedCitySuppliers = updateSupplierFilter(document.getElementById('city-supplier-filter-dropdown'), document.getElementById('city-supplier-filter-text'), selectedCitySuppliers, [...allSalesData, ...allHistoryData], 'city');
+
+            cityRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            cityRedeGroupContainer.querySelector('button[data-group=""]').classList.add('active');
+            updateRedeFilter(cityRedeFilterDropdown, cityComRedeBtnText, selectedCityRedes, allClientsData);
+
+            updateCityView();
+        }
+
+        function resetWeeklyFilters() {
+            selectedWeeklySupervisors = [];
+            selectedWeeklySellers = [];
+            currentWeeklyFornecedor = '';
+            document.querySelectorAll('#weekly-fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
+
+            // Re-populate will handle resetting the dropdown UI text and checkboxes based on empty selected arrays
+            populateWeeklyFilters();
+            updateWeeklyView();
+        }
+
+        function resetComparisonFilters() {
+            selectedComparisonSupervisors = [];
+            comparisonFilialFilter.value = 'ambas';
+            currentComparisonFornecedor = '';
+            comparisonCityFilter.value = '';
+            selectedComparisonSellers = [];
+            selectedComparisonSuppliers = [];
+            selectedComparisonProducts = [];
+            selectedComparisonTiposVenda = [];
+            comparisonRedeGroupFilter = '';
+            selectedComparisonRedes = [];
+
+            comparisonRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            comparisonRedeGroupContainer.querySelector('button[data-group=""]').classList.add('active');
+            updateRedeFilter(comparisonRedeFilterDropdown, comparisonComRedeBtnText, selectedComparisonRedes, allClientsData);
+
+            document.querySelectorAll('#comparison-fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
+
+            updateAllComparisonFilters();
+            updateComparisonView();
+        }
+
+        function resetStockFilters() {
+            stockFilialFilter.value = 'ambas';
+            currentStockFornecedor = '';
+            selectedStockSupervisors = [];
+            stockCityFilter.value = '';
+            selectedStockSellers = [];
             selectedStockSuppliers = [];
             selectedStockProducts = [];
             selectedStockTiposVenda = [];
@@ -8164,12 +8135,12 @@ const supervisorGroups = new Map();
         function getCityFilteredData(options = {}) {
             const { excludeFilter = null } = options;
 
+            const sellersSet = new Set(selectedCitySellers);
             const cityInput = cityNameFilter.value.trim().toLowerCase();
             const codCli = cityCodCliFilter.value.trim();
             const tiposVendaSet = new Set(selectedCityTiposVenda);
 
-            // New Hierarchy Logic
-            let clients = getHierarchyFilteredClients('city', allClientsData);
+            let clients = allClientsData;
 
             if (excludeFilter !== 'rede') {
                  if (cityRedeGroupFilter === 'com_rede') {
@@ -8181,6 +8152,23 @@ const supervisorGroups = new Map();
                 } else if (cityRedeGroupFilter === 'sem_rede') {
                     clients = clients.filter(c => !c.ramo || c.ramo === 'N/A');
                 }
+            }
+
+            if (excludeFilter !== 'supervisor' && selectedCitySupervisors.length > 0) {
+                const rcasSet = new Set();
+                selectedCitySupervisors.forEach(sup => {
+                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
+                });
+                clients = clients.filter(c => c.rcas.some(r => rcasSet.has(r)));
+            }
+
+            if (excludeFilter !== 'seller' && sellersSet.size > 0) {
+                const rcasSet = new Set();
+                sellersSet.forEach(name => {
+                    const code = optimizedData.rcaCodeByName.get(name);
+                    if(code) rcasSet.add(code);
+                });
+                clients = clients.filter(c => c.rcas.some(r => rcasSet.has(r)));
             }
 
             if (excludeFilter !== 'supplier' && selectedCitySuppliers.length > 0) {
@@ -8197,7 +8185,11 @@ const supervisorGroups = new Map();
 
             const clientCodes = new Set(clients.map(c => c['Código']));
 
+            const supervisorSet = new Set(selectedCitySupervisors);
+
             const filters = {
+                supervisor: supervisorSet,
+                seller: sellersSet,
                 city: cityInput,
                 tipoVenda: tiposVendaSet,
                 clientCodes: clientCodes,
@@ -8212,7 +8204,13 @@ const supervisorGroups = new Map();
         function updateAllCityFilters(options = {}) {
             const { skipFilter = null } = options;
 
-            // Supervisor/Seller filters managed by setupHierarchyFilters
+            if (skipFilter !== 'supervisor') {
+                const { sales } = getCityFilteredData({ excludeFilter: 'supervisor' });
+                selectedCitySupervisors = updateSupervisorFilter(document.getElementById('city-supervisor-filter-dropdown'), document.getElementById('city-supervisor-filter-text'), selectedCitySupervisors, sales);
+            }
+
+            const { sales: salesSeller } = getCityFilteredData({ excludeFilter: 'seller' });
+            selectedCitySellers = updateSellerFilter(selectedCitySupervisors, cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, salesSeller, skipFilter === 'seller');
 
             const { sales: salesTV } = getCityFilteredData({ excludeFilter: 'tipoVenda' });
             selectedCityTiposVenda = updateTipoVendaFilter(cityTipoVendaFilterDropdown, cityTipoVendaFilterText, selectedCityTiposVenda, salesTV, skipFilter === 'tipoVenda');
@@ -8239,7 +8237,7 @@ const supervisorGroups = new Map();
         function updateCitySuggestions(filterInput, suggestionsContainer, dataSource) {
             const forbidden = ['CIDADE', 'MUNICIPIO', 'CIDADE_CLIENTE', 'NOME DA CIDADE', 'CITY'];
             const inputValue = filterInput.value.toLowerCase();
-
+            
             if (!inputValue) {
                 suggestionsContainer.classList.add('hidden');
                 return;
@@ -8582,22 +8580,22 @@ const supervisorGroups = new Map();
         }
 
         function populateWeeklyFilters() {
+            selectedWeeklySupervisors = updateSupervisorFilter(weeklySupervisorFilterDropdown, weeklySupervisorFilterText, selectedWeeklySupervisors, allSalesData);
+            selectedWeeklySellers = updateSellerFilter(selectedWeeklySupervisors, weeklyVendedorFilterDropdown, weeklyVendedorFilterText, selectedWeeklySellers, allSalesData);
         }
 
         function updateWeeklyView() {
             let dataForGeneralCharts;
 
-            const filteredClients = getHierarchyFilteredClients('weekly', allClientsData);
-            const clientCodes = new Set(filteredClients.map(c => String(c['Código'] || c['codigo_cliente'])));
-
             // Use the generic filtering helper which supports multiple selections
             const filters = {
-                clientCodes: clientCodes,
+                supervisor: selectedWeeklySupervisors.length > 0 ? new Set(selectedWeeklySupervisors) : null,
+                seller: selectedWeeklySellers.length > 0 ? new Set(selectedWeeklySellers) : null,
                 pasta: currentWeeklyFornecedor || null
             };
 
             // If we have filters, use optimized lookup
-            if (filters.clientCodes || filters.pasta) {
+            if (filters.supervisor || filters.seller || filters.pasta) {
                 dataForGeneralCharts = getFilteredDataFromIndices(optimizedData.indices.current, optimizedData.salesById, filters);
             } else {
                 dataForGeneralCharts = allSalesData;
@@ -8652,7 +8650,7 @@ const supervisorGroups = new Map();
             const currentMonthDatasets = weekNumbers.map((weekNum, index) => ({ label: `Semana ${weekNum}`, data: weekLabels.map(day => salesByWeekAndDay[weekNum][day] || 0), backgroundColor: professionalPalette[index % professionalPalette.length] }));
             // Note: Calculate "Melhor Dia Mês Anterior" dynamically based on current filters
             const historicalDataForChart = [0, 0, 0, 0, 0];
-
+            
             // 1. Get Filtered History Data
             let historyDataForCalculation;
             if (filters.supervisor || filters.seller || filters.pasta) {
@@ -8668,7 +8666,7 @@ const supervisorGroups = new Map();
 
             // 3. Aggregate Sales by Date for the Previous Month
             const prevMonthSalesByDate = {}; // 'YYYY-MM-DD' -> Total
-
+            
             // Optimize iteration if it's a columnar dataset proxy (although array methods work)
             for (let i = 0; i < historyDataForCalculation.length; i++) {
                 const sale = historyDataForCalculation instanceof ColumnarDataset ? historyDataForCalculation.get(i) : historyDataForCalculation[i];
@@ -8713,7 +8711,10 @@ const supervisorGroups = new Map();
 
             // --- "AMERICANAS" Exclusion Logic ---
             // If "AMERICANAS" is NOT explicitly selected in the vendor filter, exclude it from ranking charts.
-            const americanasSelected = hierarchyState['weekly'].promotors.has('1001');
+            // Assuming "AMERICANAS" appears as a Vendor name in sales data (d.NOME) or Client name?
+            // Usually AMERICANAS is a client, but sometimes mapped as a dummy vendor or huge account.
+            // The prompt says "o vendedor 'AMERICANAS'". So we check d.NOME.
+            const americanasSelected = selectedWeeklySellers.some(s => s.toUpperCase().includes('AMERICANAS'));
             if (!americanasSelected) {
                 dataForRankings = dataForRankings.filter(d => !d.NOME.toUpperCase().includes('AMERICANAS'));
             }
@@ -8788,7 +8789,6 @@ const supervisorGroups = new Map();
         }
 
         function updateSupplierFilter(dropdown, filterText, selectedArray, dataSource, filterType = 'comparison', skipRender = false) {
-            if (!dropdown || !filterText) return selectedArray;
             const forbidden = ['CODFOR', 'FORNECEDOR', 'COD FOR', 'NOME DO FORNECEDOR', 'FORNECEDOR_NOME'];
             const suppliers = new Map();
             dataSource.forEach(s => {
@@ -8820,7 +8820,7 @@ const supervisorGroups = new Map();
                 for (let i = 0; i < sortedSuppliers.length; i++) {
                     let [cod, name] = sortedSuppliers[i];
                     const isChecked = selectedArray.includes(cod);
-
+                    
                     let displayName = name;
                     // For all pages except 'Meta Vs. Realizado', prefix Code to Name
                     if (filterType !== 'metaRealizado') {
@@ -9596,18 +9596,20 @@ const supervisorGroups = new Map();
         function getComparisonFilteredData(options = {}) {
             const { excludeFilter = null } = options;
 
+            const sellersSet = new Set(selectedComparisonSellers);
             const suppliersSet = new Set(selectedComparisonSuppliers);
             const productsSet = new Set(selectedComparisonProducts);
             const tiposVendaSet = new Set(selectedComparisonTiposVenda);
             const redeSet = new Set(selectedComparisonRedes);
+            const supervisorSet = new Set(selectedComparisonSupervisors);
 
             const pasta = currentComparisonFornecedor;
             const city = comparisonCityFilter.value.trim().toLowerCase();
             const filial = comparisonFilialFilter.value;
 
-            let clients = getHierarchyFilteredClients('comparison', allClientsData);
-
+            let clientCodes = null;
             if (comparisonRedeGroupFilter) {
+                let clients = allClientsData;
                 if (comparisonRedeGroupFilter === 'com_rede') {
                     clients = clients.filter(c => c.ramo && c.ramo !== 'N/A');
                      if (redeSet.size > 0) {
@@ -9616,14 +9618,15 @@ const supervisorGroups = new Map();
                 } else if (comparisonRedeGroupFilter === 'sem_rede') {
                     clients = clients.filter(c => !c.ramo || c.ramo === 'N/A');
                 }
+                clientCodes = new Set(clients.map(c => c['Código']));
             }
-            
-            const clientCodes = new Set(clients.map(c => c['Código'] || c['codigo_cliente']));
 
             const filters = {
                 filial,
+                supervisor: supervisorSet,
                 pasta,
                 tipoVenda: tiposVendaSet,
+                seller: sellersSet,
                 supplier: suppliersSet,
                 product: productsSet,
                 city,
@@ -9638,6 +9641,14 @@ const supervisorGroups = new Map();
 
 
         function updateAllComparisonFilters() {
+            const { currentSales: supervisorCurrent, historySales: supervisorHistory } = getComparisonFilteredData({ excludeFilter: 'supervisor' });
+            const supervisorOptionsData = [...supervisorCurrent, ...supervisorHistory];
+            selectedComparisonSupervisors = updateSupervisorFilter(document.getElementById('comparison-supervisor-filter-dropdown'), document.getElementById('comparison-supervisor-filter-text'), selectedComparisonSupervisors, supervisorOptionsData);
+
+            const { currentSales: sellerCurrent, historySales: sellerHistory } = getComparisonFilteredData({ excludeFilter: 'seller' });
+            const sellerOptionsData = [...sellerCurrent, ...sellerHistory];
+            selectedComparisonSellers = updateSellerFilter(selectedComparisonSupervisors, comparisonVendedorFilterDropdown, comparisonVendedorFilterText, selectedComparisonSellers, sellerOptionsData);
+
             const { currentSales: supplierCurrent, historySales: supplierHistory } = getComparisonFilteredData({ excludeFilter: 'supplier' });
             const supplierOptionsData = [...supplierCurrent, ...supplierHistory];
             selectedComparisonSuppliers = updateSupplierFilter(comparisonSupplierFilterDropdown, comparisonSupplierFilterText, selectedComparisonSuppliers, supplierOptionsData, 'comparison');
@@ -9664,7 +9675,6 @@ const supervisorGroups = new Map();
         }
 
         function updateProductFilter(dropdown, filterText, selectedArray, dataSource, filterType = 'comparison', skipRender = false) {
-            if (!dropdown) return selectedArray;
             const forbidden = ['PRODUTO', 'DESCRICAO', 'CODIGO', 'CÓDIGO', 'DESCRIÇÃO'];
             const searchInput = dropdown.querySelector('input[type="text"]');
             const listContainer = dropdown.querySelector('div[id$="-list"]');
@@ -9685,7 +9695,7 @@ const supervisorGroups = new Map();
                   )
                 : products;
 
-            if (!skipRender && listContainer) {
+            if (!skipRender) {
                 const htmlParts = [];
                 for (let i = 0; i < filteredProducts.length; i++) {
                     const [code, name] = filteredProducts[i];
@@ -9727,6 +9737,7 @@ const supervisorGroups = new Map();
 
         function updateStockSellerFilter(skipRender = false) {
             const data = getStockFilteredData({excludeFilter: 'seller'});
+            selectedStockSellers = updateSellerFilter(selectedStockSupervisors, stockVendedorFilterDropdown, stockVendedorFilterText, selectedStockSellers, [...data.sales, ...data.history], skipRender);
         }
 
         function updateStockCitySuggestions(dataSource) {
@@ -9768,19 +9779,21 @@ const supervisorGroups = new Map();
         function getStockFilteredData(options = {}) {
             const { excludeFilter = null } = options;
 
+            const sellersSet = new Set(selectedStockSellers);
             const suppliersSet = new Set(selectedStockSuppliers);
             const productsSet = new Set(selectedStockProducts);
             const tiposVendaSet = new Set(selectedStockTiposVenda);
             const redeSet = new Set(selectedStockRedes);
+            const supervisorSet = new Set(selectedStockSupervisors);
 
             const pasta = currentStockFornecedor;
             const city = stockCityFilter.value.trim().toLowerCase();
             const filial = stockFilialFilter.value;
 
-            let clients = getHierarchyFilteredClients('stock', allClientsData);
-
+            let clientCodes = null;
             if (excludeFilter !== 'rede') {
                 if (stockRedeGroupFilter === 'com_rede' || stockRedeGroupFilter === 'sem_rede') {
+                    let clients = allClientsData;
                     if (stockRedeGroupFilter === 'com_rede') {
                         clients = clients.filter(c => c.ramo && c.ramo !== 'N/A');
                         if (redeSet.size > 0) {
@@ -9789,15 +9802,16 @@ const supervisorGroups = new Map();
                     } else if (stockRedeGroupFilter === 'sem_rede') {
                         clients = clients.filter(c => !c.ramo || c.ramo === 'N/A');
                     }
+                    clientCodes = new Set(clients.map(c => c['Código']));
                 }
             }
-            
-            const clientCodes = new Set(clients.map(c => c['Código'] || c['codigo_cliente']));
 
             const filters = {
                 filial,
+                supervisor: supervisorSet,
                 pasta,
                 tipoVenda: tiposVendaSet,
+                seller: sellersSet,
                 supplier: suppliersSet,
                 product: productsSet,
                 city,
@@ -9816,6 +9830,13 @@ const supervisorGroups = new Map();
             // Debounce stock view update
             if (window.stockUpdateTimeout) clearTimeout(window.stockUpdateTimeout);
             window.stockUpdateTimeout = setTimeout(() => {
+                if (skipFilter !== 'supervisor') {
+                    const supervisorData = getStockFilteredData({ excludeFilter: 'supervisor' });
+                    const supervisorOptionsData = [...supervisorData.sales, ...supervisorData.history];
+                    selectedStockSupervisors = updateSupervisorFilter(document.getElementById('stock-supervisor-filter-dropdown'), document.getElementById('stock-supervisor-filter-text'), selectedStockSupervisors, supervisorOptionsData);
+                }
+
+                updateStockSellerFilter(skipFilter === 'seller');
                 updateStockSupplierFilter(skipFilter === 'supplier');
                 updateStockProductFilter(skipFilter === 'product');
 
@@ -10488,7 +10509,6 @@ const supervisorGroups = new Map();
                 });
 
                 const renderProductTable = (bodyElement, data, showVariation = true) => {
-                if (!bodyElement) return;
                     bodyElement.innerHTML = data.map(p => {
                         const variation = p.monthlyAvgSale > 0 ? ((p.currentMonthSalesQty - p.monthlyAvgSale) / p.monthlyAvgSale) * 100 : (p.currentMonthSalesQty > 0 ? Infinity : 0);
                         const colorClass = variation > 0 ? 'text-green-400' : (variation < 0 ? 'text-red-400' : 'text-slate-400');
@@ -10527,15 +10547,37 @@ const supervisorGroups = new Map();
         function getInnovationsMonthFilteredData(options = {}) {
             const { excludeFilter = null } = options;
 
+            const sellers = selectedInnovationsMonthSellers;
             const city = innovationsMonthCityFilter.value.trim().toLowerCase();
             const filial = innovationsMonthFilialFilter.value;
 
-            let clients = getHierarchyFilteredClients('innovations-month', allClientsData);
+            let clients = allClientsData;
 
             if (filial !== 'ambas') {
                 clients = clients.filter(c => clientLastBranch.get(c['Código']) === filial);
             }
 
+            if (excludeFilter !== 'supervisor' && selectedInnovationsSupervisors.length > 0) {
+                const rcasSet = new Set();
+                selectedInnovationsSupervisors.forEach(sup => {
+                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
+                });
+                clients = clients.filter(c => {
+                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
+                    return clientRcas.some(rca => rcasSet.has(rca));
+                });
+            }
+            if (excludeFilter !== 'seller' && sellers.length > 0) {
+                const rcasOfSellers = new Set();
+                 sellers.forEach(sellerName => {
+                    const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
+                    if (rcaCode) rcasOfSellers.add(rcaCode);
+                });
+                clients = clients.filter(c => {
+                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
+                    return clientRcas.some(rca => rcasOfSellers.has(rca));
+                });
+            }
             if (excludeFilter !== 'city' && city) {
                 clients = clients.filter(c => c.cidade && c.cidade.toLowerCase() === city);
             }
@@ -10544,11 +10586,15 @@ const supervisorGroups = new Map();
         }
 
         function resetInnovationsMonthFilters() {
+            selectedInnovationsSupervisors = [];
             innovationsMonthCityFilter.value = '';
             innovationsMonthFilialFilter.value = 'ambas';
             innovationsMonthCategoryFilter.value = '';
+            selectedInnovationsMonthSellers = [];
             selectedInnovationsMonthTiposVenda = [];
 
+            selectedInnovationsSupervisors = updateSupervisorFilter(document.getElementById('innovations-month-supervisor-filter-dropdown'), document.getElementById('innovations-month-supervisor-filter-text'), selectedInnovationsSupervisors, allSalesData);
+            updateSellerFilter(selectedInnovationsSupervisors, innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, [], allSalesData);
             selectedInnovationsMonthTiposVenda = updateTipoVendaFilter(innovationsMonthTipoVendaFilterDropdown, innovationsMonthTipoVendaFilterText, selectedInnovationsMonthTiposVenda, [...allSalesData, ...allHistoryData]);
             updateInnovationsMonthView();
         }
@@ -10590,6 +10636,18 @@ const supervisorGroups = new Map();
 
             const { clients: filteredClients } = getInnovationsMonthFilteredData();
 
+            const sellers = selectedInnovationsMonthSellers;
+            const sellerRcaCodes = new Set();
+            if (sellers.length > 0) {
+                sellers.forEach(sellerName => {
+                    const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
+                    if (rcaCode) sellerRcaCodes.add(rcaCode);
+                });
+            } else if (selectedInnovationsSupervisors.length > 0) {
+                selectedInnovationsSupervisors.forEach(sup => {
+                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => sellerRcaCodes.add(rca));
+                });
+            }
 
             const activeClients = filteredClients.filter(c => {
                 const codcli = c['Código'];
@@ -10653,6 +10711,21 @@ const supervisorGroups = new Map();
                         const category = globalProductToCategoryMap ? globalProductToCategoryMap.get(prodCode) : null;
                         if (!category) return; // Should not happen if innovation data is consistent
 
+                        // Check RCA Filter
+                        let soldBySelected = false;
+                        if (sellerRcaCodes.size === 0) {
+                            soldBySelected = true;
+                        } else {
+                            // Check intersection of rcas and sellerRcaCodes
+                            for (const rca of rcas) {
+                                if (sellerRcaCodes.has(rca)) {
+                                    soldBySelected = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (!soldBySelected) return;
 
                         const targetSetField = isCurrent ? 'current' : 'previous';
 
@@ -10914,7 +10987,7 @@ const supervisorGroups = new Map();
             const innovationsByClientLegend = document.getElementById('innovations-by-client-legend');
 
             categoryLegendForExport = chartLabels.map((name, index) => `${index + 1} - ${name}`);
-            if (innovationsByClientLegend) innovationsByClientLegend.innerHTML = `<strong>Legenda:</strong> ${categoryLegendForExport.join('; ')}`;
+            innovationsByClientLegend.innerHTML = `<strong>Legenda:</strong> ${categoryLegendForExport.join('; ')}`;
 
             let tableHeadHTML = `
                 <tr>
@@ -10928,7 +11001,7 @@ const supervisorGroups = new Map();
                 tableHeadHTML += `<th class="px-2 py-2 text-center">${index + 1}</th>`;
             });
             tableHeadHTML += `</tr>`;
-            if (innovationsByClientTableHead) innovationsByClientTableHead.innerHTML = tableHeadHTML;
+            innovationsByClientTableHead.innerHTML = tableHeadHTML;
 
             // Build Client Status List
             // Optimized: Iterate Active Clients and check sets in categoryResults
@@ -10994,7 +11067,7 @@ const supervisorGroups = new Map();
                     });
                     tableBodyHTML += `</tr>`;
                 });
-                if (innovationsByClientTableBody) innovationsByClientTableBody.innerHTML = tableBodyHTML;
+                innovationsByClientTableBody.innerHTML = tableBodyHTML;
 
                 // Update Pagination Controls
                 const prevBtn = document.getElementById('innovations-prev-page-btn');
@@ -11198,7 +11271,8 @@ const supervisorGroups = new Map();
             }
 
             let fileNameParam = 'geral';
-            if (hierarchyState['innovations-month'] && hierarchyState['innovations-month'].promotors.size === 1) {
+            if (selectedInnovationsMonthSellers.length === 1) {
+                fileNameParam = getFirstName(selectedInnovationsMonthSellers[0]);
             } else if (cidade) {
                 fileNameParam = cidade;
             }
@@ -11218,13 +11292,19 @@ const supervisorGroups = new Map();
             const supplierText = document.getElementById('coverage-supplier-filter-text').textContent;
             const generationDate = new Date().toLocaleString('pt-BR');
 
+            let dateRangeText = '';
+            if (selectedCoverageDateRange && selectedCoverageDateRange.length === 2) {
+                const formatDate = (date) => date.toLocaleDateString('pt-BR');
+                dateRangeText = ` | Data: ${formatDate(selectedCoverageDateRange[0])} a ${formatDate(selectedCoverageDateRange[1])}`;
+            }
+
             doc.setFontSize(18);
             doc.text('Relatório de Cobertura (Estoque x PDVs)', 14, 22);
             doc.setFontSize(10);
             doc.setTextColor(10);
             doc.text(`Data de Emissão: ${generationDate}`, 14, 30);
 
-            let filterText = `Filtros Aplicados: Supervisor: ${supervisor} | Vendedor: ${vendedor} | Filial: ${filial} | Cidade: ${cidade || 'Todas'} | Fornecedor: ${supplierText}`;
+            let filterText = `Filtros Aplicados: Supervisor: ${supervisor} | Vendedor: ${vendedor} | Filial: ${filial} | Cidade: ${cidade || 'Todas'} | Fornecedor: ${supplierText}${dateRangeText}`;
             const splitFilters = doc.splitTextToSize(filterText, 270);
             doc.text(splitFilters, 14, 36);
 
@@ -11320,7 +11400,8 @@ const supervisorGroups = new Map();
             }
 
             let fileNameParam = 'geral';
-            if (hierarchyState['coverage'] && hierarchyState['coverage'].promotors.size === 1) {
+            if (selectedCoverageSellers.length === 1) {
+                fileNameParam = getFirstName(selectedCoverageSellers[0]);
             } else if (cidade) {
                 fileNameParam = cidade;
             }
@@ -11447,7 +11528,8 @@ const supervisorGroups = new Map();
             for(let i = 1; i <= pageCount; i++) { doc.setPage(i); doc.setFontSize(9); doc.setTextColor(10); doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 10, { align: 'center' }); }
 
             let fileNameParam = 'geral';
-            if (hierarchyState['city'] && hierarchyState['city'].promotors.size === 1) {
+            if (selectedCitySellers.length === 1) {
+                fileNameParam = getFirstName(selectedCitySellers[0]);
             } else if (city) {
                 fileNameParam = city;
             }
@@ -11544,37 +11626,40 @@ const supervisorGroups = new Map();
             });
         }
 
-        function toggleMobileMenu() {
-            const mobileMenu = document.getElementById('mobile-menu');
-            if (mobileMenu) {
-                if (mobileMenu.classList.contains('hidden')) {
-                    mobileMenu.classList.remove('hidden');
-                    setTimeout(() => mobileMenu.classList.add('open'), 10);
-                } else {
-                    mobileMenu.classList.remove('open');
-                    setTimeout(() => mobileMenu.classList.add('hidden'), 300);
+        function toggleSidebar() {
+            const sideMenu = document.getElementById('side-menu');
+            const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+            if (sideMenu) {
+                sideMenu.classList.toggle('-translate-x-full');
+                if (sidebarOverlay) {
+                    if (sideMenu.classList.contains('-translate-x-full')) {
+                        sidebarOverlay.classList.add('hidden');
+                    } else {
+                        sidebarOverlay.classList.remove('hidden');
+                    }
                 }
             }
         }
 
         async function navigateTo(view) {
-            const mobileMenu = document.getElementById('mobile-menu');
-            if (mobileMenu && mobileMenu.classList.contains('open')) {
-                toggleMobileMenu();
-            }
+            const sideMenu = document.getElementById('side-menu');
+            const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+            if (sideMenu) sideMenu.classList.add('-translate-x-full');
+            if (sidebarOverlay) sidebarOverlay.classList.add('hidden');
 
             const viewNameMap = {
-                dashboard: 'Visão Geral',
+                dashboard: 'Dashboard',
                 pedidos: 'Pedidos',
                 comparativo: 'Comparativo',
                 estoque: 'Estoque',
                 cobertura: 'Cobertura',
-                cidades: 'Geolocalização',
+                cidades: 'Cidades',
                 semanal: 'Semanal',
                 'inovacoes-mes': 'Inovações',
                 mix: 'Mix',
-                'meta-realizado': 'Meta Vs. Realizado',
-                'goals': 'Metas'
+                'meta-realizado': 'Meta Vs. Realizado'
             };
             const friendlyName = viewNameMap[view] || 'a página';
 
@@ -11582,28 +11667,22 @@ const supervisorGroups = new Map();
 
             // This function now runs after the loader is visible
             const updateContent = () => {
-                [mainDashboard, cityView, weeklyView, comparisonView, stockView, innovationsMonthView, coverageView, document.getElementById('mix-view'), goalsView, document.getElementById('meta-realizado-view'), document.getElementById('ai-insights-full-page')].forEach(el => {
+                [mainDashboard, cityView, weeklyView, comparisonView, stockView, innovationsMonthView, coverageView, document.getElementById('mix-view'), goalsView, document.getElementById('meta-realizado-view')].forEach(el => {
                     if(el) el.classList.add('hidden');
                 });
 
                 document.querySelectorAll('.nav-link').forEach(link => {
-                    link.classList.remove('active-nav');
+                    link.classList.remove('bg-slate-700', 'text-white');
+                    const icon = link.querySelector('svg');
+                    if(icon) icon.classList.remove('text-white');
                 });
 
                 const activeLink = document.querySelector(`.nav-link[data-target="${view}"]`);
                 if (activeLink) {
-                    activeLink.classList.add('active-nav');
+                    activeLink.classList.add('bg-slate-700', 'text-white');
+                    const icon = activeLink.querySelector('svg');
+                    if(icon) icon.classList.add('text-white');
                 }
-                // Also update mobile active state
-                document.querySelectorAll('.mobile-nav-link').forEach(link => {
-                    if (link.dataset.target === view) {
-                        link.classList.add('bg-blue-600', 'text-white');
-                        link.classList.remove('bg-slate-800', 'text-slate-300');
-                    } else {
-                        link.classList.remove('bg-blue-600', 'text-white');
-                        link.classList.add('bg-slate-800', 'text-slate-300');
-                    }
-                });
 
                 switch(view) {
                     case 'dashboard':
@@ -11670,6 +11749,8 @@ const supervisorGroups = new Map();
                     case 'inovacoes-mes':
                         innovationsMonthView.classList.remove('hidden');
                         if (viewState.inovacoes.dirty) {
+                            selectedInnovationsSupervisors = updateSupervisorFilter(document.getElementById('innovations-month-supervisor-filter-dropdown'), document.getElementById('innovations-month-supervisor-filter-text'), selectedInnovationsSupervisors, allSalesData);
+                            updateSellerFilter(selectedInnovationsSupervisors, innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, [], allSalesData);
                             selectedInnovationsMonthTiposVenda = updateTipoVendaFilter(innovationsMonthTipoVendaFilterDropdown, innovationsMonthTipoVendaFilterText, selectedInnovationsMonthTiposVenda, [...allSalesData, ...allHistoryData]);
                             updateInnovationsMonthView();
                             viewState.inovacoes.dirty = false;
@@ -11694,7 +11775,9 @@ const supervisorGroups = new Map();
                         document.getElementById('meta-realizado-view').classList.remove('hidden');
                         if (viewState.metaRealizado.dirty) {
                             // Initial filter logic if needed, similar to other views
-
+                            selectedMetaRealizadoSupervisors = updateSupervisorFilter(document.getElementById('meta-realizado-supervisor-filter-dropdown'), document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
+                            selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData]);
+                            
                             updateMetaRealizadoView();
                             viewState.metaRealizado.dirty = false;
                         }
@@ -11921,10 +12004,6 @@ const supervisorGroups = new Map();
                     await clearTable('data_active_products', 'code');
                     await uploadBatchParallel('data_active_products', data.active_products, false);
                 }
-                if (data.hierarchy && data.hierarchy.length > 0) {
-                    await clearTable('data_hierarchy');
-                    await uploadBatchParallel('data_hierarchy', data.hierarchy, false);
-                }
                 if (data.metadata && data.metadata.length > 0) {
                     // Update last_update timestamp
                     const now = new Date();
@@ -11978,51 +12057,7 @@ const supervisorGroups = new Map();
                 alert('Erro durante o upload: ' + msg);
             }
         }
-        // Helper to mark dirty states
-        const markDirty = (view) => {
-            if (viewState[view]) viewState[view].dirty = true;
-        };
-
-        // --- Dashboard/Pedidos Filters ---
-        const updateDashboard = () => {
-            markDirty('dashboard'); markDirty('pedidos');
-            updateAllVisuals();
-        };
-
         function setupEventListeners() {
-            // Drag-to-Scroll for Desktop Nav
-            const navContainer = document.getElementById('desktop-nav-container');
-            if (navContainer) {
-                let isDown = false;
-                let startX;
-                let scrollLeft;
-
-                navContainer.addEventListener('mousedown', (e) => {
-                    isDown = true;
-                    navContainer.classList.add('cursor-grabbing');
-                    startX = e.pageX - navContainer.offsetLeft;
-                    scrollLeft = navContainer.scrollLeft;
-                });
-
-                navContainer.addEventListener('mouseleave', () => {
-                    isDown = false;
-                    navContainer.classList.remove('cursor-grabbing');
-                });
-
-                navContainer.addEventListener('mouseup', () => {
-                    isDown = false;
-                    navContainer.classList.remove('cursor-grabbing');
-                });
-
-                navContainer.addEventListener('mousemove', (e) => {
-                    if (!isDown) return;
-                    e.preventDefault();
-                    const x = e.pageX - navContainer.offsetLeft;
-                    const walk = (x - startX) * 2; // Scroll-fast
-                    navContainer.scrollLeft = scrollLeft - walk;
-                });
-            }
-
             // Uploader Logic
             const openAdminBtn = document.getElementById('open-admin-btn');
             const adminModal = document.getElementById('admin-uploader-modal');
@@ -12035,11 +12070,14 @@ const supervisorGroups = new Map();
                         return;
                     }
                     adminModal.classList.remove('hidden');
-                    // Close mobile menu if open
-                    const mobileMenu = document.getElementById('mobile-menu');
-                    if (mobileMenu && mobileMenu.classList.contains('open')) {
-                        toggleMobileMenu();
+                    // Close sidebar on mobile if open
+                    const sideMenu = document.getElementById('side-menu');
+                    const sidebarOverlay = document.getElementById('sidebar-overlay');
+                    if (sideMenu) {
+                        sideMenu.classList.remove('translate-x-0'); 
+                        sideMenu.classList.add('-translate-x-full');
                     }
+                    if (sidebarOverlay) sidebarOverlay.classList.add('hidden');
                 });
             }
             if (adminCloseBtn) {
@@ -12056,10 +12094,9 @@ const supervisorGroups = new Map();
                     const productsFile = document.getElementById('products-file-input').files[0];
                     const historyFile = document.getElementById('history-file-input').files[0];
                     const innovationsFile = document.getElementById('innovations-file-input').files[0];
-                    const hierarchyFile = document.getElementById('hierarchy-file-input').files[0];
 
-                    if (!salesFile && !historyFile && !hierarchyFile) {
-                        alert("Pelo menos um arquivo (Vendas, Histórico ou Hierarquia) é necessário.");
+                    if (!salesFile && !historyFile) {
+                        alert("Pelo menos o arquivo de Vendas ou Histórico é necessário.");
                         return;
                     }
 
@@ -12069,7 +12106,7 @@ const supervisorGroups = new Map();
                     document.getElementById('status-container').classList.remove('hidden');
                     document.getElementById('status-text').textContent = "Processando arquivos...";
 
-                    worker.postMessage({ salesFile, clientsFile, productsFile, historyFile, innovationsFile, hierarchyFile });
+                    worker.postMessage({ salesFile, clientsFile, productsFile, historyFile, innovationsFile });
 
                     worker.onmessage = (e) => {
                         const { type, data, status, percentage, message } = e.data;
@@ -12087,214 +12124,234 @@ const supervisorGroups = new Map();
                 });
             }
 
-            const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
-            if (mobileMenuToggle) mobileMenuToggle.addEventListener('click', toggleMobileMenu);
-
-            const handleNavClick = (e) => {
-                const target = e.currentTarget.dataset.target;
-                if (e.ctrlKey || e.metaKey) {
-                    e.preventDefault();
-                    const url = new URL(window.location.href);
-                    url.searchParams.set('ir_para', target);
-                    window.open(url.toString(), '_blank');
-                } else {
-                    navigateTo(target);
-                }
+            // Helper to mark dirty states
+            const markDirty = (view) => {
+                if (viewState[view]) viewState[view].dirty = true;
             };
 
-            document.querySelectorAll('.nav-link').forEach(link => link.addEventListener('click', handleNavClick));
-            
-            document.querySelectorAll('.mobile-nav-link').forEach(link => {
+            document.querySelectorAll('.sidebar-toggle').forEach(btn => btn.addEventListener('click', toggleSidebar));
+            const closeSidebarBtn = document.getElementById('close-sidebar-btn');
+            if(closeSidebarBtn) closeSidebarBtn.addEventListener('click', toggleSidebar);
+            const sidebarOverlay = document.getElementById('sidebar-overlay');
+            if(sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
+
+            document.querySelectorAll('.nav-link').forEach(link => {
                 link.addEventListener('click', (e) => {
-                    handleNavClick(e);
-                    toggleMobileMenu();
+                    const target = e.currentTarget.dataset.target;
+
+                    if (e.ctrlKey || e.metaKey) {
+                        e.preventDefault();
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('ir_para', target);
+                        window.open(url.toString(), '_blank');
+                    } else {
+                        navigateTo(target);
+                    }
                 });
             });
 
+            // --- Dashboard/Pedidos Filters ---
+            const updateDashboard = () => {
+                markDirty('dashboard'); markDirty('pedidos');
+                updateAllVisuals();
+            };
+
             const supervisorFilterBtn = document.getElementById('supervisor-filter-btn');
             const supervisorFilterDropdown = document.getElementById('supervisor-filter-dropdown');
-            if (supervisorFilterBtn && supervisorFilterDropdown) {
-                supervisorFilterBtn.addEventListener('click', () => supervisorFilterDropdown.classList.toggle('hidden'));
-                supervisorFilterDropdown.addEventListener('change', (e) => {
-                    if (e.target.type === 'checkbox') {
-                        const { value, checked } = e.target;
-                        mainTableState.currentPage = 1;
-                        updateDashboard();
-                    }
-                });
-            }
+            supervisorFilterBtn.addEventListener('click', () => supervisorFilterDropdown.classList.toggle('hidden'));
+            supervisorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedMainSupervisors.push(value);
+                    else selectedMainSupervisors = selectedMainSupervisors.filter(s => s !== value);
+
+                    selectedSellers = []; // Reset sellers when supervisor changes to avoid inconsistent state? Or keep valid intersection?
+                    // Better: Re-run updateSellerFilter which filters 'selectedSellers' to only keep valid ones.
+                    selectedMainSupervisors = updateSupervisorFilter(supervisorFilterDropdown, document.getElementById('supervisor-filter-text'), selectedMainSupervisors, allSalesData);
+                    selectedSellers = updateSellerFilter(selectedMainSupervisors, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
+                    mainTableState.currentPage = 1;
+                    updateDashboard();
+                }
+            });
 
             const fornecedorFilterBtn = document.getElementById('fornecedor-filter-btn');
             const fornecedorFilterDropdown = document.getElementById('fornecedor-filter-dropdown');
-            if (fornecedorFilterBtn && fornecedorFilterDropdown) {
-                fornecedorFilterBtn.addEventListener('click', () => fornecedorFilterDropdown.classList.toggle('hidden'));
-                fornecedorFilterDropdown.addEventListener('change', (e) => {
-                    if (e.target.type === 'checkbox') {
-                        const { value, checked } = e.target;
-                        if (checked) selectedMainSuppliers.push(value);
-                        else selectedMainSuppliers = selectedMainSuppliers.filter(s => s !== value);
+            fornecedorFilterBtn.addEventListener('click', () => fornecedorFilterDropdown.classList.toggle('hidden'));
+            fornecedorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedMainSuppliers.push(value);
+                    else selectedMainSuppliers = selectedMainSuppliers.filter(s => s !== value);
 
-                        let supplierDataSource = [...allSalesData, ...allHistoryData];
-                        if (currentFornecedor) {
-                            supplierDataSource = supplierDataSource.filter(s => s.OBSERVACAOFOR === currentFornecedor);
-                        }
-                        selectedMainSuppliers = updateSupplierFilter(fornecedorFilterDropdown, document.getElementById('fornecedor-filter-text'), selectedMainSuppliers, supplierDataSource, 'main');
-                        mainTableState.currentPage = 1;
-                        updateDashboard();
+                    let supplierDataSource = [...allSalesData, ...allHistoryData];
+                    if (currentFornecedor) {
+                        supplierDataSource = supplierDataSource.filter(s => s.OBSERVACAOFOR === currentFornecedor);
                     }
-                });
-            }
-
-            if (vendedorFilterBtn && vendedorFilterDropdown) {
-                vendedorFilterBtn.addEventListener('click', () => vendedorFilterDropdown.classList.toggle('hidden'));
-                vendedorFilterDropdown.addEventListener('change', (e) => {
-                    if (e.target.type === 'checkbox') {
-                        const { value, checked } = e.target;
-                        mainTableState.currentPage = 1;
-                        updateDashboard();
-                    }
-                });
-            }
-
-            if (tipoVendaFilterBtn && tipoVendaFilterDropdown) {
-                tipoVendaFilterBtn.addEventListener('click', () => tipoVendaFilterDropdown.classList.toggle('hidden'));
-                tipoVendaFilterDropdown.addEventListener('change', (e) => {
-                    if (e.target.type === 'checkbox') {
-                        const { value, checked } = e.target;
-                        if (checked) selectedTiposVenda.push(value);
-                        else selectedTiposVenda = selectedTiposVenda.filter(s => s !== value);
-                        selectedTiposVenda = updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
-                        mainTableState.currentPage = 1;
-                        updateDashboard();
-                    }
-                });
-            }
-
-            if (posicaoFilter) posicaoFilter.addEventListener('change', () => { mainTableState.currentPage = 1; updateDashboard(); });
-            const debouncedUpdateDashboard = debounce(updateDashboard, 400);
-            if (codcliFilter) {
-                codcliFilter.addEventListener('input', (e) => {
-                    e.target.value = e.target.value.replace(/[^0-9]/g, '');
+                    selectedMainSuppliers = updateSupplierFilter(fornecedorFilterDropdown, document.getElementById('fornecedor-filter-text'), selectedMainSuppliers, supplierDataSource, 'main');
                     mainTableState.currentPage = 1;
-                    debouncedUpdateDashboard();
-                });
-            }
-            if (clearFiltersBtn) clearFiltersBtn.addEventListener('click', () => { resetMainFilters(); markDirty('dashboard'); markDirty('pedidos'); });
+                    updateDashboard();
+                }
+            });
 
-            if (prevPageBtn) {
-                prevPageBtn.addEventListener('click', () => {
-                    if (mainTableState.currentPage > 1) {
-                        mainTableState.currentPage--;
-                        renderTable(mainTableState.filteredData);
-                    }
-                });
-            }
-            if (nextPageBtn) {
-                nextPageBtn.addEventListener('click', () => {
-                    if (mainTableState.currentPage < mainTableState.totalPages) {
-                        mainTableState.currentPage++;
-                        renderTable(mainTableState.filteredData);
-                    }
-                });
-            }
+            vendedorFilterBtn.addEventListener('click', () => vendedorFilterDropdown.classList.toggle('hidden'));
+            vendedorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedSellers.push(value); else selectedSellers = selectedSellers.filter(s => s !== value);
+                    selectedSellers = updateSellerFilter(selectedMainSupervisors, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
+                    mainTableState.currentPage = 1;
+                    updateDashboard();
+                }
+            });
 
-            if (mainComRedeBtn) mainComRedeBtn.addEventListener('click', () => mainRedeFilterDropdown.classList.toggle('hidden'));
-            if (mainRedeGroupContainer) {
-                mainRedeGroupContainer.addEventListener('click', (e) => {
-                    if(e.target.closest('button')) {
-                        const button = e.target.closest('button');
-                        mainRedeGroupFilter = button.dataset.group;
-                        mainRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                        button.classList.add('active');
-                        if (mainRedeGroupFilter !== 'com_rede') {
-                            mainRedeFilterDropdown.classList.add('hidden');
-                            selectedMainRedes = [];
-                        }
-                        updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
-                        mainTableState.currentPage = 1;
-                        updateDashboard();
+            tipoVendaFilterBtn.addEventListener('click', () => tipoVendaFilterDropdown.classList.toggle('hidden'));
+            tipoVendaFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedTiposVenda.push(value);
+                    else selectedTiposVenda = selectedTiposVenda.filter(s => s !== value);
+                    selectedTiposVenda = updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
+                    mainTableState.currentPage = 1;
+                    updateDashboard();
+                }
+            });
+
+            posicaoFilter.addEventListener('change', () => { mainTableState.currentPage = 1; updateDashboard(); });
+            const debouncedUpdateDashboard = debounce(updateDashboard, 400);
+            codcliFilter.addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/[^0-9]/g, '');
+                mainTableState.currentPage = 1;
+                debouncedUpdateDashboard();
+            });
+            clearFiltersBtn.addEventListener('click', () => { resetMainFilters(); markDirty('dashboard'); markDirty('pedidos'); });
+
+            prevPageBtn.addEventListener('click', () => {
+                if (mainTableState.currentPage > 1) {
+                    mainTableState.currentPage--;
+                    renderTable(mainTableState.filteredData);
+                }
+            });
+            nextPageBtn.addEventListener('click', () => {
+                if (mainTableState.currentPage < mainTableState.totalPages) {
+                    mainTableState.currentPage++;
+                    renderTable(mainTableState.filteredData);
+                }
+            });
+
+            mainComRedeBtn.addEventListener('click', () => mainRedeFilterDropdown.classList.toggle('hidden'));
+            mainRedeGroupContainer.addEventListener('click', (e) => {
+                if(e.target.closest('button')) {
+                    const button = e.target.closest('button');
+                    mainRedeGroupFilter = button.dataset.group;
+                    mainRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                    button.classList.add('active');
+                    if (mainRedeGroupFilter !== 'com_rede') {
+                        mainRedeFilterDropdown.classList.add('hidden');
+                        selectedMainRedes = [];
                     }
-                });
-            }
-            if (mainRedeFilterDropdown) {
-                mainRedeFilterDropdown.addEventListener('change', (e) => {
-                    if (e.target.type === 'checkbox') {
-                        const { value, checked } = e.target;
-                        if (checked) selectedMainRedes.push(value);
-                        else selectedMainRedes = selectedMainRedes.filter(r => r !== value);
-                        selectedMainRedes = updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
-                        mainTableState.currentPage = 1;
-                        updateDashboard();
-                    }
-                });
-            }
+                    updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
+                    mainTableState.currentPage = 1;
+                    updateDashboard();
+                }
+            });
+            mainRedeFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedMainRedes.push(value);
+                    else selectedMainRedes = selectedMainRedes.filter(r => r !== value);
+                    selectedMainRedes = updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
+                    mainTableState.currentPage = 1;
+                    updateDashboard();
+                }
+            });
 
             // --- City View Filters ---
             const updateCity = () => {
                 markDirty('cidades');
                 handleCityFilterChange();
             };
-            if (citySupplierFilterDropdown) {
-                citySupplierFilterDropdown.addEventListener('change', (e) => {
-                    if (e.target.type === 'checkbox' && e.target.dataset.filterType === 'city') {
-                        const { value, checked } = e.target;
-                        if (checked) {
-                            if (!selectedCitySuppliers.includes(value)) selectedCitySuppliers.push(value);
-                        } else {
-                            selectedCitySuppliers = selectedCitySuppliers.filter(s => s !== value);
-                        }
-                        handleCityFilterChange({ skipFilter: 'supplier' });
+
+            const citySupervisorFilterBtn = document.getElementById('city-supervisor-filter-btn');
+            const citySupervisorFilterDropdown = document.getElementById('city-supervisor-filter-dropdown');
+            citySupervisorFilterBtn.addEventListener('click', () => citySupervisorFilterDropdown.classList.toggle('hidden'));
+            citySupervisorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedCitySupervisors.push(value);
+                    else selectedCitySupervisors = selectedCitySupervisors.filter(s => s !== value);
+
+                    selectedCitySellers = [];
+                    handleCityFilterChange();
+                }
+            });
+
+            cityVendedorFilterBtn.addEventListener('click', () => cityVendedorFilterDropdown.classList.toggle('hidden'));
+            cityVendedorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) {
+                        if (!selectedCitySellers.includes(value)) selectedCitySellers.push(value);
+                    } else {
+                        selectedCitySellers = selectedCitySellers.filter(s => s !== value);
                     }
-                });
-            }
+                    handleCityFilterChange({ skipFilter: 'seller' });
+                }
+            });
 
-            if (cityTipoVendaFilterBtn && cityTipoVendaFilterDropdown) {
-                cityTipoVendaFilterBtn.addEventListener('click', () => cityTipoVendaFilterDropdown.classList.toggle('hidden'));
-                cityTipoVendaFilterDropdown.addEventListener('change', (e) => {
-                    if (e.target.type === 'checkbox') {
-                        const { value, checked } = e.target;
-                        if (checked) {
-                            if (!selectedCityTiposVenda.includes(value)) selectedCityTiposVenda.push(value);
-                        } else {
-                            selectedCityTiposVenda = selectedCityTiposVenda.filter(s => s !== value);
-                        }
-                        handleCityFilterChange({ skipFilter: 'tipoVenda' });
+            citySupplierFilterBtn.addEventListener('click', () => citySupplierFilterDropdown.classList.toggle('hidden'));
+            citySupplierFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox' && e.target.dataset.filterType === 'city') {
+                    const { value, checked } = e.target;
+                    if (checked) {
+                        if (!selectedCitySuppliers.includes(value)) selectedCitySuppliers.push(value);
+                    } else {
+                        selectedCitySuppliers = selectedCitySuppliers.filter(s => s !== value);
                     }
-                });
-            }
+                    handleCityFilterChange({ skipFilter: 'supplier' });
+                }
+            });
 
-            if (cityComRedeBtn) cityComRedeBtn.addEventListener('click', () => cityRedeFilterDropdown.classList.toggle('hidden'));
-            if (cityRedeGroupContainer) {
-                cityRedeGroupContainer.addEventListener('click', (e) => {
-                    if(e.target.closest('button')) {
-                        const button = e.target.closest('button');
-                        cityRedeGroupFilter = button.dataset.group;
-                        cityRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                        button.classList.add('active');
-
-                        if (cityRedeGroupFilter !== 'com_rede') {
-                            cityRedeFilterDropdown.classList.add('hidden');
-                            selectedCityRedes = [];
-                        }
-                        handleCityFilterChange();
+            cityTipoVendaFilterBtn.addEventListener('click', () => cityTipoVendaFilterDropdown.classList.toggle('hidden'));
+            cityTipoVendaFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) {
+                        if (!selectedCityTiposVenda.includes(value)) selectedCityTiposVenda.push(value);
+                    } else {
+                        selectedCityTiposVenda = selectedCityTiposVenda.filter(s => s !== value);
                     }
-                });
-            }
-            if (cityRedeFilterDropdown) {
-                cityRedeFilterDropdown.addEventListener('change', (e) => {
-                    if (e.target.type === 'checkbox') {
-                        const { value, checked } = e.target;
-                        if (checked) selectedCityRedes.push(value);
-                        else selectedCityRedes = selectedCityRedes.filter(r => r !== value);
+                    handleCityFilterChange({ skipFilter: 'tipoVenda' });
+                }
+            });
 
-                        cityRedeGroupFilter = 'com_rede';
-                        cityRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                        cityComRedeBtn.classList.add('active');
+            cityComRedeBtn.addEventListener('click', () => cityRedeFilterDropdown.classList.toggle('hidden'));
+            cityRedeGroupContainer.addEventListener('click', (e) => {
+                if(e.target.closest('button')) {
+                    const button = e.target.closest('button');
+                    cityRedeGroupFilter = button.dataset.group;
+                    cityRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                    button.classList.add('active');
 
-                        handleCityFilterChange({ skipFilter: 'rede' });
+                    if (cityRedeGroupFilter !== 'com_rede') {
+                        cityRedeFilterDropdown.classList.add('hidden');
+                        selectedCityRedes = [];
                     }
-                });
-            }
+                    handleCityFilterChange();
+                }
+            });
+            cityRedeFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedCityRedes.push(value);
+                    else selectedCityRedes = selectedCityRedes.filter(r => r !== value);
+
+                    cityRedeGroupFilter = 'com_rede';
+                    cityRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                    cityComRedeBtn.classList.add('active');
+
+                    handleCityFilterChange({ skipFilter: 'rede' });
+                }
+            });
 
             const toggleCityMapBtn = document.getElementById('toggle-city-map-btn');
             if (toggleCityMapBtn) {
@@ -12334,75 +12391,90 @@ const supervisorGroups = new Map();
                 });
             }
 
-            if (clearCityFiltersBtn) clearCityFiltersBtn.addEventListener('click', () => { resetCityFilters(); markDirty('cidades'); });
+            clearCityFiltersBtn.addEventListener('click', () => { resetCityFilters(); markDirty('cidades'); });
             const debouncedUpdateCity = debounce(updateCity, 400);
-            if (cityCodCliFilter) {
-                cityCodCliFilter.addEventListener('input', (e) => {
-                    e.target.value = e.target.value.replace(/[^0-9]/g, '');
-                    debouncedUpdateCity();
-                });
-            }
+            cityCodCliFilter.addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/[^0-9]/g, '');
+                debouncedUpdateCity();
+            });
 
             const debouncedCitySearch = debounce(() => {
                 const { clients } = getCityFilteredData({ excludeFilter: 'city' });
                 updateCitySuggestions(cityNameFilter, citySuggestions, clients);
             }, 300);
 
-            if (cityNameFilter) {
-                cityNameFilter.addEventListener('input', (e) => {
-                    e.target.value = e.target.value.replace(/[0-9]/g, '');
-                    debouncedCitySearch();
-                });
-                cityNameFilter.addEventListener('focus', () => {
-                    const { clients } = getCityFilteredData({ excludeFilter: 'city' });
-                    citySuggestions.classList.remove('manual-hide');
-                    updateCitySuggestions(cityNameFilter, citySuggestions, clients);
-                });
-                cityNameFilter.addEventListener('blur', () => setTimeout(() => citySuggestions.classList.add('hidden'), 150));
-                cityNameFilter.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        citySuggestions.classList.add('hidden', 'manual-hide');
-                        handleCityFilterChange();
-                        e.target.blur();
-                    }
-                });
-            }
+            cityNameFilter.addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/[0-9]/g, '');
+                debouncedCitySearch();
+            });
+            cityNameFilter.addEventListener('focus', () => {
+                const { clients } = getCityFilteredData({ excludeFilter: 'city' });
+                citySuggestions.classList.remove('manual-hide');
+                updateCitySuggestions(cityNameFilter, citySuggestions, clients);
+            });
+            cityNameFilter.addEventListener('blur', () => setTimeout(() => citySuggestions.classList.add('hidden'), 150));
+            cityNameFilter.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    citySuggestions.classList.add('hidden', 'manual-hide');
+                    handleCityFilterChange();
+                    e.target.blur();
+                }
+            });
 
             document.addEventListener('click', (e) => {
-                if (supervisorFilterBtn && supervisorFilterDropdown && !supervisorFilterBtn.contains(e.target) && !supervisorFilterDropdown.contains(e.target)) supervisorFilterDropdown.classList.add('hidden');
-                if (fornecedorFilterBtn && fornecedorFilterDropdown && !fornecedorFilterBtn.contains(e.target) && !fornecedorFilterDropdown.contains(e.target)) fornecedorFilterDropdown.classList.add('hidden');
-                if (vendedorFilterBtn && vendedorFilterDropdown && !vendedorFilterBtn.contains(e.target) && !vendedorFilterDropdown.contains(e.target)) vendedorFilterDropdown.classList.add('hidden');
-                if (tipoVendaFilterBtn && tipoVendaFilterDropdown && !tipoVendaFilterBtn.contains(e.target) && !tipoVendaFilterDropdown.contains(e.target)) tipoVendaFilterDropdown.classList.add('hidden');
+                if (!supervisorFilterBtn.contains(e.target) && !supervisorFilterDropdown.contains(e.target)) supervisorFilterDropdown.classList.add('hidden');
+                if (!fornecedorFilterBtn.contains(e.target) && !fornecedorFilterDropdown.contains(e.target)) fornecedorFilterDropdown.classList.add('hidden');
+                if (!vendedorFilterBtn.contains(e.target) && !vendedorFilterDropdown.contains(e.target)) vendedorFilterDropdown.classList.add('hidden');
+                if (!tipoVendaFilterBtn.contains(e.target) && !tipoVendaFilterDropdown.contains(e.target)) tipoVendaFilterDropdown.classList.add('hidden');
 
-                if (citySupplierFilterBtn && citySupplierFilterDropdown && !citySupplierFilterBtn.contains(e.target) && !citySupplierFilterDropdown.contains(e.target)) citySupplierFilterDropdown.classList.add('hidden');
-                if (cityTipoVendaFilterBtn && cityTipoVendaFilterDropdown && !cityTipoVendaFilterBtn.contains(e.target) && !cityTipoVendaFilterDropdown.contains(e.target)) cityTipoVendaFilterDropdown.classList.add('hidden');
-                if (cityComRedeBtn && cityRedeFilterDropdown && !cityComRedeBtn.contains(e.target) && !cityRedeFilterDropdown.contains(e.target)) cityRedeFilterDropdown.classList.add('hidden');
-                if (mainComRedeBtn && mainRedeFilterDropdown && !mainComRedeBtn.contains(e.target) && !mainRedeFilterDropdown.contains(e.target)) mainRedeFilterDropdown.classList.add('hidden');
+                if (!citySupervisorFilterBtn.contains(e.target) && !citySupervisorFilterDropdown.contains(e.target)) citySupervisorFilterDropdown.classList.add('hidden');
+                if (!cityVendedorFilterBtn.contains(e.target) && !cityVendedorFilterDropdown.contains(e.target)) cityVendedorFilterDropdown.classList.add('hidden');
+                if (!citySupplierFilterBtn.contains(e.target) && !citySupplierFilterDropdown.contains(e.target)) citySupplierFilterDropdown.classList.add('hidden');
+                if (!cityTipoVendaFilterBtn.contains(e.target) && !cityTipoVendaFilterDropdown.contains(e.target)) cityTipoVendaFilterDropdown.classList.add('hidden');
+                if (!cityComRedeBtn.contains(e.target) && !cityRedeFilterDropdown.contains(e.target)) cityRedeFilterDropdown.classList.add('hidden');
+                if (!mainComRedeBtn.contains(e.target) && !mainRedeFilterDropdown.contains(e.target)) mainRedeFilterDropdown.classList.add('hidden');
 
-                if (comparisonComRedeBtn && comparisonRedeFilterDropdown && !comparisonComRedeBtn.contains(e.target) && !comparisonRedeFilterDropdown.contains(e.target)) comparisonRedeFilterDropdown.classList.add('hidden');
-                if (comparisonTipoVendaFilterBtn && comparisonTipoVendaFilterDropdown && !comparisonTipoVendaFilterBtn.contains(e.target) && !comparisonTipoVendaFilterDropdown.contains(e.target)) comparisonTipoVendaFilterDropdown.classList.add('hidden');
-                if (comparisonSupplierFilterBtn && comparisonSupplierFilterDropdown && !comparisonSupplierFilterBtn.contains(e.target) && !comparisonSupplierFilterDropdown.contains(e.target)) comparisonSupplierFilterDropdown.classList.add('hidden');
-                if (comparisonProductFilterBtn && comparisonProductFilterDropdown && !comparisonProductFilterBtn.contains(e.target) && !comparisonProductFilterDropdown.contains(e.target)) comparisonProductFilterDropdown.classList.add('hidden');
+                if (!comparisonSupervisorFilterBtn.contains(e.target) && !comparisonSupervisorFilterDropdown.contains(e.target)) comparisonSupervisorFilterDropdown.classList.add('hidden');
+                if (!comparisonComRedeBtn.contains(e.target) && !comparisonRedeFilterDropdown.contains(e.target)) comparisonRedeFilterDropdown.classList.add('hidden');
+                if (!comparisonVendedorFilterBtn.contains(e.target) && !comparisonVendedorFilterDropdown.contains(e.target)) comparisonVendedorFilterDropdown.classList.add('hidden');
+                if (!comparisonTipoVendaFilterBtn.contains(e.target) && !comparisonTipoVendaFilterDropdown.contains(e.target)) comparisonTipoVendaFilterDropdown.classList.add('hidden');
+                if (!comparisonSupplierFilterBtn.contains(e.target) && !comparisonSupplierFilterDropdown.contains(e.target)) comparisonSupplierFilterDropdown.classList.add('hidden');
+                if (!comparisonProductFilterBtn.contains(e.target) && !comparisonProductFilterDropdown.contains(e.target)) comparisonProductFilterDropdown.classList.add('hidden');
 
-                if (stockComRedeBtn && stockRedeFilterDropdown && !stockComRedeBtn.contains(e.target) && !stockRedeFilterDropdown.contains(e.target)) stockRedeFilterDropdown.classList.add('hidden');
-                if (stockSupplierFilterBtn && stockSupplierFilterDropdown && !stockSupplierFilterBtn.contains(e.target) && !stockSupplierFilterDropdown.contains(e.target)) stockSupplierFilterDropdown.classList.add('hidden');
-                if (stockProductFilterBtn && stockProductFilterDropdown && !stockProductFilterBtn.contains(e.target) && !stockProductFilterDropdown.contains(e.target)) stockProductFilterDropdown.classList.add('hidden');
-                if (stockTipoVendaFilterBtn && stockTipoVendaFilterDropdown && !stockTipoVendaFilterBtn.contains(e.target) && !stockTipoVendaFilterDropdown.contains(e.target)) stockTipoVendaFilterDropdown.classList.add('hidden');
+                if (!stockSupervisorFilterBtn.contains(e.target) && !stockSupervisorFilterDropdown.contains(e.target)) stockSupervisorFilterDropdown.classList.add('hidden');
+                if (!stockComRedeBtn.contains(e.target) && !stockRedeFilterDropdown.contains(e.target)) stockRedeFilterDropdown.classList.add('hidden');
+                if (!stockVendedorFilterBtn.contains(e.target) && !stockVendedorFilterDropdown.contains(e.target)) stockVendedorFilterDropdown.classList.add('hidden');
+                if (!stockSupplierFilterBtn.contains(e.target) && !stockSupplierFilterDropdown.contains(e.target)) stockSupplierFilterDropdown.classList.add('hidden');
+                if (!stockProductFilterBtn.contains(e.target) && !stockProductFilterDropdown.contains(e.target)) stockProductFilterDropdown.classList.add('hidden');
+                if (!stockTipoVendaFilterBtn.contains(e.target) && !stockTipoVendaFilterDropdown.contains(e.target)) stockTipoVendaFilterDropdown.classList.add('hidden');
 
+                if (!innovationsMonthSupervisorFilterBtn.contains(e.target) && !innovationsMonthSupervisorFilterDropdown.contains(e.target)) innovationsMonthSupervisorFilterDropdown.classList.add('hidden');
+                if (!coverageSupervisorFilterBtn.contains(e.target) && !coverageSupervisorFilterDropdown.contains(e.target)) coverageSupervisorFilterDropdown.classList.add('hidden');
 
                 if (e.target.closest('[data-pedido-id]')) { e.preventDefault(); openModal(e.target.closest('[data-pedido-id]').dataset.pedidoId); }
                 if (e.target.closest('[data-codcli]')) { e.preventDefault(); openClientModal(e.target.closest('[data-codcli]').dataset.codcli); }
-                if (e.target.closest('#city-suggestions > div')) { if(cityNameFilter) cityNameFilter.value = e.target.textContent; citySuggestions.classList.add('hidden'); updateCityView(); }
-                if (e.target.closest('#comparison-city-suggestions > div')) { if(comparisonCityFilter) comparisonCityFilter.value = e.target.textContent; comparisonCitySuggestions.classList.add('hidden'); updateAllComparisonFilters(); updateComparisonView(); }
-                else if (comparisonCityFilter && !comparisonCityFilter.contains(e.target)) comparisonCitySuggestions.classList.add('hidden');
-                if (e.target.closest('#stock-city-suggestions > div')) { if(stockCityFilter) stockCityFilter.value = e.target.textContent; stockCitySuggestions.classList.add('hidden'); handleStockFilterChange(); }
-                else if (stockCityFilter && !stockCityFilter.contains(e.target)) stockCitySuggestions.classList.add('hidden');
+                if (e.target.closest('#city-suggestions > div')) { cityNameFilter.value = e.target.textContent; citySuggestions.classList.add('hidden'); updateCityView(); }
+                if (e.target.closest('#comparison-city-suggestions > div')) { comparisonCityFilter.value = e.target.textContent; comparisonCitySuggestions.classList.add('hidden'); updateAllComparisonFilters(); updateComparisonView(); }
+                else if (!comparisonCityFilter.contains(e.target)) comparisonCitySuggestions.classList.add('hidden');
+                if (e.target.closest('#stock-city-suggestions > div')) { stockCityFilter.value = e.target.textContent; stockCitySuggestions.classList.add('hidden'); handleStockFilterChange(); }
+                else if (!stockCityFilter.contains(e.target)) stockCitySuggestions.classList.add('hidden');
             });
 
             fornecedorToggleContainerEl.querySelectorAll('.fornecedor-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const fornecedor = btn.dataset.fornecedor;
                     if (currentFornecedor === fornecedor) { currentFornecedor = ''; btn.classList.remove('active'); } else { currentFornecedor = fornecedor; fornecedorToggleContainerEl.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+
+                    let supplierDataSource = [...allSalesData, ...allHistoryData];
+                    if (currentFornecedor) {
+                        supplierDataSource = supplierDataSource.filter(s => s.OBSERVACAOFOR === currentFornecedor);
+                    }
+                    selectedMainSuppliers = updateSupplierFilter(document.getElementById('fornecedor-filter-dropdown'), document.getElementById('fornecedor-filter-text'), selectedMainSuppliers, supplierDataSource, 'main');
+
+                    selectedMainSupervisors = updateSupervisorFilter(document.getElementById('supervisor-filter-dropdown'), document.getElementById('supervisor-filter-text'), selectedMainSupervisors, allSalesData);
+                    selectedSellers = [];
+                    updateSellerFilter(selectedMainSupervisors, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
+                    mainTableState.currentPage = 1;
                     updateDashboard();
                 });
             });
@@ -12420,6 +12492,33 @@ const supervisorGroups = new Map();
                 });
             });
 
+            weeklySupervisorFilterBtn.addEventListener('click', () => weeklySupervisorFilterDropdown.classList.toggle('hidden'));
+            weeklySupervisorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedWeeklySupervisors.push(value);
+                    else selectedWeeklySupervisors = selectedWeeklySupervisors.filter(s => s !== value);
+
+                    selectedWeeklySupervisors = updateSupervisorFilter(weeklySupervisorFilterDropdown, weeklySupervisorFilterText, selectedWeeklySupervisors, allSalesData);
+                    selectedWeeklySellers = updateSellerFilter(selectedWeeklySupervisors, weeklyVendedorFilterDropdown, weeklyVendedorFilterText, selectedWeeklySellers, allSalesData);
+                    updateWeekly();
+                }
+            });
+
+            weeklyVendedorFilterBtn.addEventListener('click', () => weeklyVendedorFilterDropdown.classList.toggle('hidden'));
+            weeklyVendedorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) {
+                        if (!selectedWeeklySellers.includes(value)) selectedWeeklySellers.push(value);
+                    } else {
+                        selectedWeeklySellers = selectedWeeklySellers.filter(s => s !== value);
+                    }
+                    updateSellerFilter(selectedWeeklySupervisors, weeklyVendedorFilterDropdown, weeklyVendedorFilterText, selectedWeeklySellers, allSalesData);
+                    updateWeekly();
+                }
+            });
+
             clearWeeklyFiltersBtn.addEventListener('click', () => { resetWeeklyFilters(); markDirty('semanal'); });
 
             // --- Comparison View Filters ---
@@ -12431,6 +12530,22 @@ const supervisorGroups = new Map();
 
             const handleComparisonFilterChange = updateComparison;
 
+            const comparisonSupervisorFilterBtn = document.getElementById('comparison-supervisor-filter-btn');
+            const comparisonSupervisorFilterDropdown = document.getElementById('comparison-supervisor-filter-dropdown');
+            comparisonSupervisorFilterBtn.addEventListener('click', () => comparisonSupervisorFilterDropdown.classList.toggle('hidden'));
+            comparisonSupervisorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedComparisonSupervisors.push(value);
+                    else selectedComparisonSupervisors = selectedComparisonSupervisors.filter(s => s !== value);
+                    selectedComparisonSellers = [];
+                    handleComparisonFilterChange();
+                }
+            });
+
+            comparisonFilialFilter.addEventListener('change', handleComparisonFilterChange);
+            comparisonVendedorFilterBtn.addEventListener('click', () => comparisonVendedorFilterDropdown.classList.toggle('hidden'));
+            comparisonVendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedComparisonSellers.push(value); else selectedComparisonSellers = selectedComparisonSellers.filter(s => s !== value); handleComparisonFilterChange(); } });
             comparisonTipoVendaFilterBtn.addEventListener('click', () => comparisonTipoVendaFilterDropdown.classList.toggle('hidden'));
             comparisonTipoVendaFilterDropdown.addEventListener('change', (e) => {
                 if (e.target.type === 'checkbox') {
@@ -12505,43 +12620,6 @@ const supervisorGroups = new Map();
                 }
             });
 
-            const resetComparisonFilters = () => {
-                selectedComparisonTiposVenda = [];
-                currentComparisonFornecedor = '';
-                selectedComparisonSuppliers = [];
-                comparisonRedeGroupFilter = '';
-                selectedComparisonRedes = [];
-
-                if (comparisonCityFilter) comparisonCityFilter.value = '';
-
-                if (comparisonTipoVendaFilterDropdown) {
-                    comparisonTipoVendaFilterDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-                    updateTipoVendaFilter(comparisonTipoVendaFilterDropdown, comparisonTipoVendaFilterText, selectedComparisonTiposVenda, [...allSalesData, ...allHistoryData]);
-                }
-
-                if (comparisonSupplierFilterDropdown) {
-                    comparisonSupplierFilterDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-                    updateSupplierFilter(comparisonSupplierFilterDropdown, comparisonSupplierFilterText, selectedComparisonSuppliers, supplierOptionsData, 'comparison');
-                }
-
-                if (comparisonRedeFilterDropdown) {
-                    comparisonRedeFilterDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-                }
-
-                if (comparisonRedeGroupContainer) {
-                    comparisonRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    const defaultBtn = comparisonRedeGroupContainer.querySelector('button[data-group=""]');
-                    if (defaultBtn) defaultBtn.classList.add('active');
-                    updateRedeFilter(comparisonRedeFilterDropdown, comparisonComRedeBtnText, selectedComparisonRedes, allClientsData);
-                }
-
-                if (comparisonFornecedorToggleContainer) {
-                    comparisonFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active'));
-                }
-
-                handleComparisonFilterChange();
-            };
-
             clearComparisonFiltersBtn.addEventListener('click', resetComparisonFilters);
 
             const handleProductFilterChange = (e, selectedArray) => {
@@ -12595,62 +12673,25 @@ const supervisorGroups = new Map();
             });
 
             stockFilialFilter.addEventListener('change', handleStockFilterChange);
-            const resetStockFilters = () => {
-                selectedStockSuppliers = [];
-                selectedStockProducts = [];
-                selectedStockTiposVenda = [];
-                stockRedeGroupFilter = '';
-                selectedStockRedes = [];
-                stockTrendFilter = 'all';
-                currentStockFornecedor = '';
-
-                if (stockCityFilter) stockCityFilter.value = '';
-
-                // Reset Trend Buttons
-                document.querySelectorAll('.stock-trend-btn').forEach(btn => btn.classList.remove('active'));
-                const allTrendBtn = document.querySelector('.stock-trend-btn[data-trend="all"]');
-                if (allTrendBtn) allTrendBtn.classList.add('active');
-
-                // Reset Rede Group
-                if (stockRedeGroupContainer) {
-                    stockRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    const defaultGroupBtn = stockRedeGroupContainer.querySelector('button[data-group=""]');
-                    if (defaultGroupBtn) defaultGroupBtn.classList.add('active');
-                }
-
-                // Reset Fornecedor Toggle
-                if (stockFornecedorToggleContainer) {
-                    stockFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active'));
-                }
-
-                // Reset Dropdowns
-                if (stockSupplierFilterDropdown) {
-                    stockSupplierFilterDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-                    updateSupplierFilter(stockSupplierFilterDropdown, stockSupplierFilterText, selectedStockSuppliers, [...allSalesData, ...allHistoryData], 'stock');
-                }
-                if (stockProductFilterDropdown) {
-                    stockProductFilterDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-                    updateProductFilter(stockProductFilterDropdown, stockProductFilterText, selectedStockProducts, [...allSalesData, ...allHistoryData], 'stock');
-                }
-                if (stockTipoVendaFilterDropdown) {
-                    stockTipoVendaFilterDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-                    updateTipoVendaFilter(stockTipoVendaFilterDropdown, stockTipoVendaFilterText, selectedStockTiposVenda, [...allSalesData, ...allHistoryData]);
-                }
-                if (stockRedeFilterDropdown) {
-                    stockRedeFilterDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-                    updateRedeFilter(stockRedeFilterDropdown, stockComRedeBtnText, selectedStockRedes, allClientsData, 'Com Rede');
-                }
-
-                // Reset Working Days
-                customWorkingDaysStock = maxWorkingDaysStock;
-                const daysInput = document.getElementById('stock-working-days-input');
-                if (daysInput) daysInput.value = customWorkingDaysStock;
-
-                handleStockFilterChange();
-            };
             clearStockFiltersBtn.addEventListener('click', resetStockFilters);
             stockFornecedorToggleContainer.addEventListener('click', (e) => { if (e.target.tagName === 'BUTTON') { const fornecedor = e.target.dataset.fornecedor; if (currentStockFornecedor === fornecedor) { currentStockFornecedor = ''; e.target.classList.remove('active'); } else { currentStockFornecedor = fornecedor; stockFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); e.target.classList.add('active'); } handleStockFilterChange(); } });
 
+            const stockSupervisorFilterBtn = document.getElementById('stock-supervisor-filter-btn');
+            const stockSupervisorFilterDropdown = document.getElementById('stock-supervisor-filter-dropdown');
+            stockSupervisorFilterBtn.addEventListener('click', () => stockSupervisorFilterDropdown.classList.toggle('hidden'));
+            stockSupervisorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedStockSupervisors.push(value);
+                    else selectedStockSupervisors = selectedStockSupervisors.filter(s => s !== value);
+
+                    selectedStockSellers = [];
+                    handleStockFilterChange();
+                }
+            });
+
+            stockVendedorFilterBtn.addEventListener('click', () => stockVendedorFilterDropdown.classList.toggle('hidden'));
+            stockVendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedStockSellers.push(value); else selectedStockSellers = selectedStockSellers.filter(s => s !== value); handleStockFilterChange({ skipFilter: 'seller' }); } });
             stockSupplierFilterBtn.addEventListener('click', () => stockSupplierFilterDropdown.classList.toggle('hidden'));
             stockSupplierFilterDropdown.addEventListener('change', (e) => { if (e.target.dataset.filterType === 'stock' && e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) { if(!selectedStockSuppliers.includes(value)) selectedStockSuppliers.push(value); } else { selectedStockSuppliers = selectedStockSuppliers.filter(s => s !== value); } handleStockFilterChange({ skipFilter: 'supplier' }); } });
 
@@ -12828,6 +12869,37 @@ const supervisorGroups = new Map();
             innovationsMonthCategoryFilter.addEventListener('change', updateInnovations);
 
             const debouncedUpdateInnovationsMonth = debounce(updateInnovations, 400);
+
+            const innovationsMonthSupervisorFilterBtn = document.getElementById('innovations-month-supervisor-filter-btn');
+            const innovationsMonthSupervisorFilterDropdown = document.getElementById('innovations-month-supervisor-filter-dropdown');
+            innovationsMonthSupervisorFilterBtn.addEventListener('click', () => innovationsMonthSupervisorFilterDropdown.classList.toggle('hidden'));
+            innovationsMonthSupervisorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedInnovationsSupervisors.push(value);
+                    else selectedInnovationsSupervisors = selectedInnovationsSupervisors.filter(s => s !== value);
+
+                    selectedInnovationsSupervisors = updateSupervisorFilter(innovationsMonthSupervisorFilterDropdown, document.getElementById('innovations-month-supervisor-filter-text'), selectedInnovationsSupervisors, allSalesData, true);
+
+                    selectedInnovationsMonthSellers = [];
+                    updateSellerFilter(selectedInnovationsSupervisors, innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, selectedInnovationsMonthSellers, allSalesData);
+                    debouncedUpdateInnovationsMonth();
+                }
+            });
+
+            innovationsMonthVendedorFilterBtn.addEventListener('click', () => innovationsMonthVendedorFilterDropdown.classList.toggle('hidden'));
+            innovationsMonthVendedorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) {
+                        if (!selectedInnovationsMonthSellers.includes(value)) selectedInnovationsMonthSellers.push(value);
+                    } else {
+                        selectedInnovationsMonthSellers = selectedInnovationsMonthSellers.filter(s => s !== value);
+                    }
+                    updateSellerFilter(selectedInnovationsSupervisors, innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, selectedInnovationsMonthSellers, allSalesData);
+                    debouncedUpdateInnovationsMonth();
+                }
+            });
 
             innovationsMonthCityFilter.addEventListener('input', (e) => {
                 e.target.value = e.target.value.replace(/[0-9]/g, '');
@@ -13035,6 +13107,8 @@ const supervisorGroups = new Map();
             const goalsSummaryContainer = document.getElementById('goals-summary-content');
 
             // Filter Wrappers
+            const wrapperSupervisor = document.getElementById('goals-gv-supervisor-filter-wrapper');
+            const wrapperSeller = document.getElementById('goals-gv-seller-filter-wrapper');
             const wrapperCodCli = document.getElementById('goals-gv-codcli-filter-wrapper');
 
             const toggleGoalsView = (view) => {
@@ -13074,6 +13148,8 @@ const supervisorGroups = new Map();
 
                     // SHOW Main Filters Container and all wrappers
                     if(goalsFiltersContainer) goalsFiltersContainer.classList.remove('hidden');
+                    if(wrapperSupervisor) wrapperSupervisor.classList.remove('hidden');
+                    if(wrapperSeller) wrapperSeller.classList.remove('hidden');
                     if(wrapperCodCli) wrapperCodCli.classList.remove('hidden');
 
                     if (view === 'pepsico') {
@@ -13133,6 +13209,7 @@ const supervisorGroups = new Map();
                     } else if (tab === 'sv') {
                         goalsGvContent.classList.add('hidden');
                         goalsSvContent.classList.remove('hidden');
+                        // Initialize SV filters if needed - Wait, updateSupervisorFilter should be called first or on load
                         // But we want to refresh data
                         updateGoalsSvView();
                     }
@@ -13142,7 +13219,109 @@ const supervisorGroups = new Map();
             // SV Sub-tabs Logic and Toggle Logic REMOVED (Replaced by Single Table View)
 
             // GV Filters
+            goalsGvSupervisorFilterBtn.addEventListener('click', () => goalsGvSupervisorFilterDropdown.classList.toggle('hidden'));
+            goalsGvSupervisorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedGoalsGvSupervisors.push(value);
+                    else selectedGoalsGvSupervisors = selectedGoalsGvSupervisors.filter(s => s !== value);
+
+                    selectedGoalsGvSupervisors = updateSupervisorFilter(goalsGvSupervisorFilterDropdown, goalsGvSupervisorFilterText, selectedGoalsGvSupervisors, [...allSalesData, ...allHistoryData], true);
+
+                    // Reset sellers or keep intersection?
+                    // Standard: Update Seller Options based on Supervisor
+                    selectedGoalsGvSellers = [];
+                    selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, [...allSalesData, ...allHistoryData]);
+
+                    updateGoals();
+                }
+            });
+
+            goalsGvSellerFilterBtn.addEventListener('click', () => goalsGvSellerFilterDropdown.classList.toggle('hidden'));
+            goalsGvSellerFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedGoalsGvSellers.push(value);
+                    else selectedGoalsGvSellers = selectedGoalsGvSellers.filter(s => s !== value);
+
+                    selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, [...allSalesData, ...allHistoryData], true);
+
+                    updateGoals();
+                }
+            });
+
+            goalsGvCodcliFilter.addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/[^0-9]/g, '');
+                debouncedUpdateGoals();
+            });
+
+            // --- Summary View Independent Filters ---
+            const goalsSummarySupervisorFilterBtn = document.getElementById('goals-summary-supervisor-filter-btn');
+            const goalsSummarySupervisorFilterDropdown = document.getElementById('goals-summary-supervisor-filter-dropdown');
+            const goalsSummarySellerFilterBtn = document.getElementById('goals-summary-seller-filter-btn');
+            const goalsSummarySellerFilterDropdown = document.getElementById('goals-summary-seller-filter-dropdown');
             const clearGoalsSummaryFiltersBtn = document.getElementById('clear-goals-summary-filters-btn');
+
+            if (goalsSummarySupervisorFilterBtn && goalsSummarySupervisorFilterDropdown) {
+                goalsSummarySupervisorFilterBtn.addEventListener('click', () => goalsSummarySupervisorFilterDropdown.classList.toggle('hidden'));
+
+                goalsSummarySupervisorFilterDropdown.addEventListener('change', (e) => {
+                    if (e.target.type === 'checkbox') {
+                        const { value, checked } = e.target;
+                        if (checked) selectedGoalsSummarySupervisors.push(value);
+                        else selectedGoalsSummarySupervisors = selectedGoalsSummarySupervisors.filter(s => s !== value);
+
+                        selectedGoalsSummarySupervisors = updateSupervisorFilter(goalsSummarySupervisorFilterDropdown, document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, allSalesData, true);
+                        
+                        // Update Seller Filter Cascade
+                        selectedGoalsSummarySellers = [];
+                        selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, goalsSummarySellerFilterDropdown, document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData);
+                        
+                        updateGoalsSummaryView();
+                    }
+                });
+            }
+
+            if (goalsSummarySellerFilterBtn && goalsSummarySellerFilterDropdown) {
+                goalsSummarySellerFilterBtn.addEventListener('click', () => goalsSummarySellerFilterDropdown.classList.toggle('hidden'));
+
+                goalsSummarySellerFilterDropdown.addEventListener('change', (e) => {
+                    if (e.target.type === 'checkbox') {
+                        const { value, checked } = e.target;
+                        if (checked) {
+                            if (!selectedGoalsSummarySellers.includes(value)) selectedGoalsSummarySellers.push(value);
+                        } else {
+                            selectedGoalsSummarySellers = selectedGoalsSummarySellers.filter(s => s !== value);
+                        }
+                        selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, goalsSummarySellerFilterDropdown, document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData, true);
+                        updateGoalsSummaryView();
+                    }
+                });
+            }
+
+            if (clearGoalsSummaryFiltersBtn) {
+                clearGoalsSummaryFiltersBtn.addEventListener('click', () => {
+                    selectedGoalsSummarySupervisors = [];
+                    selectedGoalsSummarySellers = [];
+                    updateSupervisorFilter(goalsSummarySupervisorFilterDropdown, document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, allSalesData, true);
+                    updateSellerFilter(selectedGoalsSummarySupervisors, goalsSummarySellerFilterDropdown, document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData);
+                    updateGoalsSummaryView();
+                });
+            }
+
+            // Close dropdowns on outside click
+            document.addEventListener('click', (e) => {
+                if (goalsSummarySupervisorFilterBtn && goalsSummarySupervisorFilterDropdown) {
+                    if (!goalsSummarySupervisorFilterBtn.contains(e.target) && !goalsSummarySupervisorFilterDropdown.contains(e.target)) {
+                        goalsSummarySupervisorFilterDropdown.classList.add('hidden');
+                    }
+                }
+                if (goalsSummarySellerFilterBtn && goalsSummarySellerFilterDropdown) {
+                    if (!goalsSummarySellerFilterBtn.contains(e.target) && !goalsSummarySellerFilterDropdown.contains(e.target)) {
+                        goalsSummarySellerFilterDropdown.classList.add('hidden');
+                    }
+                }
+            });
 
             const btnDistributeFat = document.getElementById('btn-distribute-fat');
             if (btnDistributeFat) {
@@ -13169,6 +13348,7 @@ const supervisorGroups = new Map();
             const btnDistributeMixSalty = document.getElementById('btn-distribute-mix-salty');
             if (btnDistributeMixSalty) {
                 btnDistributeMixSalty.addEventListener('click', () => {
+                    const sellerName = selectedGoalsGvSellers[0];
                     if (!sellerName) return;
                     const valStr = document.getElementById('goal-global-mix-salty').value;
                     showConfirmationModal(`Confirmar ajuste de Meta Mix Salty para ${valStr} (Vendedor: ${getFirstName(sellerName)})?`, () => {
@@ -13196,6 +13376,7 @@ const supervisorGroups = new Map();
             const btnDistributeMixFoods = document.getElementById('btn-distribute-mix-foods');
             if (btnDistributeMixFoods) {
                 btnDistributeMixFoods.addEventListener('click', () => {
+                    const sellerName = selectedGoalsGvSellers[0];
                     if (!sellerName) return;
                     const valStr = document.getElementById('goal-global-mix-foods').value;
                     showConfirmationModal(`Confirmar ajuste de Meta Mix Foods para ${valStr} (Vendedor: ${getFirstName(sellerName)})?`, () => {
@@ -13215,6 +13396,25 @@ const supervisorGroups = new Map();
             clearGoalsGvFiltersBtn.addEventListener('click', () => { resetGoalsGvFilters(); markDirty('goals'); });
 
             // SV Filters
+            goalsSvSupervisorFilterBtn.addEventListener('click', () => goalsSvSupervisorFilterDropdown.classList.toggle('hidden'));
+            goalsSvSupervisorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedGoalsSvSupervisors.push(value);
+                    else selectedGoalsSvSupervisors = selectedGoalsSvSupervisors.filter(s => s !== value);
+
+                    selectedGoalsSvSupervisors = updateSupervisorFilter(goalsSvSupervisorFilterDropdown, goalsSvSupervisorFilterText, selectedGoalsSvSupervisors, allSalesData, true);
+                    updateGoalsSvView();
+                }
+            });
+
+            document.getElementById('goals-sv-export-xlsx-btn').addEventListener('click', exportGoalsSvXLSX);
+
+            document.addEventListener('click', (e) => {
+                if (!goalsGvSupervisorFilterBtn.contains(e.target) && !goalsGvSupervisorFilterDropdown.contains(e.target)) goalsGvSupervisorFilterDropdown.classList.add('hidden');
+                if (!goalsGvSellerFilterBtn.contains(e.target) && !goalsGvSellerFilterDropdown.contains(e.target)) goalsGvSellerFilterDropdown.classList.add('hidden');
+                if (!goalsSvSupervisorFilterBtn.contains(e.target) && !goalsSvSupervisorFilterDropdown.contains(e.target)) goalsSvSupervisorFilterDropdown.classList.add('hidden');
+            });
 
             document.getElementById('goals-prev-page-btn').addEventListener('click', () => {
                 if (goalsTableState.currentPage > 1) {
@@ -13248,6 +13448,41 @@ const supervisorGroups = new Map();
             const debouncedUpdateMetaRealizado = debounce(updateMetaRealizado, 400);
 
             // Supervisor Filter
+            const metaRealizadoSupervisorFilterBtn = document.getElementById('meta-realizado-supervisor-filter-btn');
+            const metaRealizadoSupervisorFilterDropdown = document.getElementById('meta-realizado-supervisor-filter-dropdown');
+            metaRealizadoSupervisorFilterBtn.addEventListener('click', () => metaRealizadoSupervisorFilterDropdown.classList.toggle('hidden'));
+            metaRealizadoSupervisorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedMetaRealizadoSupervisors.push(value);
+                    else selectedMetaRealizadoSupervisors = selectedMetaRealizadoSupervisors.filter(s => s !== value);
+
+                    selectedMetaRealizadoSupervisors = updateSupervisorFilter(metaRealizadoSupervisorFilterDropdown, document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
+                    
+                    // Reset or Filter Sellers
+                    selectedMetaRealizadoSellers = [];
+                    selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData]);
+                    
+                    debouncedUpdateMetaRealizado();
+                }
+            });
+
+            // Seller Filter
+            const metaRealizadoSellerFilterBtn = document.getElementById('meta-realizado-vendedor-filter-btn');
+            const metaRealizadoSellerFilterDropdown = document.getElementById('meta-realizado-vendedor-filter-dropdown');
+            metaRealizadoSellerFilterBtn.addEventListener('click', () => metaRealizadoSellerFilterDropdown.classList.toggle('hidden'));
+            metaRealizadoSellerFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) {
+                        if (!selectedMetaRealizadoSellers.includes(value)) selectedMetaRealizadoSellers.push(value);
+                    } else {
+                        selectedMetaRealizadoSellers = selectedMetaRealizadoSellers.filter(s => s !== value);
+                    }
+                    selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, metaRealizadoSellerFilterDropdown, document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData], true);
+                    debouncedUpdateMetaRealizado();
+                }
+            });
 
             // Supplier Filter
             const metaRealizadoSupplierFilterBtn = document.getElementById('meta-realizado-supplier-filter-btn');
@@ -13272,7 +13507,7 @@ const supervisorGroups = new Map();
                 metaRealizadoPastaContainer.addEventListener('click', (e) => {
                     if (e.target.tagName === 'BUTTON') {
                         const pasta = e.target.dataset.pasta;
-
+                        
                         // Toggle logic: If clicking active button, deselect (revert to PEPSICO/All).
                         // If clicking inactive, select it.
                         if (currentMetaRealizadoPasta === pasta) {
@@ -13291,11 +13526,11 @@ const supervisorGroups = new Map();
                                 b.classList.remove('bg-teal-600', 'hover:bg-teal-500');
                             }
                         });
-
+                        
                         debouncedUpdateMetaRealizado();
                     }
                 });
-
+                
                 // Initialize default active button style
                 metaRealizadoPastaContainer.querySelectorAll('.pasta-btn').forEach(b => {
                     if (b.dataset.pasta === currentMetaRealizadoPasta) {
@@ -13325,14 +13560,14 @@ const supervisorGroups = new Map();
                         // Let's update text to indicate CURRENT state or NEXT state?
                         // Usually toggle buttons indicate current state.
                         // Let's use: "Faturamento (R$)" and "Volume (Ton)" as labels for clarity, or stick to user image.
-                        // User image: "R$ / Ton".
+                        // User image: "R$ / Ton". 
                         // Let's assume the button text is static "R$ / Ton" and we just toggle state?
                         // No, usually buttons show what is selected.
                         // Let's change text to "Volume (Ton)" when Ton is selected, and "Faturamento (R$)" when R$ is selected?
                         // Or just keep "R$ / Ton" and toggle a visual indicator?
                         // Let's just update the chart and maybe change button style/text slightly.
                     }
-
+                    
                     // Simple Toggle Text Update
                     metaRealizadoMetricToggleBtn.textContent = currentMetaRealizadoMetric === 'valor' ? 'R$ / Ton' : 'Toneladas';
 
@@ -13340,18 +13575,22 @@ const supervisorGroups = new Map();
                     if (metaRealizadoChartTitle) {
                         metaRealizadoChartTitle.textContent = currentMetaRealizadoMetric === 'valor' ? 'Meta Vs Realizado - Faturamento' : 'Meta Vs Realizado - Tonelada';
                     }
-
+                    
                     updateMetaRealizado();
                 });
             }
 
             // Clear Filters
             document.getElementById('clear-meta-realizado-filters-btn').addEventListener('click', () => {
+                selectedMetaRealizadoSupervisors = [];
+                selectedMetaRealizadoSellers = [];
                 selectedMetaRealizadoSuppliers = [];
                 currentMetaRealizadoPasta = 'PEPSICO'; // Reset to default
 
                 // Reset UI
-
+                updateSupervisorFilter(metaRealizadoSupervisorFilterDropdown, document.getElementById('meta-realizado-supervisor-filter-text'), [], allSalesData);
+                updateSellerFilter([], metaRealizadoSellerFilterDropdown, document.getElementById('meta-realizado-vendedor-filter-text'), [], allSalesData);
+                
                 // Reset Supplier UI
                 document.getElementById('meta-realizado-supplier-filter-text').textContent = 'Todos';
                 metaRealizadoSupplierFilterDropdown.querySelectorAll('input').forEach(cb => cb.checked = false);
@@ -13367,6 +13606,8 @@ const supervisorGroups = new Map();
 
             // Close Dropdowns on Click Outside
             document.addEventListener('click', (e) => {
+                if (!metaRealizadoSupervisorFilterBtn.contains(e.target) && !metaRealizadoSupervisorFilterDropdown.contains(e.target)) metaRealizadoSupervisorFilterDropdown.classList.add('hidden');
+                if (!metaRealizadoSellerFilterBtn.contains(e.target) && !metaRealizadoSellerFilterDropdown.contains(e.target)) metaRealizadoSellerFilterDropdown.classList.add('hidden');
                 if (!metaRealizadoSupplierFilterBtn.contains(e.target) && !metaRealizadoSupplierFilterDropdown.contains(e.target)) metaRealizadoSupplierFilterDropdown.classList.add('hidden');
             });
 
@@ -13393,13 +13634,31 @@ const supervisorGroups = new Map();
                 handleMixFilterChange();
             };
 
-            const mixSupervisorBtn = document.getElementById('mix-supervisor-filter-btn');
-            if (mixSupervisorBtn) {
-                mixSupervisorBtn.addEventListener('click', () => {
-                    const dropdown = document.getElementById('mix-supervisor-filter-dropdown');
-                    if(dropdown) dropdown.classList.toggle('hidden');
-                });
-            }
+            document.getElementById('mix-supervisor-filter-btn').addEventListener('click', (e) => {
+                document.getElementById('mix-supervisor-filter-dropdown').classList.toggle('hidden');
+            });
+            document.getElementById('mix-supervisor-filter-dropdown').addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedMixSupervisors.push(value);
+                    else selectedMixSupervisors = selectedMixSupervisors.filter(s => s !== value);
+                    selectedMixSellers = [];
+                    updateMix();
+                }
+            });
+
+            document.getElementById('mix-vendedor-filter-btn').addEventListener('click', (e) => {
+                document.getElementById('mix-vendedor-filter-dropdown').classList.toggle('hidden');
+            });
+            document.getElementById('mix-vendedor-filter-dropdown').addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedMixSellers.push(value);
+                    else selectedMixSellers = selectedMixSellers.filter(s => s !== value);
+                    handleMixFilterChange({ skipFilter: 'seller' });
+                    markDirty('mix');
+                }
+            });
 
             document.getElementById('mix-tipo-venda-filter-btn').addEventListener('click', (e) => {
                 document.getElementById('mix-tipo-venda-filter-dropdown').classList.toggle('hidden');
@@ -13500,13 +13759,8 @@ const supervisorGroups = new Map();
 
             document.addEventListener('click', (e) => {
                 // Close Mix Dropdowns
-                const mixSupBtn = document.getElementById('mix-supervisor-filter-btn');
-                const mixSupDropdown = document.getElementById('mix-supervisor-filter-dropdown');
-                if (mixSupBtn && mixSupDropdown && !mixSupBtn.contains(e.target) && !mixSupDropdown.contains(e.target)) mixSupDropdown.classList.add('hidden');
-
-                const mixVendBtn = document.getElementById('mix-vendedor-filter-btn');
-                const mixVendDropdown = document.getElementById('mix-vendedor-filter-dropdown');
-                if (mixVendBtn && mixVendDropdown && !mixVendBtn.contains(e.target) && !mixVendDropdown.contains(e.target)) mixVendDropdown.classList.add('hidden');
+                if (!document.getElementById('mix-supervisor-filter-btn').contains(e.target) && !document.getElementById('mix-supervisor-filter-dropdown').contains(e.target)) document.getElementById('mix-supervisor-filter-dropdown').classList.add('hidden');
+                if (!document.getElementById('mix-vendedor-filter-btn').contains(e.target) && !document.getElementById('mix-vendedor-filter-dropdown').contains(e.target)) document.getElementById('mix-vendedor-filter-dropdown').classList.add('hidden');
                 if (!document.getElementById('mix-tipo-venda-filter-btn').contains(e.target) && !document.getElementById('mix-tipo-venda-filter-dropdown').contains(e.target)) document.getElementById('mix-tipo-venda-filter-dropdown').classList.add('hidden');
                 if (!document.getElementById('mix-com-rede-btn').contains(e.target) && !document.getElementById('mix-rede-filter-dropdown').contains(e.target)) document.getElementById('mix-rede-filter-dropdown').classList.add('hidden');
 
@@ -13523,8 +13777,23 @@ const supervisorGroups = new Map();
             const debouncedHandleCoverageChange = debounce(updateCoverage, 400);
 
             coverageFilialFilter.addEventListener('change', updateCoverage);
-            if (coverageCityFilter) coverageCityFilter.addEventListener('input', (e) => { e.target.value = e.target.value.replace(/[0-9]/g, '');
 
+            const coverageSupervisorFilterBtn = document.getElementById('coverage-supervisor-filter-btn');
+            const coverageSupervisorFilterDropdown = document.getElementById('coverage-supervisor-filter-dropdown');
+            coverageSupervisorFilterBtn.addEventListener('click', () => coverageSupervisorFilterDropdown.classList.toggle('hidden'));
+            coverageSupervisorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedCoverageSupervisors.push(value);
+                    else selectedCoverageSupervisors = selectedCoverageSupervisors.filter(s => s !== value);
+
+                    selectedCoverageSellers = [];
+                    updateCoverage();
+                }
+            });
+
+            coverageCityFilter.addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/[0-9]/g, '');
                 const { clients } = getCoverageFilteredData({ excludeFilter: 'city' });
                 coverageCitySuggestions.classList.remove('manual-hide');
                 updateCitySuggestions(coverageCityFilter, coverageCitySuggestions, clients);
@@ -13565,6 +13834,20 @@ const supervisorGroups = new Map();
 
             clearCoverageFiltersBtn.addEventListener('click', () => { resetCoverageFilters(); markDirty('cobertura'); });
 
+            coverageVendedorFilterBtn.addEventListener('click', () => coverageVendedorFilterDropdown.classList.toggle('hidden'));
+            coverageVendedorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) {
+                        if (!selectedCoverageSellers.includes(value)) selectedCoverageSellers.push(value);
+                    } else {
+                        selectedCoverageSellers = selectedCoverageSellers.filter(s => s !== value);
+                    }
+                    markDirty('cobertura');
+                    handleCoverageFilterChange({ skipFilter: 'seller' });
+                }
+            });
+
             coverageSupplierFilterBtn.addEventListener('click', () => coverageSupplierFilterDropdown.classList.toggle('hidden'));
             coverageSupplierFilterDropdown.addEventListener('change', (e) => {
                 if (e.target.type === 'checkbox' && e.target.dataset.filterType === 'coverage') {
@@ -13604,6 +13887,24 @@ const supervisorGroups = new Map();
                 }
             });
 
+            const coverageDateFilterInput = document.getElementById('coverage-date-filter');
+            if (coverageDateFilterInput) {
+                coverageDateFilterInstance = flatpickr(coverageDateFilterInput, {
+                    mode: 'range',
+                    dateFormat: 'd/m/Y',
+                    locale: 'pt',
+                    onClose: (selectedDates) => {
+                        if (selectedDates.length === 2) {
+                            selectedCoverageDateRange = selectedDates;
+                            updateCoverage();
+                        } else if (selectedDates.length === 0) {
+                            selectedCoverageDateRange = null;
+                            updateCoverage();
+                        }
+                    }
+                });
+            }
+
             const coverageUnitPriceInput = document.getElementById('coverage-unit-price-filter');
             if (coverageUnitPriceInput) {
                 coverageUnitPriceInput.addEventListener('keydown', (e) => {
@@ -13617,7 +13918,9 @@ const supervisorGroups = new Map();
 
 
             document.addEventListener('click', (e) => {
+                if (!innovationsMonthVendedorFilterBtn.contains(e.target) && !innovationsMonthVendedorFilterDropdown.contains(e.target)) innovationsMonthVendedorFilterDropdown.classList.add('hidden');
                 if (!innovationsMonthTipoVendaFilterBtn.contains(e.target) && !innovationsMonthTipoVendaFilterDropdown.contains(e.target)) innovationsMonthTipoVendaFilterDropdown.classList.add('hidden');
+                if (!coverageVendedorFilterBtn.contains(e.target) && !coverageVendedorFilterDropdown.contains(e.target)) coverageVendedorFilterDropdown.classList.add('hidden');
                 if (!coverageSupplierFilterBtn.contains(e.target) && !coverageSupplierFilterDropdown.contains(e.target)) coverageSupplierFilterDropdown.classList.add('hidden');
                 if (!coverageProductFilterBtn.contains(e.target) && !coverageProductFilterDropdown.contains(e.target)) coverageProductFilterDropdown.classList.add('hidden');
                 if (!coverageTipoVendaFilterBtn.contains(e.target) && !coverageTipoVendaFilterDropdown.contains(e.target)) coverageTipoVendaFilterDropdown.classList.add('hidden');
@@ -13661,72 +13964,49 @@ const supervisorGroups = new Map();
         }
 
         initializeOptimizedDataStructures();
-
-        // --- USER CONTEXT RESOLUTION ---
-        let userHierarchyContext = { role: 'adm', coord: null, cocoord: null, promotor: null };
-
-        function resolveUserContext() {
-            const role = (window.userRole || '').trim().toUpperCase();
-            if (role === 'ADM' || role === 'ADMIN') {
-                userHierarchyContext.role = 'adm';
-                return;
-            }
-
-            // Check if Role is a Coordinator
-            if (optimizedData.coordMap.has(role)) {
-                userHierarchyContext.role = 'coord';
-                userHierarchyContext.coord = role;
-                return;
-            }
-
-            // Check if Role is a Co-Coordinator
-            if (optimizedData.cocoordMap.has(role)) {
-                userHierarchyContext.role = 'cocoord';
-                userHierarchyContext.cocoord = role;
-                userHierarchyContext.coord = optimizedData.coordsByCocoord.get(role);
-                return;
-            }
-
-            // Check if Role is a Promotor
-            if (optimizedData.promotorMap.has(role)) {
-                userHierarchyContext.role = 'promotor';
-                userHierarchyContext.promotor = role;
-                const node = optimizedData.hierarchyMap.get(role);
-                if (node) {
-                    userHierarchyContext.cocoord = node.cocoord.code;
-                    userHierarchyContext.coord = node.coord.code;
-                }
-                return;
-            }
-            
-            // Fallback: Default to ADM (UI allows all, but Data is filtered by init.js)
-            userHierarchyContext.role = 'adm';
-        }
-        resolveUserContext();
-
         calculateHistoricalBests(); // <-- MOVIDA PARA CIMA
-        // Initialize Hierarchy Filters
-        setupHierarchyFilters('main', updateDashboard);
-        setupHierarchyFilters('city', updateCityView);
-        setupHierarchyFilters('weekly', updateWeeklyView);
-        setupHierarchyFilters('comparison', updateComparisonView);
-        setupHierarchyFilters('stock', updateStockView);
-        setupHierarchyFilters('innovations-month', updateInnovationsMonthView);
-        setupHierarchyFilters('mix', updateMixView);
-        setupHierarchyFilters('meta-realizado', updateMetaRealizadoView);
-        setupHierarchyFilters('coverage', updateCoverageView);
-        setupHierarchyFilters('goals-gv', updateGoalsView);
-        setupHierarchyFilters('goals-summary', updateGoalsSummaryView);
-        setupHierarchyFilters('goals-sv', updateGoalsSvView);
-
-        // Initialize Other Filters
+        selectedMainSupervisors = updateSupervisorFilter(document.getElementById('supervisor-filter-dropdown'), document.getElementById('supervisor-filter-text'), selectedMainSupervisors, allSalesData);
         selectedMainSuppliers = updateSupplierFilter(document.getElementById('fornecedor-filter-dropdown'), document.getElementById('fornecedor-filter-text'), selectedMainSuppliers, [...allSalesData, ...allHistoryData], 'main');
+        selectedCitySupervisors = updateSupervisorFilter(document.getElementById('city-supervisor-filter-dropdown'), document.getElementById('city-supervisor-filter-text'), selectedCitySupervisors, allSalesData);
+        selectedStockSupervisors = updateSupervisorFilter(document.getElementById('stock-supervisor-filter-dropdown'), document.getElementById('stock-supervisor-filter-text'), selectedStockSupervisors, [...allSalesData, ...allHistoryData]);
+
+        updateSellerFilter(selectedMainSupervisors, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
         updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
+        updateSellerFilter(selectedCitySupervisors, cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData);
+
+        // --- FIXED: Initialize Filters for Other Views ---
+        // Coverage
+        selectedCoverageSupervisors = updateSupervisorFilter(document.getElementById('coverage-supervisor-filter-dropdown'), document.getElementById('coverage-supervisor-filter-text'), selectedCoverageSupervisors, allSalesData);
+        updateSellerFilter(selectedCoverageSupervisors, document.getElementById('coverage-vendedor-filter-dropdown'), document.getElementById('coverage-vendedor-filter-text'), selectedCoverageSellers, allSalesData);
+
+        // Innovations
+        selectedInnovationsSupervisors = updateSupervisorFilter(document.getElementById('innovations-month-supervisor-filter-dropdown'), document.getElementById('innovations-month-supervisor-filter-text'), selectedInnovationsSupervisors, allSalesData, true);
+        updateSellerFilter(selectedInnovationsSupervisors, document.getElementById('innovations-month-vendedor-filter-dropdown'), document.getElementById('innovations-month-vendedor-filter-text'), selectedInnovationsMonthSellers, allSalesData);
+
+        // Mix
+        selectedMixSupervisors = updateSupervisorFilter(document.getElementById('mix-supervisor-filter-dropdown'), document.getElementById('mix-supervisor-filter-text'), selectedMixSupervisors, allSalesData);
+        updateSellerFilter(selectedMixSupervisors, document.getElementById('mix-vendedor-filter-dropdown'), document.getElementById('mix-vendedor-filter-text'), selectedMixSellers, allSalesData);
+        // -------------------------------------------------
 
         updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
         updateRedeFilter(cityRedeFilterDropdown, cityComRedeBtnText, selectedCityRedes, allClientsData);
         updateRedeFilter(comparisonRedeFilterDropdown, comparisonComRedeBtnText, selectedComparisonRedes, allClientsData);
         updateRedeFilter(stockRedeFilterDropdown, stockComRedeBtnText, selectedStockRedes, allClientsData, 'Com Rede');
+
+        // Initial Population for Goals Filters
+        selectedGoalsGvSupervisors = updateSupervisorFilter(goalsGvSupervisorFilterDropdown, goalsGvSupervisorFilterText, selectedGoalsGvSupervisors, allSalesData);
+        selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, [...allSalesData, ...allHistoryData]);
+        // Initialize SV Supervisor filter just in case
+        selectedGoalsSvSupervisors = updateSupervisorFilter(goalsSvSupervisorFilterDropdown, goalsSvSupervisorFilterText, selectedGoalsSvSupervisors, allSalesData);
+        // Initialize Summary Supervisor Filter
+        if(document.getElementById('goals-summary-supervisor-filter-dropdown')) {
+            selectedGoalsSummarySupervisors = updateSupervisorFilter(document.getElementById('goals-summary-supervisor-filter-dropdown'), document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, allSalesData);
+            selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, document.getElementById('goals-summary-seller-filter-dropdown'), document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData);
+        }
+
+        // Initialize Meta Vs Realizado Filters
+        selectedMetaRealizadoSupervisors = updateSupervisorFilter(document.getElementById('meta-realizado-supervisor-filter-dropdown'), document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
+        updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData]);
 
         // Fix: Pre-filter Suppliers for Meta Realizado (Only PEPSICO)
         const pepsicoSuppliersSource = [...allSalesData, ...allHistoryData].filter(s => {
@@ -13903,7 +14183,7 @@ const supervisorGroups = new Map();
             activeClients.forEach(client => {
                 const codCli = String(client["Código"] || client["codigo_cliente"]);
                 const historyIds = optimizedData.indices.history.byClient.get(codCli);
-
+                
                 if (historyIds) {
                     let clientElmaFat = 0;
                     let clientFoodsFat = 0;
@@ -14044,9 +14324,9 @@ const supervisorGroups = new Map();
 
                 const dotIdx = clean.lastIndexOf('.');
                 const commaIdx = clean.lastIndexOf(',');
-
+                
                 if (dotIdx > -1 && commaIdx > -1) {
-                    if (dotIdx > commaIdx) clean = clean.replace(/,/g, '');
+                    if (dotIdx > commaIdx) clean = clean.replace(/,/g, ''); 
                     else clean = clean.replace(/\./g, '').replace(',', '.');
                 } else if (commaIdx > -1) {
                     if (/,\d{3}$/.test(clean)) clean = clean.replace(/,/g, '');
@@ -14061,7 +14341,7 @@ const supervisorGroups = new Map();
             // Identify Vendor Column Index (Name)
             // Usually Index 1 (Code, Name, ...)
             // We scan first few rows to find valid seller names
-            let nameColIndex = 1;
+            let nameColIndex = 1; 
             // Basic Heuristic: If col 0 looks like a name and col 1 is number, maybe it's col 0.
             // But standard template is [Code, Name, ...]. We stick to 1 for now or 0 if 1 is empty.
 
@@ -14082,13 +14362,13 @@ const supervisorGroups = new Map();
                      }
                 }
 
-                if (!sellerName) continue;
-
+                if (!sellerName) continue; 
+                
                 // --- ENHANCED FILTER: Ignore Supervisors, Aggregates, and BALCAO ---
                 const upperName = sellerName.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-
+                
                 // 1. Explicit Blocklist
-                if (upperName === 'BALCAO' || upperName === 'BALCÃO' ||
+                if (upperName === 'BALCAO' || upperName === 'BALCÃO' || 
                     upperName.includes('TOTAL') || upperName.includes('SUPERVISOR') || upperName.includes('GERAL')) {
                     continue;
                 }
@@ -14203,7 +14483,7 @@ const supervisorGroups = new Map();
             // Insert after table container (which is inside analysisContainer -> div.bg-slate-900)
             // analysisContainer contains a header div, result div, and then the table container div.
             // We need to find the table container.
-
+            
         let pendingImportUpdates = [];
             let importTablePage = 1;
             const importTablePageSize = 19;
@@ -14211,7 +14491,7 @@ const supervisorGroups = new Map();
             function renderImportTable() {
                 if (!analysisBody) return;
                 analysisBody.innerHTML = '';
-
+                
                 const totalPages = Math.ceil(pendingImportUpdates.length / importTablePageSize);
                 if (importTablePage > totalPages && totalPages > 0) importTablePage = totalPages;
                 if (totalPages === 0) importTablePage = 1;
@@ -14228,7 +14508,7 @@ const supervisorGroups = new Map();
 
                 pageItems.forEach(u => {
                     const row = document.createElement('tr');
-
+                    
                     const currentVal = getSellerCurrentGoal(u.seller, u.category, u.type);
                     const newVal = u.val;
                     const diff = newVal - currentVal;
@@ -14291,7 +14571,7 @@ const supervisorGroups = new Map();
             // Bind Pagination Listeners
             const prevBtn = document.getElementById('import-prev-page-btn');
             const nextBtn = document.getElementById('import-next-page-btn');
-
+            
             if (prevBtn) {
                 prevBtn.addEventListener('click', () => {
                     if (importTablePage > 1) {
@@ -14316,7 +14596,7 @@ const supervisorGroups = new Map();
                 analysisContainer.classList.add('hidden');
                 importConfirmBtn.disabled = true;
                 importConfirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
-
+                
                 // Reset File Input
                 if (fileInput) fileInput.value = '';
                 if (dropZone) {
@@ -14381,7 +14661,7 @@ const supervisorGroups = new Map();
             function handleFiles(files) {
                 if (files.length === 0) return;
                 const file = files[0];
-
+                
                 // Visual Feedback: Loading
                 if (dropZone) {
                     dropZone.innerHTML = `
@@ -14400,13 +14680,13 @@ const supervisorGroups = new Map();
                     try {
                         const data = new Uint8Array(e.target.result);
                         const workbook = XLSX.read(data, {type: 'array'});
-
+                        
                         const sheetName = workbook.SheetNames[0];
                         const sheet = workbook.Sheets[sheetName];
-
+                        
                         // Convert to TSV for the parser
                         const tsv = XLSX.utils.sheet_to_csv(sheet, {FS: "\t"});
-
+                        
                         // Update UI
                         importTextarea.value = tsv;
                         if (dropZone) {
@@ -14416,7 +14696,7 @@ const supervisorGroups = new Map();
                                 <p class="text-slate-400 text-sm">${file.name} carregado.</p>
                             `;
                         }
-
+                        
                         // Auto-analyze
                         setTimeout(() => importAnalyzeBtn.click(), 500);
 
@@ -14487,7 +14767,7 @@ const supervisorGroups = new Map();
 
                     let total = 0;
                     const leafCategories = resolveGoalCategory(category);
-
+                    
                     activeClients.forEach(client => {
                         const codCli = String(client['Código'] || client['codigo_cliente']);
                         const clientGoals = globalClientGoals.get(codCli);
@@ -14509,13 +14789,13 @@ const supervisorGroups = new Map();
             // --- AI Insights Logic ---
                         async function generateAiInsights() {
                 const btn = document.getElementById('btn-generate-ai');
-
+                
                 if (!pendingImportUpdates || pendingImportUpdates.length === 0) return;
 
                 // UI Loading State
                 btn.disabled = true;
                 btn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Analisando...`;
-
+                
                 // Show loading overlay
                 const pageLoader = document.getElementById('page-transition-loader');
                 const loaderText = document.getElementById('loader-text');
@@ -14567,9 +14847,9 @@ const supervisorGroups = new Map();
                        // Actually pendingImportUpdates doesn't store history, it stores 'val' (new).
                        // We can compute history on the fly for the top items only? No, we need to sort first.
                        // Let's rely on 'getSellerCurrentGoal' as the "Old" value (which is Current Target).
-                       // The Prompt asks for comparison with "History".
-                       // getSellerCurrentGoal returns the *Current Goal* before update.
-                       // The AI prompt usually compares New Goal vs History Avg.
+                       // The Prompt asks for comparison with "History". 
+                       // getSellerCurrentGoal returns the *Current Goal* before update. 
+                       // The AI prompt usually compares New Goal vs History Avg. 
                        // Let's provide [Current Goal] and [New Goal]. The AI can infer "Change".
                        return getSellerCurrentGoal(sellerName, category, type);
                     };
@@ -14578,7 +14858,7 @@ const supervisorGroups = new Map();
                     for (const u of pendingImportUpdates) {
                         // Filter out supervisors/aggregates
                         const upperUName = u.seller.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-                        if (upperUName === 'BALCAO' || upperUName === 'BALCÃO' ||
+                        if (upperUName === 'BALCAO' || upperUName === 'BALCÃO' || 
                             upperUName.includes('TOTAL') || upperUName.includes('SUPERVISOR') || upperUName.includes('GERAL') ||
                             optimizedData.rcasBySupervisor.has(upperUName) || optimizedData.rcasBySupervisor.has(u.seller)) {
                             continue;
@@ -14609,12 +14889,12 @@ const supervisorGroups = new Map();
 
                         // Add to Supervisor Group
                         const supervisorEntry = getSupervisorEntry(supervisorName);
-
+                        
                         // We aggregate items per seller? Or just list variations?
                         // Requirement: "list the main variations of 5 sellers".
                         // It's better to list *Variations* as items.
                         // One seller might have huge Rev change AND huge Vol change.
-
+                        
                         supervisorEntry.sellers.push({
                             seller: u.seller,
                             category: u.category,
@@ -14632,25 +14912,25 @@ const supervisorGroups = new Map();
                     supervisorsMap.forEach(sup => {
                         // Sort by Impact (Magnitude of change)
                         sup.sellers.sort((a, b) => b.impact - a.impact);
-
+                        
                         // Deduplicate Variations (same seller + same metric)
                         const seen = new Set();
                         const uniqueVariations = [];
-
+                        
                         for (const v of sup.sellers) {
                             const catName = resolveCategoryName(v.category);
                             let metricName = '';
                             if (v.unit === 'R$') metricName = `Faturamento (${catName})`;
                             else if (v.unit === 'Kg') metricName = `Volume (${catName})`;
                             else metricName = `Positivação (${catName})`;
-
+                            
                             // Create unique signature
                             const sig = `${v.seller}|${metricName}`;
-
+                            
                             if (!seen.has(sig)) {
                                 seen.add(sig);
                                 // Attach resolved metric name for later use
-                                v._resolvedMetricName = metricName;
+                                v._resolvedMetricName = metricName; 
                                 uniqueVariations.push(v);
                             }
                         }
@@ -14674,9 +14954,9 @@ const supervisorGroups = new Map();
                     const promptText = `
                         Atue como um Gerente Nacional de Vendas da Prime Distribuição.
                         Analise as alterações de metas propostas (Proposed Goals).
-
+                        
                         Dados: ${JSON.stringify(optimizedContext)}
-
+                        
                         Gere um relatório JSON estritamente com esta estrutura:
                         {
                             "global_summary": "Resumo executivo da estratégia geral percebida nas alterações. Use emojis.",
@@ -14695,7 +14975,7 @@ const supervisorGroups = new Map();
                                 }
                             ]
                         }
-
+                        
                         Regras:
                         1. "variations" deve conter EXATAMENTE os itens enviados no contexto.
                         2. Use o nome COMPLETO da métrica fornecido no input (ex: "Faturamento (Extrusados)"). NÃO simplifique para apenas "Faturamento".
@@ -14710,7 +14990,7 @@ const supervisorGroups = new Map();
 
                     const response = await fetch(`https://api.groq.com/openai/v1/chat/completions`, {
                         method: 'POST',
-                        headers: {
+                        headers: { 
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${API_KEY}`
                         },
@@ -14722,40 +15002,40 @@ const supervisorGroups = new Map();
 
                     const data = await response.json();
                     if (data.error) throw new Error(data.error.message);
-
+                    
                     const aiText = data.choices[0].message.content;
-
+                    
                     // 3. Render Output
                     let result;
                     try {
                         const jsonStart = aiText.indexOf('{');
                         const jsonEnd = aiText.lastIndexOf('}');
                         result = JSON.parse(aiText.substring(jsonStart, jsonEnd + 1));
-
+                        
                         // Deduplicate Variations (Post-Processing)
                         if (result.supervisors) {
                             result.supervisors.forEach(sup => {
                                 if (sup.variations) {
                                     const uniqueMap = new Map();
                                     const cleanVariations = [];
-
+                                    
                                     sup.variations.forEach(v => {
                                         // Create signature: Seller + Metric Name
                                         // Normalize strings to avoid case/space issues
                                         const sig = `${v.seller}_${v.metric}`.trim().toLowerCase();
-
+                                        
                                         if (!uniqueMap.has(sig)) {
                                             uniqueMap.set(sig, true);
                                             cleanVariations.push(v);
                                         }
                                     });
-
+                                    
                                     // Enforce Limits (Safety Net)
                                     // If AI hallucinates or context structure varies, ensure BALCAO/Americanas is capped at 5
                                     // Other supervisors can show up to 10
                                     const isBalcao = sup.name && (sup.name.toUpperCase() === 'BALCAO' || sup.name.toUpperCase().includes('AMERICANAS'));
                                     const limit = isBalcao ? 5 : 10;
-
+                                    
                                     sup.variations = cleanVariations.slice(0, limit);
                                 }
                             });
@@ -14781,7 +15061,7 @@ const supervisorGroups = new Map();
             function renderAiSummaryChart(fatDiff) {
                 const chartContainer = document.getElementById('ai-chart-container');
                 if(!chartContainer) return;
-
+                
                 // Clear previous canvas
                 chartContainer.innerHTML = '<canvas id="aiSummaryChart"></canvas>';
                 const ctx = document.getElementById('aiSummaryChart').getContext('2d');
@@ -14791,7 +15071,7 @@ const supervisorGroups = new Map();
                 // Let's iterate updates again to sum "Current" and "Proposed" totals for Revenue only.
                 let totalCurrent = 0;
                 let totalProposed = 0;
-
+                
                 pendingImportUpdates.forEach(u => {
                     if (u.type === 'rev') {
                         const cur = getSellerCurrentGoal(u.seller, u.category, u.type);
@@ -14820,15 +15100,15 @@ const supervisorGroups = new Map();
                             title: { display: true, text: 'Comparativo de Faturamento Total', color: '#fff' }
                         },
                         scales: {
-                            y: {
-                                beginAtZero: false,
-                                grid: { color: '#334155' },
-                                ticks: {
+                            y: { 
+                                beginAtZero: false, 
+                                grid: { color: '#334155' }, 
+                                ticks: { 
                                     color: '#94a3b8',
                                     callback: function(value) {
                                         return new Intl.NumberFormat('pt-BR', { notation: "compact", maximumFractionDigits: 1 }).format(value);
                                     }
-                                }
+                                } 
                             },
                             x: { grid: { display: false }, ticks: { color: '#fff' } }
                         }
@@ -14850,7 +15130,7 @@ const supervisorGroups = new Map();
                         return;
                     }
                     console.log("Iniciando análise. Tamanho do texto:", text.length);
-
+                    
                     const updates = parseGoalsSvStructure(text);
                     console.log("Resultado da análise:", updates ? updates.length : "null");
 
@@ -14858,16 +15138,16 @@ const supervisorGroups = new Map();
                         alert("Nenhum dado válido encontrado para atualização. \n\nVerifique se:\n1. O arquivo possui os cabeçalhos corretos (3 linhas iniciais).\n2. As colunas de 'Ajuste' contêm valores numéricos.\n3. Os nomes dos vendedores correspondem ao cadastro.");
                         return;
                     }
-
+                    
                     pendingImportUpdates = updates;
-
+                    
                     // Reset to page 1 and render using the pagination function
                     importTablePage = 1;
                     renderImportTable();
-
+                    
                     analysisBadges.innerHTML = `<span class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">${updates.length} Registros Encontrados</span>`;
                     analysisContainer.classList.remove('hidden');
-
+                    
                     // Force Scroll
                     analysisContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -14895,7 +15175,7 @@ const supervisorGroups = new Map();
                     goalsSellerTargets.clear();
                     globalClientGoals.clear();
                     // ------------------------
-
+                    
                     // 1. Process Manual Updates (Imported)
                     pendingImportUpdates.forEach(u => {
                         if (u.type === 'rev') {
@@ -14930,7 +15210,7 @@ const supervisorGroups = new Map();
                     const activeSellerNames = new Set();
                     const forbiddenBackfill = ['INATIVOS', 'N/A', 'BALCAO', 'BALCÃO', 'TOTAL', 'GERAL'];
                     const supervisorNames = new Set(optimizedData.rcasBySupervisor.keys());
-
+                    
                     optimizedData.rcasBySupervisor.forEach(rcas => {
                         rcas.forEach(code => {
                             const name = optimizedData.rcaNameByCode.get(code);
@@ -14948,7 +15228,7 @@ const supervisorGroups = new Map();
                     activeSellerNames.forEach(sellerName => {
                         if (!goalsSellerTargets.has(sellerName)) goalsSellerTargets.set(sellerName, {});
                         const targets = goalsSellerTargets.get(sellerName);
-
+                        
                         // Calculate Defaults
                         const defaults = calculateSellerDefaults(sellerName);
 
@@ -14961,10 +15241,10 @@ const supervisorGroups = new Map();
 
                     // Save to Supabase (SKIPPED - Load to Memory Only)
                     // const success = await saveGoalsToSupabase();
-
+                    
                     alert(`Importação realizada! As metas foram carregadas para a aba "Rateio Metas". Verifique e salve manualmente.`);
                     closeModal();
-
+                    
                     // Switch to "Rateio Metas" tab to verify
                     const btnGv = document.querySelector('button[data-tab="gv"]');
                     if (btnGv) btnGv.click();
@@ -15119,7 +15399,8 @@ const supervisorGroups = new Map();
             }
 
             let fileNameParam = 'geral';
-            if (hierarchyState['meta-realizado'] && hierarchyState['meta-realizado'].promotors.size === 1) {
+            if (selectedMetaRealizadoSellers.length === 1) {
+                fileNameParam = getFirstName(selectedMetaRealizadoSellers[0]);
             }
             const safeFileNameParam = fileNameParam.replace(/[^a-z0-9]/gi, '_').toLowerCase();
             doc.save(`meta_vs_realizado_${safeFileNameParam}_${new Date().toISOString().slice(0,10)}.pdf`);
@@ -15138,14 +15419,14 @@ const supervisorGroups = new Map();
 
                 // Hide Main Dashboard / Content Wrapper
                 // Note: index.html structure shows content-wrapper wraps everything *except* the new page which I inserted *inside*?
-                // Let's check where I inserted it.
+                // Let's check where I inserted it. 
                 // "Insert the new full-screen AI insights container into index.html... inside content-wrapper"
                 // If it is inside content-wrapper, hiding content-wrapper hides it too.
                 // Wait, in my previous step I used  to insert it *before* Goals View.
                 //  is inside .
                 // So  IS inside .
                 // Therefore, I should hide the *siblings* (dashboard, goals-view, etc) explicitly, NOT the wrapper.
-
+                
                 // Hide all main views
                 ['main-dashboard', 'city-view', 'weekly-view', 'comparison-view', 'stock-view', 'coverage-view', 'goals-view', 'meta-realizado-view', 'mix-view', 'innovations-month-view'].forEach(id => {
                     const el = document.getElementById(id);
@@ -15154,7 +15435,7 @@ const supervisorGroups = new Map();
 
                 // Show AI Page
                 fullPage.classList.remove('hidden');
-
+                
                 // Render Content
                 let html = `
                     <div class="bg-gradient-to-r from-slate-800 to-slate-900 rounded-lg p-6 border border-slate-700 shadow-lg mb-8">
@@ -15167,7 +15448,7 @@ const supervisorGroups = new Map();
                     <div id="ai-full-page-chart-container" class="mt-8 mb-8 h-80 bg-slate-800 rounded-xl p-4 border border-slate-700 relative">
                         <canvas id="aiFullPageSummaryChart"></canvas>
                     </div>
-
+                    
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
                 `;
 
@@ -15186,7 +15467,7 @@ const supervisorGroups = new Map();
                                         <h4 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Análise do Time</h4>
                                         <p class="text-slate-300 text-sm leading-relaxed">${sup.analysis}</p>
                                     </div>
-
+                                    
                                     <div>
                                         <div class="flex justify-between items-center mb-3">
                                             <h4 class="text-sm font-bold text-slate-400 uppercase tracking-wider">Detalhamento por Vendedor</h4>
@@ -15204,12 +15485,12 @@ const supervisorGroups = new Map();
                                                 </thead>
                                                 <tbody class="divide-y divide-slate-700/50 bg-slate-800/30">
                         `;
-
+                        
                         if (sup.variations) {
                             sup.variations.forEach(v => {
                                 // Enhance change display with colors and icons
                                 let coloredChange = v.change_display;
-
+                                
                                 // Regex for (+...) -> Green with arrow up
                                 if (coloredChange.includes('(+')) {
                                     coloredChange = coloredChange.replace(/(\(\+[^)]+\))/g, '<span class="text-emerald-400 font-bold bg-emerald-400/10 px-1.5 py-0.5 rounded ml-1 text-xs">$1</span>');
@@ -15248,7 +15529,7 @@ const supervisorGroups = new Map();
 
                 html += `</div>`;
                 contentDiv.innerHTML = html;
-
+                
                 // Render Chart
                 setTimeout(renderFullPageSummaryChart, 100);
 
@@ -15263,7 +15544,7 @@ const supervisorGroups = new Map();
                 // Calculate Totals
                 let totalCurrent = 0;
                 let totalProposed = 0;
-
+                
                 // Ensure we have updates
                 if (pendingImportUpdates) {
                     pendingImportUpdates.forEach(u => {
@@ -15299,9 +15580,9 @@ const supervisorGroups = new Map();
                         maintainAspectRatio: false,
                         plugins: {
                             legend: { display: false },
-                            title: {
-                                display: true,
-                                text: `Comparativo Global de Faturamento (Diferença: ${diff > 0 ? '+' : ''}${diff.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})})`,
+                            title: { 
+                                display: true, 
+                                text: `Comparativo Global de Faturamento (Diferença: ${diff > 0 ? '+' : ''}${diff.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})})`, 
                                 color: '#fff',
                                 font: { size: 16 }
                             },
@@ -15314,14 +15595,14 @@ const supervisorGroups = new Map();
                             }
                         },
                         scales: {
-                            y: {
-                                beginAtZero: false,
-                                grid: { color: '#334155' },
-                                ticks: { color: '#94a3b8' }
+                            y: { 
+                                beginAtZero: false, 
+                                grid: { color: '#334155' }, 
+                                ticks: { color: '#94a3b8' } 
                             },
-                            x: {
-                                grid: { display: false },
-                                ticks: { color: '#fff', font: { size: 14, weight: 'bold' } }
+                            x: { 
+                                grid: { display: false }, 
+                                ticks: { color: '#fff', font: { size: 14, weight: 'bold' } } 
                             }
                         }
                     }
@@ -15332,7 +15613,7 @@ const supervisorGroups = new Map();
             document.getElementById('ai-insights-export-btn')?.addEventListener('click', () => {
                 const content = document.getElementById('ai-insights-full-content').innerHTML;
                 const timestamp = new Date().toLocaleString();
-
+                
                 const fullHtml = `
                     <!DOCTYPE html>
                     <html lang="pt-br">
@@ -15352,7 +15633,7 @@ const supervisorGroups = new Map();
                     </body>
                     </html>
                 `;
-
+                
                 const blob = new Blob([fullHtml], { type: 'text/html' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -15370,7 +15651,7 @@ const supervisorGroups = new Map();
                 // Restore Dashboard (or Goals View specifically since we came from there)
                 // Default to Goals View since the Import Modal is there
                 navigateTo('goals');
-
+                
                 // Re-open the Import Modal to preserve context/flow
                 const modal = document.getElementById('import-goals-modal');
                 if (modal) modal.classList.remove('hidden');
