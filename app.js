@@ -1962,7 +1962,7 @@
             return new Date(d.getTime() + userTimezoneOffset).toLocaleDateString('pt-BR');
         }
 
-        function buildInnovationSalesMaps(salesData, mainTypes, bonusTypes) {
+        function buildInnovationSalesMaps(salesData, mainTypes, bonusTypes, dateRange = null) {
             const mainMap = new Map(); // Map<CODCLI, Map<PRODUTO, Set<CODUSUR>>>
             const bonusMap = new Map();
             const mainSet = new Set(mainTypes);
@@ -1973,6 +1973,12 @@
                 const isBonus = bonusSet.has(sale.TIPOVENDA);
 
                 if (!isMain && !isBonus) return;
+
+                // Date Filtering (Optional)
+                if (dateRange) {
+                    const d = parseDate(sale.DTPED);
+                    if (!d || d < dateRange.start || d > dateRange.end) return;
+                }
 
                 const codCli = sale.CODCLI;
                 const prod = sale.PRODUTO;
@@ -10679,9 +10685,17 @@ const supervisorGroups = new Map();
                 const mainTypes = currentSelection.filter(t => t !== '5' && t !== '11');
                 const bonusTypes = currentSelection.filter(t => t === '5' || t === '11');
 
+                // Calculate Previous Month Date Range (Strict M-1 from lastSaleDate)
+                const refDate = lastSaleDate || new Date();
+                // Start of M-1
+                const prevStart = new Date(Date.UTC(refDate.getUTCFullYear(), refDate.getUTCMonth() - 1, 1));
+                // End of M-1 (Start of M - 1ms)
+                const prevEnd = new Date(Date.UTC(refDate.getUTCFullYear(), refDate.getUTCMonth(), 0, 23, 59, 59, 999));
+
                 // Optimized Map Building (2 passes instead of 4)
                 mapsCurrent = buildInnovationSalesMaps(allSalesData, mainTypes, bonusTypes);
-                mapsPrevious = buildInnovationSalesMaps(allHistoryData, mainTypes, bonusTypes);
+                // Apply strict date range for History to match Comparison View logic (Single Month)
+                mapsPrevious = buildInnovationSalesMaps(allHistoryData, mainTypes, bonusTypes, { start: prevStart, end: prevEnd });
 
                 viewState.inovacoes.lastTypesKey = currentSelectionKey;
                 viewState.inovacoes.cache = { mapsCurrent, mapsPrevious };
