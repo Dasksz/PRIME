@@ -1926,6 +1926,8 @@
         let selectedCoverageSuppliers = [];
         let selectedCoverageSupervisors = [];
         let selectedCoverageProducts = [];
+        let selectedCoverageDateRange = null;
+        let coverageDateFilterInstance = null;
         let coverageUnitPriceFilter = null;
         let customWorkingDaysCoverage = 0;
         let coverageTrendFilter = 'all';
@@ -6822,6 +6824,25 @@ const supervisorGroups = new Map();
             let sales = getFilteredDataFromIndices(optimizedData.indices.current, optimizedData.salesById, filters, excludeFilter);
             let history = getFilteredDataFromIndices(optimizedData.indices.history, optimizedData.historyById, filters, excludeFilter);
 
+            // --- Date Filtering ---
+            if (selectedCoverageDateRange && selectedCoverageDateRange.length === 2) {
+                const startDate = selectedCoverageDateRange[0];
+                const endDate = selectedCoverageDateRange[1];
+                // Ensure boundaries
+                const startTs = new Date(startDate).setHours(0,0,0,0);
+                const endTs = new Date(endDate).setHours(23,59,59,999);
+
+                const filterByDate = (item) => {
+                    const dt = item.DTPED;
+                    if (!dt) return false;
+                    const ts = (typeof dt === 'number') ? dt : (dt instanceof Date ? dt.getTime() : parseDate(dt)?.getTime());
+                    return ts >= startTs && ts <= endTs;
+                };
+
+                sales = sales.filter(filterByDate);
+                history = history.filter(filterByDate);
+            }
+
             // Post-filtering for logic not supported by indices
             const unitPriceInput = document.getElementById('coverage-unit-price-filter');
             const unitPrice = unitPriceInput && unitPriceInput.value ? parseFloat(unitPriceInput.value) : null;
@@ -6867,6 +6888,8 @@ const supervisorGroups = new Map();
 
         function resetCoverageFilters() {
             selectedCoverageSupervisors = [];
+            selectedCoverageDateRange = null;
+            if (coverageDateFilterInstance) coverageDateFilterInstance.clear();
             coverageCityFilter.value = '';
             coverageFilialFilter.value = 'ambas';
 
@@ -13857,6 +13880,24 @@ const supervisorGroups = new Map();
                     handleCoverageFilterChange({ skipFilter: 'product' });
                 }
             });
+
+            const coverageDateFilterInput = document.getElementById('coverage-date-filter');
+            if (coverageDateFilterInput) {
+                coverageDateFilterInstance = flatpickr(coverageDateFilterInput, {
+                    mode: 'range',
+                    dateFormat: 'd/m/Y',
+                    locale: 'pt',
+                    onClose: (selectedDates) => {
+                        if (selectedDates.length === 2) {
+                            selectedCoverageDateRange = selectedDates;
+                            updateCoverage();
+                        } else if (selectedDates.length === 0) {
+                            selectedCoverageDateRange = null;
+                            updateCoverage();
+                        }
+                    }
+                });
+            }
 
             const coverageUnitPriceInput = document.getElementById('coverage-unit-price-filter');
             if (coverageUnitPriceInput) {
