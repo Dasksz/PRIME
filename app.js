@@ -11292,13 +11292,19 @@ const supervisorGroups = new Map();
             const supplierText = document.getElementById('coverage-supplier-filter-text').textContent;
             const generationDate = new Date().toLocaleString('pt-BR');
 
+            let dateRangeText = '';
+            if (selectedCoverageDateRange && selectedCoverageDateRange.length === 2) {
+                const formatDate = (date) => date.toLocaleDateString('pt-BR');
+                dateRangeText = ` | Data: ${formatDate(selectedCoverageDateRange[0])} a ${formatDate(selectedCoverageDateRange[1])}`;
+            }
+
             doc.setFontSize(18);
             doc.text('Relatório de Cobertura (Estoque x PDVs)', 14, 22);
             doc.setFontSize(10);
             doc.setTextColor(10);
             doc.text(`Data de Emissão: ${generationDate}`, 14, 30);
 
-            let filterText = `Filtros Aplicados: Supervisor: ${supervisor} | Vendedor: ${vendedor} | Filial: ${filial} | Cidade: ${cidade || 'Todas'} | Fornecedor: ${supplierText}`;
+            let filterText = `Filtros Aplicados: Supervisor: ${supervisor} | Vendedor: ${vendedor} | Filial: ${filial} | Cidade: ${cidade || 'Todas'} | Fornecedor: ${supplierText}${dateRangeText}`;
             const splitFilters = doc.splitTextToSize(filterText, 270);
             doc.text(splitFilters, 14, 36);
 
