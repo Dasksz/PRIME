@@ -1979,13 +1979,17 @@
                 const rca = sale.CODUSUR;
 
                 if (isMain) {
-                    if (!mainMap.has(codCli)) mainMap.set(codCli, new Map());
-                    const clientMap = mainMap.get(codCli);
-                    if (!clientMap.has(prod)) clientMap.set(prod, new Set());
-                    clientMap.get(prod).add(rca);
+                    // Strict Rule for Main Sales: Value must be >= 1
+                    if ((Number(sale.VLVENDA) || 0) >= 1) {
+                        if (!mainMap.has(codCli)) mainMap.set(codCli, new Map());
+                        const clientMap = mainMap.get(codCli);
+                        if (!clientMap.has(prod)) clientMap.set(prod, new Set());
+                        clientMap.get(prod).add(rca);
+                    }
                 }
 
                 if (isBonus) {
+                    // Bonus Sales: No value threshold (often 0)
                     if (!bonusMap.has(codCli)) bonusMap.set(codCli, new Map());
                     const clientMap = bonusMap.get(codCli);
                     if (!clientMap.has(prod)) clientMap.set(prod, new Set());
