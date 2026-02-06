@@ -5164,13 +5164,44 @@
                 (item.mixPdv || 0).toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})
             ]);
 
+            // Calculate Totals
+            const totals = {
+                months: quarterMonths.map(() => 0),
+                avgFat: 0,
+                metaFat: 0,
+                metaVol: 0,
+                mixPdv: 0
+            };
+
+            data.forEach(item => {
+                quarterMonths.forEach((m, i) => {
+                    totals.months[i] += (item.monthlyValues[m.key] || 0);
+                });
+                totals.avgFat += (item.avgFat || 0);
+                totals.metaFat += (item.metaFat || 0);
+                totals.metaVol += (item.metaVol || 0);
+                totals.mixPdv += (item.mixPdv || 0);
+            });
+
+            const foot = [[
+                'TOTAL', '', '',
+                ...totals.months.map(v => v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})),
+                totals.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
+                '-', // Share
+                totals.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
+                totals.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3}),
+                totals.mixPdv.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})
+            ]];
+
             doc.autoTable({
                 head: head,
                 body: body,
+                foot: foot,
                 startY: 45,
                 theme: 'grid',
                 styles: { fontSize: 7, cellPadding: 1, textColor: [0, 0, 0], halign: 'right' },
                 headStyles: { fillColor: [20, 184, 166], textColor: 255, fontStyle: 'bold', fontSize: 8, halign: 'center' },
+                footStyles: { fillColor: [50, 50, 50], textColor: 255, fontStyle: 'bold', halign: 'right', fontSize: 8 },
                 columnStyles: {
                     0: { halign: 'center', cellWidth: 12 },
                     1: { halign: 'left', cellWidth: 40 },
@@ -5234,11 +5265,48 @@
                 ws_data_flat.push(row);
             });
 
+            // Calculate Totals
+            const totals = {
+                months: quarterMonths.map(() => 0),
+                avgFat: 0,
+                metaFat: 0,
+                avgVol: 0,
+                metaVol: 0,
+                mixPdv: 0
+            };
+
+            data.forEach(item => {
+                quarterMonths.forEach((m, i) => {
+                    totals.months[i] += (item.monthlyValues[m.key] || 0);
+                });
+                totals.avgFat += (item.avgFat || 0);
+                totals.metaFat += (item.metaFat || 0);
+                totals.avgVol += (item.avgVol || 0);
+                totals.metaVol += (item.metaVol || 0);
+                totals.mixPdv += (item.mixPdv || 0);
+            });
+
+            // Append Total Row
+            const totalRow = [
+                'TOTAL', '', '',
+                ...totals.months,
+                totals.avgFat,
+                '', // Share Fat
+                totals.metaFat,
+                totals.avgVol,
+                '', // Share Vol
+                totals.metaVol,
+                totals.mixPdv
+            ];
+            ws_data_flat.push(totalRow);
+
             const ws_flat = XLSX.utils.aoa_to_sheet(ws_data_flat);
 
-             // Style Header
+             // Style Header & Footer
             if (ws_flat['!ref']) {
                 const range = XLSX.utils.decode_range(ws_flat['!ref']);
+
+                // Header
                 for (let C = range.s.c; C <= range.e.c; ++C) {
                     const addr = XLSX.utils.encode_cell({ r: 0, c: C });
                     if (!ws_flat[addr]) continue;
@@ -5246,6 +5314,16 @@
                     ws_flat[addr].s.fill = { fgColor: { rgb: "1E293B" } };
                     ws_flat[addr].s.font = { color: { rgb: "FFFFFF" }, bold: true };
                     ws_flat[addr].s.alignment = { horizontal: "center" };
+                }
+
+                // Footer (Total Row)
+                const lastRowIdx = range.e.r;
+                for (let C = range.s.c; C <= range.e.c; ++C) {
+                    const addr = XLSX.utils.encode_cell({ r: lastRowIdx, c: C });
+                    if (!ws_flat[addr]) continue;
+                    if (!ws_flat[addr].s) ws_flat[addr].s = {};
+                    ws_flat[addr].s.font = { bold: true };
+                    ws_flat[addr].s.fill = { fgColor: { rgb: "E2E8F0" } }; // Light Gray
                 }
 
                 // Number formats
