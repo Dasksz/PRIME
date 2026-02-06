@@ -5197,6 +5197,7 @@
                 head: head,
                 body: body,
                 foot: foot,
+                showFoot: 'lastPage',
                 startY: 45,
                 theme: 'grid',
                 styles: { fontSize: 7, cellPadding: 1, textColor: [0, 0, 0], halign: 'right' },
@@ -5305,7 +5306,7 @@
              // Style Header & Footer
             if (ws_flat['!ref']) {
                 const range = XLSX.utils.decode_range(ws_flat['!ref']);
-
+                
                 // Header
                 for (let C = range.s.c; C <= range.e.c; ++C) {
                     const addr = XLSX.utils.encode_cell({ r: 0, c: C });
