@@ -2785,9 +2785,19 @@
                         const getColLet = (idx) => XLSX.utils.encode_col(idx);
 
                         // Highlight Logic
-                        const isEditable = !col.isAgg; // Base columns are editable (Yellow)
-                        const cellStyle = isEditable ? editableStyle : readOnlyStyle;
-                        const aggCellStyle = readOnlyStyle; // Aggregated columns (Light Grey)
+                        // Rule:
+                        // Fat: Editable for Leafs (!isAgg), ReadOnly for Aggregates.
+                        // Pos: Editable for Aggregates (TOTAL ELMA/FOODS), ReadOnly for Leafs.
+                        // Vol: Editable for Tonnage Columns.
+                        // Mix: Editable for Mix Columns.
+                        // Geral: Pos Editable.
+
+                        const isFatEditable = !col.isAgg;
+                        const isPosEditable = (col.id === 'total_elma' || col.id === 'total_foods');
+
+                        const fatStyle = isFatEditable ? editableStyle : readOnlyStyle;
+                        const posStyle = isPosEditable ? editableStyle : readOnlyStyle;
+                        const aggCellStyle = readOnlyStyle;
 
                         if (col.type === 'standard') {
                             rowData.push(createCell(d.metaFat, readOnlyStyle, fmtMoney));
@@ -2796,7 +2806,7 @@
                             if (col.id === 'total_elma' || col.id === 'total_foods') {
                                 const ids = col.id === 'total_elma' ? ['707', '708', '752'] : ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
                                 const compCols = ids.map(id => colMap[id] + 1);
-                                const compColsPos = ids.map(id => colMap[id] + 3);
+                                // const compColsPos = ids.map(id => colMap[id] + 3);
                                 const formulaFat = compCols.map(c => `${getColLet(c)}${excelRow}`).join("+");
 
                                 rowData.push({ t: 'n', v: d.metaFat, f: formulaFat, s: { ...aggCellStyle, numFmt: fmtMoney }, z: fmtMoney });
@@ -2808,11 +2818,10 @@
                                     const t = goalsSellerTargets.get(seller.name);
                                     if (t && t[col.id] !== undefined) posVal = t[col.id];
                                 }
-                                // Make Editable (cellStyle instead of aggCellStyle)
-                                rowData.push(createCell(posVal, editableStyle, fmtInt));
+                                rowData.push(createCell(posVal, posStyle, fmtInt));
                             } else {
-                                // Editable Cells
-                                rowData.push(createCell(d.metaFat, cellStyle, fmtMoney));
+                                // Leaf Cells
+                                rowData.push(createCell(d.metaFat, fatStyle, fmtMoney));
                                 rowData.push(createCell(d.metaPos, readOnlyStyle, fmtInt));
                                 
                                 // Positivation (Standard): Use Stored Target
@@ -2821,7 +2830,7 @@
                                     const t = goalsSellerTargets.get(seller.name);
                                     if (t && t[col.id] !== undefined) posVal = t[col.id];
                                 }
-                                rowData.push(createCell(posVal, cellStyle, fmtInt));
+                                rowData.push(createCell(posVal, posStyle, fmtInt));
                             }
 
                             colCellsForSupTotal[col.id].fat.push(`${getColLet(cIdx + 1)}${excelRow}`);
@@ -2830,14 +2839,16 @@
                         } else if (col.type === 'tonnage') {
                             rowData.push(createCell(d.avgVol, readOnlyStyle, fmtVol));
                             rowData.push(createCell(d.metaVol, readOnlyStyle, fmtVol));
-                            rowData.push(createCell(d.metaVol, isEditable ? cellStyle : aggCellStyle, fmtVol));
+                            // Tonnage Adjustment: Always Yellow (Editable)
+                            rowData.push(createCell(d.metaVol, editableStyle, fmtVol));
                             colCellsForSupTotal[col.id].vol.push(`${getColLet(cIdx + 2)}${excelRow}`);
                             colCellsForSupTotal[col.id].avg.push(`${getColLet(cIdx)}${excelRow}`);
 
                         } else if (col.type === 'mix') {
                             rowData.push(createCell(d.avgMix, readOnlyStyle, fmtDec1));
                             rowData.push(createCell(d.metaMix, readOnlyStyle, fmtInt));
-                            rowData.push(createCell(d.metaMix, isEditable ? cellStyle : aggCellStyle, fmtInt));
+                            // Mix Adjustment: Always Yellow (Editable) - Assuming we want it editable
+                            rowData.push(createCell(d.metaMix, editableStyle, fmtInt));
                             colCellsForSupTotal[col.id].mix.push(`${getColLet(cIdx + 2)}${excelRow}`);
                             colCellsForSupTotal[col.id].avg.push(`${getColLet(cIdx)}${excelRow}`);
 
@@ -6866,15 +6877,26 @@ const supervisorGroups = new Map();
                         svColumns.forEach(col => {
                             const d = seller.data[col.id] || { metaFat: 0, metaVol: 0, metaPos: 0, avgVol: 0, avgMix: 0, metaMix: 0, avgFat: 0, monthlyValues: {} };
                             if (col.type === 'standard') {
-                                const isReadOnly = col.isAgg; const inputClass = isReadOnly ? 'text-slate-400 font-bold opacity-70' : 'text-yellow-300'; const readonlyAttr = 'readonly disabled'; const cellBg = isReadOnly ? 'bg-[#151c36]' : 'bg-[#1e293b]';
+                                // Rule: Fat Editable if !isAgg (Leafs). Pos Editable if Agg (Total Elma/Foods).
+                                const isFatEditable = !col.isAgg;
+                                const isPosEditable = (col.id === 'total_elma' || col.id === 'total_foods');
+
+                                const fatInputClass = isFatEditable ? 'text-yellow-300' : 'text-slate-400 font-bold opacity-70';
+                                const fatReadonlyAttr = isFatEditable ? '' : 'readonly disabled';
+                                const fatCellBg = isFatEditable ? 'bg-[#1e293b]' : 'bg-[#151c36]';
+
+                                const posInputClass = isPosEditable ? 'text-yellow-300' : 'text-slate-400 font-bold opacity-70';
+                                const posReadonlyAttr = isPosEditable ? '' : 'readonly disabled';
+                                const posCellBg = isPosEditable ? 'bg-[#1e293b]' : 'bg-[#151c36]';
+
                                 quarterMonths.forEach(m => bodyHTML += `<td class="px-1 py-1 text-right text-slate-400 border-r border-slate-800/50 text-[10px] bg-blue-900/5">${(d.monthlyValues[m.key] || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`);
-                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 bg-blue-900/10 font-medium">${d.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right ${col.colorClass} border-r border-slate-800/50 text-xs font-mono">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 ${cellBg} border-r border-slate-800/50"><input type="text" value="${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}" class="goals-sv-input bg-transparent text-right w-full outline-none ${inputClass} text-xs font-mono" ${readonlyAttr}></td><td class="px-1 py-1 text-center text-slate-300 border-r border-slate-800/50">${d.metaPos}</td><td class="px-1 py-1 ${cellBg} border-r border-slate-800/50"><input type="text" value="${d.metaPos}" class="goals-sv-input bg-transparent text-center w-full outline-none ${inputClass} text-xs font-mono" ${readonlyAttr}></td>`;
+                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 bg-blue-900/10 font-medium">${d.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right ${col.colorClass} border-r border-slate-800/50 text-xs font-mono">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 ${fatCellBg} border-r border-slate-800/50"><input type="text" value="${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}" class="goals-sv-input bg-transparent text-right w-full outline-none ${fatInputClass} text-xs font-mono" ${fatReadonlyAttr}></td><td class="px-1 py-1 text-center text-slate-300 border-r border-slate-800/50">${d.metaPos}</td><td class="px-1 py-1 ${posCellBg} border-r border-slate-800/50"><input type="text" value="${d.metaPos}" class="goals-sv-input bg-transparent text-center w-full outline-none ${posInputClass} text-xs font-mono" ${posReadonlyAttr}></td>`;
                             } else if (col.type === 'tonnage') {
-                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 font-mono text-xs">${d.avgVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 font-bold font-mono text-xs">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 bg-[#1e293b] border-r border-slate-800/50"><input type="text" value="${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}" class="goals-sv-input bg-transparent text-right w-full outline-none text-yellow-300 text-xs font-mono" readonly disabled></td>`;
+                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 font-mono text-xs">${d.avgVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 font-bold font-mono text-xs">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 bg-[#1e293b] border-r border-slate-800/50"><input type="text" value="${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}" class="goals-sv-input bg-transparent text-right w-full outline-none text-yellow-300 text-xs font-mono"></td>`;
                             } else if (col.type === 'mix') {
-                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50">${d.avgMix.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})}</td><td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 font-bold">${d.metaMix}</td><td class="px-1 py-1 bg-[#1e293b] border-r border-slate-800/50"><input type="text" value="${d.metaMix}" class="goals-sv-input bg-transparent text-right w-full outline-none text-yellow-300 text-xs font-mono" readonly disabled></td>`;
+                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50">${d.avgMix.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})}</td><td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 font-bold">${d.metaMix}</td><td class="px-1 py-1 bg-[#1e293b] border-r border-slate-800/50"><input type="text" value="${d.metaMix}" class="goals-sv-input bg-transparent text-right w-full outline-none text-yellow-300 text-xs font-mono"></td>`;
                             } else if (col.type === 'geral') {
-                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-400 border-r border-slate-800/50 font-mono text-xs">${d.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right text-white font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="geral" data-field="fat" id="geral-${seller.id || seller.name.replace(/\s+/g,'_')}-fat">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right text-white font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="geral" data-field="ton" id="geral-${seller.id || seller.name.replace(/\s+/g,'_')}-ton">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 text-center text-white font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="geral" data-field="pos" id="geral-${seller.id || seller.name.replace(/\s+/g,'_')}-pos">${d.metaPos}</td>`;
+                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-400 border-r border-slate-800/50 font-mono text-xs">${d.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right text-white font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="geral" data-field="fat" id="geral-${seller.id || seller.name.replace(/\s+/g,'_')}-fat">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right text-white font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="geral" data-field="ton" id="geral-${seller.id || seller.name.replace(/\s+/g,'_')}-ton">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 text-center text-yellow-300 font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="geral" data-field="pos" id="geral-${seller.id || seller.name.replace(/\s+/g,'_')}-pos">${d.metaPos}</td>`;
                             } else if (col.type === 'pedev') {
                                 bodyHTML += `<td class="px-1 py-1 text-center text-pink-400 font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="pedev" data-field="pos" id="pedev-${seller.id || seller.name.replace(/\s+/g,'_')}-pos">${d.metaPos}</td>`;
                             }
