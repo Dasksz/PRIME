@@ -5197,6 +5197,7 @@
                 head: head,
                 body: body,
                 foot: foot,
+                showFoot: 'lastPage',
                 startY: 45,
                 theme: 'grid',
                 styles: { fontSize: 7, cellPadding: 1, textColor: [0, 0, 0], halign: 'right' },
