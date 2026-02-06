@@ -5168,9 +5168,11 @@
             const totals = {
                 months: quarterMonths.map(() => 0),
                 avgFat: 0,
+                shareFat: 0,
                 metaFat: 0,
                 metaVol: 0,
-                mixPdv: 0
+                mixPdvSum: 0,
+                mixPdvCount: 0
             };
 
             data.forEach(item => {
@@ -5178,19 +5180,25 @@
                     totals.months[i] += (item.monthlyValues[m.key] || 0);
                 });
                 totals.avgFat += (item.avgFat || 0);
+                totals.shareFat += (item.shareFat || 0);
                 totals.metaFat += (item.metaFat || 0);
                 totals.metaVol += (item.metaVol || 0);
-                totals.mixPdv += (item.mixPdv || 0);
+                if ((item.mixPdv || 0) > 0) {
+                    totals.mixPdvSum += (item.mixPdv || 0);
+                    totals.mixPdvCount++;
+                }
             });
+
+            const mixPdvAvg = totals.mixPdvCount > 0 ? (totals.mixPdvSum / totals.mixPdvCount) : 0;
 
             const foot = [[
                 'TOTAL', '', '',
                 ...totals.months.map(v => v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})),
                 totals.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
-                '-', // Share
+                (totals.shareFat * 100).toFixed(2) + '%',
                 totals.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
                 totals.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3}),
-                totals.mixPdv.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})
+                mixPdvAvg.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})
             ]];
 
             doc.autoTable({
@@ -5266,42 +5274,130 @@
                 ws_data_flat.push(row);
             });
 
-            // Calculate Totals
-            const totals = {
-                months: quarterMonths.map(() => 0),
-                avgFat: 0,
-                metaFat: 0,
-                avgVol: 0,
-                metaVol: 0,
-                mixPdv: 0
+            // Create Sheet directly from data
+            const ws_flat = XLSX.utils.aoa_to_sheet(ws_data_flat);
+
+            const range = XLSX.utils.decode_range(ws_flat['!ref']);
+            const lastRowIndex = range.e.r + 1; // +1 because we will append a row
+            const dataStartRow = 1; // 0-based, assuming header is row 0
+            const dataEndRow = lastRowIndex - 1; // Last row of data (0-based)
+
+            // Helper to get column letter
+            const getColLetter = (colIndex) => {
+                let letter = '';
+                let temp = colIndex;
+                while (temp >= 0) {
+                    letter = String.fromCharCode((temp % 26) + 65) + letter;
+                    temp = Math.floor(temp / 26) - 1;
+                }
+                return letter;
             };
 
-            data.forEach(item => {
-                quarterMonths.forEach((m, i) => {
-                    totals.months[i] += (item.monthlyValues[m.key] || 0);
-                });
-                totals.avgFat += (item.avgFat || 0);
-                totals.metaFat += (item.metaFat || 0);
-                totals.avgVol += (item.avgVol || 0);
-                totals.metaVol += (item.metaVol || 0);
-                totals.mixPdv += (item.mixPdv || 0);
-            });
+            // Inject Formulas into Data Rows (Optional per request: "para o EXCEL ass colunas que devem ter formulas são ( MÉDIA FAT, % SHARE FAT, % SHARE VOL)")
+            // To do this properly, we need to know the column indices.
+            // Headers: CÓD, CLIENTE, VENDEDOR, [Months...], MÉDIA FAT, % SHARE FAT, META FAT, MÉDIA VOL, % SHARE VOL, META VOL, MIX PDV
+            const colIndices = {
+                monthsStart: 3,
+                monthsEnd: 3 + quarterMonths.length - 1,
+                avgFat: 3 + quarterMonths.length,
+                shareFat: 3 + quarterMonths.length + 1,
+                metaFat: 3 + quarterMonths.length + 2,
+                avgVol: 3 + quarterMonths.length + 3,
+                shareVol: 3 + quarterMonths.length + 4,
+                metaVol: 3 + quarterMonths.length + 5,
+                mixPdv: 3 + quarterMonths.length + 6
+            };
 
-            // Append Total Row
-            const totalRow = [
-                'TOTAL', '', '',
-                ...totals.months,
-                totals.avgFat,
-                '', // Share Fat
-                totals.metaFat,
-                totals.avgVol,
-                '', // Share Vol
-                totals.metaVol,
-                totals.mixPdv
-            ];
-            ws_data_flat.push(totalRow);
+            // Update Data Rows with Formulas
+            for (let r = dataStartRow; r <= dataEndRow; r++) {
+                const rowNum = r + 1; // 1-based row number for Excel formulas
 
-            const ws_flat = XLSX.utils.aoa_to_sheet(ws_data_flat);
+                // Average Fat Formula: =AVERAGE(Start:End)
+                const avgFatRef = `${getColLetter(colIndices.avgFat)}${rowNum}`;
+                const monthsRange = `${getColLetter(colIndices.monthsStart)}${rowNum}:${getColLetter(colIndices.monthsEnd)}${rowNum}`;
+                if (ws_flat[avgFatRef]) {
+                    ws_flat[avgFatRef].f = `AVERAGE(${monthsRange})`;
+                    ws_flat[avgFatRef].v = undefined; // Clear static value to force formula calc (if supported) or rely on formula
+                }
+
+                // Share Fat Formula: =AvgFat / TotalAvgFat
+                // NOTE: This depends on the Total Row (which is at lastRowIndex + 1 in Excel, or rowNum = lastRowIndex + 1)
+                // Let's defer Share Formulas until we define the Total Row position.
+                // Assuming Total Row will be at `dataEndRow + 2` (1-based index: LastDataRow + 1)
+                const totalRowExcelNum = dataEndRow + 2;
+
+                const shareFatRef = `${getColLetter(colIndices.shareFat)}${rowNum}`;
+                const totalAvgFatRef = `${getColLetter(colIndices.avgFat)}${totalRowExcelNum}`;
+                // Only apply if totalAvgFat is not zero (avoid div/0) - hard to know in static generation, but formula handles it
+                if (ws_flat[shareFatRef]) {
+                    ws_flat[shareFatRef].f = `${avgFatRef}/$${totalAvgFatRef}`; // Absolute reference for Total
+                    ws_flat[shareFatRef].t = 'n';
+                    ws_flat[shareFatRef].z = '0.00%'; // Format as percentage
+                    ws_flat[shareFatRef].v = undefined;
+                }
+
+                const shareVolRef = `${getColLetter(colIndices.shareVol)}${rowNum}`;
+                const avgVolRef = `${getColLetter(colIndices.avgVol)}${rowNum}`; // Assuming Avg Vol is calculated or static? User asked for formula for Avg Fat, implies Avg Vol too?
+                // "ass colunas que devem ter formulas são ( MÉDIA FAT, % SHARE FAT, % SHARE VOL)" - Doesn't explicitly say Avg Vol, but Share Vol depends on it.
+                // If Avg Vol is static, we can still reference it.
+
+                const totalAvgVolRef = `${getColLetter(colIndices.avgVol)}${totalRowExcelNum}`;
+                if (ws_flat[shareVolRef]) {
+                    ws_flat[shareVolRef].f = `${avgVolRef}/$${totalAvgVolRef}`;
+                    ws_flat[shareVolRef].t = 'n';
+                    ws_flat[shareVolRef].z = '0.00%';
+                    ws_flat[shareVolRef].v = undefined;
+                }
+            }
+
+            // Append Total Row with Formulas
+            // We need to extend the sheet range
+            range.e.r = lastRowIndex; // Extend range to cover new row
+            ws_flat['!ref'] = XLSX.utils.encode_range(range);
+
+            const totalRowIndex = lastRowIndex; // 0-based index for the new row
+            const totalRowNum = totalRowIndex + 1; // 1-based for formulas
+
+            // Initialize Total Cells
+            const setTotalCell = (colIdx, formula, format) => {
+                const addr = XLSX.utils.encode_cell({ r: totalRowIndex, c: colIdx });
+                ws_flat[addr] = { t: 'n', f: formula };
+                if (format) ws_flat[addr].z = format;
+            };
+
+            // 1. Label
+            const labelAddr = XLSX.utils.encode_cell({ r: totalRowIndex, c: 0 });
+            ws_flat[labelAddr] = { t: 's', v: 'TOTAL' };
+
+            // 2. Month Totals
+            for (let i = colIndices.monthsStart; i <= colIndices.monthsEnd; i++) {
+                const colLetter = getColLetter(i);
+                setTotalCell(i, `SUM(${colLetter}${dataStartRow + 1}:${colLetter}${dataEndRow + 1})`, '#,##0.00');
+            }
+
+            // 3. Avg Fat Total
+            setTotalCell(colIndices.avgFat, `SUM(${getColLetter(colIndices.avgFat)}${dataStartRow + 1}:${getColLetter(colIndices.avgFat)}${dataEndRow + 1})`, '#,##0.00');
+
+            // 4. Share Fat Total (Sum of percentages)
+            setTotalCell(colIndices.shareFat, `SUM(${getColLetter(colIndices.shareFat)}${dataStartRow + 1}:${getColLetter(colIndices.shareFat)}${dataEndRow + 1})`, '0.00%');
+
+            // 5. Meta Fat Total
+            setTotalCell(colIndices.metaFat, `SUM(${getColLetter(colIndices.metaFat)}${dataStartRow + 1}:${getColLetter(colIndices.metaFat)}${dataEndRow + 1})`, '#,##0.00');
+
+            // 6. Avg Vol Total
+            setTotalCell(colIndices.avgVol, `SUM(${getColLetter(colIndices.avgVol)}${dataStartRow + 1}:${getColLetter(colIndices.avgVol)}${dataEndRow + 1})`, '#,##0.000');
+
+            // 7. Share Vol Total
+            setTotalCell(colIndices.shareVol, `SUM(${getColLetter(colIndices.shareVol)}${dataStartRow + 1}:${getColLetter(colIndices.shareVol)}${dataEndRow + 1})`, '0.00%');
+
+            // 8. Meta Vol Total
+            setTotalCell(colIndices.metaVol, `SUM(${getColLetter(colIndices.metaVol)}${dataStartRow + 1}:${getColLetter(colIndices.metaVol)}${dataEndRow + 1})`, '#,##0.000');
+
+            // 9. Mix PDV Total (AVERAGEIF > 0)
+            const mixCol = getColLetter(colIndices.mixPdv);
+            const mixRange = `${mixCol}${dataStartRow + 1}:${mixCol}${dataEndRow + 1}`;
+            setTotalCell(colIndices.mixPdv, `AVERAGEIF(${mixRange},">0")`, '0.0');
+
 
              // Style Header & Footer
             if (ws_flat['!ref']) {
