@@ -2654,8 +2654,8 @@
             const grandTotalStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "0F172A" } }, border: { top: { style: "thick" } } };
 
             // Format Strings
-            const fmtMoney = "\"R$ \"#,##0.00";
-            const fmtVol = "0.00 \"Kg\"";
+            const fmtMoney = "#,##0.00";
+            const fmtVol = "#,##0.000";
             const fmtInt = "0";
             const fmtDec1 = "0.0";
 
