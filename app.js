@@ -2776,7 +2776,7 @@
                 svColumns.forEach(c => colCellsForSupTotal[c.id] = { fat: [], pos: [], vol: [], mix: [], avg: [] });
 
                 sellers.forEach(seller => {
-                    const rowData = [createCell(seller.code), createCell(seller.name)];
+                    const rowData = [createCell(String(seller.code)), createCell(seller.name)];
 
                     svColumns.forEach(col => {
                         const d = seller.data[col.id] || { metaFat: 0, metaVol: 0, metaPos: 0, avgVol: 0, avgMix: 0, metaMix: 0, avgFat: 0 };
@@ -2892,7 +2892,7 @@
                 });
 
                 // Supervisor Total Row
-                const supRowData = [createCell(sup.code, totalRowStyle), createCell(sup.name.toUpperCase(), totalRowStyle)];
+                const supRowData = [createCell(String(sup.code), totalRowStyle), createCell(sup.name.toUpperCase(), totalRowStyle)];
                 const excelSupRow = currentRow + 1;
 
                 svColumns.forEach(col => {
