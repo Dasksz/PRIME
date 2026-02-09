@@ -286,9 +286,10 @@
         const FORBIDDEN_KEYS = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR', 'PASTA', 'RAMO', 'ATIVIDADE', 'CIDADE', 'MUNICIPIO', 'BAIRRO'];
         let allSalesData, allHistoryData, allClientsData;
 
+        const SANITIZE_FORBIDDEN_SET = new Set(['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR']);
+
         function sanitizeData(data) {
             if (!data) return [];
-            const forbidden = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR'];
 
             // Check if it's a ColumnarDataset proxy or regular array.
             // If it's a ColumnarDataset, we can't easily filter in-place without rebuilding.
@@ -301,7 +302,7 @@
                     const nome = String(item.NOME || '').trim().toUpperCase();
                     const codUsur = String(item.CODUSUR || '').trim().toUpperCase();
                     // Check against headers
-                    if (forbidden.includes(superv) || forbidden.includes(nome) || forbidden.includes(codUsur)) return false;
+                    if (SANITIZE_FORBIDDEN_SET.has(superv) || SANITIZE_FORBIDDEN_SET.has(nome) || SANITIZE_FORBIDDEN_SET.has(codUsur)) return false;
                     return true;
                 });
             }
