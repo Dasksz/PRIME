@@ -347,10 +347,33 @@
         }
 
         const clientsWithSalesThisMonth = new Set();
-        // Populate set
-        for(let i=0; i<allSalesData.length; i++) {
-            const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
-            clientsWithSalesThisMonth.add(s.CODCLI);
+        // Populate set - Optimized for ColumnarDataset to avoid Proxy creation
+        if (allSalesData instanceof ColumnarDataset && allSalesData._data && allSalesData._data['CODCLI']) {
+             const codCliCol = allSalesData._data['CODCLI'];
+             const overrides = allSalesData._overrides;
+
+             // Fast path: No overrides
+             if (!overrides || overrides.size === 0) {
+                 for(let i=0; i<allSalesData.length; i++) {
+                     clientsWithSalesThisMonth.add(codCliCol[i]);
+                 }
+             } else {
+                 // Slow path: Check overrides
+                 for(let i=0; i<allSalesData.length; i++) {
+                     const ov = overrides.get(i);
+                     if (ov && 'CODCLI' in ov) {
+                         clientsWithSalesThisMonth.add(ov.CODCLI);
+                     } else {
+                         clientsWithSalesThisMonth.add(codCliCol[i]);
+                     }
+                 }
+             }
+        } else {
+            // Fallback
+            for(let i=0; i<allSalesData.length; i++) {
+                const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
+                clientsWithSalesThisMonth.add(s.CODCLI);
+            }
         }
 
         const optimizedData = {
