@@ -2768,12 +2768,12 @@
             // --- 2. Data Rows ---
             let currentRow = 3;
             const colCellsForGrandTotal = {};
-            svColumns.forEach(c => colCellsForGrandTotal[c.id] = { fat: [], pos: [], vol: [], mix: [], avg: [] });
+            svColumns.forEach(c => colCellsForGrandTotal[c.id] = { fat: [], pos: [], vol: [], mix: [], avg: [], metaFat: [], metaPos: [], metaVol: [], metaMix: [] });
 
             currentGoalsSvData.forEach(sup => {
                 const sellers = sup.sellers;
                 const colCellsForSupTotal = {};
-                svColumns.forEach(c => colCellsForSupTotal[c.id] = { fat: [], pos: [], vol: [], mix: [], avg: [] });
+                svColumns.forEach(c => colCellsForSupTotal[c.id] = { fat: [], pos: [], vol: [], mix: [], avg: [], metaFat: [], metaPos: [], metaVol: [], metaMix: [] });
 
                 sellers.forEach(seller => {
                     const rowData = [createCell(seller.code), createCell(seller.name)];
@@ -2833,7 +2833,9 @@
                                 rowData.push(createCell(posVal, posStyle, fmtInt));
                             }
 
+                            colCellsForSupTotal[col.id].metaFat.push(`${getColLet(cIdx)}${excelRow}`);
                             colCellsForSupTotal[col.id].fat.push(`${getColLet(cIdx + 1)}${excelRow}`);
+                            colCellsForSupTotal[col.id].metaPos.push(`${getColLet(cIdx + 2)}${excelRow}`);
                             colCellsForSupTotal[col.id].pos.push(`${getColLet(cIdx + 3)}${excelRow}`);
 
                         } else if (col.type === 'tonnage') {
@@ -2841,16 +2843,18 @@
                             rowData.push(createCell(d.metaVol, readOnlyStyle, fmtVol));
                             // Tonnage Adjustment: Always Yellow (Editable)
                             rowData.push(createCell(d.metaVol, editableStyle, fmtVol));
-                            colCellsForSupTotal[col.id].vol.push(`${getColLet(cIdx + 2)}${excelRow}`);
                             colCellsForSupTotal[col.id].avg.push(`${getColLet(cIdx)}${excelRow}`);
+                            colCellsForSupTotal[col.id].metaVol.push(`${getColLet(cIdx + 1)}${excelRow}`);
+                            colCellsForSupTotal[col.id].vol.push(`${getColLet(cIdx + 2)}${excelRow}`);
 
                         } else if (col.type === 'mix') {
                             rowData.push(createCell(d.avgMix, readOnlyStyle, fmtDec1));
                             rowData.push(createCell(d.metaMix, readOnlyStyle, fmtInt));
                             // Mix Adjustment: Always Yellow (Editable) - Assuming we want it editable
                             rowData.push(createCell(d.metaMix, editableStyle, fmtInt));
-                            colCellsForSupTotal[col.id].mix.push(`${getColLet(cIdx + 2)}${excelRow}`);
                             colCellsForSupTotal[col.id].avg.push(`${getColLet(cIdx)}${excelRow}`);
+                            colCellsForSupTotal[col.id].metaMix.push(`${getColLet(cIdx + 1)}${excelRow}`);
+                            colCellsForSupTotal[col.id].mix.push(`${getColLet(cIdx + 2)}${excelRow}`);
 
                         } else if (col.type === 'geral') {
                             const elmaIdx = colMap['total_elma'];
@@ -2875,10 +2879,12 @@
                             }
                             rowData.push(createCell(posVal, editableStyle, fmtInt));
 
+                            colCellsForSupTotal[col.id].avg.push(`${getColLet(cIdx)}${excelRow}`);
+                            // Geral only has "Meta" columns basically, but treated as Adjustments in logic?
+                            // Logic matches previous implementation:
                             colCellsForSupTotal[col.id].fat.push(`${getColLet(cIdx + 1)}${excelRow}`);
                             colCellsForSupTotal[col.id].vol.push(`${getColLet(cIdx + 2)}${excelRow}`);
                             colCellsForSupTotal[col.id].pos.push(`${getColLet(cIdx + 3)}${excelRow}`);
-                            colCellsForSupTotal[col.id].avg.push(`${getColLet(cIdx)}${excelRow}`);
 
                         } else if (col.type === 'pedev') {
                             const elmaIdx = colMap['total_elma'];
@@ -2900,46 +2906,75 @@
                     const getColLet = (idx) => XLSX.utils.encode_col(idx);
 
                     if (col.type === 'standard') {
+                        // Meta Fat Total
+                        const rangeMetaFat = colCellsForSupTotal[col.id].metaFat;
+                        const fMetaFatRange = rangeMetaFat.length > 0 ? `SUM(${rangeMetaFat[0]}:${rangeMetaFat[rangeMetaFat.length-1]})` : "0";
+                        supRowData.push({ t: 'n', v: 0, f: fMetaFatRange, s: { ...totalRowStyle, numFmt: fmtMoney }, z: fmtMoney });
+
+                        // Ajuste Fat Total
                         const rangeFat = colCellsForSupTotal[col.id].fat;
                         const fFatRange = rangeFat.length > 0 ? `SUM(${rangeFat[0]}:${rangeFat[rangeFat.length-1]})` : "0";
                         supRowData.push({ t: 'n', v: 0, f: fFatRange, s: { ...totalRowStyle, numFmt: fmtMoney }, z: fmtMoney });
-                        supRowData.push({ t: 'n', v: 0, f: fFatRange, s: { ...totalRowStyle, numFmt: fmtMoney }, z: fmtMoney });
 
+                        // Meta Pos Total
+                        const rangeMetaPos = colCellsForSupTotal[col.id].metaPos;
+                        const fMetaPosRange = rangeMetaPos.length > 0 ? `SUM(${rangeMetaPos[0]}:${rangeMetaPos[rangeMetaPos.length-1]})` : "0";
+                        supRowData.push({ t: 'n', v: 0, f: fMetaPosRange, s: { ...totalRowStyle, numFmt: fmtInt }, z: fmtInt });
+
+                        // Ajuste Pos Total
                         const rangePos = colCellsForSupTotal[col.id].pos;
                         const fPosRange = rangePos.length > 0 ? `SUM(${rangePos[0]}:${rangePos[rangePos.length-1]})` : "0";
                         supRowData.push({ t: 'n', v: 0, f: fPosRange, s: { ...totalRowStyle, numFmt: fmtInt }, z: fmtInt });
-                        supRowData.push({ t: 'n', v: 0, f: fPosRange, s: { ...totalRowStyle, numFmt: fmtInt }, z: fmtInt });
 
+                        // Capture Grand Totals
+                        colCellsForGrandTotal[col.id].metaFat.push(`${getColLet(cIdx)}${excelSupRow}`);
                         colCellsForGrandTotal[col.id].fat.push(`${getColLet(cIdx+1)}${excelSupRow}`);
+                        colCellsForGrandTotal[col.id].metaPos.push(`${getColLet(cIdx+2)}${excelSupRow}`);
                         colCellsForGrandTotal[col.id].pos.push(`${getColLet(cIdx+3)}${excelSupRow}`);
 
                     } else if (col.type === 'tonnage') {
+                        // Avg Vol
                         const rangeAvg = colCellsForSupTotal[col.id].avg;
                         const fAvgRange = rangeAvg.length > 0 ? `SUM(${rangeAvg[0]}:${rangeAvg[rangeAvg.length-1]})` : "0";
                         supRowData.push({ t: 'n', v: 0, f: fAvgRange, s: { ...totalRowStyle, numFmt: fmtVol }, z: fmtVol });
 
+                        // Meta Vol
+                        const rangeMetaVol = colCellsForSupTotal[col.id].metaVol;
+                        const fMetaVolRange = rangeMetaVol.length > 0 ? `SUM(${rangeMetaVol[0]}:${rangeMetaVol[rangeMetaVol.length-1]})` : "0";
+                        supRowData.push({ t: 'n', v: 0, f: fMetaVolRange, s: { ...totalRowStyle, numFmt: fmtVol }, z: fmtVol });
+
+                        // Ajuste Vol
                         const rangeVol = colCellsForSupTotal[col.id].vol;
                         const fVolRange = rangeVol.length > 0 ? `SUM(${rangeVol[0]}:${rangeVol[rangeVol.length-1]})` : "0";
                         supRowData.push({ t: 'n', v: 0, f: fVolRange, s: { ...totalRowStyle, numFmt: fmtVol }, z: fmtVol });
-                        supRowData.push({ t: 'n', v: 0, f: fVolRange, s: { ...totalRowStyle, numFmt: fmtVol }, z: fmtVol });
 
-                        colCellsForGrandTotal[col.id].vol.push(`${getColLet(cIdx+2)}${excelSupRow}`);
                         colCellsForGrandTotal[col.id].avg.push(`${getColLet(cIdx)}${excelSupRow}`);
+                        colCellsForGrandTotal[col.id].metaVol.push(`${getColLet(cIdx+1)}${excelSupRow}`);
+                        colCellsForGrandTotal[col.id].vol.push(`${getColLet(cIdx+2)}${excelSupRow}`);
 
                     } else if (col.type === 'mix') {
+                        // Avg Mix
                         const rangeAvg = colCellsForSupTotal[col.id].avg;
                         const fAvgRange = rangeAvg.length > 0 ? `SUM(${rangeAvg[0]}:${rangeAvg[rangeAvg.length-1]})` : "0";
                         supRowData.push({ t: 'n', v: 0, f: fAvgRange, s: { ...totalRowStyle, numFmt: fmtDec1 }, z: fmtDec1 });
 
+                        // Meta Mix
+                        const rangeMetaMix = colCellsForSupTotal[col.id].metaMix;
+                        const fMetaMixRange = rangeMetaMix.length > 0 ? `SUM(${rangeMetaMix[0]}:${rangeMetaMix[rangeMetaMix.length-1]})` : "0";
+                        supRowData.push({ t: 'n', v: 0, f: fMetaMixRange, s: { ...totalRowStyle, numFmt: fmtInt }, z: fmtInt });
+
+                        // Ajuste Mix
                         const rangeMix = colCellsForSupTotal[col.id].mix;
                         const fMixRange = rangeMix.length > 0 ? `SUM(${rangeMix[0]}:${rangeMix[rangeMix.length-1]})` : "0";
                         supRowData.push({ t: 'n', v: 0, f: fMixRange, s: { ...totalRowStyle, numFmt: fmtInt }, z: fmtInt });
-                        supRowData.push({ t: 'n', v: 0, f: fMixRange, s: { ...totalRowStyle, numFmt: fmtInt }, z: fmtInt });
 
-                        colCellsForGrandTotal[col.id].mix.push(`${getColLet(cIdx+2)}${excelSupRow}`);
                         colCellsForGrandTotal[col.id].avg.push(`${getColLet(cIdx)}${excelSupRow}`);
+                        colCellsForGrandTotal[col.id].metaMix.push(`${getColLet(cIdx+1)}${excelSupRow}`);
+                        colCellsForGrandTotal[col.id].mix.push(`${getColLet(cIdx+2)}${excelSupRow}`);
 
                     } else if (col.type === 'geral') {
+                        // Geral columns are 1:1 mapped to 'adjustments' in logic but visualized as Meta.
+                        // Assuming Supervisor totals just sum the columns directly.
                         const rangeAvg = colCellsForSupTotal[col.id].avg;
                         const fAvgRange = rangeAvg.length > 0 ? `SUM(${rangeAvg[0]}:${rangeAvg[rangeAvg.length-1]})` : "0";
                         supRowData.push({ t: 'n', v: 0, f: fAvgRange, s: { ...totalRowStyle, numFmt: fmtMoney }, z: fmtMoney });
@@ -2977,40 +3012,76 @@
             const grandRowData = [createCell("GV", grandTotalStyle), createCell("GERAL PRIME", grandTotalStyle)];
             svColumns.forEach(col => {
                 if (col.type === 'standard') {
+                    // Meta Fat
+                    const rangeMetaFat = colCellsForGrandTotal[col.id].metaFat;
+                    const fMetaFat = rangeMetaFat.length > 0 ? rangeMetaFat.join("+") : "0";
+                    grandRowData.push({ t: 'n', v: 0, f: fMetaFat, s: { ...grandTotalStyle, numFmt: fmtMoney }, z: fmtMoney });
+
+                    // Ajuste Fat
                     const rangeFat = colCellsForGrandTotal[col.id].fat;
                     const fFat = rangeFat.length > 0 ? rangeFat.join("+") : "0";
                     grandRowData.push({ t: 'n', v: 0, f: fFat, s: { ...grandTotalStyle, numFmt: fmtMoney }, z: fmtMoney });
-                    grandRowData.push({ t: 'n', v: 0, f: fFat, s: { ...grandTotalStyle, numFmt: fmtMoney }, z: fmtMoney });
 
+                    // Meta Pos
+                    const rangeMetaPos = colCellsForGrandTotal[col.id].metaPos;
+                    const fMetaPos = rangeMetaPos.length > 0 ? rangeMetaPos.join("+") : "0";
+                    grandRowData.push({ t: 'n', v: 0, f: fMetaPos, s: { ...grandTotalStyle, numFmt: fmtInt }, z: fmtInt });
+
+                    // Ajuste Pos
                     const rangePos = colCellsForGrandTotal[col.id].pos;
                     const fPos = rangePos.length > 0 ? rangePos.join("+") : "0";
                     grandRowData.push({ t: 'n', v: 0, f: fPos, s: { ...grandTotalStyle, numFmt: fmtInt }, z: fmtInt });
-                    grandRowData.push({ t: 'n', v: 0, f: fPos, s: { ...grandTotalStyle, numFmt: fmtInt }, z: fmtInt });
 
                 } else if (col.type === 'tonnage') {
+                    // Avg
                     const rangeAvg = colCellsForGrandTotal[col.id].avg;
                     const fAvg = rangeAvg.length > 0 ? rangeAvg.join("+") : "0";
                     grandRowData.push({ t: 'n', v: 0, f: fAvg, s: { ...grandTotalStyle, numFmt: fmtVol }, z: fmtVol });
 
+                    // Meta Vol
+                    const rangeMetaVol = colCellsForGrandTotal[col.id].metaVol;
+                    const fMetaVol = rangeMetaVol.length > 0 ? rangeMetaVol.join("+") : "0";
+                    grandRowData.push({ t: 'n', v: 0, f: fMetaVol, s: { ...grandTotalStyle, numFmt: fmtVol }, z: fmtVol });
+
+                    // Ajuste Vol
                     const rangeVol = colCellsForGrandTotal[col.id].vol;
                     const fVol = rangeVol.length > 0 ? rangeVol.join("+") : "0";
                     grandRowData.push({ t: 'n', v: 0, f: fVol, s: { ...grandTotalStyle, numFmt: fmtVol }, z: fmtVol });
-                    grandRowData.push({ t: 'n', v: 0, f: fVol, s: { ...grandTotalStyle, numFmt: fmtVol }, z: fmtVol });
 
                 } else if (col.type === 'mix') {
+                    // Avg Mix
                     const rangeAvg = colCellsForGrandTotal[col.id].avg;
                     const fAvg = rangeAvg.length > 0 ? rangeAvg.join("+") : "0";
                     grandRowData.push({ t: 'n', v: 0, f: fAvg, s: { ...grandTotalStyle, numFmt: fmtDec1 }, z: fmtDec1 });
 
+                    // Meta Mix
+                    const rangeMetaMix = colCellsForGrandTotal[col.id].metaMix;
+                    const fMetaMix = rangeMetaMix.length > 0 ? rangeMetaMix.join("+") : "0";
+                    grandRowData.push({ t: 'n', v: 0, f: fMetaMix, s: { ...grandTotalStyle, numFmt: fmtInt }, z: fmtInt });
+
+                    // Ajuste Mix
                     const rangeMix = colCellsForGrandTotal[col.id].mix;
                     const fMix = rangeMix.length > 0 ? rangeMix.join("+") : "0";
-                    grandRowData.push({ t: 'n', v: 0, f: fMix, s: { ...grandTotalStyle, numFmt: fmtInt }, z: fmtInt });
                     grandRowData.push({ t: 'n', v: 0, f: fMix, s: { ...grandTotalStyle, numFmt: fmtInt }, z: fmtInt });
 
                 } else if (col.type === 'geral') {
                     const rangeAvg = colCellsForGrandTotal[col.id].avg;
                     const fAvg = rangeAvg.length > 0 ? rangeAvg.join("+") : "0";
                     grandRowData.push({ t: 'n', v: 0, f: fAvg, s: { ...grandTotalStyle, numFmt: fmtMoney }, z: fmtMoney });
+
+                    // Geral columns only have 'fat', 'vol', 'pos' in colCellsForGrandTotal because we pushed cIdx+1/2/3 to them in supervisor loop.
+                    // But in seller loop we pushed cIdx+1/2/3 to meta* arrays in SupTotal?
+                    // Wait, let's check Geral logic in Supervisor Loop again.
+
+                    // In Supervisor Loop for Geral:
+                    // colCellsForGrandTotal[col.id].fat.push(cIdx+1) -> This is Meta Fat (Calculated)
+                    // colCellsForGrandTotal[col.id].vol.push(cIdx+2) -> This is Meta Vol (Calculated)
+                    // colCellsForGrandTotal[col.id].pos.push(cIdx+3) -> This is Meta Pos (Editable)
+
+                    // So for Geral, the columns ARE the Metas. There are no separate "Adjustment" columns visualized.
+                    // Row 3 headers: Média Trim., Meta, Meta, Meta.
+                    // So existing logic for Geral is correct because there's no split between Meta vs Adjustment columns.
+                    // It sums the Meta columns.
 
                     const rangeFat = colCellsForGrandTotal[col.id].fat;
                     const fFat = rangeFat.length > 0 ? rangeFat.join("+") : "0";
