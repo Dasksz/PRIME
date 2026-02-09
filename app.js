@@ -419,17 +419,60 @@
 
         // Optimized lastSaleDate calculation to avoid mapping huge array
         let maxDateTs = 0;
-        for(let i=0; i<allSalesData.length; i++) {
-            const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
-            let ts = 0;
-            if (typeof s.DTPED === 'number' && s.DTPED > 1000000) {
-                 ts = s.DTPED;
-            } else {
-                 const d = parseDate(s.DTPED);
-                 if(d && !isNaN(d)) ts = d.getTime();
-            }
 
-            if(ts > maxDateTs) maxDateTs = ts;
+        // --- OPTIMIZATION: Direct Access to Avoid Proxy Overhead ---
+        if (allSalesData instanceof ColumnarDataset && allSalesData._data && allSalesData._data['DTPED']) {
+            const dtpedCol = allSalesData._data['DTPED'];
+            const overrides = allSalesData._overrides;
+
+            // Fast Path: No Overrides (Typical Initial Load)
+            if (!overrides || overrides.size === 0) {
+                for (let i = 0; i < allSalesData.length; i++) {
+                    const val = dtpedCol[i];
+                    let ts = 0;
+                    if (typeof val === 'number' && val > 1000000) {
+                        ts = val;
+                    } else {
+                        const d = parseDate(val);
+                        if (d && !isNaN(d)) ts = d.getTime();
+                    }
+                    if (ts > maxDateTs) maxDateTs = ts;
+                }
+            } else {
+                // Slow Path: Check Overrides
+                for (let i = 0; i < allSalesData.length; i++) {
+                    const ov = overrides.get(i);
+                    let val;
+                    if (ov && 'DTPED' in ov) {
+                        val = ov.DTPED;
+                    } else {
+                        val = dtpedCol[i];
+                    }
+
+                    let ts = 0;
+                    if (typeof val === 'number' && val > 1000000) {
+                        ts = val;
+                    } else {
+                        const d = parseDate(val);
+                        if (d && !isNaN(d)) ts = d.getTime();
+                    }
+                    if (ts > maxDateTs) maxDateTs = ts;
+                }
+            }
+        } else {
+            // Fallback: Standard Access
+            for (let i = 0; i < allSalesData.length; i++) {
+                const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
+                let ts = 0;
+                if (typeof s.DTPED === 'number' && s.DTPED > 1000000) {
+                    ts = s.DTPED;
+                } else {
+                    const d = parseDate(s.DTPED);
+                    if (d && !isNaN(d)) ts = d.getTime();
+                }
+
+                if (ts > maxDateTs) maxDateTs = ts;
+            }
         }
         const lastSaleDate = maxDateTs > 0 ? new Date(maxDateTs) : new Date();
         lastSaleDate.setUTCHours(0,0,0,0);
