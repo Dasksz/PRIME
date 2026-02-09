@@ -2233,7 +2233,7 @@
                 clientMap.set(s.PRODUTO, currentVal + (Number(s.VLVENDA) || 0));
 
                 if (!clientProductDesc.has(s.PRODUTO)) {
-                    clientProductDesc.set(s.PRODUTO, s.DESCRICAO);
+                    clientProductDesc.set(s.PRODUTO, normalize(s.DESCRICAO || ''));
                 }
             });
 
@@ -2247,7 +2247,7 @@
 
                 productsMap.forEach((netValue, prodCode) => {
                     if (netValue >= 1) {
-                        const desc = normalize(clientProductDesc.get(prodCode) || '');
+                        const desc = clientProductDesc.get(prodCode) || '';
 
                         // Checar Salty
                         MIX_SALTY_CATEGORIES.forEach(cat => {
