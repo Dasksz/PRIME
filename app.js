@@ -7871,9 +7871,27 @@ const supervisorGroups = new Map();
         function updateProductBarChart(summary) {
             const metric = currentProductMetric;
             const data = metric === 'faturamento' ? summary.top10ProdutosFaturamento : summary.top10ProdutosPeso;
-            const labels = data.map(p => `(${p.codigo}) ${p.produto}`);
+            const labels = data.map(p => String(p.codigo));
+            const tooltips = data.map(p => `(${p.codigo}) ${p.produto}`);
             const values = data.map(p => p[metric]);
-            createChart('salesByProductBarChart', 'bar', labels, values);
+
+            const optionsOverrides = {
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            title: (tooltipItems) => {
+                                if (tooltipItems.length > 0) {
+                                    const index = tooltipItems[0].dataIndex;
+                                    return tooltips[index];
+                                }
+                                return '';
+                            }
+                        }
+                    }
+                }
+            };
+
+            createChart('salesByProductBarChart', 'bar', labels, values, optionsOverrides);
         }
 
         function renderTable(data) {
