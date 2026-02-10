@@ -1,6 +1,65 @@
 (function() {
         const embeddedData = window.embeddedData;
+
+        // --- CONFIGURATION ---
+        const SUPPLIER_CONFIG = {
+            inference: {
+                triggerKeywords: ['PEPSICO'],
+                matchValue: 'PEPSICO',
+                defaultValue: 'MULTIMARCAS'
+            },
+            metaRealizado: {
+                requiredPasta: 'PEPSICO'
+            }
+        };
+
+        function resolveSupplierPasta(rowPasta, fornecedorName) {
+            if (!rowPasta || rowPasta === '0' || rowPasta === '00' || rowPasta === 'N/A') {
+                const rawFornecedor = String(fornecedorName || '').toUpperCase();
+                const match = SUPPLIER_CONFIG.inference.triggerKeywords.some(k => rawFornecedor.includes(k));
+                return match ? SUPPLIER_CONFIG.inference.matchValue : SUPPLIER_CONFIG.inference.defaultValue;
+            }
+            return rowPasta;
+        }
+
+        const GARBAGE_SELLER_KEYWORDS = ['TOTAL', 'GERAL', 'SUPERVISOR', 'BALCAO'];
+        const GARBAGE_SELLER_EXACT = ['INATIVOS', 'N/A'];
+
+        function isGarbageSeller(name) {
+            if (!name) return true;
+            // Normalize: Remove accents (NFD + Replace), Uppercase, Trim
+            const upper = String(name).normalize('NFD').replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+            if (GARBAGE_SELLER_EXACT.includes(upper)) return true;
+            return GARBAGE_SELLER_KEYWORDS.some(k => upper.includes(k));
+        }
+
         let metaRealizadoDataForExport = { sellers: [], clients: [], weeks: [] };
+        const dateCache = new Map();
+
+        // Helper to normalize keys (remove leading zeros) to ensure consistent joins
+        const normalizeKey = (key) => {
+            if (!key) return '';
+            const s = String(key).trim();
+            if (/^\d+$/.test(s)) {
+                return String(parseInt(s, 10));
+            }
+            return s;
+        };
+
+        // --- HELPER: Alternative Sales Type Logic ---
+        function isAlternativeMode(selectedTypes) {
+            if (!selectedTypes || selectedTypes.length === 0) return false;
+            // "Alternative Mode" is active ONLY if we have selected types AND none of them are 1 or 9.
+            return !selectedTypes.includes('1') && !selectedTypes.includes('9');
+        }
+
+        function getValueForSale(sale, selectedTypes) {
+            if (isAlternativeMode(selectedTypes)) {
+                return (Number(sale.VLBONIFIC) || 0) + (Number(sale.VLVENDA) || 0);
+            }
+            return Number(sale.VLVENDA) || 0;
+        }
+        // ---------------------------------------------
 
         // --- OPTIMIZATION: Lazy Columnar Accessor with Write-Back Support ---
         class ColumnarDataset {
@@ -209,15 +268,23 @@
                 return !isNaN(dateString.getTime()) ? dateString : null;
             }
 
-            // Se for um número (formato Excel ou Timestamp)
-            if (typeof dateString === 'number') {
+            // Se for uma string, verifica o cache
+            if (typeof dateString === 'string') {
+                const cached = dateCache.get(dateString);
+                if (cached !== undefined) {
+                    return cached !== null ? new Date(cached) : null;
+                }
+            } else if (typeof dateString === 'number') {
+                // Se for um número (formato Excel ou Timestamp)
                 // Excel Serial Date (approx < 50000 for current dates, Timestamp is > 1000000000000)
                 if (dateString < 100000) return new Date(Math.round((dateString - 25569) * 86400 * 1000));
                 // Timestamp
                 return new Date(dateString);
+            } else {
+                return null;
             }
 
-            if (typeof dateString !== 'string') return null;
+            let result = null;
 
             // Tentativa de parse para 'YYYY-MM-DDTHH:mm:ss.sssZ' ou 'YYYY-MM-DD'
             // O construtor do Date já lida bem com isso, mas vamos garantir o UTC.
@@ -226,29 +293,34 @@
                 const isoString = dateString.endsWith('Z') ? dateString : dateString + 'Z';
                 const isoDate = new Date(isoString);
                 if (!isNaN(isoDate.getTime())) {
-                    return isoDate;
+                    result = isoDate;
                 }
             }
 
             // Tentativa de parse para 'DD/MM/YYYY'
-            if (dateString.length === 10 && dateString.charAt(2) === '/' && dateString.charAt(5) === '/') {
+            if (!result && dateString.length === 10 && dateString.charAt(2) === '/' && dateString.charAt(5) === '/') {
                 const [day, month, year] = dateString.split('/');
                 if (year && month && day && year.length === 4) {
                     // Cria a data em UTC para evitar problemas de fuso horário
                     const utcDate = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
                     if (!isNaN(utcDate.getTime())) {
-                        return utcDate;
+                        result = utcDate;
                     }
                 }
             }
 
             // Fallback para outros formatos que o `new Date()` consegue interpretar
-            const genericDate = new Date(dateString);
-            if (!isNaN(genericDate.getTime())) {
-                return genericDate;
+            if (!result) {
+                const genericDate = new Date(dateString);
+                if (!isNaN(genericDate.getTime())) {
+                    result = genericDate;
+                }
             }
 
-            return null; // Retorna nulo se nenhum formato corresponder
+            // Armazena no cache (apenas strings)
+            dateCache.set(dateString, result !== null ? result.getTime() : null);
+
+            return result;
         }
 
         // --- OPTIMIZATION: Chunked Processor to prevent UI Freeze ---
@@ -263,12 +335,23 @@
                 if (isCancelled && isCancelled()) return;
 
                 const start = performance.now();
-                while (index < total) {
-                    const item = isColumnar ? items.get(index) : items[index];
-                    processItemFn(item, index);
-                    index++;
+                // Process in batches (50 items) to reduce overhead of time checks and loop condition
+                const BATCH_SIZE = 50;
 
-                    if (index % 5 === 0 && performance.now() - start >= 12) { // Check budget frequently to avoid long tasks
+                while (index < total) {
+                    const limit = Math.min(index + BATCH_SIZE, total);
+
+                    if (isColumnar) {
+                        for (; index < limit; index++) {
+                            processItemFn(items.get(index), index);
+                        }
+                    } else {
+                        for (; index < limit; index++) {
+                            processItemFn(items[index], index);
+                        }
+                    }
+
+                    if (performance.now() - start >= 12) { // Check budget (12ms)
                         break;
                     }
                 }
@@ -286,10 +369,71 @@
         const FORBIDDEN_KEYS = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR', 'PASTA', 'RAMO', 'ATIVIDADE', 'CIDADE', 'MUNICIPIO', 'BAIRRO'];
         let allSalesData, allHistoryData, allClientsData;
 
-        const SANITIZE_FORBIDDEN_SET = new Set(['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR']);
+        function normalizePastaInData(dataset) {
+            // Cache for supplier -> pasta mapping to avoid repeated config lookups
+            const supplierCache = new Map();
+
+            const getResolvedPasta = (currentPasta, fornecedor) => {
+                // If we already have a valid pasta, return it
+                if (currentPasta && currentPasta !== '0' && currentPasta !== '00' && currentPasta !== 'N/A') {
+                    return currentPasta;
+                }
+
+                // Check cache
+                const key = String(fornecedor || '').toUpperCase();
+                if (supplierCache.has(key)) {
+                    return supplierCache.get(key);
+                }
+
+                // Calculate and cache
+                const resolved = resolveSupplierPasta(currentPasta, fornecedor);
+                supplierCache.set(key, resolved);
+                return resolved;
+            };
+
+            if (dataset instanceof ColumnarDataset) {
+                const data = dataset._data;
+                const len = dataset.length;
+
+                // Ensure columns exist or gracefully handle
+                const pastaCol = data['OBSERVACAOFOR'] || new Array(len).fill(null);
+                const supplierCol = data['FORNECEDOR'] || [];
+
+                // If we created a new array for pasta, we must attach it to _data
+                if (!data['OBSERVACAOFOR']) {
+                    data['OBSERVACAOFOR'] = pastaCol;
+                    if (dataset.columns && !dataset.columns.includes('OBSERVACAOFOR')) {
+                        dataset.columns.push('OBSERVACAOFOR');
+                    }
+                }
+
+                for (let i = 0; i < len; i++) {
+                    const originalPasta = pastaCol[i];
+                    const fornecedor = supplierCol[i];
+                    const newPasta = getResolvedPasta(originalPasta, fornecedor);
+
+                    // Only update if changed (optimization)
+                    if (newPasta !== originalPasta) {
+                        pastaCol[i] = newPasta;
+                    }
+                }
+            } else if (Array.isArray(dataset)) {
+                 for (let i = 0; i < dataset.length; i++) {
+                    const item = dataset[i];
+                    const originalPasta = item['OBSERVACAOFOR'];
+                    const fornecedor = item['FORNECEDOR'];
+                    const newPasta = getResolvedPasta(originalPasta, fornecedor);
+
+                    if (newPasta !== originalPasta) {
+                        item['OBSERVACAOFOR'] = newPasta;
+                    }
+                 }
+            }
+        }
 
         function sanitizeData(data) {
             if (!data) return [];
+            const forbidden = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR'];
 
             // Check if it's a ColumnarDataset proxy or regular array.
             // If it's a ColumnarDataset, we can't easily filter in-place without rebuilding.
@@ -302,7 +446,7 @@
                     const nome = String(item.NOME || '').trim().toUpperCase();
                     const codUsur = String(item.CODUSUR || '').trim().toUpperCase();
                     // Check against headers
-                    if (SANITIZE_FORBIDDEN_SET.has(superv) || SANITIZE_FORBIDDEN_SET.has(nome) || SANITIZE_FORBIDDEN_SET.has(codUsur)) return false;
+                    if (forbidden.includes(superv) || forbidden.includes(nome) || forbidden.includes(codUsur)) return false;
                     return true;
                 });
             }
@@ -325,15 +469,44 @@
             allClientsData = embeddedData.clients;
         }
 
+        // --- PRE-PROCESSING: Normalize PASTA once to avoid repeated logic in loops ---
+        normalizePastaInData(allSalesData);
+        normalizePastaInData(allHistoryData);
+        // -----------------------------------------------------------------------------
+
         let aggregatedOrders = embeddedData.byOrder;
         const stockData05 = new Map(Object.entries(embeddedData.stockMap05 || {}));
         const stockData08 = new Map(Object.entries(embeddedData.stockMap08 || {}));
         const innovationsMonthData = embeddedData.innovationsMonth;
-        const clientMapForKPIs = new Map();
-        // Init Client Map manually since map() might be slower on Columnar
-        for(let i=0; i<allClientsData.length; i++) {
-            const c = allClientsData instanceof ColumnarDataset ? allClientsData.get(i) : allClientsData[i];
-            clientMapForKPIs.set(String(c['Código'] || c['codigo_cliente']), c);
+        let clientMapForKPIs;
+        if (allClientsData instanceof ColumnarDataset) {
+            clientMapForKPIs = new IndexMap(allClientsData);
+            // Optimization: Try to access raw column to avoid Proxy creation loop.
+            // Accessing private _data is necessary for performance here to bypass the get() Proxy overhead.
+            const rawData = allClientsData._data;
+            let idCol = null;
+            if (rawData) {
+                if (rawData['Código']) idCol = rawData['Código'];
+                else if (rawData['codigo_cliente']) idCol = rawData['codigo_cliente'];
+            }
+
+            // Check if idCol is an Array or TypedArray (has length and integer indexing)
+            if (idCol && typeof idCol.length === 'number') {
+                for (let i = 0; i < allClientsData.length; i++) {
+                    clientMapForKPIs.set(normalizeKey(idCol[i]), i);
+                }
+            } else {
+                for (let i = 0; i < allClientsData.length; i++) {
+                    const c = allClientsData.get(i);
+                    clientMapForKPIs.set(normalizeKey(c['Código'] || c['codigo_cliente']), i);
+                }
+            }
+        } else {
+            clientMapForKPIs = new Map();
+            for (let i = 0; i < allClientsData.length; i++) {
+                const c = allClientsData[i];
+                clientMapForKPIs.set(normalizeKey(c['Código'] || c['codigo_cliente']), c);
+            }
         }
 
         const activeProductCodesFromCadastro = new Set(embeddedData.activeProductCodes || []);
@@ -348,33 +521,10 @@
         }
 
         const clientsWithSalesThisMonth = new Set();
-        // Populate set - Optimized for ColumnarDataset to avoid Proxy creation
-        if (allSalesData instanceof ColumnarDataset && allSalesData._data && allSalesData._data['CODCLI']) {
-             const codCliCol = allSalesData._data['CODCLI'];
-             const overrides = allSalesData._overrides;
-
-             // Fast path: No overrides
-             if (!overrides || overrides.size === 0) {
-                 for(let i=0; i<allSalesData.length; i++) {
-                     clientsWithSalesThisMonth.add(codCliCol[i]);
-                 }
-             } else {
-                 // Slow path: Check overrides
-                 for(let i=0; i<allSalesData.length; i++) {
-                     const ov = overrides.get(i);
-                     if (ov && 'CODCLI' in ov) {
-                         clientsWithSalesThisMonth.add(ov.CODCLI);
-                     } else {
-                         clientsWithSalesThisMonth.add(codCliCol[i]);
-                     }
-                 }
-             }
-        } else {
-            // Fallback
-            for(let i=0; i<allSalesData.length; i++) {
-                const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
-                clientsWithSalesThisMonth.add(s.CODCLI);
-            }
+        // Populate set
+        for(let i=0; i<allSalesData.length; i++) {
+            const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
+            clientsWithSalesThisMonth.add(s.CODCLI);
         }
 
         const optimizedData = {
@@ -420,60 +570,17 @@
 
         // Optimized lastSaleDate calculation to avoid mapping huge array
         let maxDateTs = 0;
-
-        // --- OPTIMIZATION: Direct Access to Avoid Proxy Overhead ---
-        if (allSalesData instanceof ColumnarDataset && allSalesData._data && allSalesData._data['DTPED']) {
-            const dtpedCol = allSalesData._data['DTPED'];
-            const overrides = allSalesData._overrides;
-
-            // Fast Path: No Overrides (Typical Initial Load)
-            if (!overrides || overrides.size === 0) {
-                for (let i = 0; i < allSalesData.length; i++) {
-                    const val = dtpedCol[i];
-                    let ts = 0;
-                    if (typeof val === 'number' && val > 1000000) {
-                        ts = val;
-                    } else {
-                        const d = parseDate(val);
-                        if (d && !isNaN(d)) ts = d.getTime();
-                    }
-                    if (ts > maxDateTs) maxDateTs = ts;
-                }
+        for(let i=0; i<allSalesData.length; i++) {
+            const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
+            let ts = 0;
+            if (typeof s.DTPED === 'number' && s.DTPED > 1000000) {
+                 ts = s.DTPED;
             } else {
-                // Slow Path: Check Overrides
-                for (let i = 0; i < allSalesData.length; i++) {
-                    const ov = overrides.get(i);
-                    let val;
-                    if (ov && 'DTPED' in ov) {
-                        val = ov.DTPED;
-                    } else {
-                        val = dtpedCol[i];
-                    }
-
-                    let ts = 0;
-                    if (typeof val === 'number' && val > 1000000) {
-                        ts = val;
-                    } else {
-                        const d = parseDate(val);
-                        if (d && !isNaN(d)) ts = d.getTime();
-                    }
-                    if (ts > maxDateTs) maxDateTs = ts;
-                }
+                 const d = parseDate(s.DTPED);
+                 if(d && !isNaN(d)) ts = d.getTime();
             }
-        } else {
-            // Fallback: Standard Access
-            for (let i = 0; i < allSalesData.length; i++) {
-                const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
-                let ts = 0;
-                if (typeof s.DTPED === 'number' && s.DTPED > 1000000) {
-                    ts = s.DTPED;
-                } else {
-                    const d = parseDate(s.DTPED);
-                    if (d && !isNaN(d)) ts = d.getTime();
-                }
 
-                if (ts > maxDateTs) maxDateTs = ts;
-            }
+            if(ts > maxDateTs) maxDateTs = ts;
         }
         const lastSaleDate = maxDateTs > 0 ? new Date(maxDateTs) : new Date();
         lastSaleDate.setUTCHours(0,0,0,0);
@@ -492,13 +599,21 @@
         let currentFilteredSalesMap = new Map();
         let currentClientMixStatus = new Map(); // Map<ClientCode, {elma: bool, foods: bool}>
         let areMarkersGenerated = false;
+        let cityMapJobId = 0;
+        let isCityMapCalculating = false;
 
         // Load cached coordinates from embeddedData
         if (embeddedData.clientCoordinates) {
             // Robust check: Handle both Array and Object (if keys are used)
             const coords = Array.isArray(embeddedData.clientCoordinates) ? embeddedData.clientCoordinates : Object.values(embeddedData.clientCoordinates);
             coords.forEach(c => {
-                clientCoordinatesMap.set(String(c.client_code), {
+                let code = String(c.client_code).trim();
+                // Normalize keys (remove leading zeros)
+                if (/^\d+$/.test(code)) {
+                    code = String(parseInt(code, 10));
+                }
+
+                clientCoordinatesMap.set(code, {
                     lat: parseFloat(c.lat),
                     lng: parseFloat(c.lng),
                     address: c.address
@@ -528,8 +643,8 @@
                 minOpacity: 0.05, // More transparent
                 max: 20.0, // Increased max to prevent saturation and allow transparency
                 gradient: {
-                    0.2: 'rgba(0, 0, 255, 0.35)', 
-                    0.5: 'rgba(0, 255, 0, 0.35)', 
+                    0.2: 'rgba(0, 0, 255, 0.35)',
+                    0.5: 'rgba(0, 255, 0, 0.35)',
                     1.0: 'rgba(255, 0, 0, 0.35)'
                 }
             }).addTo(leafletMap);
@@ -608,41 +723,41 @@
             const bairro = client.bairro || client.BAIRRO || '';
             const cidade = client.cidade || client.CIDADE || '';
             const nome = client.nomeCliente || client.nome || '';
-            
+
             const parts = [];
             const isValid = (s) => s && s !== 'N/A' && s !== '0' && String(s).toUpperCase() !== 'S/N' && String(s).trim() !== '';
-            
+
             // Level 0 (POI - Business Name): Name + Bairro + City
-            if (level === 0) { 
+            if (level === 0) {
                 if(isValid(nome)) parts.push(nome);
                 if(isValid(bairro)) parts.push(bairro);
                 if(isValid(cidade)) parts.push(cidade);
-            } 
+            }
             // Level 1 (Address Full - Street + Number): Street + Number + Bairro + City
-            else if (level === 1) { 
+            else if (level === 1) {
                 if(isValid(endereco)) parts.push(endereco);
                 if(isValid(numero)) parts.push(numero);
                 if(isValid(bairro)) parts.push(bairro);
                 if(isValid(cidade)) parts.push(cidade);
-            } 
+            }
             // Level 2 (Street): Street + Bairro + City
-            else if (level === 2) { 
+            else if (level === 2) {
                 if(isValid(endereco)) parts.push(endereco);
                 if(isValid(bairro)) parts.push(bairro);
                 if(isValid(cidade)) parts.push(cidade);
-            } 
+            }
             // Level 3 (Neighborhood): Bairro + City
-            else if (level === 3) { 
+            else if (level === 3) {
                 if(isValid(bairro)) parts.push(bairro);
                 if(isValid(cidade)) parts.push(cidade);
-            } 
+            }
             // Level 4 (City): City only
-            else if (level === 4) { 
+            else if (level === 4) {
                 if(isValid(cidade)) parts.push(cidade);
             }
-            
+
             if (parts.length === 0) return null;
-            
+
             // Append Context if not CEP only - Enforce Bahia
             parts.push("Bahia");
             parts.push("Brasil");
@@ -665,12 +780,12 @@
                 const client = item.client;
                 // Determine level (default 0)
                 let level = item.level !== undefined ? item.level : 0;
-                
+
                 // Construct address or use legacy
                 let address = item.address;
                 if (!address) {
                     address = buildAddress(client, level);
-                    
+
                     // If address is null (e.g. invalid level data), auto-advance
                     if (!address && level < 4) {
                         nominatimQueue.unshift({ client, level: level + 1 });
@@ -696,7 +811,13 @@
 
                         const cityMapContainer = document.getElementById('city-map-container');
                         if (heatLayer && cityMapContainer && !cityMapContainer.classList.contains('hidden')) {
-                            heatLayer.addLatLng([result.lat, result.lng, 1]);
+                            // Fix: Check if layer is active on map to avoid "Cannot read properties of null (reading '_animating')"
+                            if (heatLayer._map) {
+                                heatLayer.addLatLng([result.lat, result.lng, 1]);
+                            } else {
+                                // If layer is hidden (e.g. high zoom), just update data source without redraw
+                                heatLayer._latlngs.push([result.lat, result.lng, 1]);
+                            }
                         }
                     } else {
                         // Retry Logic: If failed, try next level of fallback
@@ -728,7 +849,10 @@
             console.log("[GeoSync] Iniciando verificação de coordenadas em segundo plano...");
 
             const activeClientsList = getActiveClientsData();
-            const activeClientCodes = new Set(activeClientsList.map(c => String(c['Código'] || c['codigo_cliente'])));
+            const activeClientCodes = new Set();
+            for (const c of activeClientsList) {
+                activeClientCodes.add(String(c['Código'] || c['codigo_cliente']));
+            }
 
             // 1. Cleanup Orphans
             const orphanedCodes = [];
@@ -752,6 +876,13 @@
 
             // 2. Queue All Missing
             let queuedCount = 0;
+
+            // Optimization: Use Set for O(1) lookup
+            const queuedClientCodes = new Set();
+            nominatimQueue.forEach(item => {
+                queuedClientCodes.add(String(item.client['Código'] || item.client['codigo_cliente']));
+            });
+
             activeClientsList.forEach(client => {
                 const code = String(client['Código'] || client['codigo_cliente']);
                 if (clientCoordinatesMap.has(code)) return;
@@ -759,7 +890,7 @@
                 // Validate minimal info (City)
                 const cidade = client.cidade || client.CIDADE || '';
                 const cep = client.cep || client.CEP || '';
-                
+
                 // CEP Validation: Must be Bahia (40xxx to 48xxx)
                 const cleanCep = cep.replace(/\D/g, '');
                 const cepVal = parseInt(cleanCep);
@@ -772,8 +903,9 @@
 
                 if (cidade && cidade !== 'N/A') {
                     // Check for duplicates
-                    if (!nominatimQueue.some(item => String(item.client['Código'] || item.client['codigo_cliente']) === code)) {
+                    if (!queuedClientCodes.has(code)) {
                         nominatimQueue.push({ client, level: 0 });
+                        queuedClientCodes.add(code);
                         queuedCount++;
                     }
                 }
@@ -798,74 +930,77 @@
             }
 
             const chartId = 'metaRealizadoPosChartInstance';
-            if (charts[chartId]) {
-                charts[chartId].destroy();
-            }
 
             // Aggregate Totals for Positivação
             const totalGoal = data.reduce((sum, d) => sum + (d.posGoal || 0), 0);
             const totalReal = data.reduce((sum, d) => sum + (d.posRealized || 0), 0);
 
-            charts[chartId] = new Chart(canvas, {
-                type: 'bar',
-                data: {
-                    labels: ['Positivação'],
-                    datasets: [
-                        {
-                            label: 'Meta',
-                            data: [totalGoal],
-                            backgroundColor: '#a855f7', // Purple
-                            barPercentage: 0.6,
-                            categoryPercentage: 0.8
-                        },
-                        {
-                            label: 'Realizado',
-                            data: [totalReal],
-                            backgroundColor: '#22c55e', // Green
-                            barPercentage: 0.6,
-                            categoryPercentage: 0.8
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    layout: {
-                        padding: {
-                            top: 50
-                        }
+            if (charts[chartId]) {
+                charts[chartId].data.datasets[0].data = [totalGoal];
+                charts[chartId].data.datasets[1].data = [totalReal];
+                charts[chartId].update('none');
+            } else {
+                charts[chartId] = new Chart(canvas, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Positivação'],
+                        datasets: [
+                            {
+                                label: 'Meta',
+                                data: [totalGoal],
+                                backgroundColor: '#a855f7', // Purple
+                                barPercentage: 0.6,
+                                categoryPercentage: 0.8
+                            },
+                            {
+                                label: 'Realizado',
+                                data: [totalReal],
+                                backgroundColor: '#22c55e', // Green
+                                barPercentage: 0.6,
+                                categoryPercentage: 0.8
+                            }
+                        ]
                     },
-                    plugins: {
-                        legend: { position: 'top', labels: { color: '#cbd5e1' } },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return `${context.dataset.label}: ${context.parsed.y} Clientes`;
-                                }
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        layout: {
+                            padding: {
+                                top: 50
                             }
                         },
-                        datalabels: {
-                            color: '#fff',
-                            anchor: 'end',
-                            align: 'top',
-                            formatter: (value) => value,
-                            font: { weight: 'bold' }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grace: '10%',
-                            grid: { color: '#334155' },
-                            ticks: { color: '#94a3b8' }
+                        plugins: {
+                            legend: { position: 'top', labels: { color: '#cbd5e1' } },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return `${context.dataset.label}: ${context.parsed.y} Clientes`;
+                                    }
+                                }
+                            },
+                            datalabels: {
+                                color: '#fff',
+                                anchor: 'end',
+                                align: 'top',
+                                formatter: (value) => value,
+                                font: { weight: 'bold' }
+                            }
                         },
-                        x: {
-                            grid: { display: false },
-                            ticks: { color: '#94a3b8' }
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grace: '10%',
+                                grid: { color: '#334155' },
+                                ticks: { color: '#94a3b8' }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { color: '#94a3b8' }
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
 
         }
 
@@ -899,44 +1034,19 @@
             const { clients, sales } = getCityFilteredData();
             if (!clients || clients.length === 0) return;
 
+            const jobId = ++cityMapJobId;
+            isCityMapCalculating = true;
+
             // Cache for Async Marker Generation
             currentFilteredClients = clients;
             areMarkersGenerated = false;
             if (clientMarkersLayer) clientMarkersLayer.clearLayers();
 
-            // Cache Sales & Mix Status
-            currentFilteredSalesMap.clear();
-            currentClientMixStatus.clear();
-            if (sales) {
-                sales.forEach(s => {
-                    const cod = s.CODCLI;
-                    const val = Number(s.VLVENDA) || 0;
-                    currentFilteredSalesMap.set(cod, (currentFilteredSalesMap.get(cod) || 0) + val);
-
-                    // Mix Logic
-                    let mix = currentClientMixStatus.get(cod);
-                    if (!mix) {
-                        mix = { elma: false, foods: false };
-                        currentClientMixStatus.set(cod, mix);
-                    }
-                    
-                    const codFor = String(s.CODFOR);
-                    // Elma: 707, 708, 752
-                    if (codFor === '707' || codFor === '708' || codFor === '752') {
-                        mix.elma = true;
-                    }
-                    // Foods: 1119
-                    else if (codFor === '1119') {
-                        mix.foods = true;
-                    }
-                });
-            }
-
             const heatData = [];
             const missingCoordsClients = [];
             const validBounds = [];
 
-            // Heatmap Loop (Sync - Fast)
+            // Heatmap Loop (Sync - Fast) - Update UI immediately
             clients.forEach(client => {
                 const codCli = String(client['Código'] || client['codigo_cliente']);
                 const coords = clientCoordinatesMap.get(codCli);
@@ -959,8 +1069,55 @@
                 leafletMap.fitBounds(validBounds);
             }
 
-            // Trigger Marker Logic
-            updateMarkersVisibility();
+            // Sales Aggregation (Async Chunked)
+            const tempSalesMap = new Map();
+            const tempMixStatus = new Map();
+
+            if (sales) {
+                runAsyncChunked(sales, (s) => {
+                    const cod = s.CODCLI;
+                    const val = Number(s.VLVENDA) || 0;
+                    tempSalesMap.set(cod, (tempSalesMap.get(cod) || 0) + val);
+
+                    // Mix Logic
+                    let mix = tempMixStatus.get(cod);
+                    if (!mix) {
+                        mix = { elma: false, foods: false };
+                        tempMixStatus.set(cod, mix);
+                    }
+
+                    const codFor = String(s.CODFOR);
+                    // Elma: 707, 708, 752
+                    if (codFor === '707' || codFor === '708' || codFor === '752') {
+                        mix.elma = true;
+                    }
+                    // Foods: 1119
+                    else if (codFor === '1119') {
+                        mix.foods = true;
+                    }
+                }, () => {
+                    // On Complete
+                    if (jobId !== cityMapJobId) return; // Cancelled by newer request
+
+                    currentFilteredSalesMap = tempSalesMap;
+                    currentClientMixStatus = tempMixStatus;
+                    areMarkersGenerated = false;
+                    isCityMapCalculating = false;
+
+                    // Trigger Marker Logic (Now that data is ready)
+                    updateMarkersVisibility();
+
+                }, () => jobId !== cityMapJobId); // isCancelled check
+            } else {
+                // No sales, clear maps
+                if (jobId === cityMapJobId) {
+                    currentFilteredSalesMap = new Map();
+                    currentClientMixStatus = new Map();
+                    areMarkersGenerated = false;
+                    isCityMapCalculating = false;
+                    updateMarkersVisibility();
+                }
+            }
         }
 
         function updateMarkersVisibility() {
@@ -979,7 +1136,7 @@
         }
 
         function generateMarkersAsync() {
-            if (areMarkersGenerated) return;
+            if (areMarkersGenerated || isCityMapCalculating) return;
 
             // Use local reference to avoid race conditions if filter changes mid-process
             const clientsToProcess = currentFilteredClients;
@@ -989,12 +1146,6 @@
                 const coords = clientCoordinatesMap.get(codCli);
 
                 if (coords) {
-                    // Jittering: Add small random offset to separate overlapping markers
-                    // 0.001 degrees is approximately 110 meters (ensures visibility at zoom 15)
-                    const jitterAmount = 0.0010;
-                    const finalLat = coords.lat + (Math.random() - 0.5) * jitterAmount;
-                    const finalLng = coords.lng + (Math.random() - 0.5) * jitterAmount;
-
                     const val = currentFilteredSalesMap.get(codCli) || 0;
                     const formattedVal = val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -1045,7 +1196,7 @@
                         tooltipAnchor: [0, -35]
                     });
 
-                    const marker = L.marker([finalLat, finalLng], {
+                    const marker = L.marker([coords.lat, coords.lng], {
                         icon: svgIcon,
                         opacity: 1
                     });
@@ -1061,7 +1212,329 @@
 
         let sellerDetailsMap = new Map();
 
+        // --- HIERARCHY FILTER SYSTEM ---
+        const hierarchyState = {}; // Map<viewPrefix, { coords: Set, cocoords: Set, promotors: Set }>
+
+        function getHierarchyFilteredClients(viewPrefix, sourceClients = allClientsData) {
+            const state = hierarchyState[viewPrefix];
+            if (!state) return sourceClients;
+
+            const { coords, cocoords, promotors } = state;
+
+            let effectiveCoords = new Set(coords);
+            let effectiveCoCoords = new Set(cocoords);
+            let effectivePromotors = new Set(promotors);
+
+            // Apply User Context Constraints implicitly?
+            // FIX: Only add if values exist to avoid filtering by 'undefined' (which causes 0 results)
+            if (userHierarchyContext.role === 'coord' && userHierarchyContext.coord) effectiveCoords.add(userHierarchyContext.coord);
+            if (userHierarchyContext.role === 'cocoord') {
+                if (userHierarchyContext.coord) effectiveCoords.add(userHierarchyContext.coord);
+                if (userHierarchyContext.cocoord) effectiveCoCoords.add(userHierarchyContext.cocoord);
+            }
+            if (userHierarchyContext.role === 'promotor') {
+                if (userHierarchyContext.coord) effectiveCoords.add(userHierarchyContext.coord);
+                if (userHierarchyContext.cocoord) effectiveCoCoords.add(userHierarchyContext.cocoord);
+                if (userHierarchyContext.promotor) effectivePromotors.add(userHierarchyContext.promotor);
+            }
+
+            const isColumnar = sourceClients instanceof ColumnarDataset;
+            const result = [];
+            const len = sourceClients.length;
+
+            if (viewPrefix === 'main') {
+                 console.log(`[DEBUG] Filtering Clients for view 'main'. Total Clients: ${len}`);
+                 console.log(`[DEBUG] Effective Coords: ${Array.from(effectiveCoords).join(', ')}`);
+                 console.log(`[DEBUG] User Context Role: ${userHierarchyContext.role}`);
+            }
+
+            let missingNodeCount = 0;
+
+            for(let i=0; i<len; i++) {
+                const client = isColumnar ? sourceClients.get(i) : sourceClients[i];
+                const codCli = normalizeKey(client['Código'] || client['codigo_cliente']);
+                const node = optimizedData.clientHierarchyMap.get(codCli);
+
+                if (!node) {
+                    missingNodeCount++;
+                    // FIX: Allow Orphans for Admins if no filters are active
+                    if (userHierarchyContext.role === 'adm') {
+                        const hasFilters = effectiveCoords.size > 0 || effectiveCoCoords.size > 0 || effectivePromotors.size > 0;
+                        if (!hasFilters) {
+                            result.push(client);
+                        }
+                    }
+                    continue; 
+                }
+
+                // Check Coord
+                if (effectiveCoords.size > 0 && !effectiveCoords.has(node.coord.code)) continue;
+                // Check CoCoord
+                if (effectiveCoCoords.size > 0 && !effectiveCoCoords.has(node.cocoord.code)) continue;
+                // Check Promotor
+                if (effectivePromotors.size > 0 && !effectivePromotors.has(node.promotor.code)) continue;
+
+                result.push(client);
+            }
+
+            if (viewPrefix === 'main') {
+                 console.log(`[DEBUG] Filter Result: ${result.length} clients kept. (Missing Node: ${missingNodeCount})`);
+            }
+            return result;
+        }
+
+        function updateFilterButtonText(element, selectedSet, defaultLabel) {
+            if (!element) return;
+            if (selectedSet.size === 0) {
+                element.textContent = defaultLabel;
+            } else if (selectedSet.size === 1) {
+                // Find the label for the single selected value?
+                // We don't have the label map easily accessible here without passing it.
+                // For simplicity, showing count or generic text.
+                // Or if we want the label, we'd need to lookup in optimizedData maps.
+                // Let's iterate the set to get the value.
+                const val = selectedSet.values().next().value;
+                // Try to resolve name
+                let name = val;
+                if (optimizedData.coordMap.has(val)) name = optimizedData.coordMap.get(val);
+                else if (optimizedData.cocoordMap.has(val)) name = optimizedData.cocoordMap.get(val);
+                else if (optimizedData.promotorMap.has(val)) name = optimizedData.promotorMap.get(val);
+                
+                element.textContent = name;
+            } else {
+                element.textContent = `${selectedSet.size} selecionados`;
+            }
+        }
+
+        function updateHierarchyDropdown(viewPrefix, level) {
+            const state = hierarchyState[viewPrefix];
+            const els = {
+                coord: { dd: document.getElementById(`${viewPrefix}-coord-filter-dropdown`), text: document.getElementById(`${viewPrefix}-coord-filter-text`) },
+                cocoord: { dd: document.getElementById(`${viewPrefix}-cocoord-filter-dropdown`), text: document.getElementById(`${viewPrefix}-cocoord-filter-text`) },
+                promotor: { dd: document.getElementById(`${viewPrefix}-promotor-filter-dropdown`), text: document.getElementById(`${viewPrefix}-promotor-filter-text`) }
+            };
+
+            const target = els[level];
+            if (!target.dd) return;
+
+            let options = [];
+            // Determine available options based on parent selection
+            if (level === 'coord') {
+                // Show all Coords (or restricted)
+                if (userHierarchyContext.role === 'adm') {
+                    options = Array.from(optimizedData.coordMap.entries()).map(([k, v]) => ({ value: k, label: v }));
+                } else {
+                    // Restricted: Only show own
+                    if (userHierarchyContext.coord) {
+                        options = [{ value: userHierarchyContext.coord, label: optimizedData.coordMap.get(userHierarchyContext.coord) || userHierarchyContext.coord }];
+                    }
+                }
+            } else if (level === 'cocoord') {
+                // Show CoCoords belonging to selected Coords
+                let parentCoords = state.coords;
+                // If no parent selected, and ADM, show ALL. If restricted, show allowed.
+                // If restricted, state.coords might be empty initially, but user context implies restriction.
+                
+                let allowedCoords = parentCoords;
+                if (allowedCoords.size === 0) {
+                    if (userHierarchyContext.role === 'adm') {
+                        // All coords
+                        allowedCoords = new Set(optimizedData.coordMap.keys());
+                    } else if (userHierarchyContext.coord) {
+                        allowedCoords = new Set([userHierarchyContext.coord]);
+                    }
+                }
+
+                const validCodes = new Set();
+                allowedCoords.forEach(c => {
+                    const children = optimizedData.cocoordsByCoord.get(c);
+                    if(children) children.forEach(child => validCodes.add(child));
+                });
+
+                // Apply User Context Restriction for CoCoord level
+                if (userHierarchyContext.role === 'cocoord' || userHierarchyContext.role === 'promotor') {
+                    // Restrict to own cocoord
+                    if (userHierarchyContext.cocoord && validCodes.has(userHierarchyContext.cocoord)) {
+                        validCodes.clear();
+                        validCodes.add(userHierarchyContext.cocoord);
+                    } else {
+                        validCodes.clear(); // Should not happen if data consistent
+                    }
+                }
+
+                options = Array.from(validCodes).map(c => ({ value: c, label: optimizedData.cocoordMap.get(c) || c }));
+            } else if (level === 'promotor') {
+                // Show Promotors belonging to selected CoCoords
+                let parentCoCoords = state.cocoords;
+                
+                let allowedCoCoords = parentCoCoords;
+                if (allowedCoCoords.size === 0) {
+                    // Need to resolve relevant CoCoords from relevant Coords
+                    let relevantCoords = state.coords;
+                    if (relevantCoords.size === 0) {
+                         if (userHierarchyContext.role === 'adm') relevantCoords = new Set(optimizedData.coordMap.keys());
+                         else if (userHierarchyContext.coord) relevantCoords = new Set([userHierarchyContext.coord]);
+                    }
+
+                    const validCoCoords = new Set();
+                    relevantCoords.forEach(c => {
+                        const children = optimizedData.cocoordsByCoord.get(c);
+                        if(children) children.forEach(child => validCoCoords.add(child));
+                    });
+                    
+                    // Filter by User Context
+                    if (userHierarchyContext.role === 'cocoord' || userHierarchyContext.role === 'promotor') {
+                         if (userHierarchyContext.cocoord) {
+                             // Only keep own
+                             if (validCoCoords.has(userHierarchyContext.cocoord)) {
+                                 validCoCoords.clear();
+                                 validCoCoords.add(userHierarchyContext.cocoord);
+                             }
+                         }
+                    }
+                    allowedCoCoords = validCoCoords;
+                }
+
+                const validCodes = new Set();
+                allowedCoCoords.forEach(c => {
+                    const children = optimizedData.promotorsByCocoord.get(c);
+                    if(children) children.forEach(child => validCodes.add(child));
+                });
+
+                // Apply User Context Restriction for Promotor level
+                if (userHierarchyContext.role === 'promotor') {
+                    if (userHierarchyContext.promotor && validCodes.has(userHierarchyContext.promotor)) {
+                        validCodes.clear();
+                        validCodes.add(userHierarchyContext.promotor);
+                    }
+                }
+
+                options = Array.from(validCodes).map(c => ({ value: c, label: optimizedData.promotorMap.get(c) || c }));
+            }
+
+            // Sort
+            options.sort((a, b) => a.label.localeCompare(b.label));
+
+            // Render
+            let html = '';
+            const selectedSet = state[level + 's']; // coords, cocoords, promotors
+            options.forEach(opt => {
+                const checked = selectedSet.has(opt.value) ? 'checked' : '';
+                html += `
+                    <label class="flex items-center justify-between p-2 hover:bg-slate-700 rounded cursor-pointer">
+                        <span class="text-xs text-slate-300 truncate mr-2">${opt.label}</span>
+                        <input type="checkbox" value="${opt.value}" ${checked} class="form-checkbox h-4 w-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500 focus:ring-offset-slate-800">
+                    </label>
+                `;
+            });
+            target.dd.innerHTML = html;
+            
+            // Update Text Label
+            let label = 'Todos';
+            if (level === 'coord') label = 'Coordenador';
+            if (level === 'cocoord') label = 'Co-Coord';
+            if (level === 'promotor') label = 'Promotor';
+
+            updateFilterButtonText(target.text, selectedSet, label);
+        }
+
+        function setupHierarchyFilters(viewPrefix, onUpdate) {
+            // Init State
+            if (!hierarchyState[viewPrefix]) {
+                hierarchyState[viewPrefix] = { coords: new Set(), cocoords: new Set(), promotors: new Set() };
+            }
+            const state = hierarchyState[viewPrefix];
+
+            const els = {
+                coord: { btn: document.getElementById(`${viewPrefix}-coord-filter-btn`), dd: document.getElementById(`${viewPrefix}-coord-filter-dropdown`) },
+                cocoord: { btn: document.getElementById(`${viewPrefix}-cocoord-filter-btn`), dd: document.getElementById(`${viewPrefix}-cocoord-filter-dropdown`) },
+                promotor: { btn: document.getElementById(`${viewPrefix}-promotor-filter-btn`), dd: document.getElementById(`${viewPrefix}-promotor-filter-dropdown`) }
+            };
+
+            const bindToggle = (el) => {
+                if (el.btn && el.dd) {
+                    el.btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        // Close others
+                        Object.values(els).forEach(x => { if(x.dd && x !== el) x.dd.classList.add('hidden'); });
+                        el.dd.classList.toggle('hidden');
+                    });
+                }
+            };
+            bindToggle(els.coord);
+            bindToggle(els.cocoord);
+            bindToggle(els.promotor);
+
+            // Close dropdowns when clicking outside
+            document.addEventListener('click', (e) => {
+                Object.values(els).forEach(x => {
+                    if (x.dd && !x.dd.classList.contains('hidden')) {
+                        if (x.btn && !x.btn.contains(e.target) && !x.dd.contains(e.target)) {
+                            x.dd.classList.add('hidden');
+                        }
+                    }
+                });
+            });
+
+            const bindChange = (level, nextLevel, nextNextLevel) => {
+                const el = els[level];
+                if (el && el.dd) {
+                    el.dd.addEventListener('change', (e) => {
+                        if (e.target.type === 'checkbox') {
+                            const val = e.target.value;
+                            const set = state[level + 's'];
+                            if (e.target.checked) set.add(val); else set.delete(val);
+                            
+                            // Update Button Text
+                            updateHierarchyDropdown(viewPrefix, level); // Re-render self? No, just text. But re-rendering handles text.
+                            
+                            // Cascade Clear
+                            if (nextLevel) {
+                                state[nextLevel + 's'].clear();
+                                updateHierarchyDropdown(viewPrefix, nextLevel);
+                            }
+                            if (nextNextLevel) {
+                                state[nextNextLevel + 's'].clear();
+                                updateHierarchyDropdown(viewPrefix, nextNextLevel);
+                            }
+
+                            if (onUpdate) onUpdate();
+                        }
+                    });
+                }
+            };
+
+            bindChange('coord', 'cocoord', 'promotor');
+            bindChange('cocoord', 'promotor', null);
+            bindChange('promotor', null, null);
+
+            // Initial Population
+            updateHierarchyDropdown(viewPrefix, 'coord');
+            updateHierarchyDropdown(viewPrefix, 'cocoord');
+            updateHierarchyDropdown(viewPrefix, 'promotor');
+            
+            // Auto-select for restricted users?
+            // If I am Coord, my Coord ID is userHierarchyContext.coord.
+            // Should I pre-select it?
+            // If I pre-select it, `getHierarchyFilteredClients` uses it.
+            // If I DON'T pre-select it (empty set), `getHierarchyFilteredClients` applies it anyway via context.
+            // Visually, it's better if it shows "My Name" instead of "Coordenador" (which implies All/None).
+            // So yes, let's pre-select.
+            
+            if (userHierarchyContext.role !== 'adm') {
+                if (userHierarchyContext.coord) state.coords.add(userHierarchyContext.coord);
+                if (userHierarchyContext.cocoord) state.cocoords.add(userHierarchyContext.cocoord);
+                if (userHierarchyContext.promotor) state.promotors.add(userHierarchyContext.promotor);
+                
+                // Refresh UI to show checkmarks and text
+                updateHierarchyDropdown(viewPrefix, 'coord');
+                updateHierarchyDropdown(viewPrefix, 'cocoord');
+                updateHierarchyDropdown(viewPrefix, 'promotor');
+            }
+        }
+
         function initializeOptimizedDataStructures() {
+            console.log("[DEBUG] Starting initializeOptimizedDataStructures");
             sellerDetailsMap = new Map();
             const sellerLastSaleDateMap = new Map(); // Track latest date per seller
             const clientToCurrentSellerMap = new Map();
@@ -1096,12 +1569,94 @@
             optimizedData.supervisorCodeByName = new Map();
             optimizedData.productPastaMap = new Map();
 
+            // --- HIERARCHY LOGIC START ---
+            optimizedData.hierarchyMap = new Map(); // Promotor Code -> Hierarchy Node
+            optimizedData.clientHierarchyMap = new Map(); // Client Code -> Hierarchy Node
+            optimizedData.coordMap = new Map(); // Coord Code -> Name
+            optimizedData.cocoordMap = new Map(); // CoCoord Code -> Name
+            optimizedData.promotorMap = new Map(); // Promotor Code -> Name
+            optimizedData.coordsByCocoord = new Map(); // CoCoord Code -> Coord Code
+            optimizedData.cocoordsByCoord = new Map(); // Coord Code -> Set<CoCoord Code>
+            optimizedData.promotorsByCocoord = new Map(); // CoCoord Code -> Set<Promotor Code>
+
+            if (embeddedData.hierarchy) {
+                console.log(`[DEBUG] Processing Hierarchy. Rows: ${embeddedData.hierarchy.length}`);
+                embeddedData.hierarchy.forEach(h => {
+                    // Robust key access (Handle lowercase/uppercase/mapped variations)
+                    const getVal = (keys) => {
+                        for (const k of keys) {
+                            if (h[k] !== undefined && h[k] !== null) return String(h[k]);
+                        }
+                        return '';
+                    };
+
+                    const coordCode = getVal(['cod_coord', 'COD_COORD', 'COD COORD.']).trim().toUpperCase();
+                    const coordName = (getVal(['nome_coord', 'NOME_COORD', 'COORDENADOR']) || coordCode).toUpperCase();
+                    
+                    const cocoordCode = getVal(['cod_cocoord', 'COD_COCOORD', 'COD CO-COORD.']).trim().toUpperCase();
+                    const cocoordName = (getVal(['nome_cocoord', 'NOME_COCOORD', 'CO-COORDENADOR']) || cocoordCode).toUpperCase();
+                    
+                    const promotorCode = getVal(['cod_promotor', 'COD_PROMOTOR', 'COD PROMOTOR']).trim().toUpperCase();
+                    const promotorName = (getVal(['nome_promotor', 'NOME_PROMOTOR', 'PROMOTOR']) || promotorCode).toUpperCase();
+
+                    if (coordCode) {
+                        optimizedData.coordMap.set(coordCode, coordName);
+                        if (!optimizedData.cocoordsByCoord.has(coordCode)) optimizedData.cocoordsByCoord.set(coordCode, new Set());
+                        if (cocoordCode) optimizedData.cocoordsByCoord.get(coordCode).add(cocoordCode);
+                    }
+                    if (cocoordCode) {
+                        optimizedData.cocoordMap.set(cocoordCode, cocoordName);
+                        if (coordCode) optimizedData.coordsByCocoord.set(cocoordCode, coordCode);
+                        if (!optimizedData.promotorsByCocoord.has(cocoordCode)) optimizedData.promotorsByCocoord.set(cocoordCode, new Set());
+                        if (promotorCode) optimizedData.promotorsByCocoord.get(cocoordCode).add(promotorCode);
+                    }
+                    if (promotorCode) optimizedData.promotorMap.set(promotorCode, promotorName);
+
+                    if (promotorCode) {
+                        optimizedData.hierarchyMap.set(promotorCode, {
+                            coord: { code: coordCode, name: coordName },
+                            cocoord: { code: cocoordCode, name: cocoordName },
+                            promotor: { code: promotorCode, name: promotorName }
+                        });
+                    }
+                });
+            }
+
+            if (embeddedData.clientPromoters) {
+                console.log(`[DEBUG] Processing Client Promoters. Rows: ${embeddedData.clientPromoters.length}`);
+                let matchCount = 0;
+                let sampleLogged = false;
+                embeddedData.clientPromoters.forEach(cp => {
+                    let clientCode = String(cp.client_code).trim();
+                    // Normalize client code to match dataset (remove leading zeros)
+                    if (/^\d+$/.test(clientCode)) {
+                        clientCode = String(parseInt(clientCode, 10));
+                    }
+
+                    const promotorCode = String(cp.promoter_code).trim().toUpperCase();
+                    const hierarchyNode = optimizedData.hierarchyMap.get(promotorCode);
+                    if (hierarchyNode) {
+                        optimizedData.clientHierarchyMap.set(clientCode, hierarchyNode);
+                        matchCount++;
+                    } else if (!sampleLogged) {
+                        console.warn(`[DEBUG] Hierarchy Node Not Found for Promotor: ${promotorCode} (Client: ${clientCode})`);
+                        sampleLogged = true;
+                    }
+                });
+                console.log(`[DEBUG] Client Promoters Merged: ${matchCount}/${embeddedData.clientPromoters.length}`);
+            } else {
+                console.warn("[DEBUG] embeddedData.clientPromoters is missing or empty.");
+            }
+            console.log(`[DEBUG] Final Hierarchy Map Size: ${optimizedData.hierarchyMap.size}`);
+            console.log(`[DEBUG] Final Client Hierarchy Map Size: ${optimizedData.clientHierarchyMap.size}`);
+            // --- HIERARCHY LOGIC END ---
+
             // Access via accessor method for potential ColumnarDataset
             const getClient = (i) => allClientsData instanceof ColumnarDataset ? allClientsData.get(i) : allClientsData[i];
 
             for (let i = 0; i < allClientsData.length; i++) {
                 const client = getClient(i); // Hydrate object for processing
-                const codCli = String(client['Código'] || client['codigo_cliente']);
+                const codCli = normalizeKey(client['Código'] || client['codigo_cliente']);
 
                 // Sanitize: Skip header rows if present
                 if (!codCli || codCli === 'Código' || codCli === 'codigo_cliente' || codCli === 'CODCLI' || codCli === 'CODIGO') continue;
@@ -1140,7 +1695,7 @@
 
                 // Handle RCAS array (could be 'rcas' or 'RCAS')
                 let rcas = client.rcas || client.RCAS;
-                
+
                 // Sanitize RCAS: Filter out invalid values like "rcas" (header leak)
                 if (Array.isArray(rcas)) {
                     rcas = rcas.filter(r => r && String(r).toLowerCase() !== 'rcas');
@@ -1160,7 +1715,14 @@
                     }
                 }
 
-                optimizedData.searchIndices.clients[i] = { code: codCli, nameLower: (client.nomeCliente || '').toLowerCase(), cityLower: (client.cidade || '').toLowerCase() };
+                const rawCnpj = client['CNPJ/CPF'] || client.cnpj_cpf || client.CNPJ || '';
+                const cleanCnpj = String(rawCnpj).replace(/[^0-9]/g, '');
+                optimizedData.searchIndices.clients[i] = {
+                    code: codCli,
+                    nameLower: (client.nomeCliente || '').toLowerCase(),
+                    cityLower: (client.cidade || '').toLowerCase(),
+                    cnpj: cleanCnpj
+                };
             }
 
             const supervisorToRcaMap = new Map();
@@ -1189,6 +1751,9 @@
                     return data[i] ? data[i][prop] : undefined;
                 };
 
+                // Cache for parsed dates to avoid repeated parsing of same timestamp/string
+                const dateCache = new Map();
+
                 for (let i = 0; i < data.length; i++) {
                     // Optimized: Use Integer Index as ID
                     const id = i;
@@ -1199,13 +1764,8 @@
                     const supervisor = getVal(i, 'SUPERV') || 'N/A';
                     const rca = getVal(i, 'NOME') || 'N/A';
 
-                    // --- FIX: Derive PASTA if empty directly inside indexing loop ---
+                    // Use pre-normalized PASTA
                     let pasta = getVal(i, 'OBSERVACAOFOR');
-                    if (!pasta || pasta === '0' || pasta === '00' || pasta === 'N/A') {
-                        const rawFornecedor = String(getVal(i, 'FORNECEDOR') || '').toUpperCase();
-                        pasta = rawFornecedor.includes('PEPSICO') ? 'PEPSICO' : 'MULTIMARCAS';
-                    }
-                    // ---------------------------------------------------------------
 
                     const supplier = getVal(i, 'CODFOR');
                     const client = getVal(i, 'CODCLI');
@@ -1241,15 +1801,26 @@
 
                     const dtPed = getVal(i, 'DTPED');
                     if (dtPed) {
-                        // dtPed is likely a number (timestamp).
-                        // If it's a number, new Date(dtPed) works.
-                        // If it's a string, parseDate(dtPed) (from local function or global?)
-                        // Global parseDate handles numbers too.
-                        const dateObj = (typeof dtPed === 'number') ? new Date(dtPed) : parseDate(dtPed);
+                        // Check cache
+                        if (dateCache.has(dtPed)) {
+                            const cached = dateCache.get(dtPed);
+                            if (cached) workingDaysSet.add(cached);
+                        } else {
+                            // dtPed is likely a number (timestamp).
+                            // If it's a number, new Date(dtPed) works.
+                            // If it's a string, parseDate(dtPed) (from local function or global?)
+                            // Global parseDate handles numbers too.
+                            const dateObj = (typeof dtPed === 'number') ? new Date(dtPed) : parseDate(dtPed);
+                            let result = null;
 
-                        if(dateObj && !isNaN(dateObj.getTime())) {
-                            const dayOfWeek = dateObj.getUTCDay();
-                            if (dayOfWeek >= 1 && dayOfWeek <= 5) workingDaysSet.add(dateObj.toISOString().split('T')[0]);
+                            if(dateObj && !isNaN(dateObj.getTime())) {
+                                const dayOfWeek = dateObj.getUTCDay();
+                                if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                                    result = dateObj.toISOString().split('T')[0];
+                                    workingDaysSet.add(result);
+                                }
+                            }
+                            dateCache.set(dtPed, result);
                         }
                     }
 
@@ -1297,9 +1868,9 @@
             // Process Aggregated Orders (Remap only)
             for(let i = 0; i < aggregatedOrders.length; i++) {
                 const sale = aggregatedOrders[i];
-                // Convert to Date if number
-                if (sale.DTPED && !(sale.DTPED instanceof Date)) sale.DTPED = new Date(sale.DTPED);
-                if (sale.DTSAIDA && !(sale.DTSAIDA instanceof Date)) sale.DTSAIDA = new Date(sale.DTSAIDA);
+                // Convert to Date using robust parser
+                sale.DTPED = parseDate(sale.DTPED);
+                sale.DTSAIDA = parseDate(sale.DTSAIDA);
 
                 if (sale.CODCLI !== americanasCodCli) {
                     const currentSellerCode = clientToCurrentSellerMap.get(sale.CODCLI);
@@ -1327,8 +1898,8 @@
         }
 
         aggregatedOrders.sort((a, b) => {
-            const dateA = parseDate(a.DTPED);
-            const dateB = parseDate(b.DTPED);
+            const dateA = a.DTPED;
+            const dateB = b.DTPED;
             if (!dateA) return 1;
             if (!dateB) return -1;
             return dateB - dateA;
@@ -1338,14 +1909,11 @@
 
         const mainDashboard = document.getElementById('main-dashboard');
         const cityView = document.getElementById('city-view');
-        const weeklyView = document.getElementById('weekly-view');
         const comparisonView = document.getElementById('comparison-view');
         const stockView = document.getElementById('stock-view');
 
-        const showWeeklyBtn = document.getElementById('show-weekly-btn');
         const showCityBtn = document.getElementById('show-city-btn');
         const backToMainFromCityBtn = document.getElementById('back-to-main-from-city-btn');
-        const backToMainFromWeeklyBtn = document.getElementById('back-to-main-from-weekly-btn');
         const backToMainFromComparisonBtn = document.getElementById('back-to-main-from-comparison-btn');
         const backToMainFromStockBtn = document.getElementById('back-to-main-from-stock-btn');
 
@@ -1387,9 +1955,7 @@
         const fornecedorToggleContainerEl = document.getElementById('fornecedor-toggle-container');
 
         const citySupervisorFilter = document.getElementById('city-supervisor-filter');
-        const cityVendedorFilterBtn = document.getElementById('city-vendedor-filter-btn');
         const cityVendedorFilterText = document.getElementById('city-vendedor-filter-text');
-        const cityVendedorFilterDropdown = document.getElementById('city-vendedor-filter-dropdown');
         const citySupplierFilterBtn = document.getElementById('city-supplier-filter-btn');
         const citySupplierFilterText = document.getElementById('city-supplier-filter-text');
         const citySupplierFilterDropdown = document.getElementById('city-supplier-filter-dropdown');
@@ -1399,7 +1965,7 @@
                 const codcli = String(c['Código'] || c['codigo_cliente']);
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                
+
                 // Logic identical to 'updateCoverageView' active clients KPI
                 return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(codcli));
             });
@@ -1421,20 +1987,8 @@
         const cityTipoVendaFilterText = document.getElementById('city-tipo-venda-filter-text');
         const cityTipoVendaFilterDropdown = document.getElementById('city-tipo-venda-filter-dropdown');
 
-        const weeklySupervisorFilterBtn = document.getElementById('weekly-supervisor-filter-btn');
-        const weeklySupervisorFilterText = document.getElementById('weekly-supervisor-filter-text');
-        const weeklySupervisorFilterDropdown = document.getElementById('weekly-supervisor-filter-dropdown');
-        const weeklyVendedorFilterBtn = document.getElementById('weekly-vendedor-filter-btn');
-        const weeklyVendedorFilterText = document.getElementById('weekly-vendedor-filter-text');
-        const weeklyVendedorFilterDropdown = document.getElementById('weekly-vendedor-filter-dropdown');
-        const clearWeeklyFiltersBtn = document.getElementById('clear-weekly-filters-btn');
-        const totalMesSemanalEl = document.getElementById('total-mes-semanal');
-        const weeklyFornecedorToggleContainer = document.getElementById('weekly-fornecedor-toggle-container');
-
         const comparisonSupervisorFilter = document.getElementById('comparison-supervisor-filter');
-        const comparisonVendedorFilterBtn = document.getElementById('comparison-vendedor-filter-btn');
         const comparisonVendedorFilterText = document.getElementById('comparison-vendedor-filter-text');
-        const comparisonVendedorFilterDropdown = document.getElementById('comparison-vendedor-filter-dropdown');
         const comparisonFornecedorToggleContainer = document.getElementById('comparison-fornecedor-toggle-container');
         const comparisonFilialFilter = document.getElementById('comparison-filial-filter');
 
@@ -1466,31 +2020,6 @@
         const weeklyComparisonChartContainer = document.getElementById('weeklyComparisonChartContainer');
         const monthlyComparisonChartContainer = document.getElementById('monthlyComparisonChartContainer');
 
-        const stockFilialFilter = document.getElementById('stock-filial-filter');
-        const stockRedeGroupContainer = document.getElementById('stock-rede-group-container');
-        const stockComRedeBtn = document.getElementById('stock-com-rede-btn');
-        const stockComRedeBtnText = document.getElementById('stock-com-rede-btn-text');
-        const stockRedeFilterDropdown = document.getElementById('stock-rede-filter-dropdown');
-        const stockFornecedorToggleContainer = document.getElementById('stock-fornecedor-toggle-container');
-        const stockSupervisorFilter = document.getElementById('stock-supervisor-filter');
-        const stockVendedorFilterBtn = document.getElementById('stock-vendedor-filter-btn');
-        const stockVendedorFilterText = document.getElementById('stock-vendedor-filter-text');
-        const stockVendedorFilterDropdown = document.getElementById('stock-vendedor-filter-dropdown');
-        const stockSupplierFilterBtn = document.getElementById('stock-supplier-filter-btn');
-        const stockSupplierFilterText = document.getElementById('stock-supplier-filter-text');
-        const stockSupplierFilterDropdown = document.getElementById('stock-supplier-filter-dropdown');
-        const stockCityFilter = document.getElementById('stock-city-filter');
-        const stockCitySuggestions = document.getElementById('stock-city-suggestions');
-        const stockProductFilterBtn = document.getElementById('stock-product-filter-btn');
-        const stockProductFilterText = document.getElementById('stock-product-filter-text');
-        const stockProductFilterDropdown = document.getElementById('stock-product-filter-dropdown');
-        const stockTipoVendaFilterBtn = document.getElementById('stock-tipo-venda-filter-btn');
-        const stockTipoVendaFilterText = document.getElementById('stock-tipo-venda-filter-text');
-        const stockTipoVendaFilterDropdown = document.getElementById('stock-tipo-venda-filter-dropdown');
-        const clearStockFiltersBtn = document.getElementById('clear-stock-filters-btn');
-        const stockAnalysisTableBody = document.getElementById('stock-analysis-table-body');
-        const growthTableBody = document.getElementById('growth-table-body');
-        const declineTableBody = document.getElementById('decline-table-body');
         const newProductsTableBody = document.getElementById('new-products-table-body');
         const lostProductsTableBody = document.getElementById('lost-products-table-body');
 
@@ -1500,9 +2029,7 @@
         const innovationsMonthTableBody = document.getElementById('innovations-month-table-body');
         const innovationsMonthCategoryFilter = document.getElementById('innovations-month-category-filter');
         const innovationsMonthSupervisorFilter = document.getElementById('innovations-month-supervisor-filter');
-        const innovationsMonthVendedorFilterBtn = document.getElementById('innovations-month-vendedor-filter-btn');
         const innovationsMonthVendedorFilterText = document.getElementById('innovations-month-vendedor-filter-text');
-        const innovationsMonthVendedorFilterDropdown = document.getElementById('innovations-month-vendedor-filter-dropdown');
         const innovationsMonthCityFilter = document.getElementById('innovations-month-city-filter');
         const innovationsMonthCitySuggestions = document.getElementById('innovations-month-city-suggestions');
         const clearInnovationsMonthFiltersBtn = document.getElementById('clear-innovations-month-filters-btn');
@@ -1528,9 +2055,7 @@
         const viewCoverageBtn = document.getElementById('viewCoverageBtn');
         const backToMainFromCoverageBtn = document.getElementById('back-to-main-from-coverage-btn');
         const coverageSupervisorFilter = document.getElementById('coverage-supervisor-filter');
-        const coverageVendedorFilterBtn = document.getElementById('coverage-vendedor-filter-btn');
         const coverageVendedorFilterText = document.getElementById('coverage-vendedor-filter-text');
-        const coverageVendedorFilterDropdown = document.getElementById('coverage-vendedor-filter-dropdown');
         const coverageSupplierFilterBtn = document.getElementById('coverage-supplier-filter-btn');
         const coverageSupplierFilterText = document.getElementById('coverage-supplier-filter-text');
         const coverageSupplierFilterDropdown = document.getElementById('coverage-supplier-filter-dropdown');
@@ -1561,20 +2086,14 @@
         const goalsGvTableBody = document.getElementById('goals-gv-table-body');
         const goalsGvTotalValueEl = document.getElementById('goals-gv-total-value');
 
-        const goalsGvSupervisorFilterBtn = document.getElementById('goals-gv-supervisor-filter-btn');
         const goalsGvSupervisorFilterText = document.getElementById('goals-gv-supervisor-filter-text');
-        const goalsGvSupervisorFilterDropdown = document.getElementById('goals-gv-supervisor-filter-dropdown');
 
-        const goalsGvSellerFilterBtn = document.getElementById('goals-gv-seller-filter-btn');
         const goalsGvSellerFilterText = document.getElementById('goals-gv-seller-filter-text');
-        const goalsGvSellerFilterDropdown = document.getElementById('goals-gv-seller-filter-dropdown');
 
         const goalsGvCodcliFilter = document.getElementById('goals-gv-codcli-filter');
         const clearGoalsGvFiltersBtn = document.getElementById('clear-goals-gv-filters-btn');
 
-        const goalsSvSupervisorFilterBtn = document.getElementById('goals-sv-supervisor-filter-btn');
         const goalsSvSupervisorFilterText = document.getElementById('goals-sv-supervisor-filter-text');
-        const goalsSvSupervisorFilterDropdown = document.getElementById('goals-sv-supervisor-filter-dropdown');
 
 
         const modal = document.getElementById('order-details-modal');
@@ -1605,10 +2124,8 @@
             dashboard: { dirty: true },
             pedidos: { dirty: true },
             comparativo: { dirty: true },
-            estoque: { dirty: true },
             cobertura: { dirty: true },
             cidades: { dirty: true },
-            semanal: { dirty: true },
             inovacoes: { dirty: true, cache: null, lastTypesKey: '' },
             mix: { dirty: true },
             goals: { dirty: true },
@@ -1619,7 +2136,6 @@
         let mixRenderId = 0;
         let coverageRenderId = 0;
         let cityRenderId = 0;
-        let stockRenderId = 0;
         let comparisonRenderId = 0;
         let goalsRenderId = 0;
         let goalsSvRenderId = 0;
@@ -1627,55 +2143,63 @@
         let charts = {};
         let currentProductMetric = 'faturamento';
         let currentFornecedor = '';
-        let currentWeeklyFornecedor = '';
-        let currentComparisonFornecedor = '';
-        let currentStockFornecedor = '';
+        let currentComparisonFornecedor = 'PEPSICO';
         let useTendencyComparison = false;
         let comparisonChartType = 'weekly';
         let comparisonMonthlyMetric = 'faturamento';
         let activeClientsForExport = [];
+        let selectedMainCoords = [];
+        let selectedMainCoCoords = [];
+        let selectedMainPromotors = [];
+        let selectedCityCoords = [];
+        let selectedCityCoCoords = [];
+        let selectedCityPromotors = [];
+        let selectedComparisonCoords = [];
+        let selectedComparisonCoCoords = [];
+        let selectedComparisonPromotors = [];
+        let selectedInnovationsCoords = [];
+        let selectedInnovationsCoCoords = [];
+        let selectedInnovationsPromotors = [];
+        let selectedMixCoords = [];
+        let selectedMixCoCoords = [];
+        let selectedMixPromotors = [];
+        let selectedCoverageCoords = [];
+        let selectedCoverageCoCoords = [];
+        let selectedCoveragePromotors = [];
+        let selectedGoalsGvCoords = [];
+        let selectedGoalsGvCoCoords = [];
+        let selectedGoalsGvPromotors = [];
+        let selectedGoalsSvCoords = [];
+        let selectedGoalsSvCoCoords = [];
+        let selectedGoalsSvPromotors = [];
+        let selectedGoalsSummaryCoords = [];
+        let selectedGoalsSummaryCoCoords = [];
+        let selectedGoalsSummaryPromotors = [];
+        let selectedMetaRealizadoCoords = [];
+        let selectedMetaRealizadoCoCoords = [];
+        let selectedMetaRealizadoPromotors = [];
         let inactiveClientsForExport = [];
-        let selectedSellers = [];
-        let selectedMainSupervisors = [];
         let selectedMainSuppliers = [];
         let selectedTiposVenda = [];
-        var selectedCitySellers = [];
         var selectedCitySuppliers = [];
-        var selectedCitySupervisors = [];
-        let selectedComparisonSellers = [];
-        let selectedComparisonSupervisors = [];
-        let selectedStockSellers = [];
-        let selectedStockSupervisors = [];
         let selectedComparisonSuppliers = [];
         let selectedComparisonProducts = [];
-        let selectedStockSuppliers = [];
-        let selectedStockProducts = [];
-        let selectedStockTiposVenda = [];
         let selectedCoverageTiposVenda = [];
         let selectedComparisonTiposVenda = [];
         let selectedCityTiposVenda = [];
         let historicalBests = {};
         let selectedHolidays = [];
-        let stockTrendFilter = 'all';
 
         let selectedMainRedes = [];
         let selectedCityRedes = [];
-        let selectedWeeklySupervisors = [];
-        let selectedWeeklySellers = [];
         let selectedComparisonRedes = [];
-        let selectedStockRedes = [];
 
         let mainRedeGroupFilter = '';
         let cityRedeGroupFilter = '';
         let comparisonRedeGroupFilter = '';
-        let stockRedeGroupFilter = '';
 
-        let selectedInnovationsMonthSellers = [];
-        let selectedInnovationsSupervisors = [];
         let selectedInnovationsMonthTiposVenda = [];
 
-        let selectedMixSupervisors = [];
-        let selectedMixSellers = [];
         let selectedMixRedes = [];
         let mixRedeGroupFilter = '';
         let selectedMixTiposVenda = [];
@@ -1971,14 +2495,7 @@
                 m.avgClients = sumClients / QUARTERLY_DIVISOR;
             }
         }
-        let selectedGoalsGvSupervisors = [];
-        let selectedGoalsGvSellers = [];
-        let selectedGoalsSvSupervisors = [];
-        let selectedGoalsSummarySupervisors = [];
-        let selectedGoalsSummarySellers = [];
 
-        let selectedMetaRealizadoSupervisors = [];
-        let selectedMetaRealizadoSellers = [];
         let selectedMetaRealizadoSuppliers = [];
         let currentMetaRealizadoPasta = 'PEPSICO'; // Default
         let currentMetaRealizadoMetric = 'valor'; // 'valor' or 'peso'
@@ -1995,12 +2512,8 @@
 
         let calendarState = { year: lastSaleDate.getUTCFullYear(), month: lastSaleDate.getUTCMonth() };
 
-        let selectedCoverageSellers = [];
         let selectedCoverageSuppliers = [];
-        let selectedCoverageSupervisors = [];
         let selectedCoverageProducts = [];
-        let selectedCoverageDateRange = null;
-        let coverageDateFilterInstance = null;
         let coverageUnitPriceFilter = null;
         let customWorkingDaysCoverage = 0;
         let coverageTrendFilter = 'all';
@@ -2035,7 +2548,7 @@
             return new Date(d.getTime() + userTimezoneOffset).toLocaleDateString('pt-BR');
         }
 
-        function buildInnovationSalesMaps(salesData, mainTypes, bonusTypes, dateRange = null) {
+        function buildInnovationSalesMaps(salesData, mainTypes, bonusTypes) {
             const mainMap = new Map(); // Map<CODCLI, Map<PRODUTO, Set<CODUSUR>>>
             const bonusMap = new Map();
             const mainSet = new Set(mainTypes);
@@ -2047,28 +2560,18 @@
 
                 if (!isMain && !isBonus) return;
 
-                // Date Filtering (Optional)
-                if (dateRange) {
-                    const d = parseDate(sale.DTPED);
-                    if (!d || d < dateRange.start || d > dateRange.end) return;
-                }
-
                 const codCli = sale.CODCLI;
                 const prod = sale.PRODUTO;
                 const rca = sale.CODUSUR;
 
                 if (isMain) {
-                    // Strict Rule for Main Sales: Value must be >= 1
-                    if ((Number(sale.VLVENDA) || 0) >= 1) {
-                        if (!mainMap.has(codCli)) mainMap.set(codCli, new Map());
-                        const clientMap = mainMap.get(codCli);
-                        if (!clientMap.has(prod)) clientMap.set(prod, new Set());
-                        clientMap.get(prod).add(rca);
-                    }
+                    if (!mainMap.has(codCli)) mainMap.set(codCli, new Map());
+                    const clientMap = mainMap.get(codCli);
+                    if (!clientMap.has(prod)) clientMap.set(prod, new Set());
+                    clientMap.get(prod).add(rca);
                 }
 
                 if (isBonus) {
-                    // Bonus Sales: No value threshold (often 0)
                     if (!bonusMap.has(codCli)) bonusMap.set(codCli, new Map());
                     const clientMap = bonusMap.get(codCli);
                     if (!clientMap.has(prod)) clientMap.set(prod, new Set());
@@ -2085,67 +2588,61 @@
         function getMixFilteredData(options = {}) {
             const { excludeFilter = null } = options;
 
-            const sellersSet = new Set(selectedMixSellers);
-            const supervisorsSet = new Set(selectedMixSupervisors);
             const tiposVendaSet = new Set(selectedMixTiposVenda);
             const city = document.getElementById('mix-city-filter').value.trim().toLowerCase();
             const filial = document.getElementById('mix-filial-filter').value;
 
-            let clients = allClientsData;
+            // New Hierarchy Logic
+            let clients = getHierarchyFilteredClients('mix', allClientsData);
 
-            if (excludeFilter !== 'rede') {
-                 if (mixRedeGroupFilter === 'com_rede') {
-                    clients = clients.filter(c => c.ramo && c.ramo !== 'N/A');
-                    if (selectedMixRedes.length > 0) {
-                        const redeSet = new Set(selectedMixRedes);
-                        clients = clients.filter(c => redeSet.has(c.ramo));
-                    }
-                } else if (mixRedeGroupFilter === 'sem_rede') {
-                    clients = clients.filter(c => !c.ramo || c.ramo === 'N/A');
-                }
-            }
+            // OPTIMIZATION: Combine filters into a single pass
+            const checkRede = excludeFilter !== 'rede';
+            const isComRede = mixRedeGroupFilter === 'com_rede';
+            const isSemRede = mixRedeGroupFilter === 'sem_rede';
+            const redeSet = (isComRede && selectedMixRedes.length > 0) ? new Set(selectedMixRedes) : null;
 
-            if (filial !== 'ambas') {
-                clients = clients.filter(c => clientLastBranch.get(c['Código']) === filial);
-            }
+            const checkFilial = filial !== 'ambas';
+            const checkCity = excludeFilter !== 'city' && !!city;
 
-            if (excludeFilter !== 'supervisor' && selectedMixSupervisors.length > 0) {
-                const rcasSet = new Set();
-                selectedMixSupervisors.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
-                });
-                clients = clients.filter(c => c.rcas.some(r => rcasSet.has(r)));
-            }
+            // Removed Supervisor/Seller checks
+            // if (excludeFilter !== 'supplier' && selectedCitySuppliers.length > 0) { ... }
 
-            if (excludeFilter !== 'seller' && sellersSet.size > 0) {
-                const rcasSet = new Set();
-                sellersSet.forEach(name => {
-                    const code = optimizedData.rcaCodeByName.get(name);
-                    if(code) rcasSet.add(code);
-                });
-                clients = clients.filter(c => c.rcas.some(r => rcasSet.has(r)));
-            }
-
-            if (excludeFilter !== 'supplier' && selectedCitySuppliers.length > 0) {
-                 // No filtering of clients list based on supplier for now.
-            }
-
-            if (excludeFilter !== 'city' && city) {
-                clients = clients.filter(c => c.cidade && c.cidade.toLowerCase() === city);
-            }
-
-            // Include only active or Americanas or not RCA 53
             clients = clients.filter(c => {
+                // 1. Rede Logic
+                if (checkRede) {
+                    if (isComRede) {
+                        if (!c.ramo || c.ramo === 'N/A') return false;
+                        if (redeSet && !redeSet.has(c.ramo)) return false;
+                    } else if (isSemRede) {
+                        if (c.ramo && c.ramo !== 'N/A') return false;
+                    }
+                }
+
+                // 2. Filial Logic
+                if (checkFilial) {
+                    if (clientLastBranch.get(c['Código']) !== filial) return false;
+                }
+
+                // 3. City Logic
+                if (checkCity) {
+                    if (!c.cidade || c.cidade.toLowerCase() !== city) return false;
+                }
+
+                // 4. Active Logic
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(c['Código']));
+                // Keep if Americanas OR Not 53 OR Has Sales
+                if (!isAmericanas && rca1 === '53' && !clientsWithSalesThisMonth.has(c['Código'])) return false;
+
+                return true;
             });
 
-            const clientCodes = new Set(clients.map(c => c['Código']));
+            const clientCodes = new Set();
+            for (const c of clients) {
+                clientCodes.add(c['Código']);
+            }
 
             const filters = {
-                supervisor: supervisorsSet,
-                seller: sellersSet,
                 city: city,
                 filial: filial,
                 tipoVenda: tiposVendaSet,
@@ -2160,13 +2657,7 @@
         function updateAllMixFilters(options = {}) {
             const { skipFilter = null } = options;
 
-            if (skipFilter !== 'supervisor') {
-                const { sales } = getMixFilteredData({ excludeFilter: 'supervisor' });
-                selectedMixSupervisors = updateSupervisorFilter(document.getElementById('mix-supervisor-filter-dropdown'), document.getElementById('mix-supervisor-filter-text'), selectedMixSupervisors, sales);
-            }
-
-            const { sales: salesSeller } = getMixFilteredData({ excludeFilter: 'seller' });
-            selectedMixSellers = updateSellerFilter(selectedMixSupervisors, document.getElementById('mix-vendedor-filter-dropdown'), document.getElementById('mix-vendedor-filter-text'), selectedMixSellers, salesSeller, skipFilter === 'seller');
+            // Supervisor/Seller filters managed by setupHierarchyFilters
 
             const { sales: salesTV } = getMixFilteredData({ excludeFilter: 'tipoVenda' });
             selectedMixTiposVenda = updateTipoVendaFilter(document.getElementById('mix-tipo-venda-filter-dropdown'), document.getElementById('mix-tipo-venda-filter-text'), selectedMixTiposVenda, salesTV, skipFilter === 'tipoVenda');
@@ -2188,10 +2679,6 @@
         }
 
         function resetMixFilters() {
-            selectedMixSupervisors = [];
-            document.getElementById('mix-city-filter').value = '';
-            document.getElementById('mix-filial-filter').value = 'ambas';
-            selectedMixSellers = [];
             selectedMixTiposVenda = [];
             selectedMixRedes = [];
             mixRedeGroupFilter = '';
@@ -2215,6 +2702,19 @@
                 .replace(/'/g, "&#039;");
         }
 
+        function getSkeletonRows(cols, rows = 5) {
+            let html = '';
+            for (let i = 0; i < rows; i++) {
+                html += `<tr class="border-b border-slate-800/50">`;
+                for (let j = 0; j < cols; j++) {
+                    // Empty data-label for skeleton to prevent "null" text on mobile, just shows bar
+                    html += `<td class="p-4" data-label=""><div class="skeleton h-4 w-full"></div></td>`;
+                }
+                html += `</tr>`;
+            }
+            return html;
+        }
+
         function updateMixView() {
             mixRenderId++;
             const currentRenderId = mixRenderId;
@@ -2223,7 +2723,7 @@
             // const activeClientCodes = new Set(clients.map(c => c['Código'])); // Not used if iterating clients array
 
             // Show Loading
-            document.getElementById('mix-table-body').innerHTML = '<tr><td colspan="13" class="text-center p-8"><svg class="animate-spin h-8 w-8 text-teal-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></td></tr>';
+            document.getElementById('mix-table-body').innerHTML = getSkeletonRows(13, 10);
 
             // 1. Agregar Valor Líquido por Produto por Cliente (Sync - O(Sales))
             const clientProductNetValues = new Map(); // Map<CODCLI, Map<PRODUTO, NetValue>>
@@ -2231,16 +2731,18 @@
 
             sales.forEach(s => {
                 if (!s.CODCLI || !s.PRODUTO) return;
+                if (!isAlternativeMode(selectedMixTiposVenda) && s.TIPOVENDA !== '1' && s.TIPOVENDA !== '9') return;
 
                 if (!clientProductNetValues.has(s.CODCLI)) {
                     clientProductNetValues.set(s.CODCLI, new Map());
                 }
                 const clientMap = clientProductNetValues.get(s.CODCLI);
                 const currentVal = clientMap.get(s.PRODUTO) || 0;
-                clientMap.set(s.PRODUTO, currentVal + (Number(s.VLVENDA) || 0));
+                const val = getValueForSale(s, selectedMixTiposVenda);
+                clientMap.set(s.PRODUTO, currentVal + val);
 
                 if (!clientProductDesc.has(s.PRODUTO)) {
-                    clientProductDesc.set(s.PRODUTO, normalize(s.DESCRICAO || ''));
+                    clientProductDesc.set(s.PRODUTO, s.DESCRICAO);
                 }
             });
 
@@ -2254,7 +2756,7 @@
 
                 productsMap.forEach((netValue, prodCode) => {
                     if (netValue >= 1) {
-                        const desc = clientProductDesc.get(prodCode) || '';
+                        const desc = normalize(clientProductDesc.get(prodCode) || '');
 
                         // Checar Salty
                         MIX_SALTY_CATEGORIES.forEach(cat => {
@@ -2413,15 +2915,15 @@
                 const xIcon = `<svg class="w-3 h-3 text-red-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`;
 
                 let tableHTML = pageData.map(row => {
-                    let saltyCols = MIX_SALTY_CATEGORIES.map(b => `<td class="px-1 py-2 text-center border-l border-slate-500">${row.brands.has(b) ? checkIcon : xIcon}</td>`).join('');
-                    let foodsCols = MIX_FOODS_CATEGORIES.map(b => `<td class="px-1 py-2 text-center border-l border-slate-500">${row.brands.has(b) ? checkIcon : xIcon}</td>`).join('');
+                    let saltyCols = MIX_SALTY_CATEGORIES.map(b => `<td data-label="${b}" class="px-1 py-2 text-center border-l border-slate-500">${row.brands.has(b) ? checkIcon : xIcon}</td>`).join('');
+                    let foodsCols = MIX_FOODS_CATEGORIES.map(b => `<td data-label="${b}" class="px-1 py-2 text-center border-l border-slate-500">${row.brands.has(b) ? checkIcon : xIcon}</td>`).join('');
 
                     return `
                     <tr class="hover:bg-slate-700/50 border-b border-slate-500 last:border-0">
-                        <td class="px-2 py-2 font-medium text-slate-300 text-xs">${escapeHtml(row.codcli)}</td>
-                        <td class="px-2 py-2 text-xs truncate max-w-[150px]" title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</td>
-                        <td class="px-2 py-2 text-xs text-slate-300 truncate max-w-[100px]">${escapeHtml(row.city)}</td>
-                        <td class="px-2 py-2 text-xs text-slate-400 truncate max-w-[100px]">${escapeHtml(getFirstName(row.vendedor))}</td>
+                        <td data-label="Cód" class="px-2 py-2 font-medium text-slate-300 text-xs">${escapeHtml(row.codcli)}</td>
+                        <td data-label="Cliente" class="px-2 py-2 text-xs truncate max-w-[150px]" title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</td>
+                        <td data-label="Cidade" class="px-2 py-2 text-xs text-slate-300 truncate max-w-[100px]">${escapeHtml(row.city)}</td>
+                        <td data-label="Vendedor" class="px-2 py-2 text-xs text-slate-400 truncate max-w-[100px]">${escapeHtml(getFirstName(row.vendedor))}</td>
                         ${saltyCols}
                         ${foodsCols}
                     </tr>
@@ -2542,8 +3044,7 @@
             }
 
             let fileNameParam = 'geral';
-            if (selectedMixSellers.length === 1) {
-                fileNameParam = getFirstName(selectedMixSellers[0]);
+            if (hierarchyState['mix'] && hierarchyState['mix'].promotors.size === 1) {
             } else if (city) {
                 fileNameParam = city;
             }
@@ -2560,7 +3061,7 @@
         async function saveGoalsToSupabase() {
             try {
                 const monthKey = new Date().toISOString().slice(0, 7);
-                
+
                 // Serialize globalClientGoals (Map<CodCli, Map<Key, {fat: 0, vol: 0}>>)
                 const clientsObj = {};
                 for (const [clientId, clientMap] of globalClientGoals) {
@@ -2632,7 +3133,7 @@
             activeClients.forEach(client => {
                 const codCli = String(client['Código'] || client['codigo_cliente']);
                 const historyIds = optimizedData.indices.history.byClient.get(codCli);
-                
+
                 if (!clientSubCatHistory.has(codCli)) clientSubCatHistory.set(codCli, new Map());
                 const subCatMap = clientSubCatHistory.get(codCli);
 
@@ -2641,7 +3142,7 @@
                         const sale = optimizedData.historyById.get(id);
                         const codFor = String(sale.CODFOR);
                         const desc = normalize(sale.DESCRICAO || '');
-                        
+
                         // Check against all target categories
                         targetCategories.forEach(subCat => {
                             let isMatch = false;
@@ -2668,7 +3169,7 @@
 
             // 2. Distribute
             // NewGoal(Client, SubCat) = NewTotalValue * (ClientSubCatHistory / TotalSellerHistory)
-            
+
             const clientCount = activeClients.length;
             const subCatCount = targetCategories.length;
 
@@ -2690,7 +3191,7 @@
                     // Update Global
                     if (!globalClientGoals.has(codCli)) globalClientGoals.set(codCli, new Map());
                     const cGoals = globalClientGoals.get(codCli);
-                    
+
                     if (!cGoals.has(subCat)) cGoals.set(subCat, { fat: 0, vol: 0 });
                     const target = cGoals.get(subCat);
 
@@ -2727,8 +3228,8 @@
             const grandTotalStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "0F172A" } }, border: { top: { style: "thick" } } };
 
             // Format Strings
-            const fmtMoney = "#,##0.00";
-            const fmtVol = "#,##0.000";
+            const fmtMoney = "\"R$ \"#,##0.00";
+            const fmtVol = "0.00 \"Kg\"";
             const fmtInt = "0";
             const fmtDec1 = "0.0";
 
@@ -2841,12 +3342,12 @@
             // --- 2. Data Rows ---
             let currentRow = 3;
             const colCellsForGrandTotal = {};
-            svColumns.forEach(c => colCellsForGrandTotal[c.id] = { fat: [], pos: [], vol: [], mix: [], avg: [], metaFat: [], metaPos: [], metaVol: [], metaMix: [] });
+            svColumns.forEach(c => colCellsForGrandTotal[c.id] = { fat: [], pos: [], vol: [], mix: [], avg: [] });
 
             currentGoalsSvData.forEach(sup => {
                 const sellers = sup.sellers;
                 const colCellsForSupTotal = {};
-                svColumns.forEach(c => colCellsForSupTotal[c.id] = { fat: [], pos: [], vol: [], mix: [], avg: [], metaFat: [], metaPos: [], metaVol: [], metaMix: [] });
+                svColumns.forEach(c => colCellsForSupTotal[c.id] = { fat: [], pos: [], vol: [], mix: [], avg: [] });
 
                 sellers.forEach(seller => {
                     const rowData = [createCell(seller.code), createCell(seller.name)];
@@ -2858,19 +3359,9 @@
                         const getColLet = (idx) => XLSX.utils.encode_col(idx);
 
                         // Highlight Logic
-                        // Rule:
-                        // Fat: Editable for Leafs (!isAgg), ReadOnly for Aggregates.
-                        // Pos: Editable for Aggregates (TOTAL ELMA/FOODS), ReadOnly for Leafs.
-                        // Vol: Editable for Tonnage Columns.
-                        // Mix: Editable for Mix Columns.
-                        // Geral: Pos Editable.
-
-                        const isFatEditable = !col.isAgg;
-                        const isPosEditable = (col.id === 'total_elma' || col.id === 'total_foods');
-
-                        const fatStyle = isFatEditable ? editableStyle : readOnlyStyle;
-                        const posStyle = isPosEditable ? editableStyle : readOnlyStyle;
-                        const aggCellStyle = readOnlyStyle;
+                        const isEditable = !col.isAgg; // Base columns are editable (Yellow)
+                        const cellStyle = isEditable ? editableStyle : readOnlyStyle;
+                        const aggCellStyle = readOnlyStyle; // Aggregated columns (Light Grey)
 
                         if (col.type === 'standard') {
                             rowData.push(createCell(d.metaFat, readOnlyStyle, fmtMoney));
@@ -2879,55 +3370,50 @@
                             if (col.id === 'total_elma' || col.id === 'total_foods') {
                                 const ids = col.id === 'total_elma' ? ['707', '708', '752'] : ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
                                 const compCols = ids.map(id => colMap[id] + 1);
-                                // const compColsPos = ids.map(id => colMap[id] + 3);
+                                const compColsPos = ids.map(id => colMap[id] + 3);
                                 const formulaFat = compCols.map(c => `${getColLet(c)}${excelRow}`).join("+");
 
                                 rowData.push({ t: 'n', v: d.metaFat, f: formulaFat, s: { ...aggCellStyle, numFmt: fmtMoney }, z: fmtMoney });
                                 rowData.push(createCell(d.metaPos, readOnlyStyle, fmtInt));
-                                
+
                                 // Positivation (Aggregate): Use Stored Target
                                 let posVal = d.metaPos;
                                 if (goalsSellerTargets.has(seller.name)) {
                                     const t = goalsSellerTargets.get(seller.name);
                                     if (t && t[col.id] !== undefined) posVal = t[col.id];
                                 }
-                                rowData.push(createCell(posVal, posStyle, fmtInt));
+                                // Make Editable (cellStyle instead of aggCellStyle)
+                                rowData.push(createCell(posVal, editableStyle, fmtInt));
                             } else {
-                                // Leaf Cells
-                                rowData.push(createCell(d.metaFat, fatStyle, fmtMoney));
+                                // Editable Cells
+                                rowData.push(createCell(d.metaFat, cellStyle, fmtMoney));
                                 rowData.push(createCell(d.metaPos, readOnlyStyle, fmtInt));
-                                
+
                                 // Positivation (Standard): Use Stored Target
                                 let posVal = d.metaPos;
                                 if (goalsSellerTargets.has(seller.name)) {
                                     const t = goalsSellerTargets.get(seller.name);
                                     if (t && t[col.id] !== undefined) posVal = t[col.id];
                                 }
-                                rowData.push(createCell(posVal, posStyle, fmtInt));
+                                rowData.push(createCell(posVal, cellStyle, fmtInt));
                             }
 
-                            colCellsForSupTotal[col.id].metaFat.push(`${getColLet(cIdx)}${excelRow}`);
                             colCellsForSupTotal[col.id].fat.push(`${getColLet(cIdx + 1)}${excelRow}`);
-                            colCellsForSupTotal[col.id].metaPos.push(`${getColLet(cIdx + 2)}${excelRow}`);
                             colCellsForSupTotal[col.id].pos.push(`${getColLet(cIdx + 3)}${excelRow}`);
 
                         } else if (col.type === 'tonnage') {
                             rowData.push(createCell(d.avgVol, readOnlyStyle, fmtVol));
                             rowData.push(createCell(d.metaVol, readOnlyStyle, fmtVol));
-                            // Tonnage Adjustment: Always Yellow (Editable)
-                            rowData.push(createCell(d.metaVol, editableStyle, fmtVol));
-                            colCellsForSupTotal[col.id].avg.push(`${getColLet(cIdx)}${excelRow}`);
-                            colCellsForSupTotal[col.id].metaVol.push(`${getColLet(cIdx + 1)}${excelRow}`);
+                            rowData.push(createCell(d.metaVol, isEditable ? cellStyle : aggCellStyle, fmtVol));
                             colCellsForSupTotal[col.id].vol.push(`${getColLet(cIdx + 2)}${excelRow}`);
+                            colCellsForSupTotal[col.id].avg.push(`${getColLet(cIdx)}${excelRow}`);
 
                         } else if (col.type === 'mix') {
                             rowData.push(createCell(d.avgMix, readOnlyStyle, fmtDec1));
                             rowData.push(createCell(d.metaMix, readOnlyStyle, fmtInt));
-                            // Mix Adjustment: Always Yellow (Editable) - Assuming we want it editable
-                            rowData.push(createCell(d.metaMix, editableStyle, fmtInt));
-                            colCellsForSupTotal[col.id].avg.push(`${getColLet(cIdx)}${excelRow}`);
-                            colCellsForSupTotal[col.id].metaMix.push(`${getColLet(cIdx + 1)}${excelRow}`);
+                            rowData.push(createCell(d.metaMix, isEditable ? cellStyle : aggCellStyle, fmtInt));
                             colCellsForSupTotal[col.id].mix.push(`${getColLet(cIdx + 2)}${excelRow}`);
+                            colCellsForSupTotal[col.id].avg.push(`${getColLet(cIdx)}${excelRow}`);
 
                         } else if (col.type === 'geral') {
                             const elmaIdx = colMap['total_elma'];
@@ -2952,12 +3438,10 @@
                             }
                             rowData.push(createCell(posVal, editableStyle, fmtInt));
 
-                            colCellsForSupTotal[col.id].avg.push(`${getColLet(cIdx)}${excelRow}`);
-                            // Geral only has "Meta" columns basically, but treated as Adjustments in logic?
-                            // Logic matches previous implementation:
                             colCellsForSupTotal[col.id].fat.push(`${getColLet(cIdx + 1)}${excelRow}`);
                             colCellsForSupTotal[col.id].vol.push(`${getColLet(cIdx + 2)}${excelRow}`);
                             colCellsForSupTotal[col.id].pos.push(`${getColLet(cIdx + 3)}${excelRow}`);
+                            colCellsForSupTotal[col.id].avg.push(`${getColLet(cIdx)}${excelRow}`);
 
                         } else if (col.type === 'pedev') {
                             const elmaIdx = colMap['total_elma'];
@@ -2979,75 +3463,46 @@
                     const getColLet = (idx) => XLSX.utils.encode_col(idx);
 
                     if (col.type === 'standard') {
-                        // Meta Fat Total
-                        const rangeMetaFat = colCellsForSupTotal[col.id].metaFat;
-                        const fMetaFatRange = rangeMetaFat.length > 0 ? `SUM(${rangeMetaFat[0]}:${rangeMetaFat[rangeMetaFat.length-1]})` : "0";
-                        supRowData.push({ t: 'n', v: 0, f: fMetaFatRange, s: { ...totalRowStyle, numFmt: fmtMoney }, z: fmtMoney });
-
-                        // Ajuste Fat Total
                         const rangeFat = colCellsForSupTotal[col.id].fat;
                         const fFatRange = rangeFat.length > 0 ? `SUM(${rangeFat[0]}:${rangeFat[rangeFat.length-1]})` : "0";
                         supRowData.push({ t: 'n', v: 0, f: fFatRange, s: { ...totalRowStyle, numFmt: fmtMoney }, z: fmtMoney });
+                        supRowData.push({ t: 'n', v: 0, f: fFatRange, s: { ...totalRowStyle, numFmt: fmtMoney }, z: fmtMoney });
 
-                        // Meta Pos Total
-                        const rangeMetaPos = colCellsForSupTotal[col.id].metaPos;
-                        const fMetaPosRange = rangeMetaPos.length > 0 ? `SUM(${rangeMetaPos[0]}:${rangeMetaPos[rangeMetaPos.length-1]})` : "0";
-                        supRowData.push({ t: 'n', v: 0, f: fMetaPosRange, s: { ...totalRowStyle, numFmt: fmtInt }, z: fmtInt });
-
-                        // Ajuste Pos Total
                         const rangePos = colCellsForSupTotal[col.id].pos;
                         const fPosRange = rangePos.length > 0 ? `SUM(${rangePos[0]}:${rangePos[rangePos.length-1]})` : "0";
                         supRowData.push({ t: 'n', v: 0, f: fPosRange, s: { ...totalRowStyle, numFmt: fmtInt }, z: fmtInt });
+                        supRowData.push({ t: 'n', v: 0, f: fPosRange, s: { ...totalRowStyle, numFmt: fmtInt }, z: fmtInt });
 
-                        // Capture Grand Totals
-                        colCellsForGrandTotal[col.id].metaFat.push(`${getColLet(cIdx)}${excelSupRow}`);
                         colCellsForGrandTotal[col.id].fat.push(`${getColLet(cIdx+1)}${excelSupRow}`);
-                        colCellsForGrandTotal[col.id].metaPos.push(`${getColLet(cIdx+2)}${excelSupRow}`);
                         colCellsForGrandTotal[col.id].pos.push(`${getColLet(cIdx+3)}${excelSupRow}`);
 
                     } else if (col.type === 'tonnage') {
-                        // Avg Vol
                         const rangeAvg = colCellsForSupTotal[col.id].avg;
                         const fAvgRange = rangeAvg.length > 0 ? `SUM(${rangeAvg[0]}:${rangeAvg[rangeAvg.length-1]})` : "0";
                         supRowData.push({ t: 'n', v: 0, f: fAvgRange, s: { ...totalRowStyle, numFmt: fmtVol }, z: fmtVol });
 
-                        // Meta Vol
-                        const rangeMetaVol = colCellsForSupTotal[col.id].metaVol;
-                        const fMetaVolRange = rangeMetaVol.length > 0 ? `SUM(${rangeMetaVol[0]}:${rangeMetaVol[rangeMetaVol.length-1]})` : "0";
-                        supRowData.push({ t: 'n', v: 0, f: fMetaVolRange, s: { ...totalRowStyle, numFmt: fmtVol }, z: fmtVol });
-
-                        // Ajuste Vol
                         const rangeVol = colCellsForSupTotal[col.id].vol;
                         const fVolRange = rangeVol.length > 0 ? `SUM(${rangeVol[0]}:${rangeVol[rangeVol.length-1]})` : "0";
                         supRowData.push({ t: 'n', v: 0, f: fVolRange, s: { ...totalRowStyle, numFmt: fmtVol }, z: fmtVol });
+                        supRowData.push({ t: 'n', v: 0, f: fVolRange, s: { ...totalRowStyle, numFmt: fmtVol }, z: fmtVol });
 
-                        colCellsForGrandTotal[col.id].avg.push(`${getColLet(cIdx)}${excelSupRow}`);
-                        colCellsForGrandTotal[col.id].metaVol.push(`${getColLet(cIdx+1)}${excelSupRow}`);
                         colCellsForGrandTotal[col.id].vol.push(`${getColLet(cIdx+2)}${excelSupRow}`);
+                        colCellsForGrandTotal[col.id].avg.push(`${getColLet(cIdx)}${excelSupRow}`);
 
                     } else if (col.type === 'mix') {
-                        // Avg Mix
                         const rangeAvg = colCellsForSupTotal[col.id].avg;
                         const fAvgRange = rangeAvg.length > 0 ? `SUM(${rangeAvg[0]}:${rangeAvg[rangeAvg.length-1]})` : "0";
                         supRowData.push({ t: 'n', v: 0, f: fAvgRange, s: { ...totalRowStyle, numFmt: fmtDec1 }, z: fmtDec1 });
 
-                        // Meta Mix
-                        const rangeMetaMix = colCellsForSupTotal[col.id].metaMix;
-                        const fMetaMixRange = rangeMetaMix.length > 0 ? `SUM(${rangeMetaMix[0]}:${rangeMetaMix[rangeMetaMix.length-1]})` : "0";
-                        supRowData.push({ t: 'n', v: 0, f: fMetaMixRange, s: { ...totalRowStyle, numFmt: fmtInt }, z: fmtInt });
-
-                        // Ajuste Mix
                         const rangeMix = colCellsForSupTotal[col.id].mix;
                         const fMixRange = rangeMix.length > 0 ? `SUM(${rangeMix[0]}:${rangeMix[rangeMix.length-1]})` : "0";
                         supRowData.push({ t: 'n', v: 0, f: fMixRange, s: { ...totalRowStyle, numFmt: fmtInt }, z: fmtInt });
+                        supRowData.push({ t: 'n', v: 0, f: fMixRange, s: { ...totalRowStyle, numFmt: fmtInt }, z: fmtInt });
 
-                        colCellsForGrandTotal[col.id].avg.push(`${getColLet(cIdx)}${excelSupRow}`);
-                        colCellsForGrandTotal[col.id].metaMix.push(`${getColLet(cIdx+1)}${excelSupRow}`);
                         colCellsForGrandTotal[col.id].mix.push(`${getColLet(cIdx+2)}${excelSupRow}`);
+                        colCellsForGrandTotal[col.id].avg.push(`${getColLet(cIdx)}${excelSupRow}`);
 
                     } else if (col.type === 'geral') {
-                        // Geral columns are 1:1 mapped to 'adjustments' in logic but visualized as Meta.
-                        // Assuming Supervisor totals just sum the columns directly.
                         const rangeAvg = colCellsForSupTotal[col.id].avg;
                         const fAvgRange = rangeAvg.length > 0 ? `SUM(${rangeAvg[0]}:${rangeAvg[rangeAvg.length-1]})` : "0";
                         supRowData.push({ t: 'n', v: 0, f: fAvgRange, s: { ...totalRowStyle, numFmt: fmtMoney }, z: fmtMoney });
@@ -3085,76 +3540,40 @@
             const grandRowData = [createCell("GV", grandTotalStyle), createCell("GERAL PRIME", grandTotalStyle)];
             svColumns.forEach(col => {
                 if (col.type === 'standard') {
-                    // Meta Fat
-                    const rangeMetaFat = colCellsForGrandTotal[col.id].metaFat;
-                    const fMetaFat = rangeMetaFat.length > 0 ? rangeMetaFat.join("+") : "0";
-                    grandRowData.push({ t: 'n', v: 0, f: fMetaFat, s: { ...grandTotalStyle, numFmt: fmtMoney }, z: fmtMoney });
-
-                    // Ajuste Fat
                     const rangeFat = colCellsForGrandTotal[col.id].fat;
                     const fFat = rangeFat.length > 0 ? rangeFat.join("+") : "0";
                     grandRowData.push({ t: 'n', v: 0, f: fFat, s: { ...grandTotalStyle, numFmt: fmtMoney }, z: fmtMoney });
+                    grandRowData.push({ t: 'n', v: 0, f: fFat, s: { ...grandTotalStyle, numFmt: fmtMoney }, z: fmtMoney });
 
-                    // Meta Pos
-                    const rangeMetaPos = colCellsForGrandTotal[col.id].metaPos;
-                    const fMetaPos = rangeMetaPos.length > 0 ? rangeMetaPos.join("+") : "0";
-                    grandRowData.push({ t: 'n', v: 0, f: fMetaPos, s: { ...grandTotalStyle, numFmt: fmtInt }, z: fmtInt });
-
-                    // Ajuste Pos
                     const rangePos = colCellsForGrandTotal[col.id].pos;
                     const fPos = rangePos.length > 0 ? rangePos.join("+") : "0";
                     grandRowData.push({ t: 'n', v: 0, f: fPos, s: { ...grandTotalStyle, numFmt: fmtInt }, z: fmtInt });
+                    grandRowData.push({ t: 'n', v: 0, f: fPos, s: { ...grandTotalStyle, numFmt: fmtInt }, z: fmtInt });
 
                 } else if (col.type === 'tonnage') {
-                    // Avg
                     const rangeAvg = colCellsForGrandTotal[col.id].avg;
                     const fAvg = rangeAvg.length > 0 ? rangeAvg.join("+") : "0";
                     grandRowData.push({ t: 'n', v: 0, f: fAvg, s: { ...grandTotalStyle, numFmt: fmtVol }, z: fmtVol });
 
-                    // Meta Vol
-                    const rangeMetaVol = colCellsForGrandTotal[col.id].metaVol;
-                    const fMetaVol = rangeMetaVol.length > 0 ? rangeMetaVol.join("+") : "0";
-                    grandRowData.push({ t: 'n', v: 0, f: fMetaVol, s: { ...grandTotalStyle, numFmt: fmtVol }, z: fmtVol });
-
-                    // Ajuste Vol
                     const rangeVol = colCellsForGrandTotal[col.id].vol;
                     const fVol = rangeVol.length > 0 ? rangeVol.join("+") : "0";
                     grandRowData.push({ t: 'n', v: 0, f: fVol, s: { ...grandTotalStyle, numFmt: fmtVol }, z: fmtVol });
+                    grandRowData.push({ t: 'n', v: 0, f: fVol, s: { ...grandTotalStyle, numFmt: fmtVol }, z: fmtVol });
 
                 } else if (col.type === 'mix') {
-                    // Avg Mix
                     const rangeAvg = colCellsForGrandTotal[col.id].avg;
                     const fAvg = rangeAvg.length > 0 ? rangeAvg.join("+") : "0";
                     grandRowData.push({ t: 'n', v: 0, f: fAvg, s: { ...grandTotalStyle, numFmt: fmtDec1 }, z: fmtDec1 });
 
-                    // Meta Mix
-                    const rangeMetaMix = colCellsForGrandTotal[col.id].metaMix;
-                    const fMetaMix = rangeMetaMix.length > 0 ? rangeMetaMix.join("+") : "0";
-                    grandRowData.push({ t: 'n', v: 0, f: fMetaMix, s: { ...grandTotalStyle, numFmt: fmtInt }, z: fmtInt });
-
-                    // Ajuste Mix
                     const rangeMix = colCellsForGrandTotal[col.id].mix;
                     const fMix = rangeMix.length > 0 ? rangeMix.join("+") : "0";
+                    grandRowData.push({ t: 'n', v: 0, f: fMix, s: { ...grandTotalStyle, numFmt: fmtInt }, z: fmtInt });
                     grandRowData.push({ t: 'n', v: 0, f: fMix, s: { ...grandTotalStyle, numFmt: fmtInt }, z: fmtInt });
 
                 } else if (col.type === 'geral') {
                     const rangeAvg = colCellsForGrandTotal[col.id].avg;
                     const fAvg = rangeAvg.length > 0 ? rangeAvg.join("+") : "0";
                     grandRowData.push({ t: 'n', v: 0, f: fAvg, s: { ...grandTotalStyle, numFmt: fmtMoney }, z: fmtMoney });
-
-                    // Geral columns only have 'fat', 'vol', 'pos' in colCellsForGrandTotal because we pushed cIdx+1/2/3 to them in supervisor loop.
-                    // But in seller loop we pushed cIdx+1/2/3 to meta* arrays in SupTotal?
-                    // Wait, let's check Geral logic in Supervisor Loop again.
-
-                    // In Supervisor Loop for Geral:
-                    // colCellsForGrandTotal[col.id].fat.push(cIdx+1) -> This is Meta Fat (Calculated)
-                    // colCellsForGrandTotal[col.id].vol.push(cIdx+2) -> This is Meta Vol (Calculated)
-                    // colCellsForGrandTotal[col.id].pos.push(cIdx+3) -> This is Meta Pos (Editable)
-
-                    // So for Geral, the columns ARE the Metas. There are no separate "Adjustment" columns visualized.
-                    // Row 3 headers: Média Trim., Meta, Meta, Meta.
-                    // So existing logic for Geral is correct because there's no split between Meta vs Adjustment columns.
-                    // It sums the Meta columns.
 
                     const rangeFat = colCellsForGrandTotal[col.id].fat;
                     const fFat = rangeFat.length > 0 ? rangeFat.join("+") : "0";
@@ -3201,39 +3620,10 @@
         }
 
         function getGoalsFilteredData() {
-            const sellersSet = new Set(selectedGoalsGvSellers);
-            const supervisorsSet = new Set(selectedGoalsGvSupervisors);
             const codCli = goalsGvCodcliFilter.value.trim();
 
-            let clients = allClientsData;
-
-            // Apply "Active" Filter logic
-            clients = clients.filter(c => isActiveClient(c));
-
-            // Filter by Supervisor
-            if (supervisorsSet.size > 0) {
-                const rcasSet = new Set();
-                supervisorsSet.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
-                });
-                clients = clients.filter(c => {
-                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
-                    return clientRcas.some(r => rcasSet.has(r));
-                });
-            }
-
-            // Filter by Seller
-            if (sellersSet.size > 0) {
-                const rcasSet = new Set();
-                sellersSet.forEach(name => {
-                    const code = optimizedData.rcaCodeByName.get(name);
-                    if(code) rcasSet.add(code);
-                });
-                clients = clients.filter(c => {
-                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
-                    return clientRcas.some(r => rcasSet.has(r));
-                });
-            }
+            // Apply Hierarchy Filter + "Active" Filter logic
+            let clients = getHierarchyFilteredClients('goals-gv', allClientsData).filter(c => isActiveClient(c));
 
             // Filter by Client Code
             if (codCli) {
@@ -3263,11 +3653,11 @@
             activeClients.forEach(client => {
                 const codCli = String(client['Código'] || client['codigo_cliente']);
                 const historyIds = optimizedData.indices.history.byClient.get(codCli);
-                
+
                 if (historyIds) {
                     // Bucket by Month
                     const monthlySales = new Map(); // Map<MonthKey, Set<Brand>>
-                    
+
                     historyIds.forEach(id => {
                         const sale = optimizedData.historyById.get(id);
                         // Using same date parsing as elsewhere
@@ -3278,7 +3668,7 @@
                         if (dateObj) {
                             const monthKey = `${dateObj.getUTCFullYear()}-${dateObj.getUTCMonth()}`;
                             if (!monthlySales.has(monthKey)) monthlySales.set(monthKey, new Set());
-                            
+
                             // Check brand/category match
                             const desc = normalize(sale.DESCRICAO || '');
                             targetCategories.forEach(cat => {
@@ -3312,7 +3702,7 @@
         function getMonthWeeksDistribution(date) {
             const year = date.getUTCFullYear();
             const month = date.getUTCMonth();
-            
+
             // Start of Month
             const startDate = new Date(Date.UTC(year, month, 1));
             // End of Month
@@ -3333,14 +3723,14 @@
                 // However, user said "reconhecer as semanas pelo calendário... De segunda a sexta".
                 // Let's define week chunks.
                 // Logic: A week ends on Saturday (or Sunday).
-                
+
                 // Find next Sunday (or End of Month)
                 let dayOfWeek = currentWeekStart.getUTCDay(); // 0=Sun, 1=Mon...
                 let daysToSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-                
+
                 let currentWeekEnd = new Date(currentWeekStart);
                 currentWeekEnd.setUTCDate(currentWeekStart.getUTCDate() + daysToSunday);
-                
+
                 if (currentWeekEnd > endDate) currentWeekEnd = new Date(endDate);
 
                 // Count Working Days in this chunk
@@ -3373,14 +3763,57 @@
         }
 
         function getMetaRealizadoFilteredData() {
-            const supervisorsSet = new Set(selectedMetaRealizadoSupervisors);
-            const sellersSet = new Set(selectedMetaRealizadoSellers);
+            // New Hierarchy:
             const suppliersSet = new Set(selectedMetaRealizadoSuppliers);
             const pasta = currentMetaRealizadoPasta;
 
+            // --- Fix: Define supervisorsSet and sellersSet ---
+            const supervisorsSet = new Set();
+            const sellersSet = new Set();
+
+            const hState = hierarchyState['meta-realizado'];
+            if (hState) {
+                const validCodes = new Set();
+
+                // 1. Promotors (Leaf)
+                if (hState.promotors.size > 0) {
+                    hState.promotors.forEach(p => validCodes.add(p));
+                }
+                // 2. CoCoords
+                else if (hState.cocoords.size > 0) {
+                     hState.cocoords.forEach(cc => {
+                         const children = optimizedData.promotorsByCocoord.get(cc);
+                         if (children) children.forEach(p => validCodes.add(p));
+                     });
+                }
+                // 3. Coords
+                else if (hState.coords.size > 0) {
+                    hState.coords.forEach(c => {
+                         const cocoords = optimizedData.cocoordsByCoord.get(c);
+                         if (cocoords) {
+                             cocoords.forEach(cc => {
+                                 const children = optimizedData.promotorsByCocoord.get(cc);
+                                 if (children) children.forEach(p => validCodes.add(p));
+                             });
+                         }
+                    });
+                }
+
+                // Map Codes to Names
+                if (validCodes.size > 0) {
+                    validCodes.forEach(code => {
+                        const name = optimizedData.promotorMap.get(code);
+                        if (name) sellersSet.add(name);
+                         // Also try mapping via rcaNameByCode if the code is RCA code (fallback)
+                        const rcaName = optimizedData.rcaNameByCode.get(code);
+                        if (rcaName) sellersSet.add(rcaName);
+                    });
+                }
+            }
+
             // Determine Goal Keys based on Pasta (Moved to top level scope)
             let goalKeys = [];
-            
+
             // If Supplier Filter is Active, restricting goals to selected supplier ONLY
             if (suppliersSet.size > 0) {
                 // Map selections to goal keys
@@ -3389,10 +3822,10 @@
                     let valid = false;
                     if (pasta === 'PEPSICO') valid = true;
                     else if (pasta === 'ELMA') valid = ['707', '708', '752'].includes(sup);
-                    else if (pasta === 'FOODS') valid = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'].includes(sup) || sup === '1119'; 
-                    
+                    else if (pasta === 'FOODS') valid = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'].includes(sup) || sup === '1119';
+
                     if (valid) {
-                        if (sup === '1119') { 
+                        if (sup === '1119') {
                             goalKeys.push('1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO');
                         } else {
                             goalKeys.push(sup);
@@ -3411,7 +3844,8 @@
             }
 
             // 1. Clients Filter
-            let clients = allClientsData.filter(c => {
+            // Apply Hierarchy Logic + "Active" Filter logic
+            let clients = getHierarchyFilteredClients('meta-realizado', allClientsData).filter(c => {
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
                 // Same active logic as Goals
@@ -3421,45 +3855,9 @@
                 return true;
             });
 
-            if (supervisorsSet.size > 0) {
-                const rcasSet = new Set();
-                supervisorsSet.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
-                });
-                clients = clients.filter(c => {
-                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
-                    return clientRcas.some(r => rcasSet.has(r));
-                });
-            }
-
-            if (sellersSet.size > 0) {
-                const rcasSet = new Set();
-                sellersSet.forEach(name => {
-                    const code = optimizedData.rcaCodeByName.get(name);
-                    if (code) rcasSet.add(code);
-                });
-                clients = clients.filter(c => {
-                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
-                    return clientRcas.some(r => rcasSet.has(r));
-                });
-            }
-
             // Implement Supplier Filter Logic (Virtual IDs for Foods) - Step 7
-            // Filter clients if supplier filter is active?
-            // Usually we filter SALES, not clients list, because a client might buy multiple brands.
-            // But 'getMetaRealizadoFilteredData' returns 'goalsBySeller' and 'salesBySeller'.
-            // Filtering 'clients' here only filters the BASE for Goal calculation if Goal is derived from Client List?
-            // Yes, Goals are derived from `globalClientGoals`.
-            // If I filter clients here, I remove their goals from the sum.
-            // Requirement: "filter the Realized, but not the Goals".
-            // "ele filtra o que foi realizado, mas não filtra as metas." (He said "filters realized, BUT NOT goals").
-            // Wait, re-reading: "ele filtra o que foi realizado, mas não filtra as metas. ( fazendo a alteração para consertar o filtro...)"
-            // "consertar o filtro" implies it SHOULD filter goals too?
-            // " quando eu aplico um filtro... ele filtra o que foi realizado, mas não filtra as metas." -> This is the BUG report.
-            // "fazendo a alteração para consertar o filtro" -> This implies fixing the behavior.
-            // Usually, if I filter by "Toddynho", I want to see "Toddynho Goal vs Toddynho Realized".
-            // So YES, I should filter Goals too.
-            // To filter Goals, I need to adjust `goalKeys` loop below based on `suppliersSet`.
+            // Goals are derived from `globalClientGoals` and manual overrides.
+            // To ensure consistency, both the base client list and the goal calculation must respect all active filters.
 
             const filteredClientCodes = new Set(clients.map(c => String(c['Código'] || c['codigo_cliente'])));
 
@@ -3475,9 +3873,7 @@
                 const rcaName = optimizedData.rcaNameByCode.get(rcaCode) || rcaCode; // Map code to name for grouping
 
                 // Filtering "Garbage" Sellers to fix Total Positivação (1965 vs 1977)
-                if (!rcaName || rcaName === 'INATIVOS') return;
-                const upperName = rcaName.toUpperCase();
-                if (upperName === 'BALCAO' || upperName === 'BALCÃO' || upperName.includes('TOTAL') || upperName.includes('GERAL')) return;
+                if (isGarbageSeller(rcaName)) return;
 
                 // Goal Keys are now determined at function scope (hoisted)
 
@@ -3500,7 +3896,7 @@
                         goalsBySeller.set(rcaName, { totalFat: 0, totalVol: 0, totalPos: 0 });
                     }
                     const sellerGoals = goalsBySeller.get(rcaName);
-                    
+
                     if (clientTotalFatGoal > 0) sellerGoals.totalFat += clientTotalFatGoal;
                     if (clientTotalVolGoal > 0) sellerGoals.totalVol += clientTotalVolGoal;
                     if (hasGoal) sellerGoals.totalPos += 1; // Count client as 1 target
@@ -3515,7 +3911,7 @@
                 // Check if seller matches current filters
                 if (supervisorsSet.size > 0) {
                     const supervisorName = (sellerDetailsMap.get(optimizedData.rcaCodeByName.get(sellerName) || '') || {}).supervisor;
-                    if (!supervisorName || !supervisorsSet.has(supervisorName)) return; 
+                    if (!supervisorName || !supervisorsSet.has(supervisorName)) return;
                 }
                 if (sellersSet.size > 0 && !sellersSet.has(sellerName)) return;
 
@@ -3531,19 +3927,40 @@
                 if (targets) {
                     // 1. Positivação Overrides
                     let overrideKey = null;
-                    if (pasta === 'PEPSICO') {
-                        if (targets['pepsico_all'] !== undefined) overrideKey = 'pepsico_all';
-                        else overrideKey = 'GERAL';
-                    }
-                    else if (pasta === 'ELMA') overrideKey = 'total_elma';
-                    else if (pasta === 'FOODS') overrideKey = 'total_foods';
 
-                    if (suppliersSet.size === 1) {
-                        const sup = [...suppliersSet][0]; 
+                    // Improved Override Logic: Only apply aggregate pasta targets if NO specific supplier filter is active,
+                    // or if all suppliers of that pasta are selected.
+                    const elmaKeys = ['707', '708', '752'];
+                    const foodsKeys = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+                    const allElmaSelected = elmaKeys.every(k => goalKeys.includes(k));
+                    const allFoodsSelected = foodsKeys.every(k => goalKeys.includes(k));
+
+                    if (suppliersSet.size === 0) {
+                        if (pasta === 'PEPSICO') {
+                            overrideKey = targets['pepsico_all'] !== undefined ? 'pepsico_all' : 'GERAL';
+                        } else if (pasta === 'ELMA') {
+                            overrideKey = 'total_elma';
+                        } else if (pasta === 'FOODS') {
+                            overrideKey = 'total_foods';
+                        }
+                    } else if (suppliersSet.size === 1) {
+                        const sup = [...suppliersSet][0];
                         if (sup === '1119_TODDYNHO') overrideKey = '1119_TODDYNHO';
                         else if (sup === '1119_TODDY') overrideKey = '1119_TODDY';
-                        else if (sup === '1119_QUAKER') overrideKey = '1119_QUAKER_KEROCOCO';
+                        else if (sup === '1119_QUAKER' || sup === '1119_QUAKER_KEROCOCO') overrideKey = '1119_QUAKER_KEROCOCO';
+                        else if (sup === '1119') {
+                             if (allFoodsSelected) overrideKey = 'total_foods';
+                        }
                         else overrideKey = sup;
+                    } else {
+                        // Multiple suppliers selected - Only use aggregate if it matches the selection
+                        if (pasta === 'ELMA' && allElmaSelected) {
+                            overrideKey = 'total_elma';
+                        } else if (pasta === 'FOODS' && allFoodsSelected) {
+                            overrideKey = 'total_foods';
+                        } else if (pasta === 'PEPSICO' && allElmaSelected && allFoodsSelected) {
+                            overrideKey = targets['pepsico_all'] !== undefined ? 'pepsico_all' : 'GERAL';
+                        }
                     }
 
                     if (overrideKey && targets[overrideKey] !== undefined) {
@@ -3556,105 +3973,48 @@
                     let hasOverrideFat = false;
                     let hasOverrideVol = false;
 
-                    // If Specific Supplier Filter is Active, check specific keys
-                    if (suppliersSet.size > 0) {
-                        goalKeys.forEach(k => {
-                            if (targets[`${k}_FAT`] !== undefined) {
-                                overrideFat += targets[`${k}_FAT`];
-                                hasOverrideFat = true;
-                            }
-                            if (targets[`${k}_VOL`] !== undefined) {
-                                overrideVol += targets[`${k}_VOL`];
-                                hasOverrideVol = true;
-                            }
-                        });
-                    } else {
-                        // Aggregate View (PEPSICO/ELMA/FOODS)
-                        // Check for Aggregate Keys first (Preferred for Total View)
-                        if (pasta === 'PEPSICO') {
-                            // Sum up sub-aggregates or check 'pepsico_all'? (Import doesn't set 'pepsico_all_FAT')
-                            // Import sets totals or individual categories.
-                            // If user imported Total Elma and Total Foods, use those.
-                            // If user imported Individual Categories, sum those.
-                            
-                            // Strategy: Sum all matching components found in goalKeys
-                            goalKeys.forEach(k => {
-                                if (targets[`${k}_FAT`] !== undefined) { overrideFat += targets[`${k}_FAT`]; hasOverrideFat = true; }
-                                if (targets[`${k}_VOL`] !== undefined) { overrideVol += targets[`${k}_VOL`]; hasOverrideVol = true; }
-                            });
-
-                            // Fallback/Augment for FAT (Revenue): Check Aggregates (total_elma_FAT, total_foods_FAT)
-                            if (targets['total_elma_FAT'] !== undefined) {
-                                const elmaKeys = ['707', '708', '752'];
-                                const hasIndividualElmaFat = elmaKeys.some(k => targets[`${k}_FAT`] !== undefined);
-                                if (!hasIndividualElmaFat) {
-                                    overrideFat += targets['total_elma_FAT'];
-                                    hasOverrideFat = true;
-                                }
-                            }
-                            if (targets['total_foods_FAT'] !== undefined) {
-                                const foodsKeys = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
-                                const hasIndividualFoodsFat = foodsKeys.some(k => targets[`${k}_FAT`] !== undefined);
-                                if (!hasIndividualFoodsFat) {
-                                    overrideFat += targets['total_foods_FAT'];
-                                    hasOverrideFat = true;
-                                }
-                            }
-
-                            // Fallback/Augment: If individual keys missing but Aggregates present?
-                            // This is complex. Let's assume Import provided consistent level.
-                            // However, Volume is often imported as 'tonelada_elma'.
-                            if (targets['tonelada_elma_VOL'] !== undefined) {
-                                // If we are viewing PEPSICO, we should include ELMA Volume
-                                // Check if we already summed up individual ELMA components (707, 708, 752)
-                                // If 707_VOL etc are missing, we use tonelada_elma_VOL
-                                const elmaKeys = ['707', '708', '752'];
-                                const hasIndividualElmaVol = elmaKeys.some(k => targets[`${k}_VOL`] !== undefined);
-                                if (!hasIndividualElmaVol) {
-                                    overrideVol += targets['tonelada_elma_VOL'];
-                                    hasOverrideVol = true;
-                                }
-                            }
-                            if (targets['tonelada_foods_VOL'] !== undefined) {
-                                const foodsKeys = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
-                                const hasIndividualFoodsVol = foodsKeys.some(k => targets[`${k}_VOL`] !== undefined);
-                                if (!hasIndividualFoodsVol) {
-                                    overrideVol += targets['tonelada_foods_VOL'];
-                                    hasOverrideVol = true;
-                                }
-                            }
+                    // Strategy:
+                    // 1. Sum individual targets for all selected goalKeys
+                    goalKeys.forEach(k => {
+                        if (targets[`${k}_FAT`] !== undefined) {
+                            overrideFat += targets[`${k}_FAT`];
+                            hasOverrideFat = true;
                         }
-                        else if (pasta === 'ELMA') {
-                            // Check for 'total_elma_FAT' override? Import sets individual categories for FAT usually.
-                            // Check 'tonelada_elma_VOL' for Volume
-                            if (targets['tonelada_elma_VOL'] !== undefined) {
-                                overrideVol = targets['tonelada_elma_VOL'];
-                                hasOverrideVol = true;
-                            } else {
-                                // Sum leaves
-                                goalKeys.forEach(k => {
-                                    if (targets[`${k}_VOL`] !== undefined) { overrideVol += targets[`${k}_VOL`]; hasOverrideVol = true; }
-                                });
-                            }
-                            
-                            // Fat
-                            goalKeys.forEach(k => {
-                                if (targets[`${k}_FAT`] !== undefined) { overrideFat += targets[`${k}_FAT`]; hasOverrideFat = true; }
-                            });
+                        if (targets[`${k}_VOL`] !== undefined) {
+                            overrideVol += targets[`${k}_VOL`];
+                            hasOverrideVol = true;
                         }
-                        else if (pasta === 'FOODS') {
-                            if (targets['tonelada_foods_VOL'] !== undefined) {
-                                overrideVol = targets['tonelada_foods_VOL'];
-                                hasOverrideVol = true;
-                            } else {
-                                goalKeys.forEach(k => {
-                                    if (targets[`${k}_VOL`] !== undefined) { overrideVol += targets[`${k}_VOL`]; hasOverrideVol = true; }
-                                });
-                            }
-                            // Fat
-                            goalKeys.forEach(k => {
-                                if (targets[`${k}_FAT`] !== undefined) { overrideFat += targets[`${k}_FAT`]; hasOverrideFat = true; }
-                            });
+                    });
+
+                    // 2. Aggregate fallbacks: If individual targets are missing, check for aggregate keys
+                    // but ONLY if the current selection matches the aggregate (full pasta or no filter)
+                    const noSupplierFilter = suppliersSet.size === 0;
+
+                    // Pepsico / Elma Fallbacks
+                    if (noSupplierFilter || allElmaSelected) {
+                        const hasIndividualElmaFat = elmaKeys.some(k => targets[`${k}_FAT`] !== undefined);
+                        if (!hasIndividualElmaFat && targets['total_elma_FAT'] !== undefined) {
+                            overrideFat += targets['total_elma_FAT'];
+                            hasOverrideFat = true;
+                        }
+                        const hasIndividualElmaVol = elmaKeys.some(k => targets[`${k}_VOL`] !== undefined);
+                        if (!hasIndividualElmaVol && targets['tonelada_elma_VOL'] !== undefined) {
+                            overrideVol += targets['tonelada_elma_VOL'];
+                            hasOverrideVol = true;
+                        }
+                    }
+
+                    // Pepsico / Foods Fallbacks
+                    if (noSupplierFilter || allFoodsSelected) {
+                        const hasIndividualFoodsFat = foodsKeys.some(k => targets[`${k}_FAT`] !== undefined);
+                        if (!hasIndividualFoodsFat && targets['total_foods_FAT'] !== undefined) {
+                            overrideFat += targets['total_foods_FAT'];
+                            hasOverrideFat = true;
+                        }
+                        const hasIndividualFoodsVol = foodsKeys.some(k => targets[`${k}_VOL`] !== undefined);
+                        if (!hasIndividualFoodsVol && targets['tonelada_foods_VOL'] !== undefined) {
+                            overrideVol += targets['tonelada_foods_VOL'];
+                            hasOverrideVol = true;
                         }
                     }
 
@@ -3691,7 +4051,7 @@
 
             for(let i=0; i<allSalesData.length; i++) {
                 const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
-                
+
                 // Date Filter
                 const d = typeof s.DTPED === 'number' ? new Date(s.DTPED) : parseDate(s.DTPED);
                 if (!d || d.getUTCMonth() !== currentMonthIndex || d.getUTCFullYear() !== currentYear) continue;
@@ -3715,7 +4075,7 @@
                 // If filter is PEPSICO, we include everything (since we already filtered for PEPSICO above)
                 // If filter is ELMA, we check CODFOR 707, 708, 752
                 // If filter is FOODS, we check CODFOR 1119 (or specific sub-brands if needed, but usually 1119 is Foods)
-                
+
                 const codFor = String(s.CODFOR);
                 if (pasta === 'ELMA') {
                     if (!['707', '708', '752'].includes(codFor)) continue;
@@ -3731,19 +4091,22 @@
                 // "Meta Vs Realizado" implies comparing the same entity.
                 // If I filter Supervisor "X", I show Seller Goals for X and Seller Sales for X.
                 // Let's use the standard filter logic:
-                
+
                 if (supervisorsSet.size > 0 && !supervisorsSet.has(s.SUPERV)) continue;
                 if (sellersSet.size > 0 && !sellersSet.has(s.NOME)) continue;
-                
+
+                // Client Filter: Ensure sale belongs to the same set of clients used for goals
+                if (!filteredClientCodes.has(String(s.CODCLI))) continue;
+
                 // Enhanced Supplier Logic to handle Virtual Foods Categories
                 if (suppliersSet.size > 0) {
                     let supplierMatch = false;
                     const codFor = String(s.CODFOR);
-                    
+
                     // 1. Direct Match (Regular Suppliers)
                     if (suppliersSet.has(codFor)) {
                         supplierMatch = true;
-                    } 
+                    }
                     // 2. Virtual Category Logic for 1119 (Foods)
                     else if (codFor === '1119') {
                         const desc = normalize(s.DESCRICAO || '');
@@ -3764,10 +4127,10 @@
                     salesBySeller.set(sellerName, { totalFat: 0, totalVol: 0, weeksFat: [0, 0, 0, 0, 0], weeksVol: [0, 0, 0, 0, 0], totalPos: 0 });
                 }
                 const entry = salesBySeller.get(sellerName);
-                
+
                 entry.totalFat += valFat;
                 entry.totalVol += valVol;
-                
+
                 if (weekIdx !== -1 && weekIdx < 5) {
                     entry.weeksFat[weekIdx] += valFat;
                     entry.weeksVol[weekIdx] += valVol;
@@ -3791,7 +4154,7 @@
         function renderMetaRealizadoTable(data, weeks, totalWorkingDays) {
             const tableHead = document.getElementById('meta-realizado-table-head');
             const tableBody = document.getElementById('meta-realizado-table-body');
-            
+
             // Build Headers
             let headerHTML = `
                 <tr>
@@ -3820,7 +4183,7 @@
                 `;
             });
             headerHTML += `</tr>`;
-            
+
             tableHead.innerHTML = headerHTML;
 
             // Build Body
@@ -3828,17 +4191,17 @@
             const rowsHTML = data.map(row => {
                 const metaTotalStr = row.metaTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 const realTotalStr = row.realTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                
+
                 let cells = `
                     <td class="px-3 py-2 font-medium text-slate-200 border-r border-b border-slate-700 sticky left-0 bg-[#1d2347] z-30 truncate" title="${row.name}">${getFirstName(row.name)}</td>
-                    <td class="px-2 py-2 text-right bg-blue-900/10 text-teal-400 border-r border-b border-slate-700/50 text-xs">${metaTotalStr}</td>
+                    <td class="px-2 py-2 text-right bg-blue-900/10 text-teal-400 border-r border-b border-slate-700/50 text-xs" title="Meta Contratual Mensal">${metaTotalStr}</td>
                     <td class="px-2 py-2 text-right bg-blue-900/10 text-yellow-400 font-bold border-r border-b border-slate-700 text-xs">${realTotalStr}</td>
                 `;
 
                 row.weekData.forEach(w => {
                     const wMetaStr = w.meta.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                     const wRealStr = w.real.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                    
+
                     // Simple logic: Green if Real >= Meta, Red if Real < Meta (only if week has passed? Or always?)
                     // Let's keep it neutral for now or simple colors.
                     const realClass = w.real >= w.meta ? 'text-green-400' : 'text-slate-300';
@@ -3863,17 +4226,14 @@
             // Destroy previous chart if exists (assume we store it in charts object)
             // Wait, createChart helper handles destruction if we pass ID. But here we have container ID.
             // Let's use a canvas inside the container.
-            
+
             let canvas = ctx.querySelector('canvas');
             if (!canvas) {
                 canvas = document.createElement('canvas');
                 ctx.appendChild(canvas);
             }
-            
+
             const chartId = 'metaRealizadoChartInstance';
-            if (charts[chartId]) {
-                charts[chartId].destroy();
-            }
 
             // Aggregate totals for the chart (Total Meta vs Total Realizado)
             const totalMeta = data.reduce((sum, d) => sum + d.metaTotal, 0);
@@ -3881,7 +4241,7 @@
 
             // Adjust formatting based on metric
             const isVolume = currentMetaRealizadoMetric === 'peso';
-            
+
             // If Volume, display in Tons (input was Kg)
             const displayTotalMeta = isVolume ? totalMeta / 1000 : totalMeta;
             const displayTotalReal = isVolume ? totalReal / 1000 : totalReal;
@@ -3893,74 +4253,88 @@
                 return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             };
 
-            charts[chartId] = new Chart(canvas, {
-                type: 'bar',
-                data: {
-                    labels: ['Total'],
-                    datasets: [
-                        {
-                            label: 'Meta',
-                            data: [displayTotalMeta],
-                            backgroundColor: '#14b8a6', // Teal
-                            barPercentage: 0.6,
-                            categoryPercentage: 0.8
-                        },
-                        {
-                            label: 'Realizado',
-                            data: [displayTotalReal],
-                            backgroundColor: '#f59e0b', // Amber/Yellow
-                            barPercentage: 0.6,
-                            categoryPercentage: 0.8
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    layout: {
-                        padding: {
-                            top: 50
-                        }
+            if (charts[chartId]) {
+                charts[chartId].data.datasets[0].data = [displayTotalMeta];
+                charts[chartId].data.datasets[1].data = [displayTotalReal];
+                // Update formatters closure
+                charts[chartId].options.plugins.tooltip.callbacks.label = function(context) {
+                    let label = context.dataset.label || '';
+                    if (label) label += ': ';
+                    if (context.parsed.y !== null) label += formatValue(context.parsed.y);
+                    return label;
+                };
+                charts[chartId].options.plugins.datalabels.formatter = formatValue;
+                charts[chartId].update('none');
+            } else {
+                charts[chartId] = new Chart(canvas, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Total'],
+                        datasets: [
+                            {
+                                label: 'Meta',
+                                data: [displayTotalMeta],
+                                backgroundColor: '#14b8a6', // Teal
+                                barPercentage: 0.6,
+                                categoryPercentage: 0.8
+                            },
+                            {
+                                label: 'Realizado',
+                                data: [displayTotalReal],
+                                backgroundColor: '#f59e0b', // Amber/Yellow
+                                barPercentage: 0.6,
+                                categoryPercentage: 0.8
+                            }
+                        ]
                     },
-                    plugins: {
-                        legend: { position: 'top', labels: { color: '#cbd5e1' } },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    if (context.parsed.y !== null) {
-                                        label += formatValue(context.parsed.y);
-                                    }
-                                    return label;
-                                }
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        layout: {
+                            padding: {
+                                top: 50
                             }
                         },
-                        datalabels: {
-                            display: true,
-                            color: '#fff',
-                            anchor: 'end',
-                            align: 'top',
-                            formatter: formatValue,
-                            font: { weight: 'bold' }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grace: '10%',
-                            grid: { color: '#334155' },
-                            ticks: { color: '#94a3b8' }
+                        plugins: {
+                            legend: { position: 'top', labels: { color: '#cbd5e1' } },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed.y !== null) {
+                                            label += formatValue(context.parsed.y);
+                                        }
+                                        return label;
+                                    }
+                                }
+                            },
+                            datalabels: {
+                                display: true,
+                                color: '#fff',
+                                anchor: 'end',
+                                align: 'top',
+                                formatter: formatValue,
+                                font: { weight: 'bold' }
+                            }
                         },
-                        x: {
-                            grid: { display: false },
-                            ticks: { color: '#94a3b8' }
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grace: '10%',
+                                grid: { color: '#334155' },
+                                ticks: { color: '#94a3b8' }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { color: '#94a3b8' }
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
         }
 
         let metaRealizadoClientsTableState = {
@@ -3973,7 +4347,7 @@
         function updateMetaRealizadoView() {
             // 1. Get Data
             const { goalsBySeller, salesBySeller, weeks } = getMetaRealizadoFilteredData();
-            
+
             // Re-calculate Total Working Days
             let totalWorkingDays = weeks.reduce((sum, w) => sum + w.workingDays, 0);
             if (totalWorkingDays === 0) totalWorkingDays = 1;
@@ -3985,12 +4359,12 @@
             allSellers.forEach(sellerName => {
                 const goals = goalsBySeller.get(sellerName) || { totalFat: 0, totalVol: 0, totalPos: 0 };
                 const sales = salesBySeller.get(sellerName) || { totalFat: 0, totalVol: 0, weeksFat: [], weeksVol: [], totalPos: 0 };
-                
+
                 // Determine which metric to use for the main chart/table
                 // Note: The Table logic (renderMetaRealizadoTable) seems built for ONE metric (previously just Revenue).
                 // If we want the Table to also toggle or show both, we need to adjust it.
                 // Given the requirement "toggle button for R$/Ton", let's make the Table adhere to that too.
-                
+
                 let targetTotalGoal = 0;
                 let targetRealizedTotal = 0;
                 let targetRealizedWeeks = [];
@@ -4061,16 +4435,38 @@
         }
 
         function getMetaRealizadoClientsData(weeks) {
-            const supervisorsSet = new Set(selectedMetaRealizadoSupervisors);
-            const sellersSet = new Set(selectedMetaRealizadoSellers);
-            // Suppliers already filtered in getMetaRealizadoFilteredData logic for Sellers,
-            // but we need to re-apply logic for Client List generation.
-            // Actually, we can reuse similar filtering logic.
+            // New Hierarchy Logic
+            const currentMonthIndex = lastSaleDate.getUTCMonth();
+            const currentYear = lastSaleDate.getUTCFullYear();
             const suppliersSet = new Set(selectedMetaRealizadoSuppliers);
             const pasta = currentMetaRealizadoPasta;
 
+            // --- Fix: Define Filter Sets from Hierarchy State ---
+            const supervisorsSet = new Set();
+            const sellersSet = new Set();
+            
+            const hState = hierarchyState['meta-realizado'];
+            if (hState) {
+                // If Coords selected, filter by them
+                if (hState.coords.size > 0) {
+                    hState.coords.forEach(c => {
+                        const name = optimizedData.coordMap.get(c);
+                        if(name) supervisorsSet.add(name);
+                    });
+                }
+                // If Promotors selected (Sellers), filter by them
+                if (hState.promotors.size > 0) {
+                    hState.promotors.forEach(p => {
+                        const name = optimizedData.promotorMap.get(p);
+                        if(name) sellersSet.add(name);
+                    });
+                }
+            }
+            // ----------------------------------------------------
+
             // 1. Identify Target Clients (Active/Americanas/etc + Filtered)
-            let clients = allClientsData.filter(c => {
+            // Apply Hierarchy Logic + "Active" Filter logic
+            let clients = getHierarchyFilteredClients('meta-realizado', allClientsData).filter(c => {
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
                 if (isAmericanas) return true;
@@ -4078,30 +4474,6 @@
                 if (rca1 === '') return false;
                 return true;
             });
-
-            // Apply Filters (Supervisor/Seller)
-            if (supervisorsSet.size > 0) {
-                const rcasSet = new Set();
-                supervisorsSet.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
-                });
-                clients = clients.filter(c => {
-                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
-                    return clientRcas.some(r => rcasSet.has(r));
-                });
-            }
-
-            if (sellersSet.size > 0) {
-                const rcasSet = new Set();
-                sellersSet.forEach(name => {
-                    const code = optimizedData.rcaCodeByName.get(name);
-                    if (code) rcasSet.add(code);
-                });
-                clients = clients.filter(c => {
-                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
-                    return clientRcas.some(r => rcasSet.has(r));
-                });
-            }
 
             // Optimization: Create Set of Client Codes
             const allowedClientCodes = new Set(clients.map(c => String(c['Código'] || c['codigo_cliente'])));
@@ -4133,8 +4505,6 @@
 
             // B. Populate Sales (Iterate ALL Sales to catch those without Meta)
             // Filter Logic matches 'getMetaRealizadoFilteredData'
-            const currentMonthIndex = lastSaleDate.getUTCMonth();
-            const currentYear = lastSaleDate.getUTCFullYear();
 
             // Helper for week index (Copied from getMetaRealizadoFilteredData scope, need to redefine or reuse)
             const getWeekIndex = (date) => {
@@ -4302,7 +4672,7 @@
                         <td class="px-3 py-2 text-xs font-medium text-slate-200 border-r border-b border-slate-700 truncate" title="${escapeHtml(row.razaoSocial)}">${escapeHtml(row.razaoSocial)}</td>
                         <td class="px-3 py-2 text-xs text-slate-400 border-r border-b border-slate-700 truncate">${escapeHtml(getFirstName(row.vendedor))}</td>
                         <td class="px-3 py-2 text-xs text-slate-400 border-r border-b border-slate-700 truncate">${escapeHtml(row.cidade)}</td>
-                        <td class="px-2 py-2 text-right bg-blue-900/10 text-teal-400 border-r border-b border-slate-700/50 text-xs">${metaTotalStr}</td>
+                        <td class="px-2 py-2 text-right bg-blue-900/10 text-teal-400 border-r border-b border-slate-700/50 text-xs" title="Meta Contratual Mensal">${metaTotalStr}</td>
                         <td class="px-2 py-2 text-right bg-blue-900/10 text-yellow-400 font-bold border-r border-b border-slate-700 text-xs">${realTotalStr}</td>
                     `;
 
@@ -4364,7 +4734,7 @@
 
             clientCodes.forEach(codCli => {
                 const historyIds = optimizedData.indices.history.byClient.get(codCli);
-                const clientTotals = {}; 
+                const clientTotals = {};
 
                 if (historyIds) {
                     historyIds.forEach(id => {
@@ -4436,7 +4806,7 @@
                 const m = metricsMap[key];
                 let sumClients = 0;
                 m.monthlyClientsSets.forEach(set => sumClients += set.size);
-                
+
                 finalMetrics[key] = {
                     avgFat: m.fat / QUARTERLY_DIVISOR,
                     avgVol: m.vol / QUARTERLY_DIVISOR,
@@ -4479,7 +4849,7 @@
 
             activeClients.forEach(client => {
                 const codCli = String(client['Código'] || client['codigo_cliente']);
-                
+
                 // For Mix Salty/Foods, we exclude Americanas from the base count (Seller 1001)
                 const rca1 = String(client.rca1 || '').trim();
                 if ((category === 'mix_salty' || category === 'mix_foods') && rca1 === '1001') return;
@@ -4487,7 +4857,7 @@
                 const historyIds = optimizedData.indices.history.byClient.get(codCli);
                 if (historyIds) {
                     let hasSale = false;
-                    
+
                     for (const id of historyIds) {
                         if (hasSale) break;
                         const sale = optimizedData.historyById.get(id);
@@ -4527,7 +4897,7 @@
             if (!container) return;
 
             // 1. Identify active sellers in the current summary filter
-            let filteredSummaryClients = allClientsData;
+            let filteredSummaryClients = getHierarchyFilteredClients('goals-summary', allClientsData);
 
             // Apply "Active" Filter logic
             filteredSummaryClients = filteredSummaryClients.filter(c => {
@@ -4535,31 +4905,9 @@
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
                 if (isAmericanas) return true;
                 if (rca1 === '53') return false;
-                if (rca1 === '') return false; 
+                if (rca1 === '') return false;
                 return true;
             });
-
-            if (selectedGoalsSummarySupervisors.length > 0) {
-                const supervisorsSet = new Set(selectedGoalsSummarySupervisors);
-                const rcasSet = new Set();
-                supervisorsSet.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
-                });
-                filteredSummaryClients = filteredSummaryClients.filter(c => c.rcas.some(r => rcasSet.has(r)));
-            }
-
-            // Apply Seller Filter
-            if (selectedGoalsSummarySellers.length > 0) {
-                const sellersSet = new Set(selectedGoalsSummarySellers);
-                // selectedGoalsSummarySellers contains Names.
-                // Map names to codes to filter clients.rcas
-                const sellerCodes = new Set();
-                sellersSet.forEach(name => {
-                    const code = optimizedData.rcaCodeByName.get(name);
-                    if (code) sellerCodes.add(code);
-                });
-                filteredSummaryClients = filteredSummaryClients.filter(c => c.rcas.some(r => sellerCodes.has(r)));
-            }
 
             // Calculate Metrics based on filtered clients
             // Since getMetricsForSupervisors only handles supervisor list, we need to rebuild metrics from scratch for arbitrary client list?
@@ -4571,7 +4919,7 @@
             // But let's look at `getMetricsForSupervisors` implementation first. It likely iterates `globalGoalsMetrics`?
             // No, `globalGoalsMetrics` is keyed by Product Category (707, etc.), NOT by Supervisor.
             // So `getMetricsForSupervisors` must be aggregating `globalClientGoals` for the filtered clients.
-            
+
             // Let's assume we need to calculate display metrics from the filtered client list.
             const displayMetrics = calculateMetricsForClients(filteredSummaryClients);
 
@@ -4604,7 +4952,7 @@
                 const rcaCode = String(c.rca1 || '').trim();
                 let sellerName = null;
                 if (rcaCode) sellerName = optimizedData.rcaNameByCode.get(rcaCode);
-                
+
                 if (sellerName && activeSellersInSummary.has(sellerName)) {
                     if (globalClientGoals.has(codCli)) {
                         const cGoals = globalClientGoals.get(codCli);
@@ -4625,7 +4973,7 @@
                 activeSellersInSummary.forEach(sellerName => {
                     // Check for explicit target in `goalsSellerTargets`
                     const targets = goalsSellerTargets.get(sellerName);
-                    
+
                     // If target exists (and is not null/undefined), use it.
                     // Note: Import logic sets targets.
                     if (targets && targets[category] !== undefined && targets[category] !== null) {
@@ -5198,11 +5546,8 @@
         }
 
         function getFilterDescription() {
-            if (selectedGoalsGvSupervisors.length > 0) {
-                return selectedGoalsGvSupervisors.length === 1 ? `Supervisor "${selectedGoalsGvSupervisors[0]}"` : "Supervisores selecionados";
-            }
-            if (selectedGoalsGvSellers.length > 0) {
-                return selectedGoalsGvSellers.length === 1 ? `Vendedor "${getFirstName(selectedGoalsGvSellers[0])}"` : "Vendedores selecionados";
+            if (hierarchyState['goals-gv'] && (hierarchyState['goals-gv'].coords.size > 0 || hierarchyState['goals-gv'].promotors.size > 0)) {
+                 // return 'filtro hierarquia';
             }
             if (goalsGvCodcliFilter.value) {
                 return `Cliente "${goalsGvCodcliFilter.value}"`;
@@ -5319,53 +5664,13 @@
                 (item.mixPdv || 0).toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})
             ]);
 
-            // Calculate Totals
-            const totals = {
-                months: quarterMonths.map(() => 0),
-                avgFat: 0,
-                shareFat: 0,
-                metaFat: 0,
-                metaVol: 0,
-                mixPdvSum: 0,
-                mixPdvCount: 0
-            };
-
-            data.forEach(item => {
-                quarterMonths.forEach((m, i) => {
-                    totals.months[i] += (item.monthlyValues[m.key] || 0);
-                });
-                totals.avgFat += (item.avgFat || 0);
-                totals.shareFat += (item.shareFat || 0);
-                totals.metaFat += (item.metaFat || 0);
-                totals.metaVol += (item.metaVol || 0);
-                if ((item.mixPdv || 0) > 0) {
-                    totals.mixPdvSum += (item.mixPdv || 0);
-                    totals.mixPdvCount++;
-                }
-            });
-
-            const mixPdvAvg = totals.mixPdvCount > 0 ? (totals.mixPdvSum / totals.mixPdvCount) : 0;
-
-            const foot = [[
-                'TOTAL', '', '',
-                ...totals.months.map(v => v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})),
-                totals.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
-                (totals.shareFat * 100).toFixed(2) + '%',
-                totals.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
-                totals.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3}),
-                mixPdvAvg.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})
-            ]];
-
             doc.autoTable({
                 head: head,
                 body: body,
-                foot: foot,
-                showFoot: 'lastPage',
                 startY: 45,
                 theme: 'grid',
                 styles: { fontSize: 7, cellPadding: 1, textColor: [0, 0, 0], halign: 'right' },
                 headStyles: { fillColor: [20, 184, 166], textColor: 255, fontStyle: 'bold', fontSize: 8, halign: 'center' },
-                footStyles: { fillColor: [50, 50, 50], textColor: 255, fontStyle: 'bold', halign: 'right', fontSize: 8 },
                 columnStyles: {
                     0: { halign: 'center', cellWidth: 12 },
                     1: { halign: 'left', cellWidth: 40 },
@@ -5381,13 +5686,7 @@
             });
 
             let nameParam = '';
-            if (selectedGoalsGvSellers && selectedGoalsGvSellers.length > 0) {
-                const firstName = getFirstName(selectedGoalsGvSellers[0]);
-                if (firstName) nameParam = '_' + firstName.toUpperCase();
-            } else if (selectedGoalsGvSupervisors && selectedGoalsGvSupervisors.length > 0) {
-                const firstName = getFirstName(selectedGoalsGvSupervisors[0]);
-                if (firstName) nameParam = '_' + firstName.toUpperCase();
-            }
+            // Simplified name param for now
 
             const safeFileNameParam = currentGoalsSupplier.replace(/[^a-z0-9]/gi, '_').toUpperCase();
             doc.save(`Metas_GV_${safeFileNameParam}${nameParam}.pdf`);
@@ -5429,136 +5728,11 @@
                 ws_data_flat.push(row);
             });
 
-            // Create Sheet directly from data
             const ws_flat = XLSX.utils.aoa_to_sheet(ws_data_flat);
 
-            const range = XLSX.utils.decode_range(ws_flat['!ref']);
-            const lastRowIndex = range.e.r + 1; // +1 because we will append a row
-            const dataStartRow = 1; // 0-based, assuming header is row 0
-            const dataEndRow = lastRowIndex - 1; // Last row of data (0-based)
-
-            // Helper to get column letter
-            const getColLetter = (colIndex) => {
-                let letter = '';
-                let temp = colIndex;
-                while (temp >= 0) {
-                    letter = String.fromCharCode((temp % 26) + 65) + letter;
-                    temp = Math.floor(temp / 26) - 1;
-                }
-                return letter;
-            };
-
-            // Inject Formulas into Data Rows (Optional per request: "para o EXCEL ass colunas que devem ter formulas são ( MÉDIA FAT, % SHARE FAT, % SHARE VOL)")
-            // To do this properly, we need to know the column indices.
-            // Headers: CÓD, CLIENTE, VENDEDOR, [Months...], MÉDIA FAT, % SHARE FAT, META FAT, MÉDIA VOL, % SHARE VOL, META VOL, MIX PDV
-            const colIndices = {
-                monthsStart: 3,
-                monthsEnd: 3 + quarterMonths.length - 1,
-                avgFat: 3 + quarterMonths.length,
-                shareFat: 3 + quarterMonths.length + 1,
-                metaFat: 3 + quarterMonths.length + 2,
-                avgVol: 3 + quarterMonths.length + 3,
-                shareVol: 3 + quarterMonths.length + 4,
-                metaVol: 3 + quarterMonths.length + 5,
-                mixPdv: 3 + quarterMonths.length + 6
-            };
-
-            // Update Data Rows with Formulas
-            for (let r = dataStartRow; r <= dataEndRow; r++) {
-                const rowNum = r + 1; // 1-based row number for Excel formulas
-                
-                // Average Fat Formula: =AVERAGE(Start:End)
-                const avgFatRef = `${getColLetter(colIndices.avgFat)}${rowNum}`;
-                const monthsRange = `${getColLetter(colIndices.monthsStart)}${rowNum}:${getColLetter(colIndices.monthsEnd)}${rowNum}`;
-                if (ws_flat[avgFatRef]) {
-                    ws_flat[avgFatRef].f = `AVERAGE(${monthsRange})`;
-                    ws_flat[avgFatRef].v = undefined; // Clear static value to force formula calc (if supported) or rely on formula
-                }
-
-                // Share Fat Formula: =AvgFat / TotalAvgFat
-                // NOTE: This depends on the Total Row (which is at lastRowIndex + 1 in Excel, or rowNum = lastRowIndex + 1)
-                // Let's defer Share Formulas until we define the Total Row position.
-                // Assuming Total Row will be at `dataEndRow + 2` (1-based index: LastDataRow + 1)
-                const totalRowExcelNum = dataEndRow + 2; 
-                
-                const shareFatRef = `${getColLetter(colIndices.shareFat)}${rowNum}`;
-                const totalAvgFatRef = `${getColLetter(colIndices.avgFat)}${totalRowExcelNum}`;
-                // Only apply if totalAvgFat is not zero (avoid div/0) - hard to know in static generation, but formula handles it
-                if (ws_flat[shareFatRef]) {
-                    ws_flat[shareFatRef].f = `${avgFatRef}/$${totalAvgFatRef}`; // Absolute reference for Total
-                    ws_flat[shareFatRef].t = 'n';
-                    ws_flat[shareFatRef].z = '0.00%'; // Format as percentage
-                    ws_flat[shareFatRef].v = undefined;
-                }
-
-                const shareVolRef = `${getColLetter(colIndices.shareVol)}${rowNum}`;
-                const avgVolRef = `${getColLetter(colIndices.avgVol)}${rowNum}`; // Assuming Avg Vol is calculated or static? User asked for formula for Avg Fat, implies Avg Vol too? 
-                // "ass colunas que devem ter formulas são ( MÉDIA FAT, % SHARE FAT, % SHARE VOL)" - Doesn't explicitly say Avg Vol, but Share Vol depends on it.
-                // If Avg Vol is static, we can still reference it.
-                
-                const totalAvgVolRef = `${getColLetter(colIndices.avgVol)}${totalRowExcelNum}`;
-                if (ws_flat[shareVolRef]) {
-                    ws_flat[shareVolRef].f = `${avgVolRef}/$${totalAvgVolRef}`;
-                    ws_flat[shareVolRef].t = 'n';
-                    ws_flat[shareVolRef].z = '0.00%';
-                    ws_flat[shareVolRef].v = undefined;
-                }
-            }
-
-            // Append Total Row with Formulas
-            // We need to extend the sheet range
-            range.e.r = lastRowIndex; // Extend range to cover new row
-            ws_flat['!ref'] = XLSX.utils.encode_range(range);
-
-            const totalRowIndex = lastRowIndex; // 0-based index for the new row
-            const totalRowNum = totalRowIndex + 1; // 1-based for formulas
-
-            // Initialize Total Cells
-            const setTotalCell = (colIdx, formula, format) => {
-                const addr = XLSX.utils.encode_cell({ r: totalRowIndex, c: colIdx });
-                ws_flat[addr] = { t: 'n', f: formula };
-                if (format) ws_flat[addr].z = format;
-            };
-
-            // 1. Label
-            const labelAddr = XLSX.utils.encode_cell({ r: totalRowIndex, c: 0 });
-            ws_flat[labelAddr] = { t: 's', v: 'TOTAL' };
-
-            // 2. Month Totals
-            for (let i = colIndices.monthsStart; i <= colIndices.monthsEnd; i++) {
-                const colLetter = getColLetter(i);
-                setTotalCell(i, `SUM(${colLetter}${dataStartRow + 1}:${colLetter}${dataEndRow + 1})`, '#,##0.00');
-            }
-
-            // 3. Avg Fat Total
-            setTotalCell(colIndices.avgFat, `SUM(${getColLetter(colIndices.avgFat)}${dataStartRow + 1}:${getColLetter(colIndices.avgFat)}${dataEndRow + 1})`, '#,##0.00');
-
-            // 4. Share Fat Total (Sum of percentages)
-            setTotalCell(colIndices.shareFat, `SUM(${getColLetter(colIndices.shareFat)}${dataStartRow + 1}:${getColLetter(colIndices.shareFat)}${dataEndRow + 1})`, '0.00%');
-
-            // 5. Meta Fat Total
-            setTotalCell(colIndices.metaFat, `SUM(${getColLetter(colIndices.metaFat)}${dataStartRow + 1}:${getColLetter(colIndices.metaFat)}${dataEndRow + 1})`, '#,##0.00');
-
-            // 6. Avg Vol Total
-            setTotalCell(colIndices.avgVol, `SUM(${getColLetter(colIndices.avgVol)}${dataStartRow + 1}:${getColLetter(colIndices.avgVol)}${dataEndRow + 1})`, '#,##0.000');
-
-            // 7. Share Vol Total
-            setTotalCell(colIndices.shareVol, `SUM(${getColLetter(colIndices.shareVol)}${dataStartRow + 1}:${getColLetter(colIndices.shareVol)}${dataEndRow + 1})`, '0.00%');
-
-            // 8. Meta Vol Total
-            setTotalCell(colIndices.metaVol, `SUM(${getColLetter(colIndices.metaVol)}${dataStartRow + 1}:${getColLetter(colIndices.metaVol)}${dataEndRow + 1})`, '#,##0.000');
-
-            // 9. Mix PDV Total (AVERAGEIF > 0)
-            const mixCol = getColLetter(colIndices.mixPdv);
-            const mixRange = `${mixCol}${dataStartRow + 1}:${mixCol}${dataEndRow + 1}`;
-            setTotalCell(colIndices.mixPdv, `AVERAGEIF(${mixRange},">0")`, '0.0');
-
-
-             // Style Header & Footer
+             // Style Header
             if (ws_flat['!ref']) {
                 const range = XLSX.utils.decode_range(ws_flat['!ref']);
-                
-                // Header
                 for (let C = range.s.c; C <= range.e.c; ++C) {
                     const addr = XLSX.utils.encode_cell({ r: 0, c: C });
                     if (!ws_flat[addr]) continue;
@@ -5566,16 +5740,6 @@
                     ws_flat[addr].s.fill = { fgColor: { rgb: "1E293B" } };
                     ws_flat[addr].s.font = { color: { rgb: "FFFFFF" }, bold: true };
                     ws_flat[addr].s.alignment = { horizontal: "center" };
-                }
-
-                // Footer (Total Row)
-                const lastRowIdx = range.e.r;
-                for (let C = range.s.c; C <= range.e.c; ++C) {
-                    const addr = XLSX.utils.encode_cell({ r: lastRowIdx, c: C });
-                    if (!ws_flat[addr]) continue;
-                    if (!ws_flat[addr].s) ws_flat[addr].s = {};
-                    ws_flat[addr].s.font = { bold: true };
-                    ws_flat[addr].s.fill = { fgColor: { rgb: "E2E8F0" } }; // Light Gray
                 }
 
                 // Number formats
@@ -5626,13 +5790,7 @@
             XLSX.utils.book_append_sheet(wb, ws_flat, "Metas GV");
 
             let nameParam = '';
-            if (selectedGoalsGvSellers && selectedGoalsGvSellers.length > 0) {
-                const firstName = getFirstName(selectedGoalsGvSellers[0]);
-                if (firstName) nameParam = '_' + firstName.toUpperCase();
-            } else if (selectedGoalsGvSupervisors && selectedGoalsGvSupervisors.length > 0) {
-                const firstName = getFirstName(selectedGoalsGvSupervisors[0]);
-                if (firstName) nameParam = '_' + firstName.toUpperCase();
-            }
+            // Simplified name param for now
 
             const safeFileNameParam = currentGoalsSupplier.replace(/[^a-z0-9]/gi, '_').toUpperCase();
             XLSX.writeFile(wb, `Metas_GV_${safeFileNameParam}${nameParam}.xlsx`);
@@ -5682,7 +5840,7 @@
                 if (category === 'pepsico_all') return ['707', '708', '752', '1119'].includes(codFor);
                 if (category === 'total_elma') return ['707', '708', '752'].includes(codFor);
                 if (category === 'total_foods') return codFor === '1119';
-                
+
                 // Specifics
                 if (category === '707') return codFor === '707';
                 if (category === '708') return codFor === '708';
@@ -5690,7 +5848,7 @@
                 if (category === '1119_TODDYNHO') return codFor === '1119' && desc.includes('TODDYNHO');
                 if (category === '1119_TODDY') return codFor === '1119' && desc.includes('TODDY') && !desc.includes('TODDYNHO');
                 if (category === '1119_QUAKER_KEROCOCO') return codFor === '1119' && (desc.includes('QUAKER') || desc.includes('KEROCOCO'));
-                
+
                 return false;
             };
 
@@ -5703,7 +5861,7 @@
                         const sale = optimizedData.historyById.get(id);
                         const codFor = String(sale.CODFOR);
                         const desc = normalize(sale.DESCRICAO || '');
-                        
+
                         // Check Rev Type only? Usually yes for Positivação.
                         if ((sale.TIPOVENDA === '1' || sale.TIPOVENDA === '9') && checkSale(codFor, desc)) {
                             count++;
@@ -5721,7 +5879,7 @@
             if (parentCategory === 'pepsico_all') children = ['total_elma', 'total_foods'];
             else if (parentCategory === 'total_elma') children = ['707', '708', '752'];
             else if (parentCategory === 'total_foods') children = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
-            
+
             if (children.length === 0) return;
 
             // 1. Get History for Children
@@ -5731,16 +5889,16 @@
             }));
 
             const parentHistory = getHistoricalPositivation(sellerName, parentCategory);
-            
+
             childHistories.forEach(item => {
                 let ratio = 0;
                 if (parentHistory > 0) {
                     ratio = item.hist / parentHistory;
                 }
-                
+
                 // New Target
                 const childTarget = Math.round(parentTargetValue * ratio);
-                
+
                 // Update Seller Targets
                 if (!goalsSellerTargets.has(sellerName)) goalsSellerTargets.set(sellerName, {});
                 const t = goalsSellerTargets.get(sellerName);
@@ -5754,7 +5912,7 @@
         function handleDistributePositivation(totalGoal, contextKey, filteredClientMetrics) {
             // filteredClientMetrics contains the list of sellers currently visible/active
             // We should distribute ONLY to them.
-            
+
             // Map Context Key (Tab) to Target Key
             let targetKey = contextKey;
             if (contextKey === 'PEPSICO_ALL') targetKey = 'pepsico_all';
@@ -5768,7 +5926,7 @@
             // Group by Seller to avoid duplicates if clientMetrics has multiple rows per seller?
             // clientMetrics is PER CLIENT. So we need to aggregate unique sellers first.
             const uniqueSellers = new Set(filteredClientMetrics.map(c => c.seller));
-            
+
             uniqueSellers.forEach(seller => {
                 const hist = getHistoricalPositivation(seller, targetKey);
                 sellersHistory.push({ seller, hist });
@@ -5777,18 +5935,18 @@
 
             // 2. Distribute Total Goal
             // We use Largest Remainder Method or simple rounding? Simple rounding for now.
-            
+
             sellersHistory.forEach(item => {
                 let share = 0;
                 if (totalHistoryPos > 0) {
                     share = item.hist / totalHistoryPos;
                 }
-                
-                // If totalHistory is 0 but we have a Goal, distribute evenly? 
+
+                // If totalHistory is 0 but we have a Goal, distribute evenly?
                 // Or leave 0? User said "proporcional". 0 history -> 0 share seems fair.
-                
+
                 const sellerTarget = Math.round(totalGoal * share);
-                
+
                 // Update Primary Target
                 if (!goalsSellerTargets.has(item.seller)) goalsSellerTargets.set(item.seller, {});
                 const t = goalsSellerTargets.get(item.seller);
@@ -5802,7 +5960,7 @@
             if (contextKey === 'PEPSICO_ALL') {
                 const newSalty = Math.round(totalGoal * 0.50);
                 const newFoods = Math.round(totalGoal * 0.30);
-                
+
                 // Update UI Inputs
                 const inputSalty = document.getElementById('goal-global-mix-salty');
                 const inputFoods = document.getElementById('goal-global-mix-foods');
@@ -5821,13 +5979,13 @@
 
         function handleDistributeMix(totalGoal, type, contextKey, filteredClientMetrics) {
             let targetKey = type === 'salty' ? 'mix_salty' : 'mix_foods';
-            
+
             // 1. Calculate Total History for THESE sellers in THIS context
             let totalHistoryMix = 0;
             const sellersHistory = [];
 
             const uniqueSellers = new Set(filteredClientMetrics.map(c => c.seller));
-            
+
             uniqueSellers.forEach(seller => {
                 const hist = getHistoricalMix(seller, type);
                 sellersHistory.push({ seller, hist });
@@ -5840,9 +5998,9 @@
                 if (totalHistoryMix > 0) {
                     share = item.hist / totalHistoryMix;
                 }
-                
+
                 const sellerTarget = Math.round(totalGoal * share);
-                
+
                 // Update Primary Target
                 if (!goalsSellerTargets.has(item.seller)) goalsSellerTargets.set(item.seller, {});
                 const t = goalsSellerTargets.get(item.seller);
@@ -5866,7 +6024,10 @@
             if (quarterMonths.length === 0) identifyQuarterMonths();
 
             // Calculate Metrics for Current View (Supervisor Filter)
-            const displayMetrics = getMetricsForSupervisors(selectedGoalsGvSupervisors);
+            // Use hierarchy state to filter clients for metrics calculation
+            let filteredMetricsClients = getHierarchyFilteredClients('goals-gv', allClientsData);
+            filteredMetricsClients = filteredMetricsClients.filter(c => isActiveClient(c));
+            const displayMetrics = calculateMetricsForClients(filteredMetricsClients);
 
             // Update Header (Dynamic) - Same as before
             const thead = document.querySelector('#goals-table-container table thead');
@@ -5877,7 +6038,7 @@
             }
 
             const filteredClients = getGoalsFilteredData();
-            goalsGvTableBody.innerHTML = '<tr><td colspan="15" class="text-center p-8"><svg class="animate-spin h-8 w-8 text-teal-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></td></tr>';
+            goalsGvTableBody.innerHTML = getSkeletonRows(15, 10);
 
             // Cache Key for Global Totals
             const cacheKey = currentGoalsSupplier + (currentGoalsBrand ? `_${currentGoalsBrand}` : '');
@@ -5946,16 +6107,16 @@
                                     const monthKey = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
                                     monthlyActivity.set(monthKey, (monthlyActivity.get(monthKey) || 0) + sale.VLVENDA);
                                     if (monthlyValues.hasOwnProperty(monthKey)) monthlyValues[monthKey] += sale.VLVENDA;
-                                    
+
                                     // Mix Logic: Add Product Code + Month Key
                                     // ELMA Constraint: If ELMA_ALL, only 707 and 708 are counted for Mix. 752 (Torcida) is excluded.
                                     let includeInMix = true;
                                     const codFor = String(sale.CODFOR);
-                                    
+
                                     if (currentGoalsSupplier === 'ELMA_ALL') {
                                         if (codFor !== '707' && codFor !== '708') includeInMix = false;
                                     }
-                                    
+
                                     if (includeInMix) {
                                         mixProducts.add(`${sale.PRODUTO}_${monthKey}`);
                                     }
@@ -6019,7 +6180,7 @@
                 };
                 // Add Mix PDV to Metric Object
                 metric.mixPdv = mixPdvAvg;
-                
+
                 clientMetrics.push(metric);
 
                 // Accumulate totals
@@ -6070,7 +6231,7 @@
                 const goalMixInput = document.getElementById('goal-global-mix');
                 const btnDistributeMix = document.getElementById('btn-distribute-mix');
                 const naturalTotalPos = clientMetrics.reduce((sum, item) => sum + item.metaPos, 0);
-                const isSingleSeller = selectedGoalsGvSellers.length === 1;
+                const isSingleSeller = hierarchyState['goals-gv'] && hierarchyState['goals-gv'].promotors.size === 1;
 
                 if (goalMixInput) {
                     const newMixInput = goalMixInput.cloneNode(true);
@@ -6083,11 +6244,9 @@
 
                     if (isSingleSeller) {
                         // Check for Absolute Override from Import
-                        absoluteOverride = getSellerTargetOverride(selectedGoalsGvSellers[0], 'pos', contextKey);
 
                         if (absoluteOverride === null && adjustmentMap) {
                             // Specific Seller Context (Fallback)
-                            contextAdjustment = adjustmentMap.get(selectedGoalsGvSellers[0]) || 0;
                         }
                     } else {
                         // Aggregate Logic for Multiple Sellers (Supervisor/Global)
@@ -6142,7 +6301,6 @@
                                 } else {
                                     const filterDesc = getFilterDescription();
                                     // Validation: Check against PEPSICO Limit
-                                    const sellerName = selectedGoalsGvSellers[0];
                                     let pepsicoNaturalPos = 0;
                                     // Calculate Natural PEPSICO Positivação for this seller
                                     const len = allClientsData.length;
@@ -6165,7 +6323,7 @@
                                             }
                                         }
                                     }
-                                    
+
                                     const pepsicoAdj = goalsPosAdjustments['PEPSICO_ALL'].get(sellerName) || 0;
                                     const pepsicoLimit = pepsicoNaturalPos + pepsicoAdj;
                                     if (currentGoalsSupplier !== 'PEPSICO_ALL' && val > pepsicoLimit) {
@@ -6175,7 +6333,6 @@
                                     showConfirmationModal(`Confirmar ajuste de Meta Positivação para ${valStr} (Cliente: ${filterDesc})?`, () => {
                                         const newAdjustment = val - naturalTotalPos;
                                         if (adjustmentMap) {
-                                            adjustmentMap.set(selectedGoalsGvSellers[0], newAdjustment);
                                             updateGoalsView();
                                         }
                                     });
@@ -6215,9 +6372,7 @@
                         let absOverride = null;
 
                         if (isSingleSeller) {
-                            absOverride = getSellerTargetOverride(selectedGoalsGvSellers[0], type === 'salty' ? 'mix_salty' : 'mix_foods', contextKey);
                             if (absOverride === null) {
-                                adj = adjustmentsMap.get(selectedGoalsGvSellers[0]) || 0;
                             }
                         } else {
                             // Aggregate Logic for Multiple Sellers (Mix)
@@ -6264,18 +6419,17 @@
                                     const newBtn = btn.cloneNode(true);
                                     btn.parentNode.replaceChild(newBtn, btn);
                                     newBtn.style.display = '';
-                                    
+
                                     newBtn.onclick = () => {
                                         const valStr = input.value;
                                         const val = parseFloat(valStr.replace(/\./g, '').replace(',', '.')) || 0;
-                                        
+
                                         if (isAggregatedTab) {
                                             const contextName = currentGoalsSupplier.replace('_ALL', '');
                                             showConfirmationModal(`Confirmar distribuição Proporcional de Mix ${type === 'salty' ? 'Salty' : 'Foods'} (${val}) para ${contextName}? (Base: Histórico)`, () => {
                                                 handleDistributeMix(val, type, contextKey, clientMetrics);
                                             });
                                         } else {
-                                            const sellerName = selectedGoalsGvSellers[0];
                                             showConfirmationModal(`Confirmar ajuste de Meta Mix ${type === 'salty' ? 'Salty' : 'Foods'} para ${valStr} (Vendedor: ${getFirstName(sellerName)})?`, () => {
                                                 saveMixAdjustment(type, val, sellerName);
                                             });
@@ -6298,8 +6452,8 @@
 
                     // Bugfix: If table is empty (e.g. no active clients) but we have a specific seller filter,
                     // use the filter to prevent getElmaTargetBase from returning global counts (empty set bypass).
-                    if (visibleSellersSet.size === 0 && selectedGoalsGvSellers.length > 0) {
-                         visibleSellersSet = new Set(selectedGoalsGvSellers);
+                    if (visibleSellersSet.size === 0 && hierarchyState['goals-gv'] && hierarchyState['goals-gv'].promotors.size > 0) {
+                         visibleSellersSet = new Set(hierarchyState['goals-gv'].promotors);
                     }
 
                     const elmaTargetBase = getElmaTargetBase(displayMetrics, goalsPosAdjustments, visibleSellersSet);
@@ -6368,9 +6522,8 @@
         }
 
         function getGoalsSvFilteredData() {
-            const supervisorsSet = new Set(selectedGoalsSvSupervisors);
-
-            let clients = allClientsData;
+            // Apply Hierarchy Logic
+            let clients = getHierarchyFilteredClients('goals-sv', allClientsData);
 
             clients = clients.filter(c => {
                 const rca1 = String(c.rca1 || '').trim();
@@ -6542,7 +6695,7 @@
 
             const baseCategories = svColumns.filter(c => c.type === 'standard' && !c.isAgg);
             const mainTable = document.getElementById('goals-sv-main-table');
-            if (mainTable) mainTable.innerHTML = '<tbody><tr><td class="text-center p-8"><svg class="animate-spin h-8 w-8 text-teal-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></td></tr></tbody>';
+            if (mainTable) mainTable.innerHTML = `<tbody>${getSkeletonRows(12, 10)}</tbody>`;
 
             // Ensure Global Totals are cached (Sync operation, but fast enough for initialization)
             baseCategories.forEach(cat => {
@@ -7021,26 +7174,15 @@ const supervisorGroups = new Map();
                         svColumns.forEach(col => {
                             const d = seller.data[col.id] || { metaFat: 0, metaVol: 0, metaPos: 0, avgVol: 0, avgMix: 0, metaMix: 0, avgFat: 0, monthlyValues: {} };
                             if (col.type === 'standard') {
-                                // Rule: Fat Editable if !isAgg (Leafs). Pos Editable if Agg (Total Elma/Foods).
-                                const isFatEditable = !col.isAgg;
-                                const isPosEditable = (col.id === 'total_elma' || col.id === 'total_foods');
-
-                                const fatInputClass = isFatEditable ? 'text-yellow-300' : 'text-slate-400 font-bold opacity-70';
-                                const fatReadonlyAttr = isFatEditable ? '' : 'readonly disabled';
-                                const fatCellBg = isFatEditable ? 'bg-[#1e293b]' : 'bg-[#151c36]';
-
-                                const posInputClass = isPosEditable ? 'text-yellow-300' : 'text-slate-400 font-bold opacity-70';
-                                const posReadonlyAttr = isPosEditable ? '' : 'readonly disabled';
-                                const posCellBg = isPosEditable ? 'bg-[#1e293b]' : 'bg-[#151c36]';
-
+                                const isReadOnly = col.isAgg; const inputClass = isReadOnly ? 'text-slate-400 font-bold opacity-70' : 'text-yellow-300'; const readonlyAttr = 'readonly disabled'; const cellBg = isReadOnly ? 'bg-[#151c36]' : 'bg-[#1e293b]';
                                 quarterMonths.forEach(m => bodyHTML += `<td class="px-1 py-1 text-right text-slate-400 border-r border-slate-800/50 text-[10px] bg-blue-900/5">${(d.monthlyValues[m.key] || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`);
-                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 bg-blue-900/10 font-medium">${d.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right ${col.colorClass} border-r border-slate-800/50 text-xs font-mono">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 ${fatCellBg} border-r border-slate-800/50"><input type="text" value="${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}" class="goals-sv-input bg-transparent text-right w-full outline-none ${fatInputClass} text-xs font-mono" ${fatReadonlyAttr}></td><td class="px-1 py-1 text-center text-slate-300 border-r border-slate-800/50">${d.metaPos}</td><td class="px-1 py-1 ${posCellBg} border-r border-slate-800/50"><input type="text" value="${d.metaPos}" class="goals-sv-input bg-transparent text-center w-full outline-none ${posInputClass} text-xs font-mono" ${posReadonlyAttr}></td>`;
+                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 bg-blue-900/10 font-medium">${d.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right ${col.colorClass} border-r border-slate-800/50 text-xs font-mono">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 ${cellBg} border-r border-slate-800/50"><input type="text" value="${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}" class="goals-sv-input bg-transparent text-right w-full outline-none ${inputClass} text-xs font-mono" ${readonlyAttr}></td><td class="px-1 py-1 text-center text-slate-300 border-r border-slate-800/50">${d.metaPos}</td><td class="px-1 py-1 ${cellBg} border-r border-slate-800/50"><input type="text" value="${d.metaPos}" class="goals-sv-input bg-transparent text-center w-full outline-none ${inputClass} text-xs font-mono" ${readonlyAttr}></td>`;
                             } else if (col.type === 'tonnage') {
-                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 font-mono text-xs">${d.avgVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 font-bold font-mono text-xs">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 bg-[#1e293b] border-r border-slate-800/50"><input type="text" value="${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}" class="goals-sv-input bg-transparent text-right w-full outline-none text-yellow-300 text-xs font-mono"></td>`;
+                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 font-mono text-xs">${d.avgVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 font-bold font-mono text-xs">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 bg-[#1e293b] border-r border-slate-800/50"><input type="text" value="${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}" class="goals-sv-input bg-transparent text-right w-full outline-none text-yellow-300 text-xs font-mono" readonly disabled></td>`;
                             } else if (col.type === 'mix') {
-                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50">${d.avgMix.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})}</td><td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 font-bold">${d.metaMix}</td><td class="px-1 py-1 bg-[#1e293b] border-r border-slate-800/50"><input type="text" value="${d.metaMix}" class="goals-sv-input bg-transparent text-right w-full outline-none text-yellow-300 text-xs font-mono"></td>`;
+                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50">${d.avgMix.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})}</td><td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 font-bold">${d.metaMix}</td><td class="px-1 py-1 bg-[#1e293b] border-r border-slate-800/50"><input type="text" value="${d.metaMix}" class="goals-sv-input bg-transparent text-right w-full outline-none text-yellow-300 text-xs font-mono" readonly disabled></td>`;
                             } else if (col.type === 'geral') {
-                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-400 border-r border-slate-800/50 font-mono text-xs">${d.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right text-white font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="geral" data-field="fat" id="geral-${seller.id || seller.name.replace(/\s+/g,'_')}-fat">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right text-white font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="geral" data-field="ton" id="geral-${seller.id || seller.name.replace(/\s+/g,'_')}-ton">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 text-center text-yellow-300 font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="geral" data-field="pos" id="geral-${seller.id || seller.name.replace(/\s+/g,'_')}-pos">${d.metaPos}</td>`;
+                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-400 border-r border-slate-800/50 font-mono text-xs">${d.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right text-white font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="geral" data-field="fat" id="geral-${seller.id || seller.name.replace(/\s+/g,'_')}-fat">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right text-white font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="geral" data-field="ton" id="geral-${seller.id || seller.name.replace(/\s+/g,'_')}-ton">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 text-center text-white font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="geral" data-field="pos" id="geral-${seller.id || seller.name.replace(/\s+/g,'_')}-pos">${d.metaPos}</td>`;
                             } else if (col.type === 'pedev') {
                                 bodyHTML += `<td class="px-1 py-1 text-center text-pink-400 font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="pedev" data-field="pos" id="pedev-${seller.id || seller.name.replace(/\s+/g,'_')}-pos">${d.metaPos}</td>`;
                             }
@@ -7097,8 +7239,6 @@ const supervisorGroups = new Map();
                 // Update Seller Filter options based on Supervisor
                 // Get all clients matching supervisor filter, extract sellers.
                 // This is slightly different from sales-based filtering.
-                // But we can stick to standard updateSellerFilter using 'allSalesData' or 'allClientsData'?
-                // updateSellerFilter uses a sales/data array.
                 // Let's use allSalesData for consistency with other views to populate seller lists.
 
                 updateGoalsView();
@@ -7106,12 +7246,24 @@ const supervisorGroups = new Map();
         }
 
         function resetGoalsGvFilters() {
-            selectedGoalsGvSupervisors = [];
-            selectedGoalsGvSellers = [];
-            goalsGvCodcliFilter.value = '';
+            if (hierarchyState['goals-gv']) {
+                hierarchyState['goals-gv'].coords.clear();
+                hierarchyState['goals-gv'].cocoords.clear();
+                hierarchyState['goals-gv'].promotors.clear();
 
-            selectedGoalsGvSupervisors = updateSupervisorFilter(goalsGvSupervisorFilterDropdown, goalsGvSupervisorFilterText, selectedGoalsGvSupervisors, allSalesData);
-            selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, allSalesData);
+                if (userHierarchyContext.role !== 'adm') {
+                    if (userHierarchyContext.coord) hierarchyState['goals-gv'].coords.add(userHierarchyContext.coord);
+                    if (userHierarchyContext.cocoord) hierarchyState['goals-gv'].cocoords.add(userHierarchyContext.cocoord);
+                    if (userHierarchyContext.promotor) hierarchyState['goals-gv'].promotors.add(userHierarchyContext.promotor);
+                }
+
+                updateHierarchyDropdown('goals-gv', 'coord');
+                updateHierarchyDropdown('goals-gv', 'cocoord');
+                updateHierarchyDropdown('goals-gv', 'promotor');
+            }
+
+            const codcli = document.getElementById('goals-gv-codcli-filter');
+            if(codcli) codcli.value = '';
 
             updateGoalsView();
         }
@@ -7122,79 +7274,42 @@ const supervisorGroups = new Map();
             const { excludeFilter = null } = options;
             const isExcluded = (f) => excludeFilter === f || (Array.isArray(excludeFilter) && excludeFilter.includes(f));
 
-            // Define filter sets from UI state
-            const sellersNameSet = new Set(selectedCoverageSellers);
-            const supervisorsSet = new Set(selectedCoverageSupervisors);
             const city = coverageCityFilter.value.trim().toLowerCase();
             const filial = coverageFilialFilter.value;
             const suppliersSet = new Set(selectedCoverageSuppliers);
             const productsSet = new Set(selectedCoverageProducts);
             const tiposVendaSet = new Set(selectedCoverageTiposVenda);
 
-            // --- Client Filtering (Universe for KPIs) ---
-            // Use active clients data defined by coverage logic
-            let clients = getActiveClientsData();
+            // New Hierarchy Logic applied to Active Clients
+            let clients = getHierarchyFilteredClients('coverage', getActiveClientsData());
 
-            if (filial !== 'ambas' || supervisorsSet.size > 0 || sellersNameSet.size > 0 || city) {
-                const rcasOfSupervisor = new Set();
-                if (!isExcluded('supervisor') && supervisorsSet.size > 0) {
-                    supervisorsSet.forEach(sup => {
-                        (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasOfSupervisor.add(rca));
-                    });
-                }
-                const rcasOfSellers = new Set();
-                if (!isExcluded('seller') && sellersNameSet.size > 0) {
-                     sellersNameSet.forEach(sellerName => {
-                        const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
-                        if (rcaCode) rcasOfSellers.add(rcaCode);
-                    });
-                }
+            if (filial !== 'ambas' || city) {
                 clients = clients.filter(c => {
-                    if (filial !== 'ambas' && clientLastBranch.get(c['Código']) !== filial) return false;
-                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
-                    if (rcasOfSupervisor.size > 0 && !clientRcas.some(rca => rcasOfSupervisor.has(rca))) return false;
-                    if (rcasOfSellers.size > 0 && !clientRcas.some(rca => rcasOfSellers.has(rca))) return false;
-                    if (!isExcluded('city') && city && (!c.cidade || c.cidade.toLowerCase() !== city)) return false;
-                    return true;
+                    let pass = true;
+                    if (filial !== 'ambas') {
+                        if (clientLastBranch.get(c['Código']) !== filial) pass = false;
+                    }
+                    if (pass && !isExcluded('city') && city) {
+                        if ((c.cidade || '').toLowerCase() !== city) pass = false;
+                    }
+                    return pass;
                 });
             }
+
             const clientCodes = new Set(clients.map(c => c['Código']));
 
-            // --- Sales Filtering (Optimized via Indices) ---
             const filters = {
-                supervisor: supervisorsSet,
-                seller: sellersNameSet,
+                filial,
+                city,
+                tipoVenda: tiposVendaSet,
                 supplier: suppliersSet,
                 product: productsSet,
-                tipoVenda: tiposVendaSet,
-                city: city,
-                filial: filial,
-                clientCodes: clientCodes // Pass client universe to correctly scope sales
+                clientCodes
             };
 
             let sales = getFilteredDataFromIndices(optimizedData.indices.current, optimizedData.salesById, filters, excludeFilter);
             let history = getFilteredDataFromIndices(optimizedData.indices.history, optimizedData.historyById, filters, excludeFilter);
 
-            // --- Date Filtering ---
-            if (selectedCoverageDateRange && selectedCoverageDateRange.length === 2) {
-                const startDate = selectedCoverageDateRange[0];
-                const endDate = selectedCoverageDateRange[1];
-                // Ensure boundaries
-                const startTs = new Date(startDate).setHours(0,0,0,0);
-                const endTs = new Date(endDate).setHours(23,59,59,999);
-
-                const filterByDate = (item) => {
-                    const dt = item.DTPED;
-                    if (!dt) return false;
-                    const ts = (typeof dt === 'number') ? dt : (dt instanceof Date ? dt.getTime() : parseDate(dt)?.getTime());
-                    return ts >= startTs && ts <= endTs;
-                };
-
-                sales = sales.filter(filterByDate);
-                history = history.filter(filterByDate);
-            }
-
-            // Post-filtering for logic not supported by indices
             const unitPriceInput = document.getElementById('coverage-unit-price-filter');
             const unitPrice = unitPriceInput && unitPriceInput.value ? parseFloat(unitPriceInput.value) : null;
             if (unitPrice !== null) {
@@ -7208,15 +7323,6 @@ const supervisorGroups = new Map();
 
         function updateAllCoverageFilters(options = {}) {
             const { skipFilter = null } = options;
-
-            if (skipFilter !== 'supervisor') {
-                const { sales: salesSup, history: historySup } = getCoverageFilteredData({ excludeFilter: 'supervisor' });
-                const combinedDataSup = [...salesSup, ...historySup];
-                selectedCoverageSupervisors = updateSupervisorFilter(document.getElementById('coverage-supervisor-filter-dropdown'), document.getElementById('coverage-supervisor-filter-text'), selectedCoverageSupervisors, combinedDataSup);
-            }
-
-            const { sales: salesSeller, history: historySeller } = getCoverageFilteredData({ excludeFilter: 'seller' });
-            selectedCoverageSellers = updateSellerFilter(selectedCoverageSupervisors, coverageVendedorFilterDropdown, coverageVendedorFilterText, selectedCoverageSellers, [...salesSeller, ...historySeller], skipFilter === 'seller');
 
             const { sales: salesSupplier, history: historySupplier } = getCoverageFilteredData({ excludeFilter: ['supplier', 'product'] });
             selectedCoverageSuppliers = updateSupplierFilter(coverageSupplierFilterDropdown, coverageSupplierFilterText, selectedCoverageSuppliers, [...salesSupplier, ...historySupplier], 'coverage', skipFilter === 'supplier');
@@ -7238,9 +7344,6 @@ const supervisorGroups = new Map();
         }
 
         function resetCoverageFilters() {
-            selectedCoverageSupervisors = [];
-            selectedCoverageDateRange = null;
-            if (coverageDateFilterInstance) coverageDateFilterInstance.clear();
             coverageCityFilter.value = '';
             coverageFilialFilter.value = 'ambas';
 
@@ -7250,7 +7353,6 @@ const supervisorGroups = new Map();
             const workingDaysInput = document.getElementById('coverage-working-days-input');
             if(workingDaysInput) workingDaysInput.value = customWorkingDaysCoverage;
 
-            selectedCoverageSellers = [];
             selectedCoverageSuppliers = [];
             selectedCoverageProducts = [];
             selectedCoverageTiposVenda = [];
@@ -7266,33 +7368,14 @@ const supervisorGroups = new Map();
             const { clients, sales, history } = getCoverageFilteredData();
             const productsToAnalyze = [...new Set([...sales.map(s => s.PRODUTO), ...history.map(s => s.PRODUTO)])];
 
-            const sellers = selectedCoverageSellers;
-            const sellerRcaCodes = new Set();
-            if (sellers.length > 0) {
-                sellers.forEach(sellerName => {
-                    const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
-                    if (rcaCode) sellerRcaCodes.add(rcaCode);
-                });
-            } else if (selectedCoverageSupervisors.length > 0) {
-                selectedCoverageSupervisors.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => sellerRcaCodes.add(rca));
-                });
-            }
-
-            const activeClientsForCoverage = clients.filter(c => {
-                const codcli = c['Código'];
-                const rca1 = String(c.rca1 || '').trim();
-
-                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(codcli));
-            });
+            const activeClientsForCoverage = clients;
             const activeClientsCount = activeClientsForCoverage.length;
             const activeClientCodes = new Set(activeClientsForCoverage.map(c => c['Código']));
 
             coverageActiveClientsKpi.textContent = activeClientsCount.toLocaleString('pt-BR');
 
             // Show Loading State in Table
-            coverageTableBody.innerHTML = '<tr><td colspan="8" class="text-center p-8"><div class="flex justify-center items-center"><svg class="animate-spin h-8 w-8 text-teal-500 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span class="text-slate-400">Calculando cobertura...</span></div></td></tr>';
+            coverageTableBody.innerHTML = getSkeletonRows(8, 10);
 
             if (productsToAnalyze.length === 0) {
                 coverageSelectionCoverageValueKpi.textContent = '0%';
@@ -7337,10 +7420,13 @@ const supervisorGroups = new Map();
             // The bottleneck is the nested Product * Client check loop later.
 
             sales.forEach(s => {
+                if (!isAlternativeMode(selectedCoverageTiposVenda) && s.TIPOVENDA !== '1' && s.TIPOVENDA !== '9') return;
+                const val = getValueForSale(s, selectedCoverageTiposVenda);
+
                 // Coverage Map (Inverted for Performance)
                 if (!productClientsCurrent.has(s.PRODUTO)) productClientsCurrent.set(s.PRODUTO, new Map());
                 const clientMap = productClientsCurrent.get(s.PRODUTO);
-                clientMap.set(s.CODCLI, (clientMap.get(s.CODCLI) || 0) + s.VLVENDA);
+                clientMap.set(s.CODCLI, (clientMap.get(s.CODCLI) || 0) + val);
 
                 // Box Quantity Map
                 boxesSoldCurrentMap.set(s.PRODUTO, (boxesSoldCurrentMap.get(s.PRODUTO) || 0) + s.QTVENDA_EMBALAGEM_MASTER);
@@ -7355,12 +7441,15 @@ const supervisorGroups = new Map();
                 const d = parseDate(s.DTPED);
                 const isPrevMonth = d && d.getUTCMonth() === prevMonthIdx && d.getUTCFullYear() === prevMonthYear;
 
+                if (!isAlternativeMode(selectedCoverageTiposVenda) && s.TIPOVENDA !== '1' && s.TIPOVENDA !== '9') return;
+                const val = getValueForSale(s, selectedCoverageTiposVenda);
+
                 // Coverage Map (only if prev month)
                 if (isPrevMonth) {
                     // Coverage Map (Inverted for Performance)
                     if (!productClientsPrevious.has(s.PRODUTO)) productClientsPrevious.set(s.PRODUTO, new Map());
                     const clientMap = productClientsPrevious.get(s.PRODUTO);
-                    clientMap.set(s.CODCLI, (clientMap.get(s.CODCLI) || 0) + s.VLVENDA);
+                    clientMap.set(s.CODCLI, (clientMap.get(s.CODCLI) || 0) + val);
 
                     // Box Quantity Map (only if prev month)
                     boxesSoldPreviousMap.set(s.PRODUTO, (boxesSoldPreviousMap.get(s.PRODUTO) || 0) + s.QTVENDA_EMBALAGEM_MASTER);
@@ -7528,7 +7617,7 @@ const supervisorGroups = new Map();
 
                 const totalBoxesFiltered = filteredTableData.reduce((sum, item) => sum + item.boxesSoldCurrentMonth, 0);
                 if (coverageTotalBoxesEl) {
-                    coverageTotalBoxesEl.textContent = totalBoxesFiltered.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+                    coverageTotalBoxesEl.textContent = totalBoxesFiltered.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
                 }
 
                 coverageTableDataForExport = filteredTableData;
@@ -7556,14 +7645,14 @@ const supervisorGroups = new Map();
 
                     return `
                         <tr class="hover:bg-slate-700/50">
-                            <td class="px-2 py-1.5 text-xs">${item.descricao}</td>
-                            <td class="px-2 py-1.5 text-xs text-right">${item.stockQty.toLocaleString('pt-BR')}</td>
-                            <td class="px-2 py-1.5 text-xs text-right">${item.boxesSoldPreviousMonth.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                            <td class="px-2 py-1.5 text-xs text-right">${item.boxesSoldCurrentMonth.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                            <td class="px-2 py-1.5 text-xs text-right">${boxesVariationContent}</td>
-                            <td class="px-2 py-1.5 text-xs text-right">${item.clientsPreviousCount.toLocaleString('pt-BR')}</td>
-                            <td class="px-2 py-1.5 text-xs text-right">${item.clientsCurrentCount.toLocaleString('pt-BR')}</td>
-                            <td class="px-2 py-1.5 text-xs text-right">${pdvVariationContent}</td>
+                            <td data-label="Produto" class="px-2 py-1.5 text-xs">${item.descricao}</td>
+                            <td data-label="Estoque" class="px-2 py-1.5 text-xs text-right">${item.stockQty.toLocaleString('pt-BR')}</td>
+                            <td data-label="Vol Ant (Cx)" class="px-2 py-1.5 text-xs text-right">${item.boxesSoldPreviousMonth.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                            <td data-label="Vol Atual (Cx)" class="px-2 py-1.5 text-xs text-right">${item.boxesSoldCurrentMonth.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                            <td data-label="Var Vol" class="px-2 py-1.5 text-xs text-right">${boxesVariationContent}</td>
+                            <td data-label="PDV Ant" class="px-2 py-1.5 text-xs text-right">${item.clientsPreviousCount.toLocaleString('pt-BR')}</td>
+                            <td data-label="PDV Atual" class="px-2 py-1.5 text-xs text-right">${item.clientsCurrentCount.toLocaleString('pt-BR')}</td>
+                            <td data-label="Var PDV" class="px-2 py-1.5 text-xs text-right">${pdvVariationContent}</td>
                         </tr>
                     `;
                 }).join('');
@@ -7667,6 +7756,7 @@ const supervisorGroups = new Map();
         function calculateSummaryFromData(data, isFiltered, clientBaseForPositivacao) {
             const summary = {
                 totalFaturamento: 0, totalPeso: 0, vendasPorVendedor: {}, vendasPorSupervisor: {},
+                vendasPorCoord: {}, vendasPorCoCoord: {}, vendasPorPromotor: {}, // New Hierarchy Aggregation
                 top10ProdutosFaturamento: [], top10ProdutosPeso: [], faturamentoPorFornecedor: {},
                 skuPdv: 0, positivacaoCount: 0, positivacaoPercent: 0
             };
@@ -7685,13 +7775,15 @@ const supervisorGroups = new Map();
             const clientTotalSales = new Map();
 
             data.forEach(sale => {
+                if (!isAlternativeMode(selectedTiposVenda) && sale.TIPOVENDA !== '1' && sale.TIPOVENDA !== '9') return;
                 if (sale.CODCLI) {
                     const currentVal = clientTotalSales.get(sale.CODCLI) || 0;
                     // Considera apenas VLVENDA para consistência com o KPI "Clientes Atendidos" do Comparativo
                     // Se a regra de bonificação mudar lá, deve mudar aqui também.
                     // Atualmente Comparativo usa: (s.TIPOVENDA === '1' || s.TIPOVENDA === '9') -> VLVENDA
                     // Note que 'data' aqui já vem filtrado, mas precisamos checar se o valor agregado passa do threshold
-                    clientTotalSales.set(sale.CODCLI, currentVal + (Number(sale.VLVENDA) || 0));
+                    const val = getValueForSale(sale, selectedTiposVenda);
+                    clientTotalSales.set(sale.CODCLI, currentVal + val);
 
                     // Rastrear SKUs únicos (mantendo lógica existente para SKU/PDV)
                     // Mas apenas se o cliente for considerado "positivo" no final?
@@ -7720,7 +7812,8 @@ const supervisorGroups = new Map();
             });
 
             data.forEach(item => {
-                const vlVenda = Number(item.VLVENDA) || 0;
+                if (!isAlternativeMode(selectedTiposVenda) && item.TIPOVENDA !== '1' && item.TIPOVENDA !== '9') return;
+                const vlVenda = getValueForSale(item, selectedTiposVenda);
                 const totPesoLiq = Number(item.TOTPESOLIQ) || 0;
 
                 summary.totalFaturamento += vlVenda;
@@ -7736,6 +7829,22 @@ const supervisorGroups = new Map();
                 const supervisor = item.SUPERV || 'N/A';
                 if (!isForbidden(supervisor)) {
                     summary.vendasPorSupervisor[supervisor] = (summary.vendasPorSupervisor[supervisor] || 0) + vlVenda;
+                }
+
+                // New Hierarchy Aggregation
+                const hierarchy = optimizedData.clientHierarchyMap.get(item.CODCLI);
+                if (hierarchy) {
+                    const c = hierarchy.coord.name;
+                    const cc = hierarchy.cocoord.name;
+                    const p = hierarchy.promotor.name;
+                    if (c) summary.vendasPorCoord[c] = (summary.vendasPorCoord[c] || 0) + vlVenda;
+                    if (cc) summary.vendasPorCoCoord[cc] = (summary.vendasPorCoCoord[cc] || 0) + vlVenda;
+                    if (p) summary.vendasPorPromotor[p] = (summary.vendasPorPromotor[p] || 0) + vlVenda;
+                } else {
+                    const unk = 'Sem Estrutura';
+                    summary.vendasPorCoord[unk] = (summary.vendasPorCoord[unk] || 0) + vlVenda;
+                    summary.vendasPorCoCoord[unk] = (summary.vendasPorCoCoord[unk] || 0) + vlVenda;
+                    summary.vendasPorPromotor[unk] = (summary.vendasPorPromotor[unk] || 0) + vlVenda;
                 }
 
                 const produto = item.DESCRICAO || 'N/A';
@@ -7800,7 +7909,8 @@ const supervisorGroups = new Map();
             const tickColor = isLightMode ? '#475569' : '#94a3b8'; // slate-600 vs slate-400
             const gridColor = isLightMode ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.05)';
 
-            const professionalPalette = ['#14b8a6', '#6366f1', '#ec4899', '#f97316', '#8b5cf6', '#06b6d4', '#f59e0b', '#ef4444', '#22c55e'];
+            // Semantic Palette: Green (Success), Blue (Good), Purple (Neutral/Meta), Amber (Warning), Red (Danger)
+            const professionalPalette = ['#22c55e', '#3b82f6', '#a855f7', '#f59e0b', '#ef4444', '#64748b', '#06b6d4', '#ec4899'];
 
             let finalDatasets;
             if (Array.isArray(chartData) && chartData.length > 0 && typeof chartData[0] === 'object' && chartData[0].hasOwnProperty('label')) {
@@ -7842,7 +7952,7 @@ const supervisorGroups = new Map();
                 charts[canvasId].data.datasets = finalDatasets;
                 // 2. Substituir as opções antigas pelas novas, em vez de tentar um merge
                 charts[canvasId].options = options;
-                charts[canvasId].update();
+                charts[canvasId].update('none');
                 return;
             }
 
@@ -7926,48 +8036,57 @@ const supervisorGroups = new Map();
 
                 const tdPedido = document.createElement('td');
                 tdPedido.className = "px-4 py-2";
+                tdPedido.dataset.label = 'Nº Pedido';
                 tdPedido.appendChild(createLink(row.PEDIDO, 'pedidoId', row.PEDIDO));
                 tr.appendChild(tdPedido);
 
                 const tdCodCli = document.createElement('td');
                 tdCodCli.className = "px-4 py-2";
+                tdCodCli.dataset.label = 'Cliente';
                 tdCodCli.appendChild(createLink(row.CODCLI, 'codcli', row.CODCLI));
                 tr.appendChild(tdCodCli);
 
                 const tdVendedor = document.createElement('td');
                 tdVendedor.className = "px-4 py-2";
-                tdVendedor.textContent = getFirstName(row.NOME); // textContent escapes
+                tdVendedor.dataset.label = 'Vendedor';
+                tdVendedor.textContent = getFirstName(row.NOME);
                 tr.appendChild(tdVendedor);
 
                 const tdForn = document.createElement('td');
                 tdForn.className = "px-4 py-2";
-                tdForn.textContent = row.FORNECEDORES_STR || ''; // textContent escapes
+                tdForn.dataset.label = 'Fornecedor';
+                tdForn.textContent = row.FORNECEDORES_STR || '';
                 tr.appendChild(tdForn);
 
                 const tdDtPed = document.createElement('td');
                 tdDtPed.className = "px-4 py-2";
+                tdDtPed.dataset.label = 'Data Pedido';
                 tdDtPed.textContent = formatDate(row.DTPED);
                 tr.appendChild(tdDtPed);
 
                 const tdDtSaida = document.createElement('td');
                 tdDtSaida.className = "px-4 py-2";
+                tdDtSaida.dataset.label = 'Data Saída';
                 tdDtSaida.textContent = formatDate(row.DTSAIDA);
                 tr.appendChild(tdDtSaida);
 
                 const tdPeso = document.createElement('td');
                 tdPeso.className = "px-4 py-2 text-right";
+                tdPeso.dataset.label = 'Peso';
                 tdPeso.textContent = (Number(row.TOTPESOLIQ) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + ' Kg';
                 tr.appendChild(tdPeso);
 
                 const tdValor = document.createElement('td');
                 tdValor.className = "px-4 py-2 text-right";
+                tdValor.dataset.label = 'Total';
                 tdValor.textContent = (Number(row.VLVENDA) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 tr.appendChild(tdValor);
 
                 const tdPosicao = document.createElement('td');
                 tdPosicao.className = "px-4 py-2 text-center";
+                tdPosicao.dataset.label = 'Status';
                 const badge = getPosicaoBadge(row.POSICAO);
-                if (typeof badge === 'string') tdPosicao.textContent = badge; // Change innerHTML to textContent if string
+                if (typeof badge === 'string') tdPosicao.textContent = badge;
                 else tdPosicao.appendChild(badge);
                 tr.appendChild(tdPosicao);
 
@@ -8035,11 +8154,17 @@ const supervisorGroups = new Map();
             const monthCount = getUniqueMonthCount(historicalSales);
 
             // Robust calculation: handle potential undefined/NaN in full dataset
-            const pastQuarterRevenue = historicalSales.reduce((sum, sale) => sum + (Number(sale.VLVENDA) || 0), 0);
+            const pastQuarterRevenue = historicalSales.reduce((sum, sale) => {
+                if (!isAlternativeMode(selectedTiposVenda) && sale.TIPOVENDA !== '1' && sale.TIPOVENDA !== '9') return sum;
+                return sum + getValueForSale(sale, selectedTiposVenda);
+            }, 0);
             let averageMonthlyRevenue = pastQuarterRevenue / QUARTERLY_DIVISOR;
             if (isNaN(averageMonthlyRevenue)) averageMonthlyRevenue = 0;
 
-            const currentMonthRevenue = currentSales.reduce((sum, sale) => sum + (Number(sale.VLVENDA) || 0), 0);
+            const currentMonthRevenue = currentSales.reduce((sum, sale) => {
+                if (!isAlternativeMode(selectedTiposVenda) && sale.TIPOVENDA !== '1' && sale.TIPOVENDA !== '9') return sum;
+                return sum + getValueForSale(sale, selectedTiposVenda);
+            }, 0);
             let trend = passedWorkingDays > 0 && totalWorkingDays > 0 ? (currentMonthRevenue / passedWorkingDays) * totalWorkingDays : 0;
             if (isNaN(trend)) trend = 0;
 
@@ -8120,24 +8245,19 @@ const supervisorGroups = new Map();
                         return [];
                     }
                 }
-                    if (selectedMainSupervisors.length > 0) {
-                        hasFilter = true;
-                        const supIds = new Set();
-                        selectedMainSupervisors.forEach(sup => {
-                            if (indices.bySupervisor.has(sup)) {
-                                (indices.bySupervisor.get(sup) || []).forEach(id => supIds.add(id));
-                            }
-                        });
-                        setsToIntersect.push(supIds);
-                    }
-                    if (selectedSellers.length > 0) {
-                        hasFilter = true;
-                        const sellerIds = new Set();
-                        selectedSellers.forEach(seller => {
-                            (indices.byRca.get(seller) || []).forEach(id => sellerIds.add(id));
-                        });
-                        setsToIntersect.push(sellerIds);
-                    }
+
+                // Hierarchy Filter
+                const hierarchyClients = getHierarchyFilteredClients('main');
+                if (hierarchyClients.length < allClientsData.length) {
+                    hasFilter = true;
+                    const hierarchyIds = new Set();
+                    hierarchyClients.forEach(c => {
+                        const code = String(c['Código'] || c['codigo_cliente']);
+                        const ids = indices.byClient.get(code);
+                        if (ids) ids.forEach(id => hierarchyIds.add(id));
+                    });
+                    setsToIntersect.push(hierarchyIds);
+                }
 
                 if (selectedTiposVenda.length > 0) {
                     hasFilter = true;
@@ -8214,6 +8334,10 @@ const supervisorGroups = new Map();
             const filteredSalesData = getFilteredIds(optimizedData.indices.current, optimizedData.salesById);
             const filteredHistoryData = getFilteredIds(optimizedData.indices.history, optimizedData.historyById);
 
+            const hierarchyClientsForTable = getHierarchyFilteredClients('main');
+            const hierarchyClientCodes = new Set(hierarchyClientsForTable.map(c => String(c['Código'] || c['codigo_cliente'])));
+            const isHierarchyFiltered = hierarchyClientsForTable.length < allClientsData.length;
+
             const filteredTableData = aggregatedOrders.filter(order => {
                 let matches = true;
                 if (mainRedeGroupFilter) {
@@ -8221,8 +8345,7 @@ const supervisorGroups = new Map();
                 }
                 if (codcli) matches = matches && order.CODCLI === codcli;
                 else {
-                    if (selectedMainSupervisors.length > 0) matches = matches && selectedMainSupervisors.includes(order.SUPERV);
-                    if (selectedSellers.length > 0) matches = matches && selectedSellers.includes(order.NOME);
+                    if (isHierarchyFiltered) matches = matches && hierarchyClientCodes.has(order.CODCLI);
                 }
                 // Robust filtering with existence checks
                 if (selectedTiposVenda.length > 0) matches = matches && order.TIPOVENDA && selectedTiposVenda.includes(order.TIPOVENDA);
@@ -8232,7 +8355,7 @@ const supervisorGroups = new Map();
                 return matches;
             });
 
-            const isFiltered = selectedMainSupervisors.length > 0 || selectedSellers.length > 0 || !!codcli || !!currentFornecedor || !!mainRedeGroupFilter || selectedMainSuppliers.length > 0 || !!posicao || selectedTiposVenda.length > 0;
+            const isFiltered = isHierarchyFiltered || !!codcli || !!currentFornecedor || !!mainRedeGroupFilter || selectedMainSuppliers.length > 0 || !!posicao || selectedTiposVenda.length > 0;
 
             const summary = calculateSummaryFromData(filteredSalesData, isFiltered, clientBaseForCoverage);
 
@@ -8249,15 +8372,23 @@ const supervisorGroups = new Map();
 
             if (!chartView.classList.contains('hidden')) {
                 updateTrendChart(filteredSalesData, filteredHistoryData);
-                const totalForPercentage = selectedMainSupervisors.length > 0 ? Object.values(summary.vendasPorVendedor).reduce((a, b) => a + b, 0) : Object.values(summary.vendasPorSupervisor).reduce((a, b) => a + b, 0);
-                const personChartTooltipOptions = { plugins: { tooltip: { callbacks: { label: function(context) { let label = context.dataset.label || ''; if (label) label += ': '; const value = context.parsed.y; if (value !== null) { label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); if (totalForPercentage > 0) { const percentage = ((value / totalForPercentage) * 100).toFixed(2); label += ` (${percentage}%)`; } } return label; } } } } };
-                if (selectedMainSupervisors.length > 0) {
-                    salesByPersonTitle.textContent = 'Vendas por Vendedor';
-                    createChart('salesByPersonChart', 'bar', Object.keys(summary.vendasPorVendedor).map(getFirstName), Object.values(summary.vendasPorVendedor), personChartTooltipOptions);
-                } else {
-                    salesByPersonTitle.textContent = 'Vendas por Supervisor';
-                    createChart('salesByPersonChart', 'bar', Object.keys(summary.vendasPorSupervisor), Object.values(summary.vendasPorSupervisor), personChartTooltipOptions);
+                let chartData = summary.vendasPorCoord;
+                let chartTitle = 'Performance por Coordenador';
+                const mainState = hierarchyState['main'];
+                
+                if (mainState.cocoords.size > 0) {
+                    chartData = summary.vendasPorPromotor;
+                    chartTitle = 'Performance por Promotor';
+                } else if (mainState.coords.size > 0) {
+                    chartData = summary.vendasPorCoCoord;
+                    chartTitle = 'Performance por Co-Coordenador';
                 }
+
+                const totalForPercentage = Object.values(chartData).reduce((a, b) => a + b, 0);
+                const personChartTooltipOptions = { plugins: { tooltip: { callbacks: { label: function(context) { let label = context.dataset.label || ''; if (label) label += ': '; const value = context.parsed.y; if (value !== null) { label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); if (totalForPercentage > 0) { const percentage = ((value / totalForPercentage) * 100).toFixed(2); label += ` (${percentage}%)`; } } return label; } } } } };
+                
+                salesByPersonTitle.textContent = chartTitle;
+                createChart('salesByPersonChart', 'bar', Object.keys(chartData).map(getFirstName), Object.values(chartData), personChartTooltipOptions);
 
                 document.getElementById('faturamentoPorFornecedorTitle').textContent = isFiltered ? 'Faturamento por Fornecedor' : 'Faturamento por Categoria';
                 const faturamentoPorFornecedorData = summary.faturamentoPorFornecedor;
@@ -8270,58 +8401,9 @@ const supervisorGroups = new Map();
             }
         }
 
-        function updateSupervisorFilter(dropdown, filterText, selectedArray, dataSource, skipRender = false) {
-            if (!dropdown || !filterText) return selectedArray;
-            const forbidden = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR'];
-            const supervisors = [...new Set(dataSource.map(item => item.SUPERV).filter(s => s && !forbidden.includes(s.toUpperCase())))].sort();
-
-            selectedArray = selectedArray.filter(sup => supervisors.includes(sup));
-
-            if (!skipRender) {
-                const htmlParts = [];
-                for (let i = 0; i < supervisors.length; i++) {
-                    const sup = supervisors[i];
-                    const isChecked = selectedArray.includes(sup);
-                    htmlParts.push(`<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${sup}" ${isChecked ? 'checked' : ''}><span class="ml-2">${sup}</span></label>`);
-                }
-                dropdown.innerHTML = htmlParts.join('');
-            }
-
-            if (selectedArray.length === 0 || selectedArray.length === supervisors.length) filterText.textContent = 'Todos';
-            else if (selectedArray.length === 1) filterText.textContent = selectedArray[0];
-            else filterText.textContent = `${selectedArray.length} selecionados`;
-            return selectedArray;
-        }
-
-        function updateSellerFilter(supervisors, dropdown, filterText, selectedArray, dataSource, skipRender = false) {
-            const forbidden = ['NOME', 'VENDEDOR', 'SUPERV', 'CODUSUR', 'CODCLI', 'SUPERVISOR', 'INATIVOS'];
-            let sellersToShow;
-            if (supervisors && supervisors.length > 0) {
-                const supSet = new Set(supervisors);
-                sellersToShow = [...new Set(dataSource.filter(s => supSet.has(s.SUPERV)).map(s => s.NOME).filter(n => n && !forbidden.includes(n.toUpperCase())))].sort();
-            } else {
-                sellersToShow = [...new Set(dataSource.map(item => item.NOME).filter(n => n && !forbidden.includes(n.toUpperCase())))].sort();
-            }
-
-            selectedArray = selectedArray.filter(seller => sellersToShow.includes(seller));
-
-            if (!skipRender) {
-                const htmlParts = [];
-                for (let i = 0; i < sellersToShow.length; i++) {
-                    const s = sellersToShow[i];
-                    const isChecked = selectedArray.includes(s);
-                    htmlParts.push(`<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${s}" ${isChecked ? 'checked' : ''}><span class="ml-2">${s}</span></label>`);
-                }
-                dropdown.innerHTML = htmlParts.join('');
-            }
-
-            if (selectedArray.length === 0 || selectedArray.length === sellersToShow.length) filterText.textContent = 'Todos Vendedores';
-            else if (selectedArray.length === 1) filterText.textContent = selectedArray[0];
-            else filterText.textContent = `${selectedArray.length} vendedores selecionados`;
-            return selectedArray;
-        }
 
         function updateTipoVendaFilter(dropdown, filterText, selectedArray, dataSource, skipRender = false) {
+            if (!dropdown || !filterText) return selectedArray;
             // Collect unique types from data source
             const forbidden = ['TIPOVENDA', 'TIPO VENDA', 'TIPO', 'CODUSUR', 'CODCLI', 'SUPERV', 'NOME'];
             const uniqueTypes = new Set(dataSource.map(item => item.TIPOVENDA).filter(t => t && !forbidden.includes(t.toUpperCase())));
@@ -8354,6 +8436,7 @@ const supervisorGroups = new Map();
         }
 
         function updateRedeFilter(dropdown, buttonTextElement, selectedArray, dataSource, baseText = 'C/Rede') {
+            if (!dropdown || !buttonTextElement) return selectedArray;
             const forbidden = ['RAMO', 'RAMO DE ATIVIDADE', 'RAMO_ATIVIDADE', 'DESCRICAO', 'ATIVIDADE'];
             const redesToShow = [...new Set(dataSource.map(item => item.ramo).filter(r => r && r !== 'N/A' && !forbidden.includes(r.toUpperCase())))].sort();
             const validSelected = selectedArray.filter(rede => redesToShow.includes(rede));
@@ -8375,123 +8458,60 @@ const supervisorGroups = new Map();
         }
 
         function resetMainFilters() {
-            selectedMainSupervisors = [];
             selectedMainSuppliers = [];
-            posicaoFilter.value = '';
-            codcliFilter.value = '';
-            currentFornecedor = '';
-            selectedSellers = [];
             selectedTiposVenda = [];
-            mainRedeGroupFilter = '';
             selectedMainRedes = [];
-            mainTableState.currentPage = 1;
+            mainRedeGroupFilter = '';
 
-            mainRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-            mainRedeGroupContainer.querySelector('button[data-group=""]').classList.add('active');
+            const codcliFilter = document.getElementById('codcli-filter');
+            if (codcliFilter) codcliFilter.value = '';
+
+            selectedMainSuppliers = updateSupplierFilter(document.getElementById('fornecedor-filter-dropdown'), document.getElementById('fornecedor-filter-text'), selectedMainSuppliers, [...allSalesData, ...allHistoryData], 'main');
+            updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
             updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
 
-            document.querySelectorAll('#fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
-            selectedMainSupervisors = updateSupervisorFilter(document.getElementById('supervisor-filter-dropdown'), document.getElementById('supervisor-filter-text'), selectedMainSupervisors, allSalesData);
-            selectedMainSuppliers = updateSupplierFilter(document.getElementById('fornecedor-filter-dropdown'), document.getElementById('fornecedor-filter-text'), selectedMainSuppliers, [...allSalesData, ...allHistoryData], 'main');
-            selectedSellers = updateSellerFilter(selectedMainSupervisors, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
-            selectedTiposVenda = updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
-            updateAllVisuals();
-        }
+            if (mainRedeGroupContainer) {
+                mainRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                const defaultBtn = mainRedeGroupContainer.querySelector('button[data-group=""]');
+                if (defaultBtn) defaultBtn.classList.add('active');
+                if (mainRedeFilterDropdown) mainRedeFilterDropdown.classList.add('hidden');
+            }
 
-        function resetCityFilters() {
-            selectedCitySupervisors = [];
-            cityNameFilter.value = '';
-            cityCodCliFilter.value = '';
-            selectedCitySellers = [];
-            selectedCityRedes = [];
-            cityRedeGroupFilter = '';
-            selectedCityTiposVenda = [];
-            selectedCitySuppliers = [];
+            const fornecedorToggleContainerEl = document.getElementById('fornecedor-toggle-container');
+            if (fornecedorToggleContainerEl) {
+                fornecedorToggleContainerEl.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active'));
+            }
+            currentFornecedor = '';
 
-            selectedCitySupervisors = updateSupervisorFilter(document.getElementById('city-supervisor-filter-dropdown'), document.getElementById('city-supervisor-filter-text'), selectedCitySupervisors, allSalesData);
-            selectedCitySellers = updateSellerFilter(selectedCitySupervisors, cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData);
-            selectedCityTiposVenda = updateTipoVendaFilter(cityTipoVendaFilterDropdown, cityTipoVendaFilterText, selectedCityTiposVenda, allSalesData);
-            selectedCitySuppliers = updateSupplierFilter(document.getElementById('city-supplier-filter-dropdown'), document.getElementById('city-supplier-filter-text'), selectedCitySuppliers, [...allSalesData, ...allHistoryData], 'city');
+            if (hierarchyState['main']) {
+                hierarchyState['main'].coords.clear();
+                hierarchyState['main'].cocoords.clear();
+                hierarchyState['main'].promotors.clear();
 
-            cityRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-            cityRedeGroupContainer.querySelector('button[data-group=""]').classList.add('active');
-            updateRedeFilter(cityRedeFilterDropdown, cityComRedeBtnText, selectedCityRedes, allClientsData);
+                if (userHierarchyContext.role !== 'adm') {
+                    if (userHierarchyContext.coord) hierarchyState['main'].coords.add(userHierarchyContext.coord);
+                    if (userHierarchyContext.cocoord) hierarchyState['main'].cocoords.add(userHierarchyContext.cocoord);
+                    if (userHierarchyContext.promotor) hierarchyState['main'].promotors.add(userHierarchyContext.promotor);
+                }
 
-            updateCityView();
-        }
+                updateHierarchyDropdown('main', 'coord');
+                updateHierarchyDropdown('main', 'cocoord');
+                updateHierarchyDropdown('main', 'promotor');
+            }
 
-        function resetWeeklyFilters() {
-            selectedWeeklySupervisors = [];
-            selectedWeeklySellers = [];
-            currentWeeklyFornecedor = '';
-            document.querySelectorAll('#weekly-fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
-
-            // Re-populate will handle resetting the dropdown UI text and checkboxes based on empty selected arrays
-            populateWeeklyFilters();
-            updateWeeklyView();
-        }
-
-        function resetComparisonFilters() {
-            selectedComparisonSupervisors = [];
-            comparisonFilialFilter.value = 'ambas';
-            currentComparisonFornecedor = '';
-            comparisonCityFilter.value = '';
-            selectedComparisonSellers = [];
-            selectedComparisonSuppliers = [];
-            selectedComparisonProducts = [];
-            selectedComparisonTiposVenda = [];
-            comparisonRedeGroupFilter = '';
-            selectedComparisonRedes = [];
-
-            comparisonRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-            comparisonRedeGroupContainer.querySelector('button[data-group=""]').classList.add('active');
-            updateRedeFilter(comparisonRedeFilterDropdown, comparisonComRedeBtnText, selectedComparisonRedes, allClientsData);
-
-            document.querySelectorAll('#comparison-fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
-
-            updateAllComparisonFilters();
-            updateComparisonView();
-        }
-
-        function resetStockFilters() {
-            stockFilialFilter.value = 'ambas';
-            currentStockFornecedor = '';
-            selectedStockSupervisors = [];
-            stockCityFilter.value = '';
-            selectedStockSellers = [];
-            selectedStockSuppliers = [];
-            selectedStockProducts = [];
-            selectedStockTiposVenda = [];
-            stockRedeGroupFilter = '';
-            selectedStockRedes = [];
-            stockTrendFilter = 'all';
-
-            document.querySelectorAll('.stock-trend-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelector('.stock-trend-btn[data-trend="all"]').classList.add('active');
-
-            stockRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-            stockRedeGroupContainer.querySelector('button[data-group=""]').classList.add('active');
-            updateRedeFilter(stockRedeFilterDropdown, stockComRedeBtnText, selectedStockRedes, allClientsData, 'Com Rede');
-
-            document.querySelectorAll('#stock-fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
-
-            customWorkingDaysStock = maxWorkingDaysStock;
-            const daysInput = document.getElementById('stock-working-days-input');
-            if(daysInput) daysInput.value = customWorkingDaysStock;
-
-            handleStockFilterChange();
+            updateDashboard();
         }
 
 
         function getCityFilteredData(options = {}) {
             const { excludeFilter = null } = options;
 
-            const sellersSet = new Set(selectedCitySellers);
             const cityInput = cityNameFilter.value.trim().toLowerCase();
             const codCli = cityCodCliFilter.value.trim();
             const tiposVendaSet = new Set(selectedCityTiposVenda);
 
-            let clients = allClientsData;
+            // New Hierarchy Logic
+            let clients = getHierarchyFilteredClients('city', allClientsData);
 
             if (excludeFilter !== 'rede') {
                  if (cityRedeGroupFilter === 'com_rede') {
@@ -8503,23 +8523,6 @@ const supervisorGroups = new Map();
                 } else if (cityRedeGroupFilter === 'sem_rede') {
                     clients = clients.filter(c => !c.ramo || c.ramo === 'N/A');
                 }
-            }
-
-            if (excludeFilter !== 'supervisor' && selectedCitySupervisors.length > 0) {
-                const rcasSet = new Set();
-                selectedCitySupervisors.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
-                });
-                clients = clients.filter(c => c.rcas.some(r => rcasSet.has(r)));
-            }
-
-            if (excludeFilter !== 'seller' && sellersSet.size > 0) {
-                const rcasSet = new Set();
-                sellersSet.forEach(name => {
-                    const code = optimizedData.rcaCodeByName.get(name);
-                    if(code) rcasSet.add(code);
-                });
-                clients = clients.filter(c => c.rcas.some(r => rcasSet.has(r)));
             }
 
             if (excludeFilter !== 'supplier' && selectedCitySuppliers.length > 0) {
@@ -8536,11 +8539,7 @@ const supervisorGroups = new Map();
 
             const clientCodes = new Set(clients.map(c => c['Código']));
 
-            const supervisorSet = new Set(selectedCitySupervisors);
-
             const filters = {
-                supervisor: supervisorSet,
-                seller: sellersSet,
                 city: cityInput,
                 tipoVenda: tiposVendaSet,
                 clientCodes: clientCodes,
@@ -8555,13 +8554,7 @@ const supervisorGroups = new Map();
         function updateAllCityFilters(options = {}) {
             const { skipFilter = null } = options;
 
-            if (skipFilter !== 'supervisor') {
-                const { sales } = getCityFilteredData({ excludeFilter: 'supervisor' });
-                selectedCitySupervisors = updateSupervisorFilter(document.getElementById('city-supervisor-filter-dropdown'), document.getElementById('city-supervisor-filter-text'), selectedCitySupervisors, sales);
-            }
-
-            const { sales: salesSeller } = getCityFilteredData({ excludeFilter: 'seller' });
-            selectedCitySellers = updateSellerFilter(selectedCitySupervisors, cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, salesSeller, skipFilter === 'seller');
+            // Supervisor/Seller filters managed by setupHierarchyFilters
 
             const { sales: salesTV } = getCityFilteredData({ excludeFilter: 'tipoVenda' });
             selectedCityTiposVenda = updateTipoVendaFilter(cityTipoVendaFilterDropdown, cityTipoVendaFilterText, selectedCityTiposVenda, salesTV, skipFilter === 'tipoVenda');
@@ -8588,7 +8581,7 @@ const supervisorGroups = new Map();
         function updateCitySuggestions(filterInput, suggestionsContainer, dataSource) {
             const forbidden = ['CIDADE', 'MUNICIPIO', 'CIDADE_CLIENTE', 'NOME DA CIDADE', 'CITY'];
             const inputValue = filterInput.value.toLowerCase();
-            
+
             if (!inputValue) {
                 suggestionsContainer.classList.add('hidden');
                 return;
@@ -8662,10 +8655,12 @@ const supervisorGroups = new Map();
             for(let i=0; i<allSalesData.length; i++) {
                 const s = (allSalesData instanceof ColumnarDataset) ? allSalesData.get(i) : allSalesData[i];
                 if (selectedTiposVendaSet.size > 0 && !selectedTiposVendaSet.has(s.TIPOVENDA)) continue;
+                if (!isAlternativeMode(selectedCityTiposVenda) && s.TIPOVENDA !== '1' && s.TIPOVENDA !== '9') continue;
 
                 const d = parseDate(s.DTPED);
                 if (d && d.getUTCFullYear() === currentYear && d.getUTCMonth() === currentMonth) {
-                    clientTotalsThisMonth.set(s.CODCLI, (clientTotalsThisMonth.get(s.CODCLI) || 0) + s.VLVENDA);
+                    const val = getValueForSale(s, selectedCityTiposVenda);
+                    clientTotalsThisMonth.set(s.CODCLI, (clientTotalsThisMonth.get(s.CODCLI) || 0) + val);
                 }
             }
 
@@ -8675,6 +8670,7 @@ const supervisorGroups = new Map();
             salesForAnalysis.forEach(s => {
                 const d = parseDate(s.DTPED);
                 if (d) {
+                    if (!isAlternativeMode(selectedCityTiposVenda) && s.TIPOVENDA !== '1' && s.TIPOVENDA !== '9') return;
                     if (!detailedDataByClient.has(s.CODCLI)) {
                         detailedDataByClient.set(s.CODCLI, { total: 0, pepsico: 0, multimarcas: 0, maxDate: 0 });
                     }
@@ -8684,9 +8680,10 @@ const supervisorGroups = new Map();
                     if (ts > entry.maxDate) entry.maxDate = ts;
 
                     if (d.getUTCFullYear() === currentYear && d.getUTCMonth() === currentMonth) {
-                        entry.total += s.VLVENDA;
-                        if (s.OBSERVACAOFOR === 'PEPSICO') entry.pepsico += s.VLVENDA;
-                        else if (s.OBSERVACAOFOR === 'MULTIMARCAS') entry.multimarcas += s.VLVENDA;
+                        const val = getValueForSale(s, selectedCityTiposVenda);
+                        entry.total += val;
+                        if (s.OBSERVACAOFOR === 'PEPSICO') entry.pepsico += val;
+                        else if (s.OBSERVACAOFOR === 'MULTIMARCAS') entry.multimarcas += val;
                     }
                 }
             });
@@ -8699,8 +8696,8 @@ const supervisorGroups = new Map();
             });
 
             // Show Loading
-            cityActiveDetailTableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8"><svg class="animate-spin h-8 w-8 text-teal-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></td></tr>';
-            cityInactiveDetailTableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8"><svg class="animate-spin h-8 w-8 text-teal-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></td></tr>';
+            cityActiveDetailTableBody.innerHTML = getSkeletonRows(6, 5);
+            cityInactiveDetailTableBody.innerHTML = getSkeletonRows(6, 5);
 
             const activeClientsList = [];
             const inactiveClientsList = [];
@@ -8930,216 +8927,9 @@ const supervisorGroups = new Map();
             historicalBests = bestDayByWeekdayBySupervisor;
         }
 
-        function populateWeeklyFilters() {
-            selectedWeeklySupervisors = updateSupervisorFilter(weeklySupervisorFilterDropdown, weeklySupervisorFilterText, selectedWeeklySupervisors, allSalesData);
-            selectedWeeklySellers = updateSellerFilter(selectedWeeklySupervisors, weeklyVendedorFilterDropdown, weeklyVendedorFilterText, selectedWeeklySellers, allSalesData);
-        }
-
-        function updateWeeklyView() {
-            let dataForGeneralCharts;
-
-            // Use the generic filtering helper which supports multiple selections
-            const filters = {
-                supervisor: selectedWeeklySupervisors.length > 0 ? new Set(selectedWeeklySupervisors) : null,
-                seller: selectedWeeklySellers.length > 0 ? new Set(selectedWeeklySellers) : null,
-                pasta: currentWeeklyFornecedor || null
-            };
-
-            // If we have filters, use optimized lookup
-            if (filters.supervisor || filters.seller || filters.pasta) {
-                dataForGeneralCharts = getFilteredDataFromIndices(optimizedData.indices.current, optimizedData.salesById, filters);
-            } else {
-                dataForGeneralCharts = allSalesData;
-            }
-
-            const currentMonth = lastSaleDate.getUTCMonth(); const currentYear = lastSaleDate.getUTCFullYear();
-            const monthSales = dataForGeneralCharts.filter(d => { if (!d.DTPED) return false; const saleDate = parseDate(d.DTPED); return saleDate && saleDate.getUTCMonth() === currentMonth && saleDate.getUTCFullYear() === currentYear; });
-            const totalMes = monthSales.reduce((sum, item) => sum + item.VLVENDA, 0);
-            totalMesSemanalEl.textContent = totalMes.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-            // --- NEW WORKING WEEK BUCKET LOGIC ---
-            const currentMonthWeeks = getWorkingMonthWeeks(currentYear, currentMonth);
-            const salesByWeekAndDay = {};
-            const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-
-            // Initialize buckets for all determined working weeks
-            currentMonthWeeks.forEach((w, i) => {
-                salesByWeekAndDay[w.id] = {};
-                // Only care about Mon-Fri for the chart bars
-                // Mon=1, Fri=5
-                for(let d=1; d<=5; d++) {
-                    salesByWeekAndDay[w.id][dayNames[d]] = 0;
-                }
-            });
-
-            monthSales.forEach(sale => {
-                const saleDate = parseDate(sale.DTPED);
-                if (!saleDate) return;
-
-                // Determine bucket
-                const wIdx = currentMonthWeeks.findIndex(w => saleDate >= w.start && saleDate <= w.end);
-
-                if (wIdx !== -1) {
-                    const weekId = currentMonthWeeks[wIdx].id;
-                    const dayName = dayNames[saleDate.getUTCDay()];
-
-                    // Only accumulate to daily breakdown if it's a Weekday (Mon-Fri)
-                    // If Saturday/Sunday, it contributes to TOTAL (already calculated) but doesn't appear in chart bars.
-                    // However, user said "somado no total". totalMes already has it.
-                    // Chart is "Faturamento Mensal por Dia da Semana". Bars are Mon-Fri.
-                    // Sat/Sun sales are effectively hidden from the bars.
-
-                    if (salesByWeekAndDay[weekId] && salesByWeekAndDay[weekId][dayName] !== undefined) {
-                        salesByWeekAndDay[weekId][dayName] += sale.VLVENDA;
-                    }
-                }
-            });
-
-            const weekLabels = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
-            const weekNumbers = Object.keys(salesByWeekAndDay).sort((a,b) => parseInt(a) - parseInt(b));
-            const professionalPalette = ['#14b8a6', '#6366f1', '#ec4899', '#f97316', '#8b5cf6'];
-            const currentMonthDatasets = weekNumbers.map((weekNum, index) => ({ label: `Semana ${weekNum}`, data: weekLabels.map(day => salesByWeekAndDay[weekNum][day] || 0), backgroundColor: professionalPalette[index % professionalPalette.length] }));
-            // Note: Calculate "Melhor Dia Mês Anterior" dynamically based on current filters
-            const historicalDataForChart = [0, 0, 0, 0, 0];
-            
-            // 1. Get Filtered History Data
-            let historyDataForCalculation;
-            if (filters.supervisor || filters.seller || filters.pasta) {
-                historyDataForCalculation = getFilteredDataFromIndices(optimizedData.indices.history, optimizedData.historyById, filters);
-            } else {
-                historyDataForCalculation = allHistoryData;
-            }
-
-            // 2. Determine Previous Month Range
-            let prevMonth = currentMonth - 1;
-            let prevYear = currentYear;
-            if (prevMonth < 0) { prevMonth = 11; prevYear--; }
-
-            // 3. Aggregate Sales by Date for the Previous Month
-            const prevMonthSalesByDate = {}; // 'YYYY-MM-DD' -> Total
-            
-            // Optimize iteration if it's a columnar dataset proxy (although array methods work)
-            for (let i = 0; i < historyDataForCalculation.length; i++) {
-                const sale = historyDataForCalculation instanceof ColumnarDataset ? historyDataForCalculation.get(i) : historyDataForCalculation[i];
-                const d = parseDate(sale.DTPED);
-                if (d && d.getUTCMonth() === prevMonth && d.getUTCFullYear() === prevYear) {
-                    const dateStr = d.toISOString().split('T')[0];
-                    if (!prevMonthSalesByDate[dateStr]) prevMonthSalesByDate[dateStr] = 0;
-                    prevMonthSalesByDate[dateStr] += (sale.VLVENDA || 0);
-                }
-            }
-
-            // 4. Find Best Total for Each Weekday
-            const bestsByWeekday = {}; // 1..5 -> maxTotal
-            for (const dateStr in prevMonthSalesByDate) {
-                const d = new Date(dateStr + 'T00:00:00Z'); // Ensure UTC parsing
-                const dayOfWeek = d.getUTCDay();
-                if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-                    const total = prevMonthSalesByDate[dateStr];
-                    if (!bestsByWeekday[dayOfWeek] || total > bestsByWeekday[dayOfWeek]) {
-                        bestsByWeekday[dayOfWeek] = total;
-                    }
-                }
-            }
-
-            // 5. Populate Chart Data
-            historicalDataForChart[0] = bestsByWeekday[1] || 0; // Mon
-            historicalDataForChart[1] = bestsByWeekday[2] || 0; // Tue
-            historicalDataForChart[2] = bestsByWeekday[3] || 0; // Wed
-            historicalDataForChart[3] = bestsByWeekday[4] || 0; // Thu
-            historicalDataForChart[4] = bestsByWeekday[5] || 0; // Fri
-            const historicalDataset = { type: 'line', label: 'Melhor Dia Mês Anterior', data: historicalDataForChart, borderColor: '#f59e0b', backgroundColor: 'transparent', pointBackgroundColor: '#f59e0b', pointRadius: 4, tension: 0.1, borderWidth: 2, yAxisID: 'y', datalabels: { display: false } };
-            const finalDatasets = [...currentMonthDatasets, historicalDataset];
-            const weeklyChartOptions = { plugins: { legend: { display: true, onClick: (e, legendItem, legend) => { const index = legendItem.datasetIndex; const ci = legend.chart; if (ci.isDatasetVisible(index)) { ci.hide(index); legendItem.hidden = true; } else { ci.show(index); legendItem.hidden = false; } let newTotal = 0; ci.data.datasets.forEach((dataset, i) => { if (ci.isDatasetVisible(i) && dataset.type !== 'line') newTotal += dataset.data.reduce((acc, val) => acc + val, 0); }); totalMesSemanalEl.textContent = newTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); } } } };
-            createChart('weeklySalesChart', 'bar', weekLabels, finalDatasets, weeklyChartOptions);
-            const weeklySummaryTableBody = document.getElementById('weekly-summary-table-body');
-            if (weeklySummaryTableBody) {
-                weeklySummaryTableBody.innerHTML = ''; let grandTotal = 0;
-                Object.keys(salesByWeekAndDay).sort((a,b) => parseInt(a) - parseInt(b)).forEach(weekNum => { const weekTotal = Object.values(salesByWeekAndDay[weekNum]).reduce((a, b) => a + b, 0); grandTotal += weekTotal; weeklySummaryTableBody.innerHTML += `<tr class="hover:bg-slate-700"><td class="px-4 py-2">Semana ${weekNum}</td><td class="px-4 py-2 text-right">${weekTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td></tr>`; });
-                weeklySummaryTableBody.innerHTML += `<tr class="font-bold bg-slate-700/50"><td class="px-4 py-2">Total do Mês</td><td class="px-4 py-2 text-right">${grandTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td></tr>`;
-            }
-            let dataForRankings = dataForGeneralCharts.filter(d => d.SUPERV !== 'BALCAO');
-
-            // --- "AMERICANAS" Exclusion Logic ---
-            // If "AMERICANAS" is NOT explicitly selected in the vendor filter, exclude it from ranking charts.
-            // Assuming "AMERICANAS" appears as a Vendor name in sales data (d.NOME) or Client name?
-            // Usually AMERICANAS is a client, but sometimes mapped as a dummy vendor or huge account.
-            // The prompt says "o vendedor 'AMERICANAS'". So we check d.NOME.
-            const americanasSelected = selectedWeeklySellers.some(s => s.toUpperCase().includes('AMERICANAS'));
-            if (!americanasSelected) {
-                dataForRankings = dataForRankings.filter(d => !d.NOME.toUpperCase().includes('AMERICANAS'));
-            }
-            // ------------------------------------
-
-            const positivacaoMap = new Map(); // Map<Seller, Map<Client, Value>>
-            dataForRankings.forEach(d => {
-                if (!d.NOME || !d.CODCLI) return;
-                if (!positivacaoMap.has(d.NOME)) positivacaoMap.set(d.NOME, new Map());
-                const clientMap = positivacaoMap.get(d.NOME);
-                clientMap.set(d.CODCLI, (clientMap.get(d.CODCLI) || 0) + d.VLVENDA);
-            });
-
-            const positivacaoRank = [];
-            positivacaoMap.forEach((clientMap, seller) => {
-                let activeCount = 0;
-                clientMap.forEach(val => { if (val >= 1) activeCount++; });
-                positivacaoRank.push({ vendedor: seller, total: activeCount });
-            });
-            positivacaoRank.sort((a, b) => b.total - a.total).splice(10); // Keep top 10
-
-            if (positivacaoRank.length > 0) createChart('positivacaoChart', 'bar', positivacaoRank.map(r => getFirstName(r.vendedor)), positivacaoRank.map(r => r.total));
-            else showNoDataMessage('positivacaoChart', 'Sem dados para o ranking.');
-            const salesBySeller = {}; dataForRankings.forEach(d => { if (!d.NOME) return; salesBySeller[d.NOME] = (salesBySeller[d.NOME] || 0) + d.VLVENDA; });
-            const topSellersRank = Object.entries(salesBySeller).sort(([, a], [, b]) => b - a).slice(0, 10);
-            if (topSellersRank.length > 0) createChart('topSellersChart', 'bar', topSellersRank.map(r => getFirstName(r[0])), topSellersRank.map(r => r[1]));
-            else showNoDataMessage('topSellersChart', 'Sem dados para o ranking.');
-            // --- OPTIMIZATION: Mix Rank Calculation ---
-            // Calculate mix map: Map<Seller, Map<Client, Map<Description, Value>>>
-            const sellerClientMixMap = new Map();
-            const targetSuppliers = new Set(['707', '708']); // Aligned with Comparison Page
-
-            dataForRankings.forEach(d => {
-                const vendedor = d.NOME;
-                if (!vendedor || vendedor === 'VD HIAGO') return;
-
-                // Rule: Aligned with Comparison Page (Strict Pepsico)
-                if (!targetSuppliers.has(String(d.CODFOR))) return;
-
-                if (!d.CODCLI || !d.DESCRICAO) return;
-
-                if (!sellerClientMixMap.has(vendedor)) sellerClientMixMap.set(vendedor, new Map());
-                const clientMap = sellerClientMixMap.get(vendedor);
-
-                if (!clientMap.has(d.CODCLI)) clientMap.set(d.CODCLI, new Map());
-                const prodMap = clientMap.get(d.CODCLI);
-                prodMap.set(d.DESCRICAO, (prodMap.get(d.DESCRICAO) || 0) + d.VLVENDA);
-            });
-
-            const mixRank = [];
-            for (const [vendedor, clientMap] of sellerClientMixMap.entries()) {
-                const mixValues = [];
-                for (const prodMap of clientMap.values()) {
-                    let positiveProducts = 0;
-                    prodMap.forEach(val => { if (val >= 1) positiveProducts++; });
-                    if (positiveProducts > 0) mixValues.push(positiveProducts);
-                }
-
-                if (mixValues.length > 0) {
-                    const avgMix = mixValues.reduce((a, b) => a + b, 0) / mixValues.length;
-                    mixRank.push({ vendedor, avgMix });
-                } else {
-                     mixRank.push({ vendedor, avgMix: 0 });
-                }
-            }
-
-            mixRank.sort((a, b) => b.avgMix - a.avgMix);
-            const top10Mix = mixRank.slice(0, 10);
-
-            if(top10Mix.length > 0 && top10Mix.some(r => r.avgMix > 0)) createChart('mixChart', 'bar', top10Mix.map(r => getFirstName(r.vendedor)), top10Mix.map(r => r.avgMix));
-            else showNoDataMessage('mixChart', 'Sem dados para o ranking.');
-        }
 
         function updateSupplierFilter(dropdown, filterText, selectedArray, dataSource, filterType = 'comparison', skipRender = false) {
+            if (!dropdown || !filterText) return selectedArray;
             const forbidden = ['CODFOR', 'FORNECEDOR', 'COD FOR', 'NOME DO FORNECEDOR', 'FORNECEDOR_NOME'];
             const suppliers = new Map();
             dataSource.forEach(s => {
@@ -9171,7 +8961,7 @@ const supervisorGroups = new Map();
                 for (let i = 0; i < sortedSuppliers.length; i++) {
                     let [cod, name] = sortedSuppliers[i];
                     const isChecked = selectedArray.includes(cod);
-                    
+
                     let displayName = name;
                     // For all pages except 'Meta Vs. Realizado', prefix Code to Name
                     if (filterType !== 'metaRealizado') {
@@ -9733,34 +9523,6 @@ const supervisorGroups = new Map();
             return kpiValues.reduce((a, b) => a + b, 0) / QUARTERLY_DIVISOR;
         }
 
-        function calculateStockMonthlyAverage(historySales) {
-            // Function groupSalesByMonth is defined above in the scope
-            const salesByMonth = groupSalesByMonth(historySales);
-            let sortedMonths = Object.keys(salesByMonth).sort();
-
-            if (sortedMonths.length > 0) {
-                const firstMonthKey = sortedMonths[0];
-                const firstSaleInFirstMonth = salesByMonth[firstMonthKey].reduce((earliest, sale) => {
-                    const saleDate = parseDate(sale.DTPED);
-                    return (!earliest || (saleDate && saleDate < earliest)) ? saleDate : earliest;
-                }, null);
-
-                if (firstSaleInFirstMonth && firstSaleInFirstMonth.getUTCDate() > 20) {
-                    sortedMonths.shift();
-                }
-            }
-
-            const monthsToAverage = sortedMonths.slice(-3);
-
-            const kpiValues = monthsToAverage.map(monthKey => {
-                const salesForMonth = salesByMonth[monthKey];
-                return salesForMonth.reduce((sum, s) => sum + (s.QTVENDA_EMBALAGEM_MASTER || 0), 0);
-            });
-
-            if (kpiValues.length === 0) return 0;
-            return kpiValues.reduce((a, b) => a + b, 0) / kpiValues.length;
-        }
-
         const getFilteredDataFromIndices = (indices, dataset, filters, excludeFilter = null) => {
             const isExcluded = (f) => excludeFilter === f || (Array.isArray(excludeFilter) && excludeFilter.includes(f));
             const setsToIntersect = [];
@@ -9913,15 +9675,15 @@ const supervisorGroups = new Map();
                  // Use iteration if values() unavailable
                  if (Array.isArray(dataset)) {
                      for(let i=0; i<dataset.length; i++) {
-                         if(filters.clientCodes.has(dataset[i].CODCLI)) allData.push(dataset[i]);
+                         if(filters.clientCodes.has(normalizeKey(dataset[i].CODCLI))) allData.push(dataset[i]);
                      }
                  } else if (dataset.values && typeof dataset.values === 'function') {
                      const vals = dataset.values();
-                     for(let i=0; i<vals.length; i++) if(filters.clientCodes.has(vals[i].CODCLI)) allData.push(vals[i]);
+                     for(let i=0; i<vals.length; i++) if(filters.clientCodes.has(normalizeKey(vals[i].CODCLI))) allData.push(vals[i]);
                  } else {
                      for(let i=0; i<dataset.length; i++) {
                          const item = getItem(i);
-                         if(filters.clientCodes.has(item.CODCLI)) allData.push(item);
+                         if(filters.clientCodes.has(normalizeKey(item.CODCLI))) allData.push(item);
                      }
                  }
                  return allData;
@@ -9937,7 +9699,7 @@ const supervisorGroups = new Map();
             const result = [];
             for (const id of resultIds) {
                 const item = getItem(id);
-                if (!filters.clientCodes || filters.clientCodes.has(item.CODCLI)) {
+                if (!filters.clientCodes || filters.clientCodes.has(normalizeKey(item.CODCLI))) {
                     result.push(item);
                 }
             }
@@ -9947,20 +9709,18 @@ const supervisorGroups = new Map();
         function getComparisonFilteredData(options = {}) {
             const { excludeFilter = null } = options;
 
-            const sellersSet = new Set(selectedComparisonSellers);
             const suppliersSet = new Set(selectedComparisonSuppliers);
             const productsSet = new Set(selectedComparisonProducts);
             const tiposVendaSet = new Set(selectedComparisonTiposVenda);
             const redeSet = new Set(selectedComparisonRedes);
-            const supervisorSet = new Set(selectedComparisonSupervisors);
 
             const pasta = currentComparisonFornecedor;
             const city = comparisonCityFilter.value.trim().toLowerCase();
             const filial = comparisonFilialFilter.value;
 
-            let clientCodes = null;
+            let clients = getHierarchyFilteredClients('comparison', allClientsData);
+
             if (comparisonRedeGroupFilter) {
-                let clients = allClientsData;
                 if (comparisonRedeGroupFilter === 'com_rede') {
                     clients = clients.filter(c => c.ramo && c.ramo !== 'N/A');
                      if (redeSet.size > 0) {
@@ -9969,15 +9729,14 @@ const supervisorGroups = new Map();
                 } else if (comparisonRedeGroupFilter === 'sem_rede') {
                     clients = clients.filter(c => !c.ramo || c.ramo === 'N/A');
                 }
-                clientCodes = new Set(clients.map(c => c['Código']));
             }
+            
+            const clientCodes = new Set(clients.map(c => c['Código'] || c['codigo_cliente']));
 
             const filters = {
                 filial,
-                supervisor: supervisorSet,
                 pasta,
                 tipoVenda: tiposVendaSet,
-                seller: sellersSet,
                 supplier: suppliersSet,
                 product: productsSet,
                 city,
@@ -9992,14 +9751,6 @@ const supervisorGroups = new Map();
 
 
         function updateAllComparisonFilters() {
-            const { currentSales: supervisorCurrent, historySales: supervisorHistory } = getComparisonFilteredData({ excludeFilter: 'supervisor' });
-            const supervisorOptionsData = [...supervisorCurrent, ...supervisorHistory];
-            selectedComparisonSupervisors = updateSupervisorFilter(document.getElementById('comparison-supervisor-filter-dropdown'), document.getElementById('comparison-supervisor-filter-text'), selectedComparisonSupervisors, supervisorOptionsData);
-
-            const { currentSales: sellerCurrent, historySales: sellerHistory } = getComparisonFilteredData({ excludeFilter: 'seller' });
-            const sellerOptionsData = [...sellerCurrent, ...sellerHistory];
-            selectedComparisonSellers = updateSellerFilter(selectedComparisonSupervisors, comparisonVendedorFilterDropdown, comparisonVendedorFilterText, selectedComparisonSellers, sellerOptionsData);
-
             const { currentSales: supplierCurrent, historySales: supplierHistory } = getComparisonFilteredData({ excludeFilter: 'supplier' });
             const supplierOptionsData = [...supplierCurrent, ...supplierHistory];
             selectedComparisonSuppliers = updateSupplierFilter(comparisonSupplierFilterDropdown, comparisonSupplierFilterText, selectedComparisonSuppliers, supplierOptionsData, 'comparison');
@@ -10026,6 +9777,7 @@ const supervisorGroups = new Map();
         }
 
         function updateProductFilter(dropdown, filterText, selectedArray, dataSource, filterType = 'comparison', skipRender = false) {
+            if (!dropdown) return selectedArray;
             const forbidden = ['PRODUTO', 'DESCRICAO', 'CODIGO', 'CÓDIGO', 'DESCRIÇÃO'];
             const searchInput = dropdown.querySelector('input[type="text"]');
             const listContainer = dropdown.querySelector('div[id$="-list"]');
@@ -10046,7 +9798,7 @@ const supervisorGroups = new Map();
                   )
                 : products;
 
-            if (!skipRender) {
+            if (!skipRender && listContainer) {
                 const htmlParts = [];
                 for (let i = 0; i < filteredProducts.length; i++) {
                     const [code, name] = filteredProducts[i];
@@ -10076,44 +9828,8 @@ const supervisorGroups = new Map();
             selectedComparisonProducts = updateProductFilter(comparisonProductFilterDropdown, comparisonProductFilterText, selectedComparisonProducts, [...currentSales, ...historySales], 'comparison');
         }
 
-        function updateStockProductFilter(skipRender = false) {
-            const data = getStockFilteredData({excludeFilter: 'product'});
-            selectedStockProducts = updateProductFilter(stockProductFilterDropdown, stockProductFilterText, selectedStockProducts, [...data.sales, ...data.history], 'stock', skipRender);
-        }
-
-        function updateStockSupplierFilter(skipRender = false) {
-            const data = getStockFilteredData({excludeFilter: 'supplier'});
-            selectedStockSuppliers = updateSupplierFilter(stockSupplierFilterDropdown, stockSupplierFilterText, selectedStockSuppliers, [...data.sales, ...data.history], 'stock', skipRender);
-        }
-
-        function updateStockSellerFilter(skipRender = false) {
-            const data = getStockFilteredData({excludeFilter: 'seller'});
-            selectedStockSellers = updateSellerFilter(selectedStockSupervisors, stockVendedorFilterDropdown, stockVendedorFilterText, selectedStockSellers, [...data.sales, ...data.history], skipRender);
-        }
-
-        function updateStockCitySuggestions(dataSource) {
-            const forbidden = ['CIDADE', 'MUNICIPIO', 'CIDADE_CLIENTE', 'NOME DA CIDADE', 'CITY'];
-            const inputValue = stockCityFilter.value.toLowerCase();
-            // Optimized Lookup
-            const allAvailableCities = [...new Set(dataSource.map(item => {
-                if (item.CIDADE) return item.CIDADE;
-                if (item.CODCLI) {
-                    const c = clientMapForKPIs.get(String(item.CODCLI));
-                    if (c) return c.cidade || c['Nome da Cidade'];
-                }
-                return 'N/A';
-            }).filter(c => c && c !== 'N/A' && !forbidden.includes(c.toUpperCase())))].sort();
-            const filteredCities = inputValue ? allAvailableCities.filter(c => c.toLowerCase().includes(inputValue)) : allAvailableCities;
-            if (filteredCities.length > 0 && document.activeElement === stockCityFilter) {
-                stockCitySuggestions.innerHTML = filteredCities.map(c => `<div class="p-2 hover:bg-slate-600 cursor-pointer">${c}</div>`).join('');
-                stockCitySuggestions.classList.remove('hidden');
-            } else {
-                stockCitySuggestions.classList.add('hidden');
-            }
-        }
-
         function getActiveStockMap(filial) {
-            const filterValue = filial || stockFilialFilter.value;
+            const filterValue = filial || 'ambas';
             if (filterValue === '05') {
                 return stockData05;
             }
@@ -10127,109 +9843,19 @@ const supervisorGroups = new Map();
             return combinedStock;
         }
 
-        function getStockFilteredData(options = {}) {
-            const { excludeFilter = null } = options;
-
-            const sellersSet = new Set(selectedStockSellers);
-            const suppliersSet = new Set(selectedStockSuppliers);
-            const productsSet = new Set(selectedStockProducts);
-            const tiposVendaSet = new Set(selectedStockTiposVenda);
-            const redeSet = new Set(selectedStockRedes);
-            const supervisorSet = new Set(selectedStockSupervisors);
-
-            const pasta = currentStockFornecedor;
-            const city = stockCityFilter.value.trim().toLowerCase();
-            const filial = stockFilialFilter.value;
-
-            let clientCodes = null;
-            if (excludeFilter !== 'rede') {
-                if (stockRedeGroupFilter === 'com_rede' || stockRedeGroupFilter === 'sem_rede') {
-                    let clients = allClientsData;
-                    if (stockRedeGroupFilter === 'com_rede') {
-                        clients = clients.filter(c => c.ramo && c.ramo !== 'N/A');
-                        if (redeSet.size > 0) {
-                            clients = clients.filter(c => redeSet.has(c.ramo));
-                        }
-                    } else if (stockRedeGroupFilter === 'sem_rede') {
-                        clients = clients.filter(c => !c.ramo || c.ramo === 'N/A');
-                    }
-                    clientCodes = new Set(clients.map(c => c['Código']));
-                }
-            }
-
-            const filters = {
-                filial,
-                supervisor: supervisorSet,
-                pasta,
-                tipoVenda: tiposVendaSet,
-                seller: sellersSet,
-                supplier: suppliersSet,
-                product: productsSet,
-                city,
-                clientCodes
-            };
-
-            return {
-                sales: getFilteredDataFromIndices(optimizedData.indices.current, optimizedData.salesById, filters, excludeFilter),
-                history: getFilteredDataFromIndices(optimizedData.indices.history, optimizedData.historyById, filters, excludeFilter)
-            };
-        }
-
-        function handleStockFilterChange(options = {}) {
-            const { skipFilter = null } = options;
-
-            // Debounce stock view update
-            if (window.stockUpdateTimeout) clearTimeout(window.stockUpdateTimeout);
-            window.stockUpdateTimeout = setTimeout(() => {
-                if (skipFilter !== 'supervisor') {
-                    const supervisorData = getStockFilteredData({ excludeFilter: 'supervisor' });
-                    const supervisorOptionsData = [...supervisorData.sales, ...supervisorData.history];
-                    selectedStockSupervisors = updateSupervisorFilter(document.getElementById('stock-supervisor-filter-dropdown'), document.getElementById('stock-supervisor-filter-text'), selectedStockSupervisors, supervisorOptionsData);
-                }
-
-                updateStockSellerFilter(skipFilter === 'seller');
-                updateStockSupplierFilter(skipFilter === 'supplier');
-                updateStockProductFilter(skipFilter === 'product');
-
-                const tvData = getStockFilteredData({ excludeFilter: 'tipoVenda' });
-                selectedStockTiposVenda = updateTipoVendaFilter(stockTipoVendaFilterDropdown, stockTipoVendaFilterText, selectedStockTiposVenda, [...tvData.sales, ...tvData.history], skipFilter === 'tipoVenda');
-
-                if (skipFilter !== 'city') {
-                    const cityData = getStockFilteredData({ excludeFilter: 'city' });
-                    updateStockCitySuggestions([...cityData.sales, ...cityData.history]);
-                }
-
-                if (skipFilter !== 'pasta') {
-                    const pastaData = getStockFilteredData({ excludeFilter: 'pasta' });
-                    const pastaOptionsData = [...pastaData.sales, ...pastaData.history];
-                    const pepsicoBtn = document.querySelector('#stock-fornecedor-toggle-container button[data-fornecedor="PEPSICO"]');
-                    const multimarcasBtn = document.querySelector('#stock-fornecedor-toggle-container button[data-fornecedor="MULTIMARCAS"]');
-                    const hasPepsico = pastaOptionsData.some(s => s.OBSERVACAOFOR === 'PEPSICO');
-                    const hasMultimarcas = pastaOptionsData.some(s => s.OBSERVACAOFOR === 'MULTIMARCAS');
-                    pepsicoBtn.disabled = !hasPepsico;
-                    multimarcasBtn.disabled = !hasMultimarcas;
-                    pepsicoBtn.classList.toggle('opacity-50', !hasPepsico);
-                    multimarcasBtn.classList.toggle('opacity-50', !hasMultimarcas);
-                }
-
-                updateStockView();
-            }, 10);
-        }
 
         function updateComparisonView() {
             comparisonRenderId++;
             const currentRenderId = comparisonRenderId;
             const { currentSales, historySales } = getComparisonFilteredData();
 
-            // Show Loading State on Charts
+            // Show Loading State on Charts (only if no chart exists)
             const chartContainers = ['weeklyComparisonChart', 'monthlyComparisonChart', 'dailyWeeklyComparisonChart'];
             chartContainers.forEach(id => {
-                if (charts[id]) {
-                    charts[id].destroy();
-                    delete charts[id];
+                if (!charts[id]) {
+                    const el = document.getElementById(id + 'Container');
+                    if(el) el.innerHTML = '<div class="flex h-full items-center justify-center"><svg class="animate-spin h-8 w-8 text-teal-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></div>';
                 }
-                const el = document.getElementById(id + 'Container');
-                if(el) el.innerHTML = '<div class="flex h-full items-center justify-center"><svg class="animate-spin h-8 w-8 text-teal-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></div>';
             });
 
             const currentYear = lastSaleDate.getUTCFullYear();
@@ -10269,26 +9895,27 @@ const supervisorGroups = new Map();
 
             // 1. Process Current Sales
             runAsyncChunked(currentSales, (s) => {
-                const isValidType = (s.TIPOVENDA === '1' || s.TIPOVENDA === '9');
-                if (isValidType) {
-                    metrics.current.fat += s.VLVENDA;
-                    metrics.current.peso += s.TOTPESOLIQ;
-                }
+                if (!isAlternativeMode(selectedComparisonTiposVenda) && s.TIPOVENDA !== '1' && s.TIPOVENDA !== '9') return;
+                const val = getValueForSale(s, selectedComparisonTiposVenda);
+
+                metrics.current.fat += val;
+                metrics.current.peso += s.TOTPESOLIQ;
+
                 if (s.CODCLI) {
-                    currentClientsSet.set(s.CODCLI, (currentClientsSet.get(s.CODCLI) || 0) + s.VLVENDA);
+                    currentClientsSet.set(s.CODCLI, (currentClientsSet.get(s.CODCLI) || 0) + val);
                     if (!currentClientProductMap.has(s.CODCLI)) currentClientProductMap.set(s.CODCLI, new Map());
                     const cMap = currentClientProductMap.get(s.CODCLI);
                     if (!cMap.has(s.PRODUTO)) cMap.set(s.PRODUTO, { val: 0, desc: s.DESCRICAO, codfor: String(s.CODFOR) });
-                    cMap.get(s.PRODUTO).val += s.VLVENDA;
+                    cMap.get(s.PRODUTO).val += val;
                 }
-                if (s.SUPERV && isValidType) {
+                if (s.SUPERV) {
                     if (!metrics.charts.supervisorData[s.SUPERV]) metrics.charts.supervisorData[s.SUPERV] = { current: 0, history: 0 };
-                    metrics.charts.supervisorData[s.SUPERV].current += s.VLVENDA;
+                    metrics.charts.supervisorData[s.SUPERV].current += val;
                 }
                 const d = parseDate(s.DTPED);
-                if (d && isValidType) {
+                if (d) {
                     const wIdx = currentMonthWeeks.findIndex(w => d >= w.start && d <= w.end);
-                    if (wIdx !== -1) metrics.charts.weeklyCurrent[wIdx] += s.VLVENDA;
+                    if (wIdx !== -1) metrics.charts.weeklyCurrent[wIdx] += val;
                 }
             }, () => {
                 // 1.1 Finalize Current KPIs
@@ -10321,11 +9948,12 @@ const supervisorGroups = new Map();
 
                 // 2. Process History Sales
                 runAsyncChunked(historySales, (s) => {
-                    const isValidType = (s.TIPOVENDA === '1' || s.TIPOVENDA === '9');
-                    if (isValidType) {
-                        metrics.history.fat += s.VLVENDA;
-                        metrics.history.peso += s.TOTPESOLIQ;
-                    }
+                    if (!isAlternativeMode(selectedComparisonTiposVenda) && s.TIPOVENDA !== '1' && s.TIPOVENDA !== '9') return;
+                    const val = getValueForSale(s, selectedComparisonTiposVenda);
+
+                    metrics.history.fat += val;
+                    metrics.history.peso += s.TOTPESOLIQ;
+
                     const d = parseDate(s.DTPED);
                     if (!d) return;
 
@@ -10333,34 +9961,32 @@ const supervisorGroups = new Map();
                     if (!historyMonths.has(monthKey)) historyMonths.set(monthKey, { fat: 0, clients: new Map(), productMap: new Map() });
                     const mData = historyMonths.get(monthKey);
 
-                    if (isValidType) mData.fat += s.VLVENDA;
+                    mData.fat += val;
 
                     if (s.CODCLI) {
-                        mData.clients.set(s.CODCLI, (mData.clients.get(s.CODCLI) || 0) + s.VLVENDA);
+                        mData.clients.set(s.CODCLI, (mData.clients.get(s.CODCLI) || 0) + val);
                         if (!mData.productMap.has(s.CODCLI)) mData.productMap.set(s.CODCLI, new Map());
                         const cMap = mData.productMap.get(s.CODCLI);
                         if (!cMap.has(s.PRODUTO)) cMap.set(s.PRODUTO, { val: 0, desc: s.DESCRICAO, codfor: String(s.CODFOR) });
-                        cMap.get(s.PRODUTO).val += s.VLVENDA;
+                        cMap.get(s.PRODUTO).val += val;
                     }
 
-                    if (s.SUPERV && isValidType) {
+                    if (s.SUPERV) {
                         if (!metrics.charts.supervisorData[s.SUPERV]) metrics.charts.supervisorData[s.SUPERV] = { current: 0, history: 0 };
-                        metrics.charts.supervisorData[s.SUPERV].history += s.VLVENDA;
+                        metrics.charts.supervisorData[s.SUPERV].history += val;
                     }
 
                     // Accumulate Day Totals for Day Weight Calculation
-                    if (isValidType) {
-                        metrics.historicalDayTotals[d.getUTCDay()] += s.VLVENDA;
-                    }
+                    metrics.historicalDayTotals[d.getUTCDay()] += val;
 
                     if (!monthWeeksCache.has(monthKey)) monthWeeksCache.set(monthKey, getMonthWeeks(d.getUTCFullYear(), d.getUTCMonth()));
                     const weeks = monthWeeksCache.get(monthKey);
                     const wIdx = weeks.findIndex(w => d >= w.start && d <= w.end);
-                    if (wIdx !== -1 && wIdx < metrics.charts.weeklyHistory.length && isValidType) {
-                        metrics.charts.weeklyHistory[wIdx] += s.VLVENDA;
+                    if (wIdx !== -1 && wIdx < metrics.charts.weeklyHistory.length) {
+                        metrics.charts.weeklyHistory[wIdx] += val;
                     }
-                    if (hasOverlap && d >= firstWeekStart && d < firstOfMonth && isValidType) {
-                        metrics.charts.weeklyCurrent[0] += s.VLVENDA;
+                    if (hasOverlap && d >= firstWeekStart && d < firstOfMonth) {
+                        metrics.charts.weeklyCurrent[0] += val;
                         metrics.overlapSales.push(s);
                     }
                 }, () => {
@@ -10600,6 +10226,20 @@ const supervisorGroups = new Map();
                         showNoDataMessage('dailyWeeklyComparisonChart', 'Sem dados para exibir.');
                     }
 
+                    // Weekly Summary Table (Optimized)
+                    const weeklySummaryTableBody = document.getElementById('weeklySummaryTableBody');
+                    if (weeklySummaryTableBody) {
+                         let grandTotal = 0;
+                         const weekKeys = Object.keys(salesByWeekAndDay).sort((a,b) => parseInt(a) - parseInt(b));
+                         const rowsHTML = weekKeys.map(weekNum => {
+                             const weekTotal = Object.values(salesByWeekAndDay[weekNum]).reduce((a, b) => a + b, 0);
+                             grandTotal += weekTotal;
+                             return `<tr class="hover:bg-slate-700"><td class="px-4 py-2">Semana ${weekNum}</td><td class="px-4 py-2 text-right">${weekTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td></tr>`;
+                         }).join('');
+
+                         weeklySummaryTableBody.innerHTML = rowsHTML + `<tr class="font-bold bg-slate-700/50"><td class="px-4 py-2">Total do Mês</td><td class="px-4 py-2 text-right">${grandTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td></tr>`;
+                    }
+
                     // Supervisor Table
                     const supervisorTableBody = document.getElementById('supervisorComparisonTableBody');
                     const supRows = Object.entries(m.charts.supervisorData).map(([sup, data]) => { const variation = data.history > 0 ? ((data.current - data.history) / data.history) * 100 : (data.current > 0 ? 100 : 0); const colorClass = variation > 0 ? 'text-green-400' : variation < 0 ? 'text-red-400' : 'text-slate-400'; return `<tr class="hover:bg-slate-700"><td class="px-4 py-2">${sup}</td><td class="px-4 py-2 text-right">${data.history.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right">${data.current.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right ${colorClass}">${variation.toFixed(2)}%</td></tr>`; }).join('');
@@ -10608,327 +10248,20 @@ const supervisorGroups = new Map();
             }, () => currentRenderId !== comparisonRenderId); // Cancel check
         }
 
-        function updateStockView() {
-            stockRenderId++;
-            const currentRenderId = stockRenderId;
-
-            const { sales: filteredSales, history: filteredHistory } = getStockFilteredData();
-
-            const filial = stockFilialFilter.value;
-            const activeStockMap = getActiveStockMap(filial);
-
-            // Sets for fast lookup
-            const selectedSuppliersSet = new Set(selectedStockSuppliers);
-            const selectedProductsSet = new Set(selectedStockProducts);
-            const currentPasta = currentStockFornecedor;
-
-            const productAnalysis = new Map();
-            const productsWithFilteredActivity = new Set(); // Changed from Set to array logic below for chunking, but Set used for uniqueness
-
-            // --- OPTIMIZATION: Pre-aggregate Sales Data by Product ---
-            // Map<ProductCode, Array<Sale>>
-            const salesByProduct = new Map();
-            const historyByProduct = new Map();
-            const historySalesListByProduct = new Map();
-            const totalQtyByProduct = new Map();
-            const currentMonthQtyByProduct = new Map();
-            const uniqueMonthsByProduct = new Map();
-
-            // Sync Pre-aggregation (O(N) is fast)
-            const processSaleForAggregation = (s, isHistory) => {
-                const p = s.PRODUTO;
-                // Don't add to productsWithFilteredActivity yet, do it in the filtering loop below to respect stock filters
-
-                if (!salesByProduct.has(p)) salesByProduct.set(p, []);
-                salesByProduct.get(p).push(s);
-
-                if (!uniqueMonthsByProduct.has(p)) uniqueMonthsByProduct.set(p, new Set());
-                const d = parseDate(s.DTPED);
-                if (d) uniqueMonthsByProduct.get(p).add(`${d.getUTCFullYear()}-${d.getUTCMonth()}`);
-
-                const qty = s.QTVENDA_EMBALAGEM_MASTER;
-                totalQtyByProduct.set(p, (totalQtyByProduct.get(p) || 0) + qty);
-
-                if (isHistory) {
-                    if (!historySalesListByProduct.has(p)) historySalesListByProduct.set(p, []);
-                    historySalesListByProduct.get(p).push(s);
-
-                    if (!historyByProduct.has(p)) historyByProduct.set(p, 0);
-                    historyByProduct.set(p, historyByProduct.get(p) + 1);
-                } else {
-                    currentMonthQtyByProduct.set(p, (currentMonthQtyByProduct.get(p) || 0) + qty);
-                }
-            };
-
-            filteredSales.forEach(s => processSaleForAggregation(s, false));
-            filteredHistory.forEach(s => processSaleForAggregation(s, true));
-
-            // Build the list of products to analyze based on STOCK or SALES activity + Filters
-            activeStockMap.forEach((qty, productCode) => {
-                if (qty > 0) {
-                    const details = productDetailsMap.get(productCode);
-                    if (!details) return;
-
-                    if (selectedSuppliersSet.size > 0 && !selectedSuppliersSet.has(String(details.codfor))) return;
-                    if (selectedProductsSet.size > 0 && !selectedProductsSet.has(String(productCode))) return;
-
-                    if (currentPasta) {
-                        const pastaDoProduto = optimizedData.productPastaMap.get(productCode) || '';
-                        if (pastaDoProduto !== currentPasta) return;
-                    }
-
-                    productsWithFilteredActivity.add(productCode);
-                }
-            });
-
-            // Also include products with sales even if 0 stock (logic from original)
-            // Iterate salesByProduct keys (which implies sales existed)
-            for (const productCode of totalQtyByProduct.keys()) {
-                 if (productsWithFilteredActivity.has(productCode)) continue; // Already added
-
-                 const details = productDetailsMap.get(productCode);
-                 if (!details) continue; // Should be in details map if processed correctly
-
-                 if (selectedSuppliersSet.size > 0 && !selectedSuppliersSet.has(String(details.codfor))) continue;
-                 if (selectedProductsSet.size > 0 && !selectedProductsSet.has(String(productCode))) continue;
-                 if (currentPasta) {
-                    const pastaDoProduto = optimizedData.productPastaMap.get(productCode) || '';
-                    if (pastaDoProduto !== currentPasta) continue;
-                 }
-                 productsWithFilteredActivity.add(productCode);
-            }
-
-            // Show Loading
-            stockAnalysisTableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8"><div class="flex justify-center items-center"><svg class="animate-spin h-8 w-8 text-teal-500 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span class="text-slate-400">Calculando estoque e tendências...</span></div></td></tr>';
-
-            // Convert to array for chunking
-            const productsArray = Array.from(productsWithFilteredActivity);
-
-            // Pre-calculate global dates for trend
-            const endDate = parseDate(sortedWorkingDays[sortedWorkingDays.length - 1]);
-
-            // ASYNC PROCESS
-            runAsyncChunked(productsArray, (productCode) => {
-                if (!activeProductCodesFromCadastro.has(productCode)) return;
-
-                const details = productDetailsMap.get(productCode) || {
-                    descricao: `Produto ${productCode}`,
-                    fornecedor: 'N/A',
-                    codfor: 'N/A'
-                };
-
-                const stock = activeStockMap.get(productCode) || 0;
-                const totalQtySold = totalQtyByProduct.get(productCode) || 0;
-
-                if (stock <= 0 && totalQtySold <= 0) return;
-
-                const hasHistory = historyByProduct.has(productCode);
-                const currentMonthSalesQty = currentMonthQtyByProduct.get(productCode) || 0;
-                const soldThisMonth = currentMonthSalesQty > 0;
-
-                const productAllSales = salesByProduct.get(productCode) || [];
-
-                const productCadastroDate = parseDate(details.dtCadastro);
-                let productFirstWorkingDayIndex = 0;
-
-                if (productCadastroDate) {
-                    const cadastroDateString = productCadastroDate.toISOString().split('T')[0];
-                    productFirstWorkingDayIndex = sortedWorkingDays.findIndex(d => d >= cadastroDateString);
-                    if (productFirstWorkingDayIndex === -1) {
-                        productFirstWorkingDayIndex = sortedWorkingDays.length;
-                    }
-                }
-
-                const productMaxLifeInWorkingDays = sortedWorkingDays.length - productFirstWorkingDayIndex;
-                const daysFromBox = customWorkingDaysStock;
-                let effectiveDaysToCalculate;
-
-                const isFactuallyNewOrReactivated = (!hasHistory && soldThisMonth);
-
-                if (isFactuallyNewOrReactivated) {
-                    const daysToConsider = (daysFromBox > 0) ? daysFromBox : passedWorkingDaysCurrentMonth;
-                    effectiveDaysToCalculate = Math.min(passedWorkingDaysCurrentMonth, daysToConsider);
-                } else {
-                    if (daysFromBox > 0) {
-                        effectiveDaysToCalculate = Math.min(daysFromBox, productMaxLifeInWorkingDays);
-                    } else {
-                        effectiveDaysToCalculate = productMaxLifeInWorkingDays;
-                    }
-                }
-
-                const daysDivisor = effectiveDaysToCalculate > 0 ? effectiveDaysToCalculate : 1;
-                const targetIndex = Math.max(0, sortedWorkingDays.length - daysDivisor);
-                const startDate = parseDate(sortedWorkingDays[targetIndex]);
-
-                let totalQtySoldInRange = 0;
-                // Optimized loop
-                productAllSales.forEach(sale => {
-                    const saleDate = parseDate(sale.DTPED);
-                    if (saleDate && saleDate >= startDate && saleDate <= endDate) {
-                        totalQtySoldInRange += sale.QTVENDA_EMBALAGEM_MASTER;
-                    }
-                });
-
-                let dailyAvgSale = totalQtySoldInRange / daysDivisor;
-                const isNew = productMaxLifeInWorkingDays <= passedWorkingDaysCurrentMonth;
-                const trendDays = dailyAvgSale > 0 ? (stock / dailyAvgSale) : (stock > 0 ? Infinity : 0);
-
-                const productHistorySales = historySalesListByProduct.get(productCode) || [];
-                const monthlyAvgSale = calculateStockMonthlyAverage(productHistorySales);
-
-                productAnalysis.set(productCode, {
-                    code: productCode,
-                    ...details,
-                    stock,
-                    monthlyAvgSale,
-                    dailyAvgSale,
-                    trendDays,
-                    currentMonthSalesQty,
-                    isNew,
-                    hasHistory,
-                    soldThisMonth
-                });
-            }, () => {
-                // --- ON COMPLETE (Render) ---
-                if (currentRenderId !== stockRenderId) return;
-
-                let sortedAnalysis = [...productAnalysis.values()].sort((a, b) => {
-                     const trendA = isFinite(a.trendDays) ? a.trendDays : -1;
-                     const trendB = isFinite(b.trendDays) ? b.trendDays : -1;
-                    return trendB - trendA;
-                });
-
-                if (stockTrendFilter !== 'all') {
-                    sortedAnalysis = sortedAnalysis.filter(item => {
-                        const trend = item.trendDays;
-                        if (stockTrendFilter === 'low') return isFinite(trend) && trend < 15;
-                        if (stockTrendFilter === 'medium') return isFinite(trend) && trend >= 15 && trend < 30;
-                        if (stockTrendFilter === 'good') return isFinite(trend) && trend >= 30;
-                        return false;
-                    });
-                }
-
-                stockAnalysisTableBody.innerHTML = sortedAnalysis.slice(0, 500).map(item => {
-                    let trendText;
-                    let newTag = item.isNew ? ` <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-500/30 text-blue-300 ml-1">NOVO</span>` : '';
-
-                    if (!isFinite(item.trendDays) && item.stock > 0) {
-                        trendText = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-500/30 text-gray-300">S/ VENDA</span>`;
-                    } else if (isFinite(item.trendDays)) {
-                        const trendDays = Math.floor(item.trendDays);
-                        let trendColor = 'text-slate-400';
-                        if (trendDays < 15) trendColor = 'text-red-400';
-                        else if (trendDays < 30) trendColor = 'text-yellow-400';
-                        else trendColor = 'text-green-400';
-                        trendText = `<span class="font-bold ${trendColor}">${trendDays} dias</span>`;
-                    } else {
-                        trendText = '-';
-                    }
-
-                    return `
-                        <tr class="hover:bg-slate-700/50">
-                            <td class="px-4 py-2 text-xs">(${item.code}) ${item.descricao}</td>
-                            <td class="px-4 py-2 text-xs">(${item.codfor}) ${item.fornecedor.split(' ').slice(0, 4).join(' ')}</td>
-                            <td class="px-4 py-2 text-right text-xs">${item.stock.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                            <td class="px-4 py-2 text-right text-xs">${item.monthlyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                            <td class="px-4 py-2 text-right text-xs">${item.dailyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                            <td class="px-4 py-2 text-right text-xs flex items-center justify-end">${trendText}${newTag}</td>
-                        </tr>
-                    `;
-                }).join('');
-
-                const growth = [];
-                const decline = [];
-                const newProducts = [];
-                const lostProducts = [];
-
-                productAnalysis.forEach(p => {
-                     if (p.soldThisMonth && p.hasHistory) {
-                            const variation = p.monthlyAvgSale > 0 ? ((p.currentMonthSalesQty - p.monthlyAvgSale) / p.monthlyAvgSale) * 100 : (p.currentMonthSalesQty > 0 ? Infinity : 0);
-                            const productWithVariation = { ...p, variation };
-
-                        if (p.currentMonthSalesQty >= p.monthlyAvgSale) {
-                            growth.push(productWithVariation);
-                        } else if (p.currentMonthSalesQty < p.monthlyAvgSale && p.monthlyAvgSale > 0) {
-                            decline.push(productWithVariation);
-                        }
-                     } else if (p.soldThisMonth && !p.hasHistory) {
-                        newProducts.push(p);
-                     } else if (!p.soldThisMonth && p.stock > 0) {
-                        lostProducts.push(p);
-                     }
-                });
-
-                const renderProductTable = (bodyElement, data, showVariation = true) => {
-                    bodyElement.innerHTML = data.map(p => {
-                        const variation = p.monthlyAvgSale > 0 ? ((p.currentMonthSalesQty - p.monthlyAvgSale) / p.monthlyAvgSale) * 100 : (p.currentMonthSalesQty > 0 ? Infinity : 0);
-                        const colorClass = variation > 0 ? 'text-green-400' : (variation < 0 ? 'text-red-400' : 'text-slate-400');
-                        let variationText = '0%';
-                        if (isFinite(variation)) {
-                            variationText = `${variation.toFixed(0)}%`;
-                        } else if (variation === Infinity) {
-                             variationText = 'Novo';
-                        }
-
-                        return `
-                            <tr class="hover:bg-slate-700/50">
-                                <td class="px-2 py-1.5 text-xs">(${p.code}) ${p.descricao}</td>
-                                <td class="px-2 py-1.5 text-xs text-right">${p.currentMonthSalesQty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                                <td class="px-2 py-1.5 text-xs text-right">${p.monthlyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                                ${showVariation ? `<td class="px-2 py-1.5 text-xs text-right font-bold ${colorClass}">${variationText}</td>` : ''}
-                                <td class="px-2 py-1.5 text-xs text-right">${p.stock.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                            </tr>
-                        `;
-                    }).join('');
-                };
-
-                growth.sort((a, b) => b.variation - a.variation);
-                decline.sort((a, b) => a.variation - b.variation);
-                newProducts.sort((a,b) => b.currentMonthSalesQty - a.currentMonthSalesQty);
-                lostProducts.sort((a,b) => b.monthlyAvgSale - a.monthlyAvgSale);
-
-                renderProductTable(growthTableBody, growth);
-                renderProductTable(declineTableBody, decline);
-                renderProductTable(newProductsTableBody, newProducts, false);
-                renderProductTable(lostProductsTableBody, lostProducts, false);
-            }, () => currentRenderId !== stockRenderId);
-        }
 
 
         function getInnovationsMonthFilteredData(options = {}) {
             const { excludeFilter = null } = options;
 
-            const sellers = selectedInnovationsMonthSellers;
             const city = innovationsMonthCityFilter.value.trim().toLowerCase();
             const filial = innovationsMonthFilialFilter.value;
 
-            let clients = allClientsData;
+            let clients = getHierarchyFilteredClients('innovations-month', allClientsData);
 
             if (filial !== 'ambas') {
                 clients = clients.filter(c => clientLastBranch.get(c['Código']) === filial);
             }
 
-            if (excludeFilter !== 'supervisor' && selectedInnovationsSupervisors.length > 0) {
-                const rcasSet = new Set();
-                selectedInnovationsSupervisors.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
-                });
-                clients = clients.filter(c => {
-                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
-                    return clientRcas.some(rca => rcasSet.has(rca));
-                });
-            }
-            if (excludeFilter !== 'seller' && sellers.length > 0) {
-                const rcasOfSellers = new Set();
-                 sellers.forEach(sellerName => {
-                    const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
-                    if (rcaCode) rcasOfSellers.add(rcaCode);
-                });
-                clients = clients.filter(c => {
-                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
-                    return clientRcas.some(rca => rcasOfSellers.has(rca));
-                });
-            }
             if (excludeFilter !== 'city' && city) {
                 clients = clients.filter(c => c.cidade && c.cidade.toLowerCase() === city);
             }
@@ -10937,15 +10270,11 @@ const supervisorGroups = new Map();
         }
 
         function resetInnovationsMonthFilters() {
-            selectedInnovationsSupervisors = [];
             innovationsMonthCityFilter.value = '';
             innovationsMonthFilialFilter.value = 'ambas';
             innovationsMonthCategoryFilter.value = '';
-            selectedInnovationsMonthSellers = [];
             selectedInnovationsMonthTiposVenda = [];
 
-            selectedInnovationsSupervisors = updateSupervisorFilter(document.getElementById('innovations-month-supervisor-filter-dropdown'), document.getElementById('innovations-month-supervisor-filter-text'), selectedInnovationsSupervisors, allSalesData);
-            updateSellerFilter(selectedInnovationsSupervisors, innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, [], allSalesData);
             selectedInnovationsMonthTiposVenda = updateTipoVendaFilter(innovationsMonthTipoVendaFilterDropdown, innovationsMonthTipoVendaFilterText, selectedInnovationsMonthTiposVenda, [...allSalesData, ...allHistoryData]);
             updateInnovationsMonthView();
         }
@@ -10976,10 +10305,11 @@ const supervisorGroups = new Map();
 
             // Only update dropdown if empty or number of items changed significantly (simplistic check)
             if (innovationsMonthCategoryFilter.options.length <= 1 && allCategories.length > 0) {
-                innovationsMonthCategoryFilter.innerHTML = '<option value="">Todas as Categorias</option>';
+                let optionsHtml = '<option value="">Todas as Categorias</option>';
                 allCategories.forEach(cat => {
-                    innovationsMonthCategoryFilter.innerHTML += `<option value="${cat}">${cat}</option>`;
+                    optionsHtml += `<option value="${cat}">${cat}</option>`;
                 });
+                innovationsMonthCategoryFilter.innerHTML = optionsHtml;
                 if (allCategories.includes(currentFilterValue)) {
                     innovationsMonthCategoryFilter.value = currentFilterValue;
                 }
@@ -10987,18 +10317,6 @@ const supervisorGroups = new Map();
 
             const { clients: filteredClients } = getInnovationsMonthFilteredData();
 
-            const sellers = selectedInnovationsMonthSellers;
-            const sellerRcaCodes = new Set();
-            if (sellers.length > 0) {
-                sellers.forEach(sellerName => {
-                    const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
-                    if (rcaCode) sellerRcaCodes.add(rcaCode);
-                });
-            } else if (selectedInnovationsSupervisors.length > 0) {
-                selectedInnovationsSupervisors.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => sellerRcaCodes.add(rca));
-                });
-            }
 
             const activeClients = filteredClients.filter(c => {
                 const codcli = c['Código'];
@@ -11026,17 +10344,36 @@ const supervisorGroups = new Map();
                 const mainTypes = currentSelection.filter(t => t !== '5' && t !== '11');
                 const bonusTypes = currentSelection.filter(t => t === '5' || t === '11');
 
-                // Calculate Previous Month Date Range (Strict M-1 from lastSaleDate)
-                const refDate = lastSaleDate || new Date();
-                // Start of M-1
-                const prevStart = new Date(Date.UTC(refDate.getUTCFullYear(), refDate.getUTCMonth() - 1, 1));
-                // End of M-1 (Start of M - 1ms)
-                const prevEnd = new Date(Date.UTC(refDate.getUTCFullYear(), refDate.getUTCMonth(), 0, 23, 59, 59, 999));
-
                 // Optimized Map Building (2 passes instead of 4)
                 mapsCurrent = buildInnovationSalesMaps(allSalesData, mainTypes, bonusTypes);
-                // Apply strict date range for History to match Comparison View logic (Single Month)
-                mapsPrevious = buildInnovationSalesMaps(allHistoryData, mainTypes, bonusTypes, { start: prevStart, end: prevEnd });
+
+                // Filter History for Previous Month Only (Current Month - 1)
+                const currentYear = lastSaleDate.getUTCFullYear();
+                const currentMonth = lastSaleDate.getUTCMonth();
+                // Start of Prev Month
+                const prevMonthDate = new Date(Date.UTC(currentYear, currentMonth - 1, 1));
+                const startTs = prevMonthDate.getTime();
+                // End of Prev Month (Start of Current Month)
+                const currentMonthStartDate = new Date(Date.UTC(currentYear, currentMonth, 1));
+                const endTs = currentMonthStartDate.getTime();
+
+                const previousMonthData = allHistoryData.filter(item => {
+                    const val = item.DTPED;
+                    let ts = 0;
+                    if (typeof val === 'number') {
+                        if (val < 100000) {
+                             ts = Math.round((val - 25569) * 86400 * 1000);
+                        } else {
+                             ts = val;
+                        }
+                    } else {
+                        const d = parseDate(val);
+                        if(d) ts = d.getTime();
+                    }
+                    return ts >= startTs && ts < endTs;
+                });
+
+                mapsPrevious = buildInnovationSalesMaps(previousMonthData, mainTypes, bonusTypes);
 
                 viewState.inovacoes.lastTypesKey = currentSelectionKey;
                 viewState.inovacoes.cache = { mapsCurrent, mapsPrevious };
@@ -11070,21 +10407,6 @@ const supervisorGroups = new Map();
                         const category = globalProductToCategoryMap ? globalProductToCategoryMap.get(prodCode) : null;
                         if (!category) return; // Should not happen if innovation data is consistent
 
-                        // Check RCA Filter
-                        let soldBySelected = false;
-                        if (sellerRcaCodes.size === 0) {
-                            soldBySelected = true;
-                        } else {
-                            // Check intersection of rcas and sellerRcaCodes
-                            for (const rca of rcas) {
-                                if (sellerRcaCodes.has(rca)) {
-                                    soldBySelected = true;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (!soldBySelected) return;
 
                         const targetSetField = isCurrent ? 'current' : 'previous';
 
@@ -11346,7 +10668,7 @@ const supervisorGroups = new Map();
             const innovationsByClientLegend = document.getElementById('innovations-by-client-legend');
 
             categoryLegendForExport = chartLabels.map((name, index) => `${index + 1} - ${name}`);
-            innovationsByClientLegend.innerHTML = `<strong>Legenda:</strong> ${categoryLegendForExport.join('; ')}`;
+            if (innovationsByClientLegend) innovationsByClientLegend.innerHTML = `<strong>Legenda:</strong> ${categoryLegendForExport.join('; ')}`;
 
             let tableHeadHTML = `
                 <tr>
@@ -11360,7 +10682,7 @@ const supervisorGroups = new Map();
                 tableHeadHTML += `<th class="px-2 py-2 text-center">${index + 1}</th>`;
             });
             tableHeadHTML += `</tr>`;
-            innovationsByClientTableHead.innerHTML = tableHeadHTML;
+            if (innovationsByClientTableHead) innovationsByClientTableHead.innerHTML = tableHeadHTML;
 
             // Build Client Status List
             // Optimized: Iterate Active Clients and check sets in categoryResults
@@ -11426,7 +10748,7 @@ const supervisorGroups = new Map();
                     });
                     tableBodyHTML += `</tr>`;
                 });
-                innovationsByClientTableBody.innerHTML = tableBodyHTML;
+                if (innovationsByClientTableBody) innovationsByClientTableBody.innerHTML = tableBodyHTML;
 
                 // Update Pagination Controls
                 const prevBtn = document.getElementById('innovations-prev-page-btn');
@@ -11630,8 +10952,7 @@ const supervisorGroups = new Map();
             }
 
             let fileNameParam = 'geral';
-            if (selectedInnovationsMonthSellers.length === 1) {
-                fileNameParam = getFirstName(selectedInnovationsMonthSellers[0]);
+            if (hierarchyState['innovations-month'] && hierarchyState['innovations-month'].promotors.size === 1) {
             } else if (cidade) {
                 fileNameParam = cidade;
             }
@@ -11651,19 +10972,13 @@ const supervisorGroups = new Map();
             const supplierText = document.getElementById('coverage-supplier-filter-text').textContent;
             const generationDate = new Date().toLocaleString('pt-BR');
 
-            let dateRangeText = '';
-            if (selectedCoverageDateRange && selectedCoverageDateRange.length === 2) {
-                const formatDate = (date) => date.toLocaleDateString('pt-BR');
-                dateRangeText = ` | Data: ${formatDate(selectedCoverageDateRange[0])} a ${formatDate(selectedCoverageDateRange[1])}`;
-            }
-
             doc.setFontSize(18);
             doc.text('Relatório de Cobertura (Estoque x PDVs)', 14, 22);
             doc.setFontSize(10);
             doc.setTextColor(10);
             doc.text(`Data de Emissão: ${generationDate}`, 14, 30);
 
-            let filterText = `Filtros Aplicados: Supervisor: ${supervisor} | Vendedor: ${vendedor} | Filial: ${filial} | Cidade: ${cidade || 'Todas'} | Fornecedor: ${supplierText}${dateRangeText}`;
+            let filterText = `Filtros Aplicados: Supervisor: ${supervisor} | Vendedor: ${vendedor} | Filial: ${filial} | Cidade: ${cidade || 'Todas'} | Fornecedor: ${supplierText}`;
             const splitFilters = doc.splitTextToSize(filterText, 270);
             doc.text(splitFilters, 14, 36);
 
@@ -11759,8 +11074,7 @@ const supervisorGroups = new Map();
             }
 
             let fileNameParam = 'geral';
-            if (selectedCoverageSellers.length === 1) {
-                fileNameParam = getFirstName(selectedCoverageSellers[0]);
+            if (hierarchyState['coverage'] && hierarchyState['coverage'].promotors.size === 1) {
             } else if (cidade) {
                 fileNameParam = cidade;
             }
@@ -11887,8 +11201,7 @@ const supervisorGroups = new Map();
             for(let i = 1; i <= pageCount; i++) { doc.setPage(i); doc.setFontSize(9); doc.setTextColor(10); doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 10, { align: 'center' }); }
 
             let fileNameParam = 'geral';
-            if (selectedCitySellers.length === 1) {
-                fileNameParam = getFirstName(selectedCitySellers[0]);
+            if (hierarchyState['city'] && hierarchyState['city'].promotors.size === 1) {
             } else if (city) {
                 fileNameParam = city;
             }
@@ -11985,40 +11298,66 @@ const supervisorGroups = new Map();
             });
         }
 
-        function toggleSidebar() {
-            const sideMenu = document.getElementById('side-menu');
-            const sidebarOverlay = document.getElementById('sidebar-overlay');
-
-            if (sideMenu) {
-                sideMenu.classList.toggle('-translate-x-full');
-                if (sidebarOverlay) {
-                    if (sideMenu.classList.contains('-translate-x-full')) {
-                        sidebarOverlay.classList.add('hidden');
-                    } else {
-                        sidebarOverlay.classList.remove('hidden');
-                    }
+        function toggleMobileMenu() {
+            const mobileMenu = document.getElementById('mobile-menu');
+            if (mobileMenu) {
+                if (mobileMenu.classList.contains('hidden')) {
+                    mobileMenu.classList.remove('hidden');
+                    setTimeout(() => mobileMenu.classList.add('open'), 10);
+                } else {
+                    mobileMenu.classList.remove('open');
+                    setTimeout(() => mobileMenu.classList.add('hidden'), 300);
                 }
             }
         }
 
-        async function navigateTo(view) {
-            const sideMenu = document.getElementById('side-menu');
-            const sidebarOverlay = document.getElementById('sidebar-overlay');
+        function navigateTo(view) {
+            window.location.hash = view;
+        }
 
-            if (sideMenu) sideMenu.classList.add('-translate-x-full');
-            if (sidebarOverlay) sidebarOverlay.classList.add('hidden');
+        function showViewElement(el) {
+            if (!el) return;
+            el.classList.remove('hidden');
+            el.classList.add('animate-fade-in-up');
+            setTimeout(() => {
+                el.classList.remove('animate-fade-in-up');
+            }, 700);
+        }
+
+        async function renderView(view) {
+            // Access Control for Comparison View
+            // Restrict 'comparativo' to ADM and COORD only
+            if (view === 'comparativo') {
+                // Normalize role check (userHierarchyContext is more reliable than window.userRole here as it is resolved)
+                const contextRole = userHierarchyContext.role;
+                const isAuth = contextRole === 'adm' || contextRole === 'coord';
+
+                if (!isAuth) {
+                    console.warn(`[Access] Unauthorized access to 'comparativo'. Redirecting.`);
+                    view = 'dashboard';
+                    // alert("Acesso restrito a Coordenadores e Administradores.");
+                }
+            }
+
+            const mobileMenu = document.getElementById('mobile-menu');
+            if (mobileMenu && mobileMenu.classList.contains('open')) {
+                toggleMobileMenu();
+            }
 
             const viewNameMap = {
-                dashboard: 'Dashboard',
+                dashboard: 'Visão Geral',
                 pedidos: 'Pedidos',
                 comparativo: 'Comparativo',
                 estoque: 'Estoque',
                 cobertura: 'Cobertura',
-                cidades: 'Cidades',
-                semanal: 'Semanal',
+                cidades: 'Geolocalização',
                 'inovacoes-mes': 'Inovações',
                 mix: 'Mix',
-                'meta-realizado': 'Meta Vs. Realizado'
+                'meta-realizado': 'Meta Vs. Realizado',
+                'goals': 'Metas',
+                'consultas': 'Consultas',
+                'clientes': 'Clientes',
+                'produtos': 'Produtos'
             };
             const friendlyName = viewNameMap[view] || 'a página';
 
@@ -12026,26 +11365,60 @@ const supervisorGroups = new Map();
 
             // This function now runs after the loader is visible
             const updateContent = () => {
-                [mainDashboard, cityView, weeklyView, comparisonView, stockView, innovationsMonthView, coverageView, document.getElementById('mix-view'), goalsView, document.getElementById('meta-realizado-view')].forEach(el => {
+                [
+                    mainDashboard,
+                    cityView,
+                    comparisonView,
+                    stockView,
+                    innovationsMonthView,
+                    coverageView,
+                    document.getElementById('mix-view'),
+                    goalsView,
+                    document.getElementById('meta-realizado-view'),
+                    document.getElementById('ai-insights-full-page'),
+                    document.getElementById('wallet-view'),
+                    document.getElementById('consultas-view'),
+                    document.getElementById('clientes-view'),
+                    document.getElementById('produtos-view')
+                ].forEach(el => {
                     if(el) el.classList.add('hidden');
                 });
 
                 document.querySelectorAll('.nav-link').forEach(link => {
-                    link.classList.remove('bg-slate-700', 'text-white');
-                    const icon = link.querySelector('svg');
-                    if(icon) icon.classList.remove('text-white');
+                    link.classList.remove('active-nav');
                 });
 
                 const activeLink = document.querySelector(`.nav-link[data-target="${view}"]`);
                 if (activeLink) {
-                    activeLink.classList.add('bg-slate-700', 'text-white');
-                    const icon = activeLink.querySelector('svg');
-                    if(icon) icon.classList.add('text-white');
+                    activeLink.classList.add('active-nav');
                 }
+                // Also update mobile active state
+                document.querySelectorAll('.mobile-nav-link').forEach(link => {
+                    if (link.dataset.target === view) {
+                        link.classList.add('bg-blue-600', 'text-white');
+                        link.classList.remove('bg-slate-800', 'text-slate-300');
+                    } else {
+                        link.classList.remove('bg-blue-600', 'text-white');
+                        link.classList.add('bg-slate-800', 'text-slate-300');
+                    }
+                });
 
                 switch(view) {
+                    case 'consultas':
+                        showViewElement(document.getElementById('consultas-view'));
+                        break;
+                    case 'clientes':
+                        showViewElement(document.getElementById('clientes-view'));
+                        break;
+                    case 'produtos':
+                        showViewElement(document.getElementById('produtos-view'));
+                        break;
+                    case 'wallet':
+                        showViewElement(document.getElementById('wallet-view'));
+                        if (typeof renderWalletView === 'function') renderWalletView();
+                        break;
                     case 'dashboard':
-                        mainDashboard.classList.remove('hidden');
+                        showViewElement(mainDashboard);
                         chartView.classList.remove('hidden');
                         tableView.classList.add('hidden');
                         tablePaginationControls.classList.add('hidden');
@@ -12055,7 +11428,7 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'pedidos':
-                        mainDashboard.classList.remove('hidden');
+                        showViewElement(mainDashboard);
                         chartView.classList.add('hidden');
                         tableView.classList.remove('hidden');
                         tablePaginationControls.classList.remove('hidden');
@@ -12065,7 +11438,7 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'comparativo':
-                        comparisonView.classList.remove('hidden');
+                        showViewElement(comparisonView);
                         if (viewState.comparativo.dirty) {
                             updateAllComparisonFilters();
                             updateComparisonView();
@@ -12073,14 +11446,14 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'estoque':
-                        stockView.classList.remove('hidden');
+                        if (stockView) showViewElement(stockView);
                         if (viewState.estoque.dirty) {
                             handleStockFilterChange();
                             viewState.estoque.dirty = false;
                         }
                         break;
                     case 'cobertura':
-                        coverageView.classList.remove('hidden');
+                        showViewElement(coverageView);
                         if (viewState.cobertura.dirty) {
                             updateAllCoverageFilters();
                             updateCoverageView();
@@ -12088,7 +11461,7 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'cidades':
-                        cityView.classList.remove('hidden');
+                        showViewElement(cityView);
                         // Always trigger background sync if admin
                         syncGlobalCoordinates();
                         if (viewState.cidades.dirty) {
@@ -12097,26 +11470,16 @@ const supervisorGroups = new Map();
                             viewState.cidades.dirty = false;
                         }
                         break;
-                    case 'semanal':
-                        weeklyView.classList.remove('hidden');
-                        if (viewState.semanal.dirty) {
-                            populateWeeklyFilters();
-                            updateWeeklyView();
-                            viewState.semanal.dirty = false;
-                        }
-                        break;
                     case 'inovacoes-mes':
-                        innovationsMonthView.classList.remove('hidden');
+                        showViewElement(innovationsMonthView);
                         if (viewState.inovacoes.dirty) {
-                            selectedInnovationsSupervisors = updateSupervisorFilter(document.getElementById('innovations-month-supervisor-filter-dropdown'), document.getElementById('innovations-month-supervisor-filter-text'), selectedInnovationsSupervisors, allSalesData);
-                            updateSellerFilter(selectedInnovationsSupervisors, innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, [], allSalesData);
                             selectedInnovationsMonthTiposVenda = updateTipoVendaFilter(innovationsMonthTipoVendaFilterDropdown, innovationsMonthTipoVendaFilterText, selectedInnovationsMonthTiposVenda, [...allSalesData, ...allHistoryData]);
                             updateInnovationsMonthView();
                             viewState.inovacoes.dirty = false;
                         }
                         break;
                     case 'mix':
-                        document.getElementById('mix-view').classList.remove('hidden');
+                        showViewElement(document.getElementById('mix-view'));
                         if (viewState.mix.dirty) {
                             updateAllMixFilters();
                             updateMixView();
@@ -12124,19 +11487,17 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'goals':
-                        goalsView.classList.remove('hidden');
+                        showViewElement(goalsView);
                         if (viewState.goals.dirty) {
                             updateGoalsView();
                             viewState.goals.dirty = false;
                         }
                         break;
                     case 'meta-realizado':
-                        document.getElementById('meta-realizado-view').classList.remove('hidden');
+                        showViewElement(document.getElementById('meta-realizado-view'));
                         if (viewState.metaRealizado.dirty) {
                             // Initial filter logic if needed, similar to other views
-                            selectedMetaRealizadoSupervisors = updateSupervisorFilter(document.getElementById('meta-realizado-supervisor-filter-dropdown'), document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
-                            selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData]);
-                            
+
                             updateMetaRealizadoView();
                             viewState.metaRealizado.dirty = false;
                         }
@@ -12363,6 +11724,10 @@ const supervisorGroups = new Map();
                     await clearTable('data_active_products', 'code');
                     await uploadBatchParallel('data_active_products', data.active_products, false);
                 }
+                if (data.hierarchy && data.hierarchy.length > 0) {
+                    await clearTable('data_hierarchy');
+                    await uploadBatchParallel('data_hierarchy', data.hierarchy, false);
+                }
                 if (data.metadata && data.metadata.length > 0) {
                     // Update last_update timestamp
                     const now = new Date();
@@ -12375,7 +11740,7 @@ const supervisorGroups = new Map();
 
                     // --- PRESERVE MANUAL KEYS ---
                     try {
-                        const keysToPreserve = ['groq_api_key'];
+                        const keysToPreserve = ['groq_api_key', 'senha_modal'];
                         const { data: currentMetadata } = await window.supabaseClient
                             .from('data_metadata')
                             .select('*')
@@ -12416,27 +11781,259 @@ const supervisorGroups = new Map();
                 alert('Erro durante o upload: ' + msg);
             }
         }
+        // Helper to mark dirty states
+        const markDirty = (view) => {
+            if (viewState[view]) viewState[view].dirty = true;
+        };
+
+        // --- Dashboard/Pedidos Filters ---
+        const updateDashboard = () => {
+            markDirty('dashboard'); markDirty('pedidos');
+            updateAllVisuals();
+        };
+
+        function searchLocalClients(query) {
+            if (!query || query.length < 3) return [];
+            query = query.toLowerCase();
+            const cleanQuery = query.replace(/[^a-z0-9]/g, '');
+
+            const results = [];
+            const indices = optimizedData.searchIndices.clients;
+            const limit = 10;
+
+            if (!indices || indices.length === 0) return [];
+
+            for (let i = 0; i < indices.length; i++) {
+                const idx = indices[i];
+                if (!idx) continue;
+
+                // Match Code (Exact or partial)
+                if (idx.code.includes(cleanQuery)) {
+                    results.push(allClientsData instanceof ColumnarDataset ? allClientsData.get(i) : allClientsData[i]);
+                    if (results.length >= limit) break;
+                    continue;
+                }
+                // Match Name
+                if (idx.nameLower && idx.nameLower.includes(query)) {
+                    results.push(allClientsData instanceof ColumnarDataset ? allClientsData.get(i) : allClientsData[i]);
+                    if (results.length >= limit) break;
+                    continue;
+                }
+                // Match CNPJ
+                if (idx.cnpj && idx.cnpj.includes(cleanQuery)) {
+                    results.push(allClientsData instanceof ColumnarDataset ? allClientsData.get(i) : allClientsData[i]);
+                    if (results.length >= limit) break;
+                    continue;
+                }
+            }
+            return results;
+        }
+
+        function setupClientTypeahead(inputId, suggestionsId, onSelect) {
+            const input = document.getElementById(inputId);
+            const suggestions = document.getElementById(suggestionsId);
+            if (!input || !suggestions) return;
+
+            let debounce;
+
+            input.addEventListener('input', (e) => {
+                const val = e.target.value;
+                if (!val || val.length < 3) {
+                    suggestions.classList.add('hidden');
+                    return;
+                }
+
+                clearTimeout(debounce);
+                debounce = setTimeout(() => {
+                    const results = searchLocalClients(val);
+                    renderSuggestions(results);
+                }, 300);
+            });
+
+            // Close on click outside
+            document.addEventListener('click', (e) => {
+                if (!input.contains(e.target) && !suggestions.contains(e.target)) {
+                    suggestions.classList.add('hidden');
+                }
+            });
+
+            function renderSuggestions(results) {
+                suggestions.innerHTML = '';
+                if (results.length === 0) {
+                    suggestions.classList.add('hidden');
+                    return;
+                }
+
+                results.forEach(c => {
+                    const div = document.createElement('div');
+                    div.className = 'px-4 py-3 border-b border-slate-700 hover:bg-slate-700 cursor-pointer flex justify-between items-center group';
+
+                    const code = c['Código'] || c['codigo_cliente'];
+                    const name = c.fantasia || c.nomeCliente || c.razaoSocial || 'Sem Nome';
+                    const city = c.cidade || c.CIDADE || '';
+                    const doc = c['CNPJ/CPF'] || c.cnpj_cpf || '';
+
+                    div.innerHTML = `
+                        <div>
+                            <div class="text-sm font-bold text-white group-hover:text-blue-300 transition-colors">
+                                <span class="font-mono text-slate-400 mr-2">${code}</span>
+                                ${name}
+                            </div>
+                            <div class="text-xs text-slate-500">${city} • ${doc}</div>
+                        </div>
+                         <div class="p-2 bg-slate-800 rounded-full group-hover:bg-blue-600 transition-colors text-slate-400 group-hover:text-white">
+                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </div>
+                    `;
+                    div.onclick = () => {
+                        input.value = code;
+                        suggestions.classList.add('hidden');
+                        if (onSelect) onSelect(code);
+                    };
+                    suggestions.appendChild(div);
+                });
+                suggestions.classList.remove('hidden');
+            }
+        }
+
+        function handleClientFilterCascade(clientCode, viewPrefix) {
+            if (!clientCode) return;
+
+            // Apply only for Co-Coord and up
+            const role = userHierarchyContext.role;
+            if (role !== 'adm' && role !== 'coord' && role !== 'cocoord') return;
+
+            const normalizedCode = normalizeKey(clientCode);
+
+            // 1. Auto-Select Promoter
+            if (optimizedData.clientHierarchyMap) {
+                const node = optimizedData.clientHierarchyMap.get(normalizedCode);
+                if (node && hierarchyState[viewPrefix]) {
+                    const promotorCode = node.promotor.code;
+                    if (promotorCode) {
+                        hierarchyState[viewPrefix].promotors.clear();
+                        hierarchyState[viewPrefix].promotors.add(promotorCode);
+                        updateHierarchyDropdown(viewPrefix, 'promotor');
+                    }
+                }
+            }
+
+            // 2. Update Supplier Filter Options based on Client Data
+            const salesIndices = optimizedData.indices.current.byClient.get(normalizedCode);
+            const historyIndices = optimizedData.indices.history.byClient.get(normalizedCode);
+
+            const filteredRows = [];
+            if (salesIndices) salesIndices.forEach(i => filteredRows.push(allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i]));
+            if (historyIndices) historyIndices.forEach(i => filteredRows.push(allHistoryData instanceof ColumnarDataset ? allHistoryData.get(i) : allHistoryData[i]));
+
+            if (filteredRows.length > 0) {
+                if (viewPrefix === 'main') {
+                     // Note: We don't change 'selectedMainSuppliers' here, just the options available.
+                     // The user said: "se eu filtrar um cliente... só deve aparecer para selecionar esse fornecedor"
+                     updateSupplierFilter(document.getElementById('fornecedor-filter-dropdown'), document.getElementById('fornecedor-filter-text'), selectedMainSuppliers, filteredRows, 'main');
+                }
+            }
+        }
+
         function setupEventListeners() {
+            // Drag-to-Scroll for Desktop Nav
+            const navContainer = document.getElementById('desktop-nav-container');
+            if (navContainer) {
+                let isDown = false;
+                let startX;
+                let scrollLeft;
+
+                navContainer.addEventListener('mousedown', (e) => {
+                    isDown = true;
+                    navContainer.classList.add('cursor-grabbing');
+                    startX = e.pageX - navContainer.offsetLeft;
+                    scrollLeft = navContainer.scrollLeft;
+                });
+
+                navContainer.addEventListener('mouseleave', () => {
+                    isDown = false;
+                    navContainer.classList.remove('cursor-grabbing');
+                });
+
+                navContainer.addEventListener('mouseup', () => {
+                    isDown = false;
+                    navContainer.classList.remove('cursor-grabbing');
+                });
+
+                navContainer.addEventListener('mousemove', (e) => {
+                    if (!isDown) return;
+                    e.preventDefault();
+                    const x = e.pageX - navContainer.offsetLeft;
+                    const walk = (x - startX) * 2; // Scroll-fast
+                    navContainer.scrollLeft = scrollLeft - walk;
+                });
+            }
+
             // Uploader Logic
             const openAdminBtn = document.getElementById('open-admin-btn');
             const adminModal = document.getElementById('admin-uploader-modal');
             const adminCloseBtn = document.getElementById('admin-modal-close-btn');
 
+            // Password Modal Elements
+            const pwdModal = document.getElementById('admin-password-modal');
+            const pwdInput = document.getElementById('admin-password-input');
+            const pwdConfirm = document.getElementById('admin-password-confirm-btn');
+            const pwdCancel = document.getElementById('admin-password-cancel-btn');
+
+            const openAdminModal = () => {
+                if (pwdModal) pwdModal.classList.add('hidden');
+                if (adminModal) adminModal.classList.remove('hidden');
+                // Close mobile menu if open
+                const mobileMenu = document.getElementById('mobile-menu');
+                if (mobileMenu && mobileMenu.classList.contains('open')) {
+                    toggleMobileMenu(); // Assuming this function exists in scope
+                }
+            };
+
+            const checkPassword = () => {
+                const input = pwdInput.value;
+                // Find password in metadata
+                let storedPwd = 'admin'; // Default fallback
+                if (embeddedData.metadata && Array.isArray(embeddedData.metadata)) {
+                    const entry = embeddedData.metadata.find(m => m.key === 'senha_modal');
+                    if (entry && entry.value) storedPwd = entry.value;
+                }
+                
+                if (input === storedPwd) {
+                    openAdminModal();
+                } else {
+                    alert('Senha incorreta.');
+                    pwdInput.value = '';
+                    pwdInput.focus();
+                }
+            };
+
             if (openAdminBtn) {
                 openAdminBtn.addEventListener('click', () => {
-                    if (window.userRole !== 'adm') {
-                        alert('Apenas usuários com permissão "adm" podem acessar o Uploader.');
-                        return;
+                    if (window.userRole === 'adm') {
+                        openAdminModal();
+                    } else {
+                        // Show Password Prompt
+                        if (pwdModal) {
+                            pwdInput.value = '';
+                            pwdModal.classList.remove('hidden');
+                            pwdInput.focus();
+                        }
                     }
-                    adminModal.classList.remove('hidden');
-                    // Close sidebar on mobile if open
-                    const sideMenu = document.getElementById('side-menu');
-                    const sidebarOverlay = document.getElementById('sidebar-overlay');
-                    if (sideMenu) {
-                        sideMenu.classList.remove('translate-x-0'); 
-                        sideMenu.classList.add('-translate-x-full');
-                    }
-                    if (sidebarOverlay) sidebarOverlay.classList.add('hidden');
+                });
+            }
+
+            if (pwdConfirm) {
+                pwdConfirm.addEventListener('click', checkPassword);
+            }
+            if (pwdCancel) {
+                pwdCancel.addEventListener('click', () => {
+                    if (pwdModal) pwdModal.classList.add('hidden');
+                });
+            }
+            if (pwdInput) {
+                pwdInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') checkPassword();
                 });
             }
             if (adminCloseBtn) {
@@ -12453,9 +12050,10 @@ const supervisorGroups = new Map();
                     const productsFile = document.getElementById('products-file-input').files[0];
                     const historyFile = document.getElementById('history-file-input').files[0];
                     const innovationsFile = document.getElementById('innovations-file-input').files[0];
+                    const hierarchyFile = document.getElementById('hierarchy-file-input').files[0];
 
-                    if (!salesFile && !historyFile) {
-                        alert("Pelo menos o arquivo de Vendas ou Histórico é necessário.");
+                    if (!salesFile && !historyFile && !hierarchyFile) {
+                        alert("Pelo menos um arquivo (Vendas, Histórico ou Hierarquia) é necessário.");
                         return;
                     }
 
@@ -12465,7 +12063,7 @@ const supervisorGroups = new Map();
                     document.getElementById('status-container').classList.remove('hidden');
                     document.getElementById('status-text').textContent = "Processando arquivos...";
 
-                    worker.postMessage({ salesFile, clientsFile, productsFile, historyFile, innovationsFile });
+                    worker.postMessage({ salesFile, clientsFile, productsFile, historyFile, innovationsFile, hierarchyFile });
 
                     worker.onmessage = (e) => {
                         const { type, data, status, percentage, message } = e.data;
@@ -12483,234 +12081,267 @@ const supervisorGroups = new Map();
                 });
             }
 
-            // Helper to mark dirty states
-            const markDirty = (view) => {
-                if (viewState[view]) viewState[view].dirty = true;
+            const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+            if (mobileMenuToggle) mobileMenuToggle.addEventListener('click', toggleMobileMenu);
+
+            const handleNavClick = (e) => {
+                const target = e.currentTarget.dataset.target;
+                if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('ir_para', target);
+                    window.open(url.toString(), '_blank');
+                } else {
+                    navigateTo(target);
+                }
             };
 
-            document.querySelectorAll('.sidebar-toggle').forEach(btn => btn.addEventListener('click', toggleSidebar));
-            const closeSidebarBtn = document.getElementById('close-sidebar-btn');
-            if(closeSidebarBtn) closeSidebarBtn.addEventListener('click', toggleSidebar);
-            const sidebarOverlay = document.getElementById('sidebar-overlay');
-            if(sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
-
-            document.querySelectorAll('.nav-link').forEach(link => {
+            document.querySelectorAll('.nav-link').forEach(link => link.addEventListener('click', handleNavClick));
+            
+            document.querySelectorAll('.mobile-nav-link').forEach(link => {
                 link.addEventListener('click', (e) => {
-                    const target = e.currentTarget.dataset.target;
-
-                    if (e.ctrlKey || e.metaKey) {
-                        e.preventDefault();
-                        const url = new URL(window.location.href);
-                        url.searchParams.set('ir_para', target);
-                        window.open(url.toString(), '_blank');
-                    } else {
-                        navigateTo(target);
-                    }
+                    handleNavClick(e);
+                    toggleMobileMenu();
                 });
             });
 
-            // --- Dashboard/Pedidos Filters ---
-            const updateDashboard = () => {
-                markDirty('dashboard'); markDirty('pedidos');
-                updateAllVisuals();
-            };
-
             const supervisorFilterBtn = document.getElementById('supervisor-filter-btn');
             const supervisorFilterDropdown = document.getElementById('supervisor-filter-dropdown');
-            supervisorFilterBtn.addEventListener('click', () => supervisorFilterDropdown.classList.toggle('hidden'));
-            supervisorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedMainSupervisors.push(value);
-                    else selectedMainSupervisors = selectedMainSupervisors.filter(s => s !== value);
-
-                    selectedSellers = []; // Reset sellers when supervisor changes to avoid inconsistent state? Or keep valid intersection?
-                    // Better: Re-run updateSellerFilter which filters 'selectedSellers' to only keep valid ones.
-                    selectedMainSupervisors = updateSupervisorFilter(supervisorFilterDropdown, document.getElementById('supervisor-filter-text'), selectedMainSupervisors, allSalesData);
-                    selectedSellers = updateSellerFilter(selectedMainSupervisors, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
-                    mainTableState.currentPage = 1;
-                    updateDashboard();
-                }
-            });
+            if (supervisorFilterBtn && supervisorFilterDropdown) {
+                supervisorFilterBtn.addEventListener('click', () => supervisorFilterDropdown.classList.toggle('hidden'));
+                supervisorFilterDropdown.addEventListener('change', (e) => {
+                    if (e.target.type === 'checkbox') {
+                        const { value, checked } = e.target;
+                        mainTableState.currentPage = 1;
+                        updateDashboard();
+                    }
+                });
+            }
 
             const fornecedorFilterBtn = document.getElementById('fornecedor-filter-btn');
             const fornecedorFilterDropdown = document.getElementById('fornecedor-filter-dropdown');
-            fornecedorFilterBtn.addEventListener('click', () => fornecedorFilterDropdown.classList.toggle('hidden'));
-            fornecedorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedMainSuppliers.push(value);
-                    else selectedMainSuppliers = selectedMainSuppliers.filter(s => s !== value);
+            if (fornecedorFilterBtn && fornecedorFilterDropdown) {
+                fornecedorFilterBtn.addEventListener('click', () => fornecedorFilterDropdown.classList.toggle('hidden'));
+                fornecedorFilterDropdown.addEventListener('change', (e) => {
+                    if (e.target.type === 'checkbox') {
+                        const { value, checked } = e.target;
+                        if (checked) selectedMainSuppliers.push(value);
+                        else selectedMainSuppliers = selectedMainSuppliers.filter(s => s !== value);
 
-                    let supplierDataSource = [...allSalesData, ...allHistoryData];
-                    if (currentFornecedor) {
-                        supplierDataSource = supplierDataSource.filter(s => s.OBSERVACAOFOR === currentFornecedor);
+                        let supplierDataSource = [...allSalesData, ...allHistoryData];
+                        if (currentFornecedor) {
+                            supplierDataSource = supplierDataSource.filter(s => s.OBSERVACAOFOR === currentFornecedor);
+                        }
+                        selectedMainSuppliers = updateSupplierFilter(fornecedorFilterDropdown, document.getElementById('fornecedor-filter-text'), selectedMainSuppliers, supplierDataSource, 'main');
+                        mainTableState.currentPage = 1;
+                        updateDashboard();
                     }
-                    selectedMainSuppliers = updateSupplierFilter(fornecedorFilterDropdown, document.getElementById('fornecedor-filter-text'), selectedMainSuppliers, supplierDataSource, 'main');
-                    mainTableState.currentPage = 1;
-                    updateDashboard();
-                }
-            });
+                });
+            }
 
-            vendedorFilterBtn.addEventListener('click', () => vendedorFilterDropdown.classList.toggle('hidden'));
-            vendedorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedSellers.push(value); else selectedSellers = selectedSellers.filter(s => s !== value);
-                    selectedSellers = updateSellerFilter(selectedMainSupervisors, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
-                    mainTableState.currentPage = 1;
-                    updateDashboard();
-                }
-            });
+            if (vendedorFilterBtn && vendedorFilterDropdown) {
+                vendedorFilterBtn.addEventListener('click', () => vendedorFilterDropdown.classList.toggle('hidden'));
+                vendedorFilterDropdown.addEventListener('change', (e) => {
+                    if (e.target.type === 'checkbox') {
+                        const { value, checked } = e.target;
+                        mainTableState.currentPage = 1;
+                        updateDashboard();
+                    }
+                });
+            }
 
-            tipoVendaFilterBtn.addEventListener('click', () => tipoVendaFilterDropdown.classList.toggle('hidden'));
-            tipoVendaFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedTiposVenda.push(value);
-                    else selectedTiposVenda = selectedTiposVenda.filter(s => s !== value);
-                    selectedTiposVenda = updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
-                    mainTableState.currentPage = 1;
-                    updateDashboard();
-                }
-            });
+            if (tipoVendaFilterBtn && tipoVendaFilterDropdown) {
+                tipoVendaFilterBtn.addEventListener('click', () => tipoVendaFilterDropdown.classList.toggle('hidden'));
+                tipoVendaFilterDropdown.addEventListener('change', (e) => {
+                    if (e.target.type === 'checkbox') {
+                        const { value, checked } = e.target;
+                        if (checked) selectedTiposVenda.push(value);
+                        else selectedTiposVenda = selectedTiposVenda.filter(s => s !== value);
+                        selectedTiposVenda = updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
+                        mainTableState.currentPage = 1;
+                        updateDashboard();
+                    }
+                });
+            }
 
-            posicaoFilter.addEventListener('change', () => { mainTableState.currentPage = 1; updateDashboard(); });
+            if (posicaoFilter) posicaoFilter.addEventListener('change', () => { mainTableState.currentPage = 1; updateDashboard(); });
             const debouncedUpdateDashboard = debounce(updateDashboard, 400);
-            codcliFilter.addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/[^0-9]/g, '');
-                mainTableState.currentPage = 1;
-                debouncedUpdateDashboard();
-            });
-            clearFiltersBtn.addEventListener('click', () => { resetMainFilters(); markDirty('dashboard'); markDirty('pedidos'); });
-
-            prevPageBtn.addEventListener('click', () => {
-                if (mainTableState.currentPage > 1) {
-                    mainTableState.currentPage--;
-                    renderTable(mainTableState.filteredData);
-                }
-            });
-            nextPageBtn.addEventListener('click', () => {
-                if (mainTableState.currentPage < mainTableState.totalPages) {
-                    mainTableState.currentPage++;
-                    renderTable(mainTableState.filteredData);
-                }
-            });
-
-            mainComRedeBtn.addEventListener('click', () => mainRedeFilterDropdown.classList.toggle('hidden'));
-            mainRedeGroupContainer.addEventListener('click', (e) => {
-                if(e.target.closest('button')) {
-                    const button = e.target.closest('button');
-                    mainRedeGroupFilter = button.dataset.group;
-                    mainRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    button.classList.add('active');
-                    if (mainRedeGroupFilter !== 'com_rede') {
-                        mainRedeFilterDropdown.classList.add('hidden');
-                        selectedMainRedes = [];
+            if (codcliFilter) {
+                setupClientTypeahead('codcli-filter', 'codcli-filter-suggestions', (code) => {
+                    handleClientFilterCascade(code, 'main');
+                    mainTableState.currentPage = 1;
+                    debouncedUpdateDashboard();
+                });
+                codcliFilter.addEventListener('input', (e) => {
+                    const val = e.target.value.trim();
+                    if (val && clientMapForKPIs.has(normalizeKey(val))) {
+                         handleClientFilterCascade(val, 'main');
                     }
-                    updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
                     mainTableState.currentPage = 1;
-                    updateDashboard();
+                    debouncedUpdateDashboard();
+                });
+                // Make Lupa Icon Interactive
+                const codcliSearchIcon = document.getElementById('codcli-search-icon');
+                if (codcliSearchIcon) {
+                    codcliSearchIcon.addEventListener('click', () => {
+                        codcliFilter.focus();
+                        mainTableState.currentPage = 1;
+                        updateDashboard(); // Immediate update
+                    });
                 }
-            });
-            mainRedeFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedMainRedes.push(value);
-                    else selectedMainRedes = selectedMainRedes.filter(r => r !== value);
-                    selectedMainRedes = updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
-                    mainTableState.currentPage = 1;
-                    updateDashboard();
+            }
+
+            const goalsGvCodcliFilter = document.getElementById('goals-gv-codcli-filter');
+            if (goalsGvCodcliFilter) {
+                setupClientTypeahead('goals-gv-codcli-filter', 'goals-gv-codcli-filter-suggestions', (code) => {
+                    handleClientFilterCascade(code, 'goals-gv');
+                    if (typeof updateGoalsView === 'function') {
+                        goalsTableState.currentPage = 1;
+                        updateGoalsView();
+                    } else {
+                        goalsGvCodcliFilter.dispatchEvent(new Event('input'));
+                    }
+                });
+                goalsGvCodcliFilter.addEventListener('input', (e) => {
+                    const val = e.target.value.trim();
+                    if (val && clientMapForKPIs.has(normalizeKey(val))) {
+                         handleClientFilterCascade(val, 'goals-gv');
+                    }
+                    if (typeof updateGoalsView === 'function') {
+                        goalsTableState.currentPage = 1;
+                        updateGoalsView();
+                    }
+                });
+                // Make Goals Lupa Icon Interactive
+                const goalsGvSearchIcon = document.getElementById('goals-gv-search-icon');
+                if (goalsGvSearchIcon) {
+                    goalsGvSearchIcon.addEventListener('click', () => {
+                        goalsGvCodcliFilter.focus();
+                        if (typeof updateGoalsView === 'function') {
+                            goalsTableState.currentPage = 1;
+                            updateGoalsView();
+                        } else {
+                            goalsGvCodcliFilter.dispatchEvent(new Event('input'));
+                        }
+                    });
                 }
-            });
+            }
+            if (clearFiltersBtn) clearFiltersBtn.addEventListener('click', () => { resetMainFilters(); markDirty('dashboard'); markDirty('pedidos'); });
+
+            if (prevPageBtn) {
+                prevPageBtn.addEventListener('click', () => {
+                    if (mainTableState.currentPage > 1) {
+                        mainTableState.currentPage--;
+                        renderTable(mainTableState.filteredData);
+                    }
+                });
+            }
+            if (nextPageBtn) {
+                nextPageBtn.addEventListener('click', () => {
+                    if (mainTableState.currentPage < mainTableState.totalPages) {
+                        mainTableState.currentPage++;
+                        renderTable(mainTableState.filteredData);
+                    }
+                });
+            }
+
+            if (mainComRedeBtn) mainComRedeBtn.addEventListener('click', () => mainRedeFilterDropdown.classList.toggle('hidden'));
+            if (mainRedeGroupContainer) {
+                mainRedeGroupContainer.addEventListener('click', (e) => {
+                    if(e.target.closest('button')) {
+                        const button = e.target.closest('button');
+                        mainRedeGroupFilter = button.dataset.group;
+                        mainRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                        button.classList.add('active');
+                        if (mainRedeGroupFilter !== 'com_rede') {
+                            mainRedeFilterDropdown.classList.add('hidden');
+                            selectedMainRedes = [];
+                        }
+                        updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
+                        mainTableState.currentPage = 1;
+                        updateDashboard();
+                    }
+                });
+            }
+            if (mainRedeFilterDropdown) {
+                mainRedeFilterDropdown.addEventListener('change', (e) => {
+                    if (e.target.type === 'checkbox') {
+                        const { value, checked } = e.target;
+                        if (checked) selectedMainRedes.push(value);
+                        else selectedMainRedes = selectedMainRedes.filter(r => r !== value);
+                        selectedMainRedes = updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
+                        mainTableState.currentPage = 1;
+                        updateDashboard();
+                    }
+                });
+            }
 
             // --- City View Filters ---
             const updateCity = () => {
                 markDirty('cidades');
                 handleCityFilterChange();
             };
-
-            const citySupervisorFilterBtn = document.getElementById('city-supervisor-filter-btn');
-            const citySupervisorFilterDropdown = document.getElementById('city-supervisor-filter-dropdown');
-            citySupervisorFilterBtn.addEventListener('click', () => citySupervisorFilterDropdown.classList.toggle('hidden'));
-            citySupervisorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedCitySupervisors.push(value);
-                    else selectedCitySupervisors = selectedCitySupervisors.filter(s => s !== value);
-
-                    selectedCitySellers = [];
-                    handleCityFilterChange();
-                }
-            });
-
-            cityVendedorFilterBtn.addEventListener('click', () => cityVendedorFilterDropdown.classList.toggle('hidden'));
-            cityVendedorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedCitySellers.includes(value)) selectedCitySellers.push(value);
-                    } else {
-                        selectedCitySellers = selectedCitySellers.filter(s => s !== value);
+            if (citySupplierFilterDropdown) {
+                citySupplierFilterDropdown.addEventListener('change', (e) => {
+                    if (e.target.type === 'checkbox' && e.target.dataset.filterType === 'city') {
+                        const { value, checked } = e.target;
+                        if (checked) {
+                            if (!selectedCitySuppliers.includes(value)) selectedCitySuppliers.push(value);
+                        } else {
+                            selectedCitySuppliers = selectedCitySuppliers.filter(s => s !== value);
+                        }
+                        handleCityFilterChange({ skipFilter: 'supplier' });
                     }
-                    handleCityFilterChange({ skipFilter: 'seller' });
-                }
-            });
+                });
+            }
 
-            citySupplierFilterBtn.addEventListener('click', () => citySupplierFilterDropdown.classList.toggle('hidden'));
-            citySupplierFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox' && e.target.dataset.filterType === 'city') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedCitySuppliers.includes(value)) selectedCitySuppliers.push(value);
-                    } else {
-                        selectedCitySuppliers = selectedCitySuppliers.filter(s => s !== value);
+            if (cityTipoVendaFilterBtn && cityTipoVendaFilterDropdown) {
+                cityTipoVendaFilterBtn.addEventListener('click', () => cityTipoVendaFilterDropdown.classList.toggle('hidden'));
+                cityTipoVendaFilterDropdown.addEventListener('change', (e) => {
+                    if (e.target.type === 'checkbox') {
+                        const { value, checked } = e.target;
+                        if (checked) {
+                            if (!selectedCityTiposVenda.includes(value)) selectedCityTiposVenda.push(value);
+                        } else {
+                            selectedCityTiposVenda = selectedCityTiposVenda.filter(s => s !== value);
+                        }
+                        handleCityFilterChange({ skipFilter: 'tipoVenda' });
                     }
-                    handleCityFilterChange({ skipFilter: 'supplier' });
-                }
-            });
+                });
+            }
 
-            cityTipoVendaFilterBtn.addEventListener('click', () => cityTipoVendaFilterDropdown.classList.toggle('hidden'));
-            cityTipoVendaFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedCityTiposVenda.includes(value)) selectedCityTiposVenda.push(value);
-                    } else {
-                        selectedCityTiposVenda = selectedCityTiposVenda.filter(s => s !== value);
+            if (cityComRedeBtn) cityComRedeBtn.addEventListener('click', () => cityRedeFilterDropdown.classList.toggle('hidden'));
+            if (cityRedeGroupContainer) {
+                cityRedeGroupContainer.addEventListener('click', (e) => {
+                    if(e.target.closest('button')) {
+                        const button = e.target.closest('button');
+                        cityRedeGroupFilter = button.dataset.group;
+                        cityRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                        button.classList.add('active');
+
+                        if (cityRedeGroupFilter !== 'com_rede') {
+                            cityRedeFilterDropdown.classList.add('hidden');
+                            selectedCityRedes = [];
+                        }
+                        handleCityFilterChange();
                     }
-                    handleCityFilterChange({ skipFilter: 'tipoVenda' });
-                }
-            });
+                });
+            }
+            if (cityRedeFilterDropdown) {
+                cityRedeFilterDropdown.addEventListener('change', (e) => {
+                    if (e.target.type === 'checkbox') {
+                        const { value, checked } = e.target;
+                        if (checked) selectedCityRedes.push(value);
+                        else selectedCityRedes = selectedCityRedes.filter(r => r !== value);
 
-            cityComRedeBtn.addEventListener('click', () => cityRedeFilterDropdown.classList.toggle('hidden'));
-            cityRedeGroupContainer.addEventListener('click', (e) => {
-                if(e.target.closest('button')) {
-                    const button = e.target.closest('button');
-                    cityRedeGroupFilter = button.dataset.group;
-                    cityRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    button.classList.add('active');
+                        cityRedeGroupFilter = 'com_rede';
+                        cityRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                        cityComRedeBtn.classList.add('active');
 
-                    if (cityRedeGroupFilter !== 'com_rede') {
-                        cityRedeFilterDropdown.classList.add('hidden');
-                        selectedCityRedes = [];
+                        handleCityFilterChange({ skipFilter: 'rede' });
                     }
-                    handleCityFilterChange();
-                }
-            });
-            cityRedeFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedCityRedes.push(value);
-                    else selectedCityRedes = selectedCityRedes.filter(r => r !== value);
-
-                    cityRedeGroupFilter = 'com_rede';
-                    cityRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    cityComRedeBtn.classList.add('active');
-
-                    handleCityFilterChange({ skipFilter: 'rede' });
-                }
-            });
+                });
+            }
 
             const toggleCityMapBtn = document.getElementById('toggle-city-map-btn');
             if (toggleCityMapBtn) {
@@ -12750,73 +12381,62 @@ const supervisorGroups = new Map();
                 });
             }
 
-            clearCityFiltersBtn.addEventListener('click', () => { resetCityFilters(); markDirty('cidades'); });
+            if (clearCityFiltersBtn) clearCityFiltersBtn.addEventListener('click', () => { resetCityFilters(); markDirty('cidades'); });
             const debouncedUpdateCity = debounce(updateCity, 400);
-            cityCodCliFilter.addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/[^0-9]/g, '');
-                debouncedUpdateCity();
-            });
+            if (cityCodCliFilter) {
+                cityCodCliFilter.addEventListener('input', (e) => {
+                    e.target.value = e.target.value.replace(/[^0-9]/g, '');
+                    debouncedUpdateCity();
+                });
+            }
 
             const debouncedCitySearch = debounce(() => {
                 const { clients } = getCityFilteredData({ excludeFilter: 'city' });
                 updateCitySuggestions(cityNameFilter, citySuggestions, clients);
             }, 300);
 
-            cityNameFilter.addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/[0-9]/g, '');
-                debouncedCitySearch();
-            });
-            cityNameFilter.addEventListener('focus', () => {
-                const { clients } = getCityFilteredData({ excludeFilter: 'city' });
-                citySuggestions.classList.remove('manual-hide');
-                updateCitySuggestions(cityNameFilter, citySuggestions, clients);
-            });
-            cityNameFilter.addEventListener('blur', () => setTimeout(() => citySuggestions.classList.add('hidden'), 150));
-            cityNameFilter.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    citySuggestions.classList.add('hidden', 'manual-hide');
-                    handleCityFilterChange();
-                    e.target.blur();
-                }
-            });
+            if (cityNameFilter) {
+                cityNameFilter.addEventListener('input', (e) => {
+                    e.target.value = e.target.value.replace(/[0-9]/g, '');
+                    debouncedCitySearch();
+                });
+                cityNameFilter.addEventListener('focus', () => {
+                    const { clients } = getCityFilteredData({ excludeFilter: 'city' });
+                    citySuggestions.classList.remove('manual-hide');
+                    updateCitySuggestions(cityNameFilter, citySuggestions, clients);
+                });
+                cityNameFilter.addEventListener('blur', () => setTimeout(() => citySuggestions.classList.add('hidden'), 150));
+                cityNameFilter.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        citySuggestions.classList.add('hidden', 'manual-hide');
+                        handleCityFilterChange();
+                        e.target.blur();
+                    }
+                });
+            }
 
             document.addEventListener('click', (e) => {
-                if (!supervisorFilterBtn.contains(e.target) && !supervisorFilterDropdown.contains(e.target)) supervisorFilterDropdown.classList.add('hidden');
-                if (!fornecedorFilterBtn.contains(e.target) && !fornecedorFilterDropdown.contains(e.target)) fornecedorFilterDropdown.classList.add('hidden');
-                if (!vendedorFilterBtn.contains(e.target) && !vendedorFilterDropdown.contains(e.target)) vendedorFilterDropdown.classList.add('hidden');
-                if (!tipoVendaFilterBtn.contains(e.target) && !tipoVendaFilterDropdown.contains(e.target)) tipoVendaFilterDropdown.classList.add('hidden');
+                if (supervisorFilterBtn && supervisorFilterDropdown && !supervisorFilterBtn.contains(e.target) && !supervisorFilterDropdown.contains(e.target)) supervisorFilterDropdown.classList.add('hidden');
+                if (fornecedorFilterBtn && fornecedorFilterDropdown && !fornecedorFilterBtn.contains(e.target) && !fornecedorFilterDropdown.contains(e.target)) fornecedorFilterDropdown.classList.add('hidden');
+                if (vendedorFilterBtn && vendedorFilterDropdown && !vendedorFilterBtn.contains(e.target) && !vendedorFilterDropdown.contains(e.target)) vendedorFilterDropdown.classList.add('hidden');
+                if (tipoVendaFilterBtn && tipoVendaFilterDropdown && !tipoVendaFilterBtn.contains(e.target) && !tipoVendaFilterDropdown.contains(e.target)) tipoVendaFilterDropdown.classList.add('hidden');
 
-                if (!citySupervisorFilterBtn.contains(e.target) && !citySupervisorFilterDropdown.contains(e.target)) citySupervisorFilterDropdown.classList.add('hidden');
-                if (!cityVendedorFilterBtn.contains(e.target) && !cityVendedorFilterDropdown.contains(e.target)) cityVendedorFilterDropdown.classList.add('hidden');
-                if (!citySupplierFilterBtn.contains(e.target) && !citySupplierFilterDropdown.contains(e.target)) citySupplierFilterDropdown.classList.add('hidden');
-                if (!cityTipoVendaFilterBtn.contains(e.target) && !cityTipoVendaFilterDropdown.contains(e.target)) cityTipoVendaFilterDropdown.classList.add('hidden');
-                if (!cityComRedeBtn.contains(e.target) && !cityRedeFilterDropdown.contains(e.target)) cityRedeFilterDropdown.classList.add('hidden');
-                if (!mainComRedeBtn.contains(e.target) && !mainRedeFilterDropdown.contains(e.target)) mainRedeFilterDropdown.classList.add('hidden');
+                if (citySupplierFilterBtn && citySupplierFilterDropdown && !citySupplierFilterBtn.contains(e.target) && !citySupplierFilterDropdown.contains(e.target)) citySupplierFilterDropdown.classList.add('hidden');
+                if (cityTipoVendaFilterBtn && cityTipoVendaFilterDropdown && !cityTipoVendaFilterBtn.contains(e.target) && !cityTipoVendaFilterDropdown.contains(e.target)) cityTipoVendaFilterDropdown.classList.add('hidden');
+                if (cityComRedeBtn && cityRedeFilterDropdown && !cityComRedeBtn.contains(e.target) && !cityRedeFilterDropdown.contains(e.target)) cityRedeFilterDropdown.classList.add('hidden');
+                if (mainComRedeBtn && mainRedeFilterDropdown && !mainComRedeBtn.contains(e.target) && !mainRedeFilterDropdown.contains(e.target)) mainRedeFilterDropdown.classList.add('hidden');
 
-                if (!comparisonSupervisorFilterBtn.contains(e.target) && !comparisonSupervisorFilterDropdown.contains(e.target)) comparisonSupervisorFilterDropdown.classList.add('hidden');
-                if (!comparisonComRedeBtn.contains(e.target) && !comparisonRedeFilterDropdown.contains(e.target)) comparisonRedeFilterDropdown.classList.add('hidden');
-                if (!comparisonVendedorFilterBtn.contains(e.target) && !comparisonVendedorFilterDropdown.contains(e.target)) comparisonVendedorFilterDropdown.classList.add('hidden');
-                if (!comparisonTipoVendaFilterBtn.contains(e.target) && !comparisonTipoVendaFilterDropdown.contains(e.target)) comparisonTipoVendaFilterDropdown.classList.add('hidden');
-                if (!comparisonSupplierFilterBtn.contains(e.target) && !comparisonSupplierFilterDropdown.contains(e.target)) comparisonSupplierFilterDropdown.classList.add('hidden');
-                if (!comparisonProductFilterBtn.contains(e.target) && !comparisonProductFilterDropdown.contains(e.target)) comparisonProductFilterDropdown.classList.add('hidden');
+                if (comparisonComRedeBtn && comparisonRedeFilterDropdown && !comparisonComRedeBtn.contains(e.target) && !comparisonRedeFilterDropdown.contains(e.target)) comparisonRedeFilterDropdown.classList.add('hidden');
+                if (comparisonTipoVendaFilterBtn && comparisonTipoVendaFilterDropdown && !comparisonTipoVendaFilterBtn.contains(e.target) && !comparisonTipoVendaFilterDropdown.contains(e.target)) comparisonTipoVendaFilterDropdown.classList.add('hidden');
+                if (comparisonSupplierFilterBtn && comparisonSupplierFilterDropdown && !comparisonSupplierFilterBtn.contains(e.target) && !comparisonSupplierFilterDropdown.contains(e.target)) comparisonSupplierFilterDropdown.classList.add('hidden');
+                if (comparisonProductFilterBtn && comparisonProductFilterDropdown && !comparisonProductFilterBtn.contains(e.target) && !comparisonProductFilterDropdown.contains(e.target)) comparisonProductFilterDropdown.classList.add('hidden');
 
-                if (!stockSupervisorFilterBtn.contains(e.target) && !stockSupervisorFilterDropdown.contains(e.target)) stockSupervisorFilterDropdown.classList.add('hidden');
-                if (!stockComRedeBtn.contains(e.target) && !stockRedeFilterDropdown.contains(e.target)) stockRedeFilterDropdown.classList.add('hidden');
-                if (!stockVendedorFilterBtn.contains(e.target) && !stockVendedorFilterDropdown.contains(e.target)) stockVendedorFilterDropdown.classList.add('hidden');
-                if (!stockSupplierFilterBtn.contains(e.target) && !stockSupplierFilterDropdown.contains(e.target)) stockSupplierFilterDropdown.classList.add('hidden');
-                if (!stockProductFilterBtn.contains(e.target) && !stockProductFilterDropdown.contains(e.target)) stockProductFilterDropdown.classList.add('hidden');
-                if (!stockTipoVendaFilterBtn.contains(e.target) && !stockTipoVendaFilterDropdown.contains(e.target)) stockTipoVendaFilterDropdown.classList.add('hidden');
-
-                if (!innovationsMonthSupervisorFilterBtn.contains(e.target) && !innovationsMonthSupervisorFilterDropdown.contains(e.target)) innovationsMonthSupervisorFilterDropdown.classList.add('hidden');
-                if (!coverageSupervisorFilterBtn.contains(e.target) && !coverageSupervisorFilterDropdown.contains(e.target)) coverageSupervisorFilterDropdown.classList.add('hidden');
 
                 if (e.target.closest('[data-pedido-id]')) { e.preventDefault(); openModal(e.target.closest('[data-pedido-id]').dataset.pedidoId); }
                 if (e.target.closest('[data-codcli]')) { e.preventDefault(); openClientModal(e.target.closest('[data-codcli]').dataset.codcli); }
-                if (e.target.closest('#city-suggestions > div')) { cityNameFilter.value = e.target.textContent; citySuggestions.classList.add('hidden'); updateCityView(); }
-                if (e.target.closest('#comparison-city-suggestions > div')) { comparisonCityFilter.value = e.target.textContent; comparisonCitySuggestions.classList.add('hidden'); updateAllComparisonFilters(); updateComparisonView(); }
-                else if (!comparisonCityFilter.contains(e.target)) comparisonCitySuggestions.classList.add('hidden');
-                if (e.target.closest('#stock-city-suggestions > div')) { stockCityFilter.value = e.target.textContent; stockCitySuggestions.classList.add('hidden'); handleStockFilterChange(); }
-                else if (!stockCityFilter.contains(e.target)) stockCitySuggestions.classList.add('hidden');
+                if (e.target.closest('#city-suggestions > div')) { if(cityNameFilter) cityNameFilter.value = e.target.textContent; citySuggestions.classList.add('hidden'); updateCityView(); }
+                if (e.target.closest('#comparison-city-suggestions > div')) { if(comparisonCityFilter) comparisonCityFilter.value = e.target.textContent; comparisonCitySuggestions.classList.add('hidden'); updateAllComparisonFilters(); updateComparisonView(); }
+                else if (comparisonCityFilter && !comparisonCityFilter.contains(e.target)) comparisonCitySuggestions.classList.add('hidden');
             });
 
             fornecedorToggleContainerEl.querySelectorAll('.fornecedor-btn').forEach(btn => {
@@ -12824,63 +12444,18 @@ const supervisorGroups = new Map();
                     const fornecedor = btn.dataset.fornecedor;
                     if (currentFornecedor === fornecedor) { currentFornecedor = ''; btn.classList.remove('active'); } else { currentFornecedor = fornecedor; fornecedorToggleContainerEl.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
 
+                    // Update Supplier Filter Options
                     let supplierDataSource = [...allSalesData, ...allHistoryData];
                     if (currentFornecedor) {
                         supplierDataSource = supplierDataSource.filter(s => s.OBSERVACAOFOR === currentFornecedor);
                     }
-                    selectedMainSuppliers = updateSupplierFilter(document.getElementById('fornecedor-filter-dropdown'), document.getElementById('fornecedor-filter-text'), selectedMainSuppliers, supplierDataSource, 'main');
-
-                    selectedMainSupervisors = updateSupervisorFilter(document.getElementById('supervisor-filter-dropdown'), document.getElementById('supervisor-filter-text'), selectedMainSupervisors, allSalesData);
-                    selectedSellers = [];
-                    updateSellerFilter(selectedMainSupervisors, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
+                    selectedMainSuppliers = updateSupplierFilter(fornecedorFilterDropdown, document.getElementById('fornecedor-filter-text'), selectedMainSuppliers, supplierDataSource, 'main');
                     mainTableState.currentPage = 1;
+
                     updateDashboard();
                 });
             });
 
-            const updateWeekly = () => {
-                markDirty('semanal');
-                updateWeeklyView();
-            };
-
-            weeklyFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const fornecedor = btn.dataset.fornecedor;
-                    if (currentWeeklyFornecedor === fornecedor) { currentWeeklyFornecedor = ''; btn.classList.remove('active'); } else { currentWeeklyFornecedor = fornecedor; weeklyFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
-                    updateWeekly();
-                });
-            });
-
-            weeklySupervisorFilterBtn.addEventListener('click', () => weeklySupervisorFilterDropdown.classList.toggle('hidden'));
-            weeklySupervisorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedWeeklySupervisors.push(value);
-                    else selectedWeeklySupervisors = selectedWeeklySupervisors.filter(s => s !== value);
-
-                    selectedWeeklySupervisors = updateSupervisorFilter(weeklySupervisorFilterDropdown, weeklySupervisorFilterText, selectedWeeklySupervisors, allSalesData);
-                    selectedWeeklySellers = updateSellerFilter(selectedWeeklySupervisors, weeklyVendedorFilterDropdown, weeklyVendedorFilterText, selectedWeeklySellers, allSalesData);
-                    updateWeekly();
-                }
-            });
-
-            weeklyVendedorFilterBtn.addEventListener('click', () => weeklyVendedorFilterDropdown.classList.toggle('hidden'));
-            weeklyVendedorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedWeeklySellers.includes(value)) selectedWeeklySellers.push(value);
-                    } else {
-                        selectedWeeklySellers = selectedWeeklySellers.filter(s => s !== value);
-                    }
-                    updateSellerFilter(selectedWeeklySupervisors, weeklyVendedorFilterDropdown, weeklyVendedorFilterText, selectedWeeklySellers, allSalesData);
-                    updateWeekly();
-                }
-            });
-
-            clearWeeklyFiltersBtn.addEventListener('click', () => { resetWeeklyFilters(); markDirty('semanal'); });
-
-            // --- Comparison View Filters ---
             const updateComparison = () => {
                 markDirty('comparativo');
                 updateAllComparisonFilters();
@@ -12889,22 +12464,6 @@ const supervisorGroups = new Map();
 
             const handleComparisonFilterChange = updateComparison;
 
-            const comparisonSupervisorFilterBtn = document.getElementById('comparison-supervisor-filter-btn');
-            const comparisonSupervisorFilterDropdown = document.getElementById('comparison-supervisor-filter-dropdown');
-            comparisonSupervisorFilterBtn.addEventListener('click', () => comparisonSupervisorFilterDropdown.classList.toggle('hidden'));
-            comparisonSupervisorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedComparisonSupervisors.push(value);
-                    else selectedComparisonSupervisors = selectedComparisonSupervisors.filter(s => s !== value);
-                    selectedComparisonSellers = [];
-                    handleComparisonFilterChange();
-                }
-            });
-
-            comparisonFilialFilter.addEventListener('change', handleComparisonFilterChange);
-            comparisonVendedorFilterBtn.addEventListener('click', () => comparisonVendedorFilterDropdown.classList.toggle('hidden'));
-            comparisonVendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedComparisonSellers.push(value); else selectedComparisonSellers = selectedComparisonSellers.filter(s => s !== value); handleComparisonFilterChange(); } });
             comparisonTipoVendaFilterBtn.addEventListener('click', () => comparisonTipoVendaFilterDropdown.classList.toggle('hidden'));
             comparisonTipoVendaFilterDropdown.addEventListener('change', (e) => {
                 if (e.target.type === 'checkbox') {
@@ -12952,11 +12511,15 @@ const supervisorGroups = new Map();
                 }
             });
 
-            comparisonCityFilter.addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/[0-9]/g, '');
+            const debouncedComparisonCityUpdate = debounce(() => {
                 const { currentSales, historySales } = getComparisonFilteredData({ excludeFilter: 'city' });
                 comparisonCitySuggestions.classList.remove('manual-hide');
                 updateComparisonCitySuggestions([...currentSales, ...historySales]);
+            }, 300);
+
+            comparisonCityFilter.addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/[0-9]/g, '');
+                debouncedComparisonCityUpdate();
             });
             comparisonCityFilter.addEventListener('focus', () => {
                 const { currentSales, historySales } = getComparisonFilteredData({ excludeFilter: 'city' });
@@ -12978,6 +12541,45 @@ const supervisorGroups = new Map();
                     handleComparisonFilterChange();
                 }
             });
+
+            const resetComparisonFilters = () => {
+                selectedComparisonTiposVenda = [];
+                currentComparisonFornecedor = 'PEPSICO';
+                selectedComparisonSuppliers = [];
+                comparisonRedeGroupFilter = '';
+                selectedComparisonRedes = [];
+
+                if (comparisonCityFilter) comparisonCityFilter.value = '';
+
+                if (comparisonTipoVendaFilterDropdown) {
+                    comparisonTipoVendaFilterDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+                    updateTipoVendaFilter(comparisonTipoVendaFilterDropdown, comparisonTipoVendaFilterText, selectedComparisonTiposVenda, [...allSalesData, ...allHistoryData]);
+                }
+
+                if (comparisonSupplierFilterDropdown) {
+                    comparisonSupplierFilterDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+                    updateSupplierFilter(comparisonSupplierFilterDropdown, comparisonSupplierFilterText, selectedComparisonSuppliers, supplierOptionsData, 'comparison');
+                }
+
+                if (comparisonRedeFilterDropdown) {
+                    comparisonRedeFilterDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+                }
+
+                if (comparisonRedeGroupContainer) {
+                    comparisonRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                    const defaultBtn = comparisonRedeGroupContainer.querySelector('button[data-group=""]');
+                    if (defaultBtn) defaultBtn.classList.add('active');
+                    updateRedeFilter(comparisonRedeFilterDropdown, comparisonComRedeBtnText, selectedComparisonRedes, allClientsData);
+                }
+
+                if (comparisonFornecedorToggleContainer) {
+                    comparisonFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active'));
+                    const pepsicoBtn = comparisonFornecedorToggleContainer.querySelector('button[data-fornecedor="PEPSICO"]');
+                    if (pepsicoBtn) pepsicoBtn.classList.add('active');
+                }
+
+                handleComparisonFilterChange();
+            };
 
             clearComparisonFiltersBtn.addEventListener('click', resetComparisonFilters);
 
@@ -13010,113 +12612,6 @@ const supervisorGroups = new Map();
                 if(e.target.dataset.filterType === 'comparison' && handleProductFilterChange(e, selectedComparisonProducts)) {
                     handleComparisonFilterChange();
                     updateComparisonProductFilter();
-                }
-            });
-            stockProductFilterBtn.addEventListener('click', () => {
-                updateStockProductFilter();
-                stockProductFilterDropdown.classList.toggle('hidden');
-            });
-
-            const debouncedStockProductSearch = debounce(updateStockProductFilter, 250);
-            stockProductFilterDropdown.addEventListener('input', (e) => {
-                if (e.target.id === 'stock-product-search-input') {
-                    debouncedStockProductSearch();
-                }
-            });
-
-            stockProductFilterDropdown.addEventListener('change', (e) => {
-                if(e.target.dataset.filterType === 'stock' && handleProductFilterChange(e, selectedStockProducts)) {
-                    handleStockFilterChange();
-                    updateStockProductFilter();
-                }
-            });
-
-            stockFilialFilter.addEventListener('change', handleStockFilterChange);
-            clearStockFiltersBtn.addEventListener('click', resetStockFilters);
-            stockFornecedorToggleContainer.addEventListener('click', (e) => { if (e.target.tagName === 'BUTTON') { const fornecedor = e.target.dataset.fornecedor; if (currentStockFornecedor === fornecedor) { currentStockFornecedor = ''; e.target.classList.remove('active'); } else { currentStockFornecedor = fornecedor; stockFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); e.target.classList.add('active'); } handleStockFilterChange(); } });
-
-            const stockSupervisorFilterBtn = document.getElementById('stock-supervisor-filter-btn');
-            const stockSupervisorFilterDropdown = document.getElementById('stock-supervisor-filter-dropdown');
-            stockSupervisorFilterBtn.addEventListener('click', () => stockSupervisorFilterDropdown.classList.toggle('hidden'));
-            stockSupervisorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedStockSupervisors.push(value);
-                    else selectedStockSupervisors = selectedStockSupervisors.filter(s => s !== value);
-
-                    selectedStockSellers = [];
-                    handleStockFilterChange();
-                }
-            });
-
-            stockVendedorFilterBtn.addEventListener('click', () => stockVendedorFilterDropdown.classList.toggle('hidden'));
-            stockVendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedStockSellers.push(value); else selectedStockSellers = selectedStockSellers.filter(s => s !== value); handleStockFilterChange({ skipFilter: 'seller' }); } });
-            stockSupplierFilterBtn.addEventListener('click', () => stockSupplierFilterDropdown.classList.toggle('hidden'));
-            stockSupplierFilterDropdown.addEventListener('change', (e) => { if (e.target.dataset.filterType === 'stock' && e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) { if(!selectedStockSuppliers.includes(value)) selectedStockSuppliers.push(value); } else { selectedStockSuppliers = selectedStockSuppliers.filter(s => s !== value); } handleStockFilterChange({ skipFilter: 'supplier' }); } });
-
-            stockTipoVendaFilterBtn.addEventListener('click', () => stockTipoVendaFilterDropdown.classList.toggle('hidden'));
-            stockTipoVendaFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedStockTiposVenda.includes(value)) selectedStockTiposVenda.push(value);
-                    } else {
-                        selectedStockTiposVenda = selectedStockTiposVenda.filter(s => s !== value);
-                    }
-                    selectedStockTiposVenda = updateTipoVendaFilter(stockTipoVendaFilterDropdown, stockTipoVendaFilterText, selectedStockTiposVenda, [...allSalesData, ...allHistoryData]);
-                    handleStockFilterChange({ skipFilter: 'tipoVenda' });
-                }
-            });
-
-            stockCityFilter.addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/[0-9]/g, '');
-                const cityData = getStockFilteredData({ excludeFilter: 'city' });
-                stockCitySuggestions.classList.remove('manual-hide');
-                updateStockCitySuggestions([...cityData.sales, ...cityData.history]);
-            });
-            stockCityFilter.addEventListener('focus', () => {
-                const cityData = getStockFilteredData({ excludeFilter: 'city' });
-                stockCitySuggestions.classList.remove('manual-hide');
-                updateStockCitySuggestions([...cityData.sales, ...cityData.history]);
-            });
-            stockCityFilter.addEventListener('blur', () => setTimeout(() => stockCitySuggestions.classList.add('hidden'), 150));
-            stockCityFilter.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    stockCitySuggestions.classList.add('hidden', 'manual-hide');
-                    handleStockFilterChange();
-                    e.target.blur();
-                }
-            });
-            stockCitySuggestions.addEventListener('click', (e) => {
-                if (e.target.tagName === 'DIV') {
-                    stockCityFilter.value = e.target.textContent;
-                    stockCitySuggestions.classList.add('hidden');
-                    handleStockFilterChange();
-                }
-            });
-
-            stockComRedeBtn.addEventListener('click', () => stockRedeFilterDropdown.classList.toggle('hidden'));
-            stockRedeGroupContainer.addEventListener('click', (e) => {
-                if(e.target.closest('button')) {
-                    const button = e.target.closest('button');
-                    stockRedeGroupFilter = button.dataset.group;
-                    stockRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    button.classList.add('active');
-                    if (stockRedeGroupFilter !== 'com_rede') {
-                        stockRedeFilterDropdown.classList.add('hidden');
-                        selectedStockRedes = [];
-                    }
-                    updateRedeFilter(stockRedeFilterDropdown, stockComRedeBtnText, selectedStockRedes, allClientsData, 'Com Rede');
-                    handleStockFilterChange();
-                }
-            });
-            stockRedeFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedStockRedes.push(value);
-                    else selectedStockRedes = selectedStockRedes.filter(r => r !== value);
-                    selectedStockRedes = updateRedeFilter(stockRedeFilterDropdown, stockComRedeBtnText, selectedStockRedes, allClientsData, 'Com Rede');
-                    handleStockFilterChange();
                 }
             });
 
@@ -13229,42 +12724,15 @@ const supervisorGroups = new Map();
 
             const debouncedUpdateInnovationsMonth = debounce(updateInnovations, 400);
 
-            const innovationsMonthSupervisorFilterBtn = document.getElementById('innovations-month-supervisor-filter-btn');
-            const innovationsMonthSupervisorFilterDropdown = document.getElementById('innovations-month-supervisor-filter-dropdown');
-            innovationsMonthSupervisorFilterBtn.addEventListener('click', () => innovationsMonthSupervisorFilterDropdown.classList.toggle('hidden'));
-            innovationsMonthSupervisorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedInnovationsSupervisors.push(value);
-                    else selectedInnovationsSupervisors = selectedInnovationsSupervisors.filter(s => s !== value);
-
-                    selectedInnovationsSupervisors = updateSupervisorFilter(innovationsMonthSupervisorFilterDropdown, document.getElementById('innovations-month-supervisor-filter-text'), selectedInnovationsSupervisors, allSalesData, true);
-
-                    selectedInnovationsMonthSellers = [];
-                    updateSellerFilter(selectedInnovationsSupervisors, innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, selectedInnovationsMonthSellers, allSalesData);
-                    debouncedUpdateInnovationsMonth();
-                }
-            });
-
-            innovationsMonthVendedorFilterBtn.addEventListener('click', () => innovationsMonthVendedorFilterDropdown.classList.toggle('hidden'));
-            innovationsMonthVendedorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedInnovationsMonthSellers.includes(value)) selectedInnovationsMonthSellers.push(value);
-                    } else {
-                        selectedInnovationsMonthSellers = selectedInnovationsMonthSellers.filter(s => s !== value);
-                    }
-                    updateSellerFilter(selectedInnovationsSupervisors, innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, selectedInnovationsMonthSellers, allSalesData);
-                    debouncedUpdateInnovationsMonth();
-                }
-            });
-
-            innovationsMonthCityFilter.addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/[0-9]/g, '');
+            const debouncedInnovationsCityUpdate = debounce(() => {
                 const cityDataSource = getInnovationsMonthFilteredData({ excludeFilter: 'city' }).clients;
                 innovationsMonthCitySuggestions.classList.remove('manual-hide');
                 updateCitySuggestions(innovationsMonthCityFilter, innovationsMonthCitySuggestions, cityDataSource);
+            }, 300);
+
+            innovationsMonthCityFilter.addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/[0-9]/g, '');
+                debouncedInnovationsCityUpdate();
             });
             innovationsMonthCityFilter.addEventListener('focus', () => {
                 const cityDataSource = getInnovationsMonthFilteredData({ excludeFilter: 'city' }).clients;
@@ -13466,8 +12934,6 @@ const supervisorGroups = new Map();
             const goalsSummaryContainer = document.getElementById('goals-summary-content');
 
             // Filter Wrappers
-            const wrapperSupervisor = document.getElementById('goals-gv-supervisor-filter-wrapper');
-            const wrapperSeller = document.getElementById('goals-gv-seller-filter-wrapper');
             const wrapperCodCli = document.getElementById('goals-gv-codcli-filter-wrapper');
 
             const toggleGoalsView = (view) => {
@@ -13507,8 +12973,6 @@ const supervisorGroups = new Map();
 
                     // SHOW Main Filters Container and all wrappers
                     if(goalsFiltersContainer) goalsFiltersContainer.classList.remove('hidden');
-                    if(wrapperSupervisor) wrapperSupervisor.classList.remove('hidden');
-                    if(wrapperSeller) wrapperSeller.classList.remove('hidden');
                     if(wrapperCodCli) wrapperCodCli.classList.remove('hidden');
 
                     if (view === 'pepsico') {
@@ -13568,7 +13032,6 @@ const supervisorGroups = new Map();
                     } else if (tab === 'sv') {
                         goalsGvContent.classList.add('hidden');
                         goalsSvContent.classList.remove('hidden');
-                        // Initialize SV filters if needed - Wait, updateSupervisorFilter should be called first or on load
                         // But we want to refresh data
                         updateGoalsSvView();
                     }
@@ -13578,109 +13041,7 @@ const supervisorGroups = new Map();
             // SV Sub-tabs Logic and Toggle Logic REMOVED (Replaced by Single Table View)
 
             // GV Filters
-            goalsGvSupervisorFilterBtn.addEventListener('click', () => goalsGvSupervisorFilterDropdown.classList.toggle('hidden'));
-            goalsGvSupervisorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedGoalsGvSupervisors.push(value);
-                    else selectedGoalsGvSupervisors = selectedGoalsGvSupervisors.filter(s => s !== value);
-
-                    selectedGoalsGvSupervisors = updateSupervisorFilter(goalsGvSupervisorFilterDropdown, goalsGvSupervisorFilterText, selectedGoalsGvSupervisors, [...allSalesData, ...allHistoryData], true);
-
-                    // Reset sellers or keep intersection?
-                    // Standard: Update Seller Options based on Supervisor
-                    selectedGoalsGvSellers = [];
-                    selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, [...allSalesData, ...allHistoryData]);
-
-                    updateGoals();
-                }
-            });
-
-            goalsGvSellerFilterBtn.addEventListener('click', () => goalsGvSellerFilterDropdown.classList.toggle('hidden'));
-            goalsGvSellerFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedGoalsGvSellers.push(value);
-                    else selectedGoalsGvSellers = selectedGoalsGvSellers.filter(s => s !== value);
-
-                    selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, [...allSalesData, ...allHistoryData], true);
-
-                    updateGoals();
-                }
-            });
-
-            goalsGvCodcliFilter.addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/[^0-9]/g, '');
-                debouncedUpdateGoals();
-            });
-
-            // --- Summary View Independent Filters ---
-            const goalsSummarySupervisorFilterBtn = document.getElementById('goals-summary-supervisor-filter-btn');
-            const goalsSummarySupervisorFilterDropdown = document.getElementById('goals-summary-supervisor-filter-dropdown');
-            const goalsSummarySellerFilterBtn = document.getElementById('goals-summary-seller-filter-btn');
-            const goalsSummarySellerFilterDropdown = document.getElementById('goals-summary-seller-filter-dropdown');
             const clearGoalsSummaryFiltersBtn = document.getElementById('clear-goals-summary-filters-btn');
-
-            if (goalsSummarySupervisorFilterBtn && goalsSummarySupervisorFilterDropdown) {
-                goalsSummarySupervisorFilterBtn.addEventListener('click', () => goalsSummarySupervisorFilterDropdown.classList.toggle('hidden'));
-
-                goalsSummarySupervisorFilterDropdown.addEventListener('change', (e) => {
-                    if (e.target.type === 'checkbox') {
-                        const { value, checked } = e.target;
-                        if (checked) selectedGoalsSummarySupervisors.push(value);
-                        else selectedGoalsSummarySupervisors = selectedGoalsSummarySupervisors.filter(s => s !== value);
-
-                        selectedGoalsSummarySupervisors = updateSupervisorFilter(goalsSummarySupervisorFilterDropdown, document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, allSalesData, true);
-                        
-                        // Update Seller Filter Cascade
-                        selectedGoalsSummarySellers = [];
-                        selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, goalsSummarySellerFilterDropdown, document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData);
-                        
-                        updateGoalsSummaryView();
-                    }
-                });
-            }
-
-            if (goalsSummarySellerFilterBtn && goalsSummarySellerFilterDropdown) {
-                goalsSummarySellerFilterBtn.addEventListener('click', () => goalsSummarySellerFilterDropdown.classList.toggle('hidden'));
-
-                goalsSummarySellerFilterDropdown.addEventListener('change', (e) => {
-                    if (e.target.type === 'checkbox') {
-                        const { value, checked } = e.target;
-                        if (checked) {
-                            if (!selectedGoalsSummarySellers.includes(value)) selectedGoalsSummarySellers.push(value);
-                        } else {
-                            selectedGoalsSummarySellers = selectedGoalsSummarySellers.filter(s => s !== value);
-                        }
-                        selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, goalsSummarySellerFilterDropdown, document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData, true);
-                        updateGoalsSummaryView();
-                    }
-                });
-            }
-
-            if (clearGoalsSummaryFiltersBtn) {
-                clearGoalsSummaryFiltersBtn.addEventListener('click', () => {
-                    selectedGoalsSummarySupervisors = [];
-                    selectedGoalsSummarySellers = [];
-                    updateSupervisorFilter(goalsSummarySupervisorFilterDropdown, document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, allSalesData, true);
-                    updateSellerFilter(selectedGoalsSummarySupervisors, goalsSummarySellerFilterDropdown, document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData);
-                    updateGoalsSummaryView();
-                });
-            }
-
-            // Close dropdowns on outside click
-            document.addEventListener('click', (e) => {
-                if (goalsSummarySupervisorFilterBtn && goalsSummarySupervisorFilterDropdown) {
-                    if (!goalsSummarySupervisorFilterBtn.contains(e.target) && !goalsSummarySupervisorFilterDropdown.contains(e.target)) {
-                        goalsSummarySupervisorFilterDropdown.classList.add('hidden');
-                    }
-                }
-                if (goalsSummarySellerFilterBtn && goalsSummarySellerFilterDropdown) {
-                    if (!goalsSummarySellerFilterBtn.contains(e.target) && !goalsSummarySellerFilterDropdown.contains(e.target)) {
-                        goalsSummarySellerFilterDropdown.classList.add('hidden');
-                    }
-                }
-            });
 
             const btnDistributeFat = document.getElementById('btn-distribute-fat');
             if (btnDistributeFat) {
@@ -13707,7 +13068,6 @@ const supervisorGroups = new Map();
             const btnDistributeMixSalty = document.getElementById('btn-distribute-mix-salty');
             if (btnDistributeMixSalty) {
                 btnDistributeMixSalty.addEventListener('click', () => {
-                    const sellerName = selectedGoalsGvSellers[0];
                     if (!sellerName) return;
                     const valStr = document.getElementById('goal-global-mix-salty').value;
                     showConfirmationModal(`Confirmar ajuste de Meta Mix Salty para ${valStr} (Vendedor: ${getFirstName(sellerName)})?`, () => {
@@ -13735,7 +13095,6 @@ const supervisorGroups = new Map();
             const btnDistributeMixFoods = document.getElementById('btn-distribute-mix-foods');
             if (btnDistributeMixFoods) {
                 btnDistributeMixFoods.addEventListener('click', () => {
-                    const sellerName = selectedGoalsGvSellers[0];
                     if (!sellerName) return;
                     const valStr = document.getElementById('goal-global-mix-foods').value;
                     showConfirmationModal(`Confirmar ajuste de Meta Mix Foods para ${valStr} (Vendedor: ${getFirstName(sellerName)})?`, () => {
@@ -13755,25 +13114,6 @@ const supervisorGroups = new Map();
             clearGoalsGvFiltersBtn.addEventListener('click', () => { resetGoalsGvFilters(); markDirty('goals'); });
 
             // SV Filters
-            goalsSvSupervisorFilterBtn.addEventListener('click', () => goalsSvSupervisorFilterDropdown.classList.toggle('hidden'));
-            goalsSvSupervisorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedGoalsSvSupervisors.push(value);
-                    else selectedGoalsSvSupervisors = selectedGoalsSvSupervisors.filter(s => s !== value);
-
-                    selectedGoalsSvSupervisors = updateSupervisorFilter(goalsSvSupervisorFilterDropdown, goalsSvSupervisorFilterText, selectedGoalsSvSupervisors, allSalesData, true);
-                    updateGoalsSvView();
-                }
-            });
-
-            document.getElementById('goals-sv-export-xlsx-btn').addEventListener('click', exportGoalsSvXLSX);
-
-            document.addEventListener('click', (e) => {
-                if (!goalsGvSupervisorFilterBtn.contains(e.target) && !goalsGvSupervisorFilterDropdown.contains(e.target)) goalsGvSupervisorFilterDropdown.classList.add('hidden');
-                if (!goalsGvSellerFilterBtn.contains(e.target) && !goalsGvSellerFilterDropdown.contains(e.target)) goalsGvSellerFilterDropdown.classList.add('hidden');
-                if (!goalsSvSupervisorFilterBtn.contains(e.target) && !goalsSvSupervisorFilterDropdown.contains(e.target)) goalsSvSupervisorFilterDropdown.classList.add('hidden');
-            });
 
             document.getElementById('goals-prev-page-btn').addEventListener('click', () => {
                 if (goalsTableState.currentPage > 1) {
@@ -13807,41 +13147,6 @@ const supervisorGroups = new Map();
             const debouncedUpdateMetaRealizado = debounce(updateMetaRealizado, 400);
 
             // Supervisor Filter
-            const metaRealizadoSupervisorFilterBtn = document.getElementById('meta-realizado-supervisor-filter-btn');
-            const metaRealizadoSupervisorFilterDropdown = document.getElementById('meta-realizado-supervisor-filter-dropdown');
-            metaRealizadoSupervisorFilterBtn.addEventListener('click', () => metaRealizadoSupervisorFilterDropdown.classList.toggle('hidden'));
-            metaRealizadoSupervisorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedMetaRealizadoSupervisors.push(value);
-                    else selectedMetaRealizadoSupervisors = selectedMetaRealizadoSupervisors.filter(s => s !== value);
-
-                    selectedMetaRealizadoSupervisors = updateSupervisorFilter(metaRealizadoSupervisorFilterDropdown, document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
-                    
-                    // Reset or Filter Sellers
-                    selectedMetaRealizadoSellers = [];
-                    selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData]);
-                    
-                    debouncedUpdateMetaRealizado();
-                }
-            });
-
-            // Seller Filter
-            const metaRealizadoSellerFilterBtn = document.getElementById('meta-realizado-vendedor-filter-btn');
-            const metaRealizadoSellerFilterDropdown = document.getElementById('meta-realizado-vendedor-filter-dropdown');
-            metaRealizadoSellerFilterBtn.addEventListener('click', () => metaRealizadoSellerFilterDropdown.classList.toggle('hidden'));
-            metaRealizadoSellerFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedMetaRealizadoSellers.includes(value)) selectedMetaRealizadoSellers.push(value);
-                    } else {
-                        selectedMetaRealizadoSellers = selectedMetaRealizadoSellers.filter(s => s !== value);
-                    }
-                    selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, metaRealizadoSellerFilterDropdown, document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData], true);
-                    debouncedUpdateMetaRealizado();
-                }
-            });
 
             // Supplier Filter
             const metaRealizadoSupplierFilterBtn = document.getElementById('meta-realizado-supplier-filter-btn');
@@ -13855,7 +13160,7 @@ const supervisorGroups = new Map();
                     } else {
                         selectedMetaRealizadoSuppliers = selectedMetaRealizadoSuppliers.filter(s => s !== value);
                     }
-                    selectedMetaRealizadoSuppliers = updateSupplierFilter(metaRealizadoSupplierFilterDropdown, document.getElementById('meta-realizado-supplier-filter-text'), selectedMetaRealizadoSuppliers, pepsicoSuppliersSource, 'metaRealizado', true);
+                    selectedMetaRealizadoSuppliers = updateSupplierFilter(metaRealizadoSupplierFilterDropdown, document.getElementById('meta-realizado-supplier-filter-text'), selectedMetaRealizadoSuppliers, metaRealizadoSuppliersSource, 'metaRealizado', true);
                     debouncedUpdateMetaRealizado();
                 }
             });
@@ -13866,7 +13171,7 @@ const supervisorGroups = new Map();
                 metaRealizadoPastaContainer.addEventListener('click', (e) => {
                     if (e.target.tagName === 'BUTTON') {
                         const pasta = e.target.dataset.pasta;
-                        
+
                         // Toggle logic: If clicking active button, deselect (revert to PEPSICO/All).
                         // If clicking inactive, select it.
                         if (currentMetaRealizadoPasta === pasta) {
@@ -13885,11 +13190,11 @@ const supervisorGroups = new Map();
                                 b.classList.remove('bg-teal-600', 'hover:bg-teal-500');
                             }
                         });
-                        
+
                         debouncedUpdateMetaRealizado();
                     }
                 });
-                
+
                 // Initialize default active button style
                 metaRealizadoPastaContainer.querySelectorAll('.pasta-btn').forEach(b => {
                     if (b.dataset.pasta === currentMetaRealizadoPasta) {
@@ -13919,14 +13224,14 @@ const supervisorGroups = new Map();
                         // Let's update text to indicate CURRENT state or NEXT state?
                         // Usually toggle buttons indicate current state.
                         // Let's use: "Faturamento (R$)" and "Volume (Ton)" as labels for clarity, or stick to user image.
-                        // User image: "R$ / Ton". 
+                        // User image: "R$ / Ton".
                         // Let's assume the button text is static "R$ / Ton" and we just toggle state?
                         // No, usually buttons show what is selected.
                         // Let's change text to "Volume (Ton)" when Ton is selected, and "Faturamento (R$)" when R$ is selected?
                         // Or just keep "R$ / Ton" and toggle a visual indicator?
                         // Let's just update the chart and maybe change button style/text slightly.
                     }
-                    
+
                     // Simple Toggle Text Update
                     metaRealizadoMetricToggleBtn.textContent = currentMetaRealizadoMetric === 'valor' ? 'R$ / Ton' : 'Toneladas';
 
@@ -13934,22 +13239,18 @@ const supervisorGroups = new Map();
                     if (metaRealizadoChartTitle) {
                         metaRealizadoChartTitle.textContent = currentMetaRealizadoMetric === 'valor' ? 'Meta Vs Realizado - Faturamento' : 'Meta Vs Realizado - Tonelada';
                     }
-                    
+
                     updateMetaRealizado();
                 });
             }
 
             // Clear Filters
             document.getElementById('clear-meta-realizado-filters-btn').addEventListener('click', () => {
-                selectedMetaRealizadoSupervisors = [];
-                selectedMetaRealizadoSellers = [];
                 selectedMetaRealizadoSuppliers = [];
                 currentMetaRealizadoPasta = 'PEPSICO'; // Reset to default
 
                 // Reset UI
-                updateSupervisorFilter(metaRealizadoSupervisorFilterDropdown, document.getElementById('meta-realizado-supervisor-filter-text'), [], allSalesData);
-                updateSellerFilter([], metaRealizadoSellerFilterDropdown, document.getElementById('meta-realizado-vendedor-filter-text'), [], allSalesData);
-                
+
                 // Reset Supplier UI
                 document.getElementById('meta-realizado-supplier-filter-text').textContent = 'Todos';
                 metaRealizadoSupplierFilterDropdown.querySelectorAll('input').forEach(cb => cb.checked = false);
@@ -13965,8 +13266,6 @@ const supervisorGroups = new Map();
 
             // Close Dropdowns on Click Outside
             document.addEventListener('click', (e) => {
-                if (!metaRealizadoSupervisorFilterBtn.contains(e.target) && !metaRealizadoSupervisorFilterDropdown.contains(e.target)) metaRealizadoSupervisorFilterDropdown.classList.add('hidden');
-                if (!metaRealizadoSellerFilterBtn.contains(e.target) && !metaRealizadoSellerFilterDropdown.contains(e.target)) metaRealizadoSellerFilterDropdown.classList.add('hidden');
                 if (!metaRealizadoSupplierFilterBtn.contains(e.target) && !metaRealizadoSupplierFilterDropdown.contains(e.target)) metaRealizadoSupplierFilterDropdown.classList.add('hidden');
             });
 
@@ -13993,138 +13292,168 @@ const supervisorGroups = new Map();
                 handleMixFilterChange();
             };
 
-            document.getElementById('mix-supervisor-filter-btn').addEventListener('click', (e) => {
-                document.getElementById('mix-supervisor-filter-dropdown').classList.toggle('hidden');
-            });
-            document.getElementById('mix-supervisor-filter-dropdown').addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedMixSupervisors.push(value);
-                    else selectedMixSupervisors = selectedMixSupervisors.filter(s => s !== value);
-                    selectedMixSellers = [];
-                    updateMix();
-                }
-            });
+            const mixSupervisorBtn = document.getElementById('mix-supervisor-filter-btn');
+            if (mixSupervisorBtn) {
+                mixSupervisorBtn.addEventListener('click', () => {
+                    const dropdown = document.getElementById('mix-supervisor-filter-dropdown');
+                    if(dropdown) dropdown.classList.toggle('hidden');
+                });
+            }
 
-            document.getElementById('mix-vendedor-filter-btn').addEventListener('click', (e) => {
-                document.getElementById('mix-vendedor-filter-dropdown').classList.toggle('hidden');
-            });
-            document.getElementById('mix-vendedor-filter-dropdown').addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedMixSellers.push(value);
-                    else selectedMixSellers = selectedMixSellers.filter(s => s !== value);
-                    handleMixFilterChange({ skipFilter: 'seller' });
-                    markDirty('mix');
-                }
-            });
+            const mixTipoVendaBtn = document.getElementById('mix-tipo-venda-filter-btn');
+            if (mixTipoVendaBtn) {
+                mixTipoVendaBtn.addEventListener('click', (e) => {
+                    const dd = document.getElementById('mix-tipo-venda-filter-dropdown');
+                    if (dd) dd.classList.toggle('hidden');
+                });
+            }
 
-            document.getElementById('mix-tipo-venda-filter-btn').addEventListener('click', (e) => {
-                document.getElementById('mix-tipo-venda-filter-dropdown').classList.toggle('hidden');
-            });
-            document.getElementById('mix-tipo-venda-filter-dropdown').addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedMixTiposVenda.push(value);
-                    else selectedMixTiposVenda = selectedMixTiposVenda.filter(s => s !== value);
-                    handleMixFilterChange({ skipFilter: 'tipoVenda' });
-                    markDirty('mix');
-                }
-            });
+            const mixTipoVendaDropdown = document.getElementById('mix-tipo-venda-filter-dropdown');
+            if (mixTipoVendaDropdown) {
+                mixTipoVendaDropdown.addEventListener('change', (e) => {
+                    if (e.target.type === 'checkbox') {
+                        const { value, checked } = e.target;
+                        if (checked) selectedMixTiposVenda.push(value);
+                        else selectedMixTiposVenda = selectedMixTiposVenda.filter(s => s !== value);
+                        handleMixFilterChange({ skipFilter: 'tipoVenda' });
+                        markDirty('mix');
+                    }
+                });
+            }
 
-            document.getElementById('mix-filial-filter').addEventListener('change', updateMix);
+            const mixFilialFilter = document.getElementById('mix-filial-filter');
+            if (mixFilialFilter) mixFilialFilter.addEventListener('change', updateMix);
 
             const mixCityFilter = document.getElementById('mix-city-filter');
             const mixCitySuggestions = document.getElementById('mix-city-suggestions');
 
-            mixCityFilter.addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/[0-9]/g, '');
-                const { clients } = getMixFilteredData({ excludeFilter: 'city' });
-                mixCitySuggestions.classList.remove('manual-hide');
-                updateCitySuggestions(mixCityFilter, mixCitySuggestions, clients);
-            });
-            mixCityFilter.addEventListener('focus', () => {
-                const { clients } = getMixFilteredData({ excludeFilter: 'city' });
-                mixCitySuggestions.classList.remove('manual-hide');
-                updateCitySuggestions(mixCityFilter, mixCitySuggestions, clients);
-            });
-            mixCityFilter.addEventListener('blur', () => setTimeout(() => mixCitySuggestions.classList.add('hidden'), 150));
-            mixCityFilter.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    mixCitySuggestions.classList.add('hidden', 'manual-hide');
-                    updateMix();
-                    e.target.blur();
-                }
-            });
-            mixCitySuggestions.addEventListener('click', (e) => {
-                if (e.target.tagName === 'DIV') {
-                    mixCityFilter.value = e.target.textContent;
-                    mixCitySuggestions.classList.add('hidden');
-                    updateMix();
-                }
-            });
+            if (mixCityFilter && mixCitySuggestions) {
+                const debouncedMixCityUpdate = debounce(() => {
+                    const { clients } = getMixFilteredData({ excludeFilter: 'city' });
+                    mixCitySuggestions.classList.remove('manual-hide');
+                    updateCitySuggestions(mixCityFilter, mixCitySuggestions, clients);
+                }, 300);
 
-            document.getElementById('mix-com-rede-btn').addEventListener('click', () => {
-                document.getElementById('mix-rede-filter-dropdown').classList.toggle('hidden');
-            });
-            document.getElementById('mix-rede-group-container').addEventListener('click', (e) => {
-                if(e.target.closest('button')) {
-                    const button = e.target.closest('button');
-                    mixRedeGroupFilter = button.dataset.group;
-                    document.getElementById('mix-rede-group-container').querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    button.classList.add('active');
-                    if (mixRedeGroupFilter !== 'com_rede') {
-                        document.getElementById('mix-rede-filter-dropdown').classList.add('hidden');
-                        selectedMixRedes = [];
+                mixCityFilter.addEventListener('input', (e) => {
+                    e.target.value = e.target.value.replace(/[0-9]/g, '');
+                    debouncedMixCityUpdate();
+                });
+                mixCityFilter.addEventListener('focus', () => {
+                    const { clients } = getMixFilteredData({ excludeFilter: 'city' });
+                    mixCitySuggestions.classList.remove('manual-hide');
+                    updateCitySuggestions(mixCityFilter, mixCitySuggestions, clients);
+                });
+                mixCityFilter.addEventListener('blur', () => setTimeout(() => mixCitySuggestions.classList.add('hidden'), 150));
+                mixCityFilter.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        mixCitySuggestions.classList.add('hidden', 'manual-hide');
+                        updateMix();
+                        e.target.blur();
                     }
-                    handleMixFilterChange();
-                }
-            });
-            document.getElementById('mix-rede-filter-dropdown').addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedMixRedes.push(value);
-                    else selectedMixRedes = selectedMixRedes.filter(r => r !== value);
+                });
+                mixCitySuggestions.addEventListener('click', (e) => {
+                    if (e.target.tagName === 'DIV') {
+                        mixCityFilter.value = e.target.textContent;
+                        mixCitySuggestions.classList.add('hidden');
+                        updateMix();
+                    }
+                });
+            }
 
-                    mixRedeGroupFilter = 'com_rede';
-                    document.getElementById('mix-rede-group-container').querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    document.getElementById('mix-com-rede-btn').classList.add('active');
+            const mixComRedeBtn = document.getElementById('mix-com-rede-btn');
+            if (mixComRedeBtn) {
+                mixComRedeBtn.addEventListener('click', () => {
+                    const dd = document.getElementById('mix-rede-filter-dropdown');
+                    if (dd) dd.classList.toggle('hidden');
+                });
+            }
 
-                    handleMixFilterChange({ skipFilter: 'rede' });
-                }
-            });
+            const mixRedeGroupContainer = document.getElementById('mix-rede-group-container');
+            if (mixRedeGroupContainer) {
+                mixRedeGroupContainer.addEventListener('click', (e) => {
+                    if(e.target.closest('button')) {
+                        const button = e.target.closest('button');
+                        mixRedeGroupFilter = button.dataset.group;
+                        document.getElementById('mix-rede-group-container').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                        button.classList.add('active');
+                        if (mixRedeGroupFilter !== 'com_rede') {
+                            const dd = document.getElementById('mix-rede-filter-dropdown');
+                            if (dd) dd.classList.add('hidden');
+                            selectedMixRedes = [];
+                        }
+                        handleMixFilterChange();
+                    }
+                });
+            }
 
-            document.getElementById('clear-mix-filters-btn').addEventListener('click', () => { resetMixFilters(); markDirty('mix'); });
-            document.getElementById('export-mix-pdf-btn').addEventListener('click', exportMixPDF);
+            const mixRedeFilterDropdown = document.getElementById('mix-rede-filter-dropdown');
+            if (mixRedeFilterDropdown) {
+                mixRedeFilterDropdown.addEventListener('change', (e) => {
+                    if (e.target.type === 'checkbox') {
+                        const { value, checked } = e.target;
+                        if (checked) selectedMixRedes.push(value);
+                        else selectedMixRedes = selectedMixRedes.filter(r => r !== value);
 
-            document.getElementById('mix-kpi-toggle').addEventListener('change', (e) => {
-                mixKpiMode = e.target.checked ? 'atendidos' : 'total';
-                markDirty('mix');
-                updateMixView();
-            });
+                        mixRedeGroupFilter = 'com_rede';
+                        const container = document.getElementById('mix-rede-group-container');
+                        if (container) container.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                        const btn = document.getElementById('mix-com-rede-btn');
+                        if (btn) btn.classList.add('active');
 
-            document.getElementById('mix-prev-page-btn').addEventListener('click', () => {
-                if (mixTableState.currentPage > 1) {
-                    mixTableState.currentPage--;
+                        handleMixFilterChange({ skipFilter: 'rede' });
+                    }
+                });
+            }
+
+            const clearMixFiltersBtn = document.getElementById('clear-mix-filters-btn');
+            if (clearMixFiltersBtn) clearMixFiltersBtn.addEventListener('click', () => { resetMixFilters(); markDirty('mix'); });
+
+            const exportMixPdfBtn = document.getElementById('export-mix-pdf-btn');
+            if (exportMixPdfBtn) exportMixPdfBtn.addEventListener('click', exportMixPDF);
+
+            const mixKpiToggle = document.getElementById('mix-kpi-toggle');
+            if (mixKpiToggle) {
+                mixKpiToggle.addEventListener('change', (e) => {
+                    mixKpiMode = e.target.checked ? 'atendidos' : 'total';
+                    markDirty('mix');
                     updateMixView();
-                }
-            });
-            document.getElementById('mix-next-page-btn').addEventListener('click', () => {
-                if (mixTableState.currentPage < mixTableState.totalPages) {
-                    mixTableState.currentPage++;
-                    updateMixView();
-                }
-            });
+                });
+            }
+
+            const mixPrevPageBtn = document.getElementById('mix-prev-page-btn');
+            if (mixPrevPageBtn) {
+                mixPrevPageBtn.addEventListener('click', () => {
+                    if (mixTableState.currentPage > 1) {
+                        mixTableState.currentPage--;
+                        updateMixView();
+                    }
+                });
+            }
+
+            const mixNextPageBtn = document.getElementById('mix-next-page-btn');
+            if (mixNextPageBtn) {
+                mixNextPageBtn.addEventListener('click', () => {
+                    if (mixTableState.currentPage < mixTableState.totalPages) {
+                        mixTableState.currentPage++;
+                        updateMixView();
+                    }
+                });
+            }
 
             document.addEventListener('click', (e) => {
                 // Close Mix Dropdowns
-                if (!document.getElementById('mix-supervisor-filter-btn').contains(e.target) && !document.getElementById('mix-supervisor-filter-dropdown').contains(e.target)) document.getElementById('mix-supervisor-filter-dropdown').classList.add('hidden');
-                if (!document.getElementById('mix-vendedor-filter-btn').contains(e.target) && !document.getElementById('mix-vendedor-filter-dropdown').contains(e.target)) document.getElementById('mix-vendedor-filter-dropdown').classList.add('hidden');
-                if (!document.getElementById('mix-tipo-venda-filter-btn').contains(e.target) && !document.getElementById('mix-tipo-venda-filter-dropdown').contains(e.target)) document.getElementById('mix-tipo-venda-filter-dropdown').classList.add('hidden');
-                if (!document.getElementById('mix-com-rede-btn').contains(e.target) && !document.getElementById('mix-rede-filter-dropdown').contains(e.target)) document.getElementById('mix-rede-filter-dropdown').classList.add('hidden');
+                const safeClose = (btnId, ddId) => {
+                    const btn = document.getElementById(btnId);
+                    const dd = document.getElementById(ddId);
+                    if (btn && dd && !btn.contains(e.target) && !dd.contains(e.target)) {
+                        dd.classList.add('hidden');
+                    }
+                };
 
-                if (!document.getElementById('weekly-supervisor-filter-btn').contains(e.target) && !document.getElementById('weekly-supervisor-filter-dropdown').contains(e.target)) document.getElementById('weekly-supervisor-filter-dropdown').classList.add('hidden');
-                if (!document.getElementById('weekly-vendedor-filter-btn').contains(e.target) && !document.getElementById('weekly-vendedor-filter-dropdown').contains(e.target)) document.getElementById('weekly-vendedor-filter-dropdown').classList.add('hidden');
+                safeClose('mix-supervisor-filter-btn', 'mix-supervisor-filter-dropdown');
+                safeClose('mix-vendedor-filter-btn', 'mix-vendedor-filter-dropdown');
+                safeClose('mix-tipo-venda-filter-btn', 'mix-tipo-venda-filter-dropdown');
+                safeClose('mix-com-rede-btn', 'mix-rede-filter-dropdown');
             });
 
             // --- Coverage View Filters ---
@@ -14137,25 +13466,15 @@ const supervisorGroups = new Map();
 
             coverageFilialFilter.addEventListener('change', updateCoverage);
 
-            const coverageSupervisorFilterBtn = document.getElementById('coverage-supervisor-filter-btn');
-            const coverageSupervisorFilterDropdown = document.getElementById('coverage-supervisor-filter-dropdown');
-            coverageSupervisorFilterBtn.addEventListener('click', () => coverageSupervisorFilterDropdown.classList.toggle('hidden'));
-            coverageSupervisorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedCoverageSupervisors.push(value);
-                    else selectedCoverageSupervisors = selectedCoverageSupervisors.filter(s => s !== value);
-
-                    selectedCoverageSellers = [];
-                    updateCoverage();
-                }
-            });
-
-            coverageCityFilter.addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/[0-9]/g, '');
+            const debouncedCoverageCityUpdate = debounce(() => {
                 const { clients } = getCoverageFilteredData({ excludeFilter: 'city' });
                 coverageCitySuggestions.classList.remove('manual-hide');
                 updateCitySuggestions(coverageCityFilter, coverageCitySuggestions, clients);
+            }, 300);
+
+            if (coverageCityFilter) coverageCityFilter.addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/[0-9]/g, '');
+                debouncedCoverageCityUpdate();
             });
             coverageCityFilter.addEventListener('focus', () => {
                 const { clients } = getCoverageFilteredData({ excludeFilter: 'city' });
@@ -14192,20 +13511,6 @@ const supervisorGroups = new Map();
             });
 
             clearCoverageFiltersBtn.addEventListener('click', () => { resetCoverageFilters(); markDirty('cobertura'); });
-
-            coverageVendedorFilterBtn.addEventListener('click', () => coverageVendedorFilterDropdown.classList.toggle('hidden'));
-            coverageVendedorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedCoverageSellers.includes(value)) selectedCoverageSellers.push(value);
-                    } else {
-                        selectedCoverageSellers = selectedCoverageSellers.filter(s => s !== value);
-                    }
-                    markDirty('cobertura');
-                    handleCoverageFilterChange({ skipFilter: 'seller' });
-                }
-            });
 
             coverageSupplierFilterBtn.addEventListener('click', () => coverageSupplierFilterDropdown.classList.toggle('hidden'));
             coverageSupplierFilterDropdown.addEventListener('change', (e) => {
@@ -14246,24 +13551,6 @@ const supervisorGroups = new Map();
                 }
             });
 
-            const coverageDateFilterInput = document.getElementById('coverage-date-filter');
-            if (coverageDateFilterInput) {
-                coverageDateFilterInstance = flatpickr(coverageDateFilterInput, {
-                    mode: 'range',
-                    dateFormat: 'd/m/Y',
-                    locale: 'pt',
-                    onClose: (selectedDates) => {
-                        if (selectedDates.length === 2) {
-                            selectedCoverageDateRange = selectedDates;
-                            updateCoverage();
-                        } else if (selectedDates.length === 0) {
-                            selectedCoverageDateRange = null;
-                            updateCoverage();
-                        }
-                    }
-                });
-            }
-
             const coverageUnitPriceInput = document.getElementById('coverage-unit-price-filter');
             if (coverageUnitPriceInput) {
                 coverageUnitPriceInput.addEventListener('keydown', (e) => {
@@ -14277,116 +13564,152 @@ const supervisorGroups = new Map();
 
 
             document.addEventListener('click', (e) => {
-                if (!innovationsMonthVendedorFilterBtn.contains(e.target) && !innovationsMonthVendedorFilterDropdown.contains(e.target)) innovationsMonthVendedorFilterDropdown.classList.add('hidden');
                 if (!innovationsMonthTipoVendaFilterBtn.contains(e.target) && !innovationsMonthTipoVendaFilterDropdown.contains(e.target)) innovationsMonthTipoVendaFilterDropdown.classList.add('hidden');
-                if (!coverageVendedorFilterBtn.contains(e.target) && !coverageVendedorFilterDropdown.contains(e.target)) coverageVendedorFilterDropdown.classList.add('hidden');
                 if (!coverageSupplierFilterBtn.contains(e.target) && !coverageSupplierFilterDropdown.contains(e.target)) coverageSupplierFilterDropdown.classList.add('hidden');
                 if (!coverageProductFilterBtn.contains(e.target) && !coverageProductFilterDropdown.contains(e.target)) coverageProductFilterDropdown.classList.add('hidden');
                 if (!coverageTipoVendaFilterBtn.contains(e.target) && !coverageTipoVendaFilterDropdown.contains(e.target)) coverageTipoVendaFilterDropdown.classList.add('hidden');
             });
 
-            const stockWorkingDaysInput = document.getElementById('stock-working-days-input');
-            if (stockWorkingDaysInput) {
-                stockWorkingDaysInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const value = parseInt(e.target.value);
-                        if (!isNaN(value) && value > 0 && value <= maxWorkingDaysStock) {
-                            customWorkingDaysStock = value;
-                        } else {
-                             e.target.value = customWorkingDaysStock;
-                        }
-                        handleStockFilterChange();
-                        e.target.blur(); // <-- ADICIONADO: Remove o foco do input após pressionar Enter
-                    }
-                });
-                stockWorkingDaysInput.addEventListener('blur', (e) => {
-                    const value = parseInt(e.target.value);
-                     if (isNaN(value) || value <= 0 || value > maxWorkingDaysStock) {
-                         e.target.value = customWorkingDaysStock;
-                    } else if (value !== customWorkingDaysStock) {
-
-                        customWorkingDaysStock = value;
-                        handleStockFilterChange();
-                    }
-                });
-            }
-
-            document.querySelectorAll('.stock-trend-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    stockTrendFilter = btn.dataset.trend;
-                    document.querySelectorAll('.stock-trend-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    handleStockFilterChange();
-                });
-            });
         }
 
         initializeOptimizedDataStructures();
+
+        // --- USER CONTEXT RESOLUTION ---
+        let userHierarchyContext = { role: 'adm', coord: null, cocoord: null, promotor: null };
+
+        function applyHierarchyVisibilityRules() {
+            const role = (userHierarchyContext.role || '').toLowerCase();
+            // Views to apply logic to (excluding 'goals' and 'wallet' as requested)
+            const views = ['main', 'city', 'comparison', 'innovations-month', 'mix', 'coverage'];
+
+            views.forEach(prefix => {
+                const coordWrapper = document.getElementById(`${prefix}-coord-filter-wrapper`);
+                const cocoordWrapper = document.getElementById(`${prefix}-cocoord-filter-wrapper`);
+                const promotorWrapper = document.getElementById(`${prefix}-promotor-filter-wrapper`);
+
+                // Reset visibility first (Show All)
+                if (coordWrapper) coordWrapper.classList.remove('hidden');
+                if (cocoordWrapper) cocoordWrapper.classList.remove('hidden');
+                if (promotorWrapper) promotorWrapper.classList.remove('hidden');
+
+                if (role === 'adm') {
+                    // Show all
+                } else if (role === 'coord') {
+                    // Hide Coord filter
+                    if (coordWrapper) coordWrapper.classList.add('hidden');
+                } else if (role === 'cocoord') {
+                    // Hide Coord and CoCoord
+                    if (coordWrapper) coordWrapper.classList.add('hidden');
+                    if (cocoordWrapper) cocoordWrapper.classList.add('hidden');
+                } else if (role === 'promotor') {
+                    // Hide All
+                    if (coordWrapper) coordWrapper.classList.add('hidden');
+                    if (cocoordWrapper) cocoordWrapper.classList.add('hidden');
+                    if (promotorWrapper) promotorWrapper.classList.add('hidden');
+                }
+            });
+        }
+
+        function updateNavigationVisibility() {
+            const role = (userHierarchyContext.role || '').toLowerCase();
+            const isAuth = role === 'adm' || role === 'coord';
+            
+            // Toggle Comparison Buttons (Desktop and Mobile)
+            const comparisonBtns = document.querySelectorAll('button[data-target="comparativo"]');
+            comparisonBtns.forEach(btn => {
+                if (isAuth) {
+                    btn.classList.remove('hidden');
+                    // If desktop nav, ensure we don't break layout (flex)
+                    if (btn.classList.contains('nav-link')) btn.style.display = ''; 
+                } else {
+                    btn.classList.add('hidden');
+                }
+            });
+        }
+
+        function resolveUserContext() {
+            const role = (window.userRole || '').trim().toUpperCase();
+            console.log(`[DEBUG] Resolving User Context for Role: '${role}'`);
+
+            if (role === 'ADM' || role === 'ADMIN') {
+                userHierarchyContext.role = 'adm';
+                console.log(`[DEBUG] Role identified as ADM`);
+                return;
+            }
+
+            // Check if Role is a Coordinator
+            if (optimizedData.coordMap.has(role)) {
+                userHierarchyContext.role = 'coord';
+                userHierarchyContext.coord = role;
+                console.log(`[DEBUG] Role identified as COORD: ${role}`);
+                return;
+            }
+
+            // Check if Role is a Co-Coordinator
+            if (optimizedData.cocoordMap.has(role)) {
+                userHierarchyContext.role = 'cocoord';
+                userHierarchyContext.cocoord = role;
+                userHierarchyContext.coord = optimizedData.coordsByCocoord.get(role);
+                console.log(`[DEBUG] Role identified as COCOORD: ${role}`);
+                return;
+            }
+
+            // Check if Role is a Promotor
+            if (optimizedData.promotorMap.has(role)) {
+                userHierarchyContext.role = 'promotor';
+                userHierarchyContext.promotor = role;
+                const node = optimizedData.hierarchyMap.get(role);
+                if (node) {
+                    userHierarchyContext.cocoord = node.cocoord.code;
+                    userHierarchyContext.coord = node.coord.code;
+                }
+                console.log(`[DEBUG] Role identified as PROMOTOR: ${role}`);
+                return;
+            }
+            
+            // Fallback: Default to ADM (UI allows all, but Data is filtered by init.js)
+            userHierarchyContext.role = 'adm';
+            console.warn(`[DEBUG] Role '${role}' not found in Hierarchy Maps. Defaulting to ADM context (Data filtered by Init).`);
+            console.log("Available Coords:", Array.from(optimizedData.coordMap.keys()));
+        }
+        resolveUserContext();
+        updateNavigationVisibility(); // Update menu visibility based on resolved context
+        applyHierarchyVisibilityRules();
+
         calculateHistoricalBests(); // <-- MOVIDA PARA CIMA
-        selectedMainSupervisors = updateSupervisorFilter(document.getElementById('supervisor-filter-dropdown'), document.getElementById('supervisor-filter-text'), selectedMainSupervisors, allSalesData);
+        // Initialize Hierarchy Filters
+        setupHierarchyFilters('main', updateDashboard);
+        setupHierarchyFilters('city', updateCityView);
+        setupHierarchyFilters('comparison', updateComparisonView);
+        setupHierarchyFilters('innovations-month', updateInnovationsMonthView);
+        setupHierarchyFilters('mix', updateMixView);
+        setupHierarchyFilters('meta-realizado', updateMetaRealizadoView);
+        setupHierarchyFilters('coverage', updateCoverageView);
+        setupHierarchyFilters('goals-gv', updateGoalsView);
+        setupHierarchyFilters('goals-summary', updateGoalsSummaryView);
+        setupHierarchyFilters('goals-sv', updateGoalsSvView);
+
+        // Initialize Other Filters
         selectedMainSuppliers = updateSupplierFilter(document.getElementById('fornecedor-filter-dropdown'), document.getElementById('fornecedor-filter-text'), selectedMainSuppliers, [...allSalesData, ...allHistoryData], 'main');
-        selectedCitySupervisors = updateSupervisorFilter(document.getElementById('city-supervisor-filter-dropdown'), document.getElementById('city-supervisor-filter-text'), selectedCitySupervisors, allSalesData);
-        selectedStockSupervisors = updateSupervisorFilter(document.getElementById('stock-supervisor-filter-dropdown'), document.getElementById('stock-supervisor-filter-text'), selectedStockSupervisors, [...allSalesData, ...allHistoryData]);
-
-        updateSellerFilter(selectedMainSupervisors, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
         updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
-        updateSellerFilter(selectedCitySupervisors, cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData);
-
-        // --- FIXED: Initialize Filters for Other Views ---
-        // Coverage
-        selectedCoverageSupervisors = updateSupervisorFilter(document.getElementById('coverage-supervisor-filter-dropdown'), document.getElementById('coverage-supervisor-filter-text'), selectedCoverageSupervisors, allSalesData);
-        updateSellerFilter(selectedCoverageSupervisors, document.getElementById('coverage-vendedor-filter-dropdown'), document.getElementById('coverage-vendedor-filter-text'), selectedCoverageSellers, allSalesData);
-
-        // Innovations
-        selectedInnovationsSupervisors = updateSupervisorFilter(document.getElementById('innovations-month-supervisor-filter-dropdown'), document.getElementById('innovations-month-supervisor-filter-text'), selectedInnovationsSupervisors, allSalesData, true);
-        updateSellerFilter(selectedInnovationsSupervisors, document.getElementById('innovations-month-vendedor-filter-dropdown'), document.getElementById('innovations-month-vendedor-filter-text'), selectedInnovationsMonthSellers, allSalesData);
-
-        // Mix
-        selectedMixSupervisors = updateSupervisorFilter(document.getElementById('mix-supervisor-filter-dropdown'), document.getElementById('mix-supervisor-filter-text'), selectedMixSupervisors, allSalesData);
-        updateSellerFilter(selectedMixSupervisors, document.getElementById('mix-vendedor-filter-dropdown'), document.getElementById('mix-vendedor-filter-text'), selectedMixSellers, allSalesData);
-        // -------------------------------------------------
 
         updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
         updateRedeFilter(cityRedeFilterDropdown, cityComRedeBtnText, selectedCityRedes, allClientsData);
         updateRedeFilter(comparisonRedeFilterDropdown, comparisonComRedeBtnText, selectedComparisonRedes, allClientsData);
-        updateRedeFilter(stockRedeFilterDropdown, stockComRedeBtnText, selectedStockRedes, allClientsData, 'Com Rede');
-
-        // Initial Population for Goals Filters
-        selectedGoalsGvSupervisors = updateSupervisorFilter(goalsGvSupervisorFilterDropdown, goalsGvSupervisorFilterText, selectedGoalsGvSupervisors, allSalesData);
-        selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, [...allSalesData, ...allHistoryData]);
-        // Initialize SV Supervisor filter just in case
-        selectedGoalsSvSupervisors = updateSupervisorFilter(goalsSvSupervisorFilterDropdown, goalsSvSupervisorFilterText, selectedGoalsSvSupervisors, allSalesData);
-        // Initialize Summary Supervisor Filter
-        if(document.getElementById('goals-summary-supervisor-filter-dropdown')) {
-            selectedGoalsSummarySupervisors = updateSupervisorFilter(document.getElementById('goals-summary-supervisor-filter-dropdown'), document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, allSalesData);
-            selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, document.getElementById('goals-summary-seller-filter-dropdown'), document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData);
-        }
-
-        // Initialize Meta Vs Realizado Filters
-        selectedMetaRealizadoSupervisors = updateSupervisorFilter(document.getElementById('meta-realizado-supervisor-filter-dropdown'), document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
-        updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData]);
 
         // Fix: Pre-filter Suppliers for Meta Realizado (Only PEPSICO)
-        const pepsicoSuppliersSource = [...allSalesData, ...allHistoryData].filter(s => {
-            let rowPasta = s.OBSERVACAOFOR;
-            if (!rowPasta || rowPasta === '0' || rowPasta === '00' || rowPasta === 'N/A') {
-                 const rawFornecedor = String(s.FORNECEDOR || '').toUpperCase();
-                 rowPasta = rawFornecedor.includes('PEPSICO') ? 'PEPSICO' : 'MULTIMARCAS';
-            }
-            return rowPasta === 'PEPSICO';
+        const metaRealizadoSuppliersSource = [...allSalesData, ...allHistoryData].filter(s => {
+            const rowPasta = resolveSupplierPasta(s.OBSERVACAOFOR, s.FORNECEDOR);
+            return rowPasta === SUPPLIER_CONFIG.metaRealizado.requiredPasta;
         });
-        selectedMetaRealizadoSuppliers = updateSupplierFilter(document.getElementById('meta-realizado-supplier-filter-dropdown'), document.getElementById('meta-realizado-supplier-filter-text'), selectedMetaRealizadoSuppliers, pepsicoSuppliersSource, 'metaRealizado');
+        selectedMetaRealizadoSuppliers = updateSupplierFilter(document.getElementById('meta-realizado-supplier-filter-dropdown'), document.getElementById('meta-realizado-supplier-filter-text'), selectedMetaRealizadoSuppliers, metaRealizadoSuppliersSource, 'metaRealizado');
 
         updateAllComparisonFilters();
 
-        updateStockSellerFilter();
-        updateStockSupplierFilter();
-        updateStockProductFilter();
-        updateStockCitySuggestions([...allSalesData, ...allHistoryData]);
 
         initializeRedeFilters();
         setupEventListeners();
+        initFloatingFilters();
 
         // Assegura que os dados históricos estão prontos antes da primeira renderização
         calculateHistoricalBests();
@@ -14420,13 +13743,20 @@ const supervisorGroups = new Map();
         }
         // ----------------------------------------
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const targetPage = urlParams.get('ir_para');
+        window.addEventListener('hashchange', () => {
+            const view = window.location.hash.substring(1) || 'dashboard';
+            renderView(view);
+        });
 
-        if (targetPage) {
-            navigateTo(targetPage);
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetParam = urlParams.get('ir_para');
+        const hash = window.location.hash.substring(1);
+        const targetPage = hash || targetParam || 'dashboard';
+
+        if (window.location.hash.substring(1) === targetPage) {
+            renderView(targetPage);
         } else {
-            navigateTo('dashboard');
+            window.location.hash = targetPage;
         }
         renderTable(aggregatedOrders);
 
@@ -14444,7 +13774,7 @@ const supervisorGroups = new Map();
             weeks.forEach((week, i) => {
                 // Determine if week is fully past
                 // A week is "past" if its END date is strictly BEFORE the currentDate (ignoring time)
-                // Note: user said "check if first week passed... then redistribute difference".
+                // Logic: "Check if first week passed... then redistribute difference".
                 // If we are IN week 2, week 1 is past.
                 // Assuming lastSaleDate represents "today".
 
@@ -14453,24 +13783,21 @@ const supervisorGroups = new Map();
                 let originalWeekGoal = dailyGoal * week.workingDays;
 
                 if (isPast) {
-                    // Week is closed. The goal is fixed? No, the user says:
-                    // "case in the first week the goal that was 40k wasn't hit (realized 30k), the 10k missing must be reassigned"
-                    // This implies the "Goal" for the past week stays as original or realized?
-                    // Usually in these reports, you show the original goal for past weeks, and the *future* weeks get adjusted.
-                    // Or does the user want to see the "gap" moved?
-                    // "the 10.000 missing must be reassigned to other weeks"
-                    // This means the TARGET for future weeks increases. The displayed Goal for past week usually remains static (Original) so you can see the failure.
-                    // HOWEVER, if I change the future goals, the sum of all displayed goals will be Total Goal.
-                    // If I show Original Goal for W1 (40k) and Realized (30k), I have a deficit of 10k.
-                    // If I add 10k to W2, W3, W4...
-                    // The sum of displayed goals would be: 40k (W1) + (Original W2 + share of 10k) + ... = Total Goal + 10k.
-                    // This is mathmatically wrong if "Meta Total" column shows the fixed monthly target.
-                    // BUT, dynamic planning often works this way: "To hit the month, now I need to do X".
-                    // The user said: "as colunas onde mostram as metas por semana fossem dinâmicas de acordo com o realizado"
-
-                    // Let's assume:
-                    // Displayed Goal for Past Week = Original Proportional Goal (so you can see the variance).
-                    // Displayed Goal for Future Week = Original + Redistribution.
+                    // Week is closed.
+                    // User Requirement: "case in the first week the goal that was 40k wasn't hit (realized 30k), the 10k missing must be reassigned"
+                    //
+                    // Implementation:
+                    // 1. Past Weeks: Display Original Goal (to show variance/failure).
+                    // 2. Future Weeks: Display Adjusted Goal (Original + Share of Deficit).
+                    //
+                    // Mathematical Note:
+                    // Because we display Original Goal for past weeks (instead of Realized), the sum of displayed goals
+                    // will NOT equal the Total Monthly Goal if there is any deficit/surplus.
+                    // Sum(Displayed) = Total Goal + (Original Past - Realized Past).
+                    //
+                    // However, the Dynamic Planning Invariant holds:
+                    // Realized Past + Future Adjusted Goals = Total Monthly Goal.
+                    // This ensures the seller knows exactly what is needed in future weeks to hit the contract target.
 
                     adjustedGoals[i] = originalWeekGoal;
                     const realized = realizedByWeek[i] || 0;
@@ -14542,7 +13869,7 @@ const supervisorGroups = new Map();
             activeClients.forEach(client => {
                 const codCli = String(client["Código"] || client["codigo_cliente"]);
                 const historyIds = optimizedData.indices.history.byClient.get(codCli);
-                
+
                 if (historyIds) {
                     let clientElmaFat = 0;
                     let clientFoodsFat = 0;
@@ -14609,20 +13936,139 @@ const supervisorGroups = new Map();
 
             console.log(`[Parser] Linhas encontradas: ${rows.length}`);
 
+            // Helper: Parse Value (Moved up for availability)
+            const parseImportValue = (rawStr) => {
+                if (!rawStr) return NaN;
+                let clean = String(rawStr).trim().toUpperCase().replace(/[^0-9,.-]/g, '');
+                if (!clean) return NaN;
+
+                const dotIdx = clean.lastIndexOf('.');
+                const commaIdx = clean.lastIndexOf(',');
+
+                if (dotIdx > -1 && commaIdx > -1) {
+                    if (dotIdx > commaIdx) clean = clean.replace(/,/g, '');
+                    else clean = clean.replace(/\./g, '').replace(',', '.');
+                } else if (commaIdx > -1) {
+                    if (/,\d{3}$/.test(clean)) clean = clean.replace(/,/g, '');
+                    else clean = clean.replace(',', '.');
+                } else if (dotIdx > -1) {
+                    if (/\.\d{3}$/.test(clean)) clean = clean.replace(/\./g, '');
+                }
+                return parseFloat(clean);
+            };
+
+            // Helper: Normalize Category
+            const normalizeGoalCategory = (catKey) => {
+                if (!catKey) return null;
+                catKey = catKey.toUpperCase();
+                if (catKey.includes('NÃO EXTRUSADOS') || catKey.includes('NAO EXTRUSADOS')) return '708';
+                if (catKey.includes('EXTRUSADOS')) return '707';
+                if (catKey.includes('TORCIDA')) return '752';
+                if (catKey.includes('TODDYNHO')) return '1119_TODDYNHO';
+                if (catKey.includes('TODDY')) return '1119_TODDY';
+                if (catKey.includes('QUAKER') || catKey.includes('KEROCOCO')) return '1119_QUAKER_KEROCOCO';
+                if (catKey === 'KG ELMA' || catKey === 'KG_ELMA') return 'tonelada_elma';
+                if (catKey === 'KG FOODS' || catKey === 'KG_FOODS') return 'tonelada_foods';
+                if (catKey === 'TOTAL ELMA' || catKey === 'TOTAL_ELMA') return 'total_elma';
+                if (catKey === 'TOTAL FOODS' || catKey === 'TOTAL_FOODS') return 'total_foods';
+                if (catKey === 'MIX SALTY' || catKey === 'MIX_SALTY') return 'mix_salty';
+                if (catKey === 'MIX FOODS' || catKey === 'MIX_FOODS') return 'mix_foods';
+                if (catKey === 'PEPSICO_ALL_POS' || catKey === 'PEPSICO_ALL' || catKey === 'GERAL') return 'pepsico_all';
+
+                const validIds = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO', 'tonelada_elma', 'tonelada_foods', 'total_elma', 'total_foods', 'mix_salty', 'mix_foods', 'pepsico_all'];
+                if (validIds.includes(catKey.toLowerCase())) return catKey.toLowerCase();
+                return null;
+            };
+
+            // Helper: Normalize Metric
+            const normalizeGoalMetric = (metricKey) => {
+                if (!metricKey) return null;
+                metricKey = metricKey.toUpperCase();
+                if (metricKey === 'FATURAMENTO' || metricKey === 'MÉDIA TRIM.' || metricKey === 'FAT' || metricKey === 'R$' || metricKey === 'VALOR') return 'FAT';
+                if (metricKey === 'POSITIVAÇÃO' || metricKey === 'POSITIVACAO' || metricKey.includes('POSITIVA') || metricKey === 'POS') return 'POS';
+                if (metricKey === 'TONELADA' || metricKey === 'META KG' || metricKey === 'VOL' || metricKey === 'KG' || metricKey === 'VOLUME') return 'VOL';
+                if (metricKey === 'META MIX' || metricKey === 'MIX' || metricKey === 'QTD') return 'MIX';
+                return null;
+            };
+
+            // Helper: Resolve Seller
+            const resolveSeller = (rawName) => {
+                if (!rawName) return null;
+                if (isGarbageSeller(rawName)) return null;
+                const upperName = rawName.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+                if (optimizedData.rcasBySupervisor.has(upperName) || optimizedData.rcasBySupervisor.has(rawName)) return null;
+
+                if (!isNaN(parseImportValue(rawName))) {
+                     const codeStr = String(parseImportValue(rawName));
+                     if (optimizedData.rcaNameByCode.has(codeStr)) return optimizedData.rcaNameByCode.get(codeStr);
+                }
+
+                for (const [sysName, sysCode] of optimizedData.rcaCodeByName) {
+                     const sysUpper = sysName.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+                     if (sysUpper === upperName) return sysName;
+                }
+                return rawName;
+            };
+
             // 2. Identify Header Rows
             // We look for 3 consecutive rows that might be the header structure
-            // Row A: Categories (EXTRUSADOS, ETC)
-            // Row B: Metrics (FATURAMENTO, ETC)
-            // Row C: Submetrics (META, AJUSTE)
             let startRow = 0;
             if (rows.length >= 3) {
                 // Standard logic: Rows 0, 1, 2
                 startRow = 0;
             } else {
                 console.warn("[Parser] Menos de 3 linhas. Tentando modo simplificado...");
-                // TODO: Implement simplified mode for single-row updates if needed
-                // For now, abort to avoid garbage data
-                return null;
+                const simplifiedUpdates = [];
+
+                rows.forEach((row, rowIndex) => {
+                    const cols = row.map(c => c ? c.trim() : '').filter(c => c !== '');
+                    if (cols.length < 3) {
+                         console.warn(`[Parser-Simples] Linha ${rowIndex+1} ignorada: Menos de 3 colunas válidas.`);
+                         return;
+                    }
+
+                    const sellerName = resolveSeller(cols[0]);
+                    if (!sellerName) return;
+
+                    let catId = null;
+                    let metricId = null;
+                    let value = NaN;
+
+                    // Try 4 Columns: Seller | Category | Metric | Value
+                    if (cols.length >= 4) {
+                        catId = normalizeGoalCategory(cols[1]);
+                        metricId = normalizeGoalMetric(cols[2]);
+                        value = parseImportValue(cols[3]);
+                    }
+                    // Try 3 Columns: Seller | Category | Value (Infer Metric)
+                    else if (cols.length === 3) {
+                        catId = normalizeGoalCategory(cols[1]);
+                        value = parseImportValue(cols[2]);
+
+                        if (catId) {
+                            if (catId.startsWith('mix_')) metricId = 'MIX';
+                            else if (catId.startsWith('tonelada_')) metricId = 'VOL';
+                            else if (catId.startsWith('total_') || catId === 'pepsico_all') metricId = 'POS';
+                            // Ambiguous: 707, 708... could be FAT or POS.
+                            // If Value is small (< 200), maybe POS? If large, FAT? Dangerous.
+                            // Default to FAT for 707/etc?
+                            else if (['707','708','752','1119_TODDYNHO','1119_TODDY','1119_QUAKER_KEROCOCO'].includes(catId)) {
+                                metricId = 'FAT'; // Default assumption for simplified input
+                            }
+                        }
+                    }
+
+                    if (sellerName && catId && metricId && !isNaN(value)) {
+                        let type = 'rev';
+                        if (metricId === 'VOL') type = 'vol';
+                        if (metricId === 'POS') type = 'pos';
+                        if (metricId === 'MIX') type = 'mix';
+
+                        simplifiedUpdates.push({ type, seller: sellerName, category: catId, val: value });
+                    }
+                });
+
+                return simplifiedUpdates.length > 0 ? simplifiedUpdates : null;
             }
 
             const header0 = rows[startRow].map(h => h ? h.trim().toUpperCase() : '');
@@ -14647,26 +14093,13 @@ const supervisorGroups = new Map();
                     if (subMetric === 'AJ.' || subMetric === 'AJ') subMetric = 'AJUSTE';
 
                     let catKey = currentCategory;
-                    // Normalize Category Names to IDs (Fuzzy Matching)
-                    if (catKey.includes('NÃO EXTRUSADOS') || catKey.includes('NAO EXTRUSADOS')) catKey = '708';
-                    else if (catKey.includes('EXTRUSADOS')) catKey = '707';
-                    else if (catKey.includes('TORCIDA')) catKey = '752';
-                    else if (catKey.includes('TODDYNHO')) catKey = '1119_TODDYNHO';
-                    else if (catKey.includes('TODDY')) catKey = '1119_TODDY';
-                    else if (catKey.includes('QUAKER') || catKey.includes('KEROCOCO')) catKey = '1119_QUAKER_KEROCOCO';
-                    else if (catKey === 'KG ELMA') catKey = 'tonelada_elma';
-                    else if (catKey === 'KG FOODS') catKey = 'tonelada_foods';
-                    else if (catKey === 'TOTAL ELMA') catKey = 'total_elma';
-                    else if (catKey === 'TOTAL FOODS') catKey = 'total_foods';
-                    else if (catKey === 'MIX SALTY') catKey = 'mix_salty';
-                    else if (catKey === 'MIX FOODS') catKey = 'mix_foods';
-                    else if (catKey === 'PEPSICO_ALL_POS' || catKey === 'PEPSICO_ALL' || catKey === 'GERAL') catKey = 'pepsico_all';
+                    // Normalize Category Names to IDs (Reuse helper if possible or keep logic)
+                    const normalizedCat = normalizeGoalCategory(catKey);
+                    if (normalizedCat) catKey = normalizedCat;
 
                     let metricKey = 'OTHER';
-                    if (currentMetric === 'FATURAMENTO' || currentMetric === 'MÉDIA TRIM.') metricKey = 'FAT';
-                    else if (currentMetric === 'POSITIVAÇÃO' || currentMetric === 'POSITIVACAO' || currentMetric.includes('POSITIVA')) metricKey = 'POS';
-                    else if (currentMetric === 'TONELADA' || currentMetric === 'META KG') metricKey = 'VOL';
-                    else if (currentMetric === 'META MIX' || currentMetric === 'MIX' || currentMetric === 'QTD') metricKey = 'MIX';
+                    const normalizedMetric = normalizeGoalMetric(currentMetric);
+                    if (normalizedMetric) metricKey = normalizedMetric;
 
                     const key = `${catKey}_${metricKey}_${subMetric}`;
                     colMap[key] = i;
@@ -14676,31 +14109,11 @@ const supervisorGroups = new Map();
             const updates = [];
             const processedSellers = new Set();
 
-            const parseImportValue = (rawStr) => {
-                if (!rawStr) return NaN;
-                let clean = String(rawStr).trim().toUpperCase().replace(/[^0-9,.-]/g, '');
-                if (!clean) return NaN;
-
-                const dotIdx = clean.lastIndexOf('.');
-                const commaIdx = clean.lastIndexOf(',');
-                
-                if (dotIdx > -1 && commaIdx > -1) {
-                    if (dotIdx > commaIdx) clean = clean.replace(/,/g, ''); 
-                    else clean = clean.replace(/\./g, '').replace(',', '.');
-                } else if (commaIdx > -1) {
-                    if (/,\d{3}$/.test(clean)) clean = clean.replace(/,/g, '');
-                    else clean = clean.replace(',', '.');
-                } else if (dotIdx > -1) {
-                    if (/\.\d{3}$/.test(clean)) clean = clean.replace(/\./g, '');
-                }
-                return parseFloat(clean);
-            };
-
             const dataStartRow = startRow + 3;
             // Identify Vendor Column Index (Name)
             // Usually Index 1 (Code, Name, ...)
             // We scan first few rows to find valid seller names
-            let nameColIndex = 1; 
+            let nameColIndex = 1;
             // Basic Heuristic: If col 0 looks like a name and col 1 is number, maybe it's col 0.
             // But standard template is [Code, Name, ...]. We stick to 1 for now or 0 if 1 is empty.
 
@@ -14721,16 +14134,11 @@ const supervisorGroups = new Map();
                      }
                 }
 
-                if (!sellerName) continue; 
-                
+                if (!sellerName) continue;
+
                 // --- ENHANCED FILTER: Ignore Supervisors, Aggregates, and BALCAO ---
+                if (isGarbageSeller(sellerName)) continue;
                 const upperName = sellerName.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-                
-                // 1. Explicit Blocklist
-                if (upperName === 'BALCAO' || upperName === 'BALCÃO' || 
-                    upperName.includes('TOTAL') || upperName.includes('SUPERVISOR') || upperName.includes('GERAL')) {
-                    continue;
-                }
 
                 // --- RESOLUTION LOGIC: Normalize Seller Name to System Canonical Name ---
                 let canonicalName = null;
@@ -14842,7 +14250,7 @@ const supervisorGroups = new Map();
             // Insert after table container (which is inside analysisContainer -> div.bg-slate-900)
             // analysisContainer contains a header div, result div, and then the table container div.
             // We need to find the table container.
-            
+
         let pendingImportUpdates = [];
             let importTablePage = 1;
             const importTablePageSize = 19;
@@ -14850,7 +14258,7 @@ const supervisorGroups = new Map();
             function renderImportTable() {
                 if (!analysisBody) return;
                 analysisBody.innerHTML = '';
-                
+
                 const totalPages = Math.ceil(pendingImportUpdates.length / importTablePageSize);
                 if (importTablePage > totalPages && totalPages > 0) importTablePage = totalPages;
                 if (totalPages === 0) importTablePage = 1;
@@ -14867,7 +14275,7 @@ const supervisorGroups = new Map();
 
                 pageItems.forEach(u => {
                     const row = document.createElement('tr');
-                    
+
                     const currentVal = getSellerCurrentGoal(u.seller, u.category, u.type);
                     const newVal = u.val;
                     const diff = newVal - currentVal;
@@ -14930,7 +14338,7 @@ const supervisorGroups = new Map();
             // Bind Pagination Listeners
             const prevBtn = document.getElementById('import-prev-page-btn');
             const nextBtn = document.getElementById('import-next-page-btn');
-            
+
             if (prevBtn) {
                 prevBtn.addEventListener('click', () => {
                     if (importTablePage > 1) {
@@ -14955,7 +14363,7 @@ const supervisorGroups = new Map();
                 analysisContainer.classList.add('hidden');
                 importConfirmBtn.disabled = true;
                 importConfirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                
+
                 // Reset File Input
                 if (fileInput) fileInput.value = '';
                 if (dropZone) {
@@ -15020,7 +14428,7 @@ const supervisorGroups = new Map();
             function handleFiles(files) {
                 if (files.length === 0) return;
                 const file = files[0];
-                
+
                 // Visual Feedback: Loading
                 if (dropZone) {
                     dropZone.innerHTML = `
@@ -15039,13 +14447,13 @@ const supervisorGroups = new Map();
                     try {
                         const data = new Uint8Array(e.target.result);
                         const workbook = XLSX.read(data, {type: 'array'});
-                        
+
                         const sheetName = workbook.SheetNames[0];
                         const sheet = workbook.Sheets[sheetName];
-                        
+
                         // Convert to TSV for the parser
                         const tsv = XLSX.utils.sheet_to_csv(sheet, {FS: "\t"});
-                        
+
                         // Update UI
                         importTextarea.value = tsv;
                         if (dropZone) {
@@ -15055,7 +14463,7 @@ const supervisorGroups = new Map();
                                 <p class="text-slate-400 text-sm">${file.name} carregado.</p>
                             `;
                         }
-                        
+
                         // Auto-analyze
                         setTimeout(() => importAnalyzeBtn.click(), 500);
 
@@ -15096,20 +14504,21 @@ const supervisorGroups = new Map();
                 }
 
                 if (type === 'pos' || type === 'mix') {
-                    // FIX: Return Default Calculated Value if Manual Target is Missing
-                    if (targets && targets[category] !== undefined) {
-                        return targets[category];
+                    // FIX: Do not mask missing data. If manual targets exist for seller, do not fall back to defaults.
+                    if (targets) {
+                        // Manual Override Exists for this Seller
+                        if (targets[category] !== undefined) {
+                            return targets[category];
+                        }
+                        // Explicitly return 0 if category is missing (User intended 0 or skipped it)
+                        return 0;
                     } else {
-                        // Calculate Default
+                        // Calculate Default (Auto-Pilot for unconfigured sellers)
                         const defaults = calculateSellerDefaults(sellerName);
                         if (category === 'total_elma') return defaults.elmaPos;
                         if (category === 'total_foods') return defaults.foodsPos;
                         if (category === 'mix_salty') return defaults.mixSalty;
                         if (category === 'mix_foods') return defaults.mixFoods;
-                        // Fallback for leaf components? Currently Pos adjustments are manual.
-                        // If category is a leaf (e.g. 707), default adjustment is 0 (Natural Base is not stored here).
-                        // Note: parseGoalsSvStructure sends '707', '708' etc for Positivação.
-                        // We assume 0 for leaf adjustments if not set.
                         return 0;
                     }
                 }
@@ -15126,7 +14535,7 @@ const supervisorGroups = new Map();
 
                     let total = 0;
                     const leafCategories = resolveGoalCategory(category);
-                    
+
                     activeClients.forEach(client => {
                         const codCli = String(client['Código'] || client['codigo_cliente']);
                         const clientGoals = globalClientGoals.get(codCli);
@@ -15148,13 +14557,13 @@ const supervisorGroups = new Map();
             // --- AI Insights Logic ---
                         async function generateAiInsights() {
                 const btn = document.getElementById('btn-generate-ai');
-                
+
                 if (!pendingImportUpdates || pendingImportUpdates.length === 0) return;
 
                 // UI Loading State
                 btn.disabled = true;
                 btn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Analisando...`;
-                
+
                 // Show loading overlay
                 const pageLoader = document.getElementById('page-transition-loader');
                 const loaderText = document.getElementById('loader-text');
@@ -15206,9 +14615,9 @@ const supervisorGroups = new Map();
                        // Actually pendingImportUpdates doesn't store history, it stores 'val' (new).
                        // We can compute history on the fly for the top items only? No, we need to sort first.
                        // Let's rely on 'getSellerCurrentGoal' as the "Old" value (which is Current Target).
-                       // The Prompt asks for comparison with "History". 
-                       // getSellerCurrentGoal returns the *Current Goal* before update. 
-                       // The AI prompt usually compares New Goal vs History Avg. 
+                       // The Prompt asks for comparison with "History".
+                       // getSellerCurrentGoal returns the *Current Goal* before update.
+                       // The AI prompt usually compares New Goal vs History Avg.
                        // Let's provide [Current Goal] and [New Goal]. The AI can infer "Change".
                        return getSellerCurrentGoal(sellerName, category, type);
                     };
@@ -15216,10 +14625,10 @@ const supervisorGroups = new Map();
                     // Process Updates
                     for (const u of pendingImportUpdates) {
                         // Filter out supervisors/aggregates
+                        if (isGarbageSeller(u.seller)) continue;
+
                         const upperUName = u.seller.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-                        if (upperUName === 'BALCAO' || upperUName === 'BALCÃO' || 
-                            upperUName.includes('TOTAL') || upperUName.includes('SUPERVISOR') || upperUName.includes('GERAL') ||
-                            optimizedData.rcasBySupervisor.has(upperUName) || optimizedData.rcasBySupervisor.has(u.seller)) {
+                        if (optimizedData.rcasBySupervisor.has(upperUName) || optimizedData.rcasBySupervisor.has(u.seller)) {
                             continue;
                         }
 
@@ -15248,12 +14657,12 @@ const supervisorGroups = new Map();
 
                         // Add to Supervisor Group
                         const supervisorEntry = getSupervisorEntry(supervisorName);
-                        
+
                         // We aggregate items per seller? Or just list variations?
                         // Requirement: "list the main variations of 5 sellers".
                         // It's better to list *Variations* as items.
                         // One seller might have huge Rev change AND huge Vol change.
-                        
+
                         supervisorEntry.sellers.push({
                             seller: u.seller,
                             category: u.category,
@@ -15271,25 +14680,25 @@ const supervisorGroups = new Map();
                     supervisorsMap.forEach(sup => {
                         // Sort by Impact (Magnitude of change)
                         sup.sellers.sort((a, b) => b.impact - a.impact);
-                        
+
                         // Deduplicate Variations (same seller + same metric)
                         const seen = new Set();
                         const uniqueVariations = [];
-                        
+
                         for (const v of sup.sellers) {
                             const catName = resolveCategoryName(v.category);
                             let metricName = '';
                             if (v.unit === 'R$') metricName = `Faturamento (${catName})`;
                             else if (v.unit === 'Kg') metricName = `Volume (${catName})`;
                             else metricName = `Positivação (${catName})`;
-                            
+
                             // Create unique signature
                             const sig = `${v.seller}|${metricName}`;
-                            
+
                             if (!seen.has(sig)) {
                                 seen.add(sig);
                                 // Attach resolved metric name for later use
-                                v._resolvedMetricName = metricName; 
+                                v._resolvedMetricName = metricName;
                                 uniqueVariations.push(v);
                             }
                         }
@@ -15313,9 +14722,9 @@ const supervisorGroups = new Map();
                     const promptText = `
                         Atue como um Gerente Nacional de Vendas da Prime Distribuição.
                         Analise as alterações de metas propostas (Proposed Goals).
-                        
+
                         Dados: ${JSON.stringify(optimizedContext)}
-                        
+
                         Gere um relatório JSON estritamente com esta estrutura:
                         {
                             "global_summary": "Resumo executivo da estratégia geral percebida nas alterações. Use emojis.",
@@ -15334,7 +14743,7 @@ const supervisorGroups = new Map();
                                 }
                             ]
                         }
-                        
+
                         Regras:
                         1. "variations" deve conter EXATAMENTE os itens enviados no contexto.
                         2. Use o nome COMPLETO da métrica fornecido no input (ex: "Faturamento (Extrusados)"). NÃO simplifique para apenas "Faturamento".
@@ -15349,7 +14758,7 @@ const supervisorGroups = new Map();
 
                     const response = await fetch(`https://api.groq.com/openai/v1/chat/completions`, {
                         method: 'POST',
-                        headers: { 
+                        headers: {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${API_KEY}`
                         },
@@ -15361,40 +14770,40 @@ const supervisorGroups = new Map();
 
                     const data = await response.json();
                     if (data.error) throw new Error(data.error.message);
-                    
+
                     const aiText = data.choices[0].message.content;
-                    
+
                     // 3. Render Output
                     let result;
                     try {
                         const jsonStart = aiText.indexOf('{');
                         const jsonEnd = aiText.lastIndexOf('}');
                         result = JSON.parse(aiText.substring(jsonStart, jsonEnd + 1));
-                        
+
                         // Deduplicate Variations (Post-Processing)
                         if (result.supervisors) {
                             result.supervisors.forEach(sup => {
                                 if (sup.variations) {
                                     const uniqueMap = new Map();
                                     const cleanVariations = [];
-                                    
+
                                     sup.variations.forEach(v => {
                                         // Create signature: Seller + Metric Name
                                         // Normalize strings to avoid case/space issues
                                         const sig = `${v.seller}_${v.metric}`.trim().toLowerCase();
-                                        
+
                                         if (!uniqueMap.has(sig)) {
                                             uniqueMap.set(sig, true);
                                             cleanVariations.push(v);
                                         }
                                     });
-                                    
+
                                     // Enforce Limits (Safety Net)
                                     // If AI hallucinates or context structure varies, ensure BALCAO/Americanas is capped at 5
                                     // Other supervisors can show up to 10
                                     const isBalcao = sup.name && (sup.name.toUpperCase() === 'BALCAO' || sup.name.toUpperCase().includes('AMERICANAS'));
                                     const limit = isBalcao ? 5 : 10;
-                                    
+
                                     sup.variations = cleanVariations.slice(0, limit);
                                 }
                             });
@@ -15420,7 +14829,7 @@ const supervisorGroups = new Map();
             function renderAiSummaryChart(fatDiff) {
                 const chartContainer = document.getElementById('ai-chart-container');
                 if(!chartContainer) return;
-                
+
                 // Clear previous canvas
                 chartContainer.innerHTML = '<canvas id="aiSummaryChart"></canvas>';
                 const ctx = document.getElementById('aiSummaryChart').getContext('2d');
@@ -15430,7 +14839,7 @@ const supervisorGroups = new Map();
                 // Let's iterate updates again to sum "Current" and "Proposed" totals for Revenue only.
                 let totalCurrent = 0;
                 let totalProposed = 0;
-                
+
                 pendingImportUpdates.forEach(u => {
                     if (u.type === 'rev') {
                         const cur = getSellerCurrentGoal(u.seller, u.category, u.type);
@@ -15459,15 +14868,15 @@ const supervisorGroups = new Map();
                             title: { display: true, text: 'Comparativo de Faturamento Total', color: '#fff' }
                         },
                         scales: {
-                            y: { 
-                                beginAtZero: false, 
-                                grid: { color: '#334155' }, 
-                                ticks: { 
+                            y: {
+                                beginAtZero: false,
+                                grid: { color: '#334155' },
+                                ticks: {
                                     color: '#94a3b8',
                                     callback: function(value) {
                                         return new Intl.NumberFormat('pt-BR', { notation: "compact", maximumFractionDigits: 1 }).format(value);
                                     }
-                                } 
+                                }
                             },
                             x: { grid: { display: false }, ticks: { color: '#fff' } }
                         }
@@ -15489,7 +14898,7 @@ const supervisorGroups = new Map();
                         return;
                     }
                     console.log("Iniciando análise. Tamanho do texto:", text.length);
-                    
+
                     const updates = parseGoalsSvStructure(text);
                     console.log("Resultado da análise:", updates ? updates.length : "null");
 
@@ -15497,16 +14906,16 @@ const supervisorGroups = new Map();
                         alert("Nenhum dado válido encontrado para atualização. \n\nVerifique se:\n1. O arquivo possui os cabeçalhos corretos (3 linhas iniciais).\n2. As colunas de 'Ajuste' contêm valores numéricos.\n3. Os nomes dos vendedores correspondem ao cadastro.");
                         return;
                     }
-                    
+
                     pendingImportUpdates = updates;
-                    
+
                     // Reset to page 1 and render using the pagination function
                     importTablePage = 1;
                     renderImportTable();
-                    
+
                     analysisBadges.innerHTML = `<span class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">${updates.length} Registros Encontrados</span>`;
                     analysisContainer.classList.remove('hidden');
-                    
+
                     // Force Scroll
                     analysisContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -15534,9 +14943,11 @@ const supervisorGroups = new Map();
                     goalsSellerTargets.clear();
                     globalClientGoals.clear();
                     // ------------------------
-                    
+
                     // 1. Process Manual Updates (Imported)
+                    const importedSellers = new Set();
                     pendingImportUpdates.forEach(u => {
+                        importedSellers.add(u.seller);
                         if (u.type === 'rev') {
                             distributeSellerGoal(u.seller, u.category, u.val, 'fat');
                             // Save Override
@@ -15565,45 +14976,16 @@ const supervisorGroups = new Map();
                     // We get active sellers from optimizedData.rcasBySupervisor
                     // 2. Backfill Defaults for ALL Active Sellers
                     // Iterate all active sellers to ensure their calculated "Suggestions" are saved if not manually set.
-                    // We get active sellers from optimizedData.rcasBySupervisor
-                    const activeSellerNames = new Set();
-                    const forbiddenBackfill = ['INATIVOS', 'N/A', 'BALCAO', 'BALCÃO', 'TOTAL', 'GERAL'];
-                    const supervisorNames = new Set(optimizedData.rcasBySupervisor.keys());
-                    
-                    optimizedData.rcasBySupervisor.forEach(rcas => {
-                        rcas.forEach(code => {
-                            const name = optimizedData.rcaNameByCode.get(code);
-                            if (name) {
-                                const upper = name.toUpperCase();
-                                // Ensure we exclude supervisors themselves from being treated as sellers
-                                // and exclude forbidden keywords
-                                if (!forbiddenBackfill.some(f => upper.includes(f)) && !supervisorNames.has(name)) {
-                                    activeSellerNames.add(name);
-                                }
-                            }
-                        });
-                    });
-
-                    activeSellerNames.forEach(sellerName => {
-                        if (!goalsSellerTargets.has(sellerName)) goalsSellerTargets.set(sellerName, {});
-                        const targets = goalsSellerTargets.get(sellerName);
-                        
-                        // Calculate Defaults
-                        const defaults = calculateSellerDefaults(sellerName);
-
-                        // Backfill if missing
-                        if (targets['total_elma'] === undefined) targets['total_elma'] = defaults.elmaPos;
-                        if (targets['total_foods'] === undefined) targets['total_foods'] = defaults.foodsPos;
-                        if (targets['mix_salty'] === undefined) targets['mix_salty'] = defaults.mixSalty;
-                        if (targets['mix_foods'] === undefined) targets['mix_foods'] = defaults.mixFoods;
-                    });
+                    // 2. Backfill Defaults Removed
+                    // We rely on getSellerCurrentGoal dynamic calculation for unconfigured sellers.
+                    // This avoids materializing defaults into overrides, which would prevent strict mode behavior (returning 0 for missing manual targets).
 
                     // Save to Supabase (SKIPPED - Load to Memory Only)
                     // const success = await saveGoalsToSupabase();
-                    
+
                     alert(`Importação realizada! As metas foram carregadas para a aba "Rateio Metas". Verifique e salve manualmente.`);
                     closeModal();
-                    
+
                     // Switch to "Rateio Metas" tab to verify
                     const btnGv = document.querySelector('button[data-tab="gv"]');
                     if (btnGv) btnGv.click();
@@ -15758,8 +15140,7 @@ const supervisorGroups = new Map();
             }
 
             let fileNameParam = 'geral';
-            if (selectedMetaRealizadoSellers.length === 1) {
-                fileNameParam = getFirstName(selectedMetaRealizadoSellers[0]);
+            if (hierarchyState['meta-realizado'] && hierarchyState['meta-realizado'].promotors.size === 1) {
             }
             const safeFileNameParam = fileNameParam.replace(/[^a-z0-9]/gi, '_').toLowerCase();
             doc.save(`meta_vs_realizado_${safeFileNameParam}_${new Date().toISOString().slice(0,10)}.pdf`);
@@ -15778,23 +15159,23 @@ const supervisorGroups = new Map();
 
                 // Hide Main Dashboard / Content Wrapper
                 // Note: index.html structure shows content-wrapper wraps everything *except* the new page which I inserted *inside*?
-                // Let's check where I inserted it. 
+                // Let's check where I inserted it.
                 // "Insert the new full-screen AI insights container into index.html... inside content-wrapper"
                 // If it is inside content-wrapper, hiding content-wrapper hides it too.
                 // Wait, in my previous step I used  to insert it *before* Goals View.
                 //  is inside .
                 // So  IS inside .
                 // Therefore, I should hide the *siblings* (dashboard, goals-view, etc) explicitly, NOT the wrapper.
-                
+
                 // Hide all main views
-                ['main-dashboard', 'city-view', 'weekly-view', 'comparison-view', 'stock-view', 'coverage-view', 'goals-view', 'meta-realizado-view', 'mix-view', 'innovations-month-view'].forEach(id => {
+                ['main-dashboard', 'city-view', 'comparison-view', 'stock-view', 'coverage-view', 'goals-view', 'meta-realizado-view', 'mix-view', 'innovations-month-view'].forEach(id => {
                     const el = document.getElementById(id);
                     if (el) el.classList.add('hidden');
                 });
 
                 // Show AI Page
                 fullPage.classList.remove('hidden');
-                
+
                 // Render Content
                 let html = `
                     <div class="bg-gradient-to-r from-slate-800 to-slate-900 rounded-lg p-6 border border-slate-700 shadow-lg mb-8">
@@ -15807,7 +15188,7 @@ const supervisorGroups = new Map();
                     <div id="ai-full-page-chart-container" class="mt-8 mb-8 h-80 bg-slate-800 rounded-xl p-4 border border-slate-700 relative">
                         <canvas id="aiFullPageSummaryChart"></canvas>
                     </div>
-                    
+
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
                 `;
 
@@ -15826,7 +15207,7 @@ const supervisorGroups = new Map();
                                         <h4 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Análise do Time</h4>
                                         <p class="text-slate-300 text-sm leading-relaxed">${sup.analysis}</p>
                                     </div>
-                                    
+
                                     <div>
                                         <div class="flex justify-between items-center mb-3">
                                             <h4 class="text-sm font-bold text-slate-400 uppercase tracking-wider">Detalhamento por Vendedor</h4>
@@ -15844,12 +15225,12 @@ const supervisorGroups = new Map();
                                                 </thead>
                                                 <tbody class="divide-y divide-slate-700/50 bg-slate-800/30">
                         `;
-                        
+
                         if (sup.variations) {
                             sup.variations.forEach(v => {
                                 // Enhance change display with colors and icons
                                 let coloredChange = v.change_display;
-                                
+
                                 // Regex for (+...) -> Green with arrow up
                                 if (coloredChange.includes('(+')) {
                                     coloredChange = coloredChange.replace(/(\(\+[^)]+\))/g, '<span class="text-emerald-400 font-bold bg-emerald-400/10 px-1.5 py-0.5 rounded ml-1 text-xs">$1</span>');
@@ -15888,7 +15269,7 @@ const supervisorGroups = new Map();
 
                 html += `</div>`;
                 contentDiv.innerHTML = html;
-                
+
                 // Render Chart
                 setTimeout(renderFullPageSummaryChart, 100);
 
@@ -15903,7 +15284,7 @@ const supervisorGroups = new Map();
                 // Calculate Totals
                 let totalCurrent = 0;
                 let totalProposed = 0;
-                
+
                 // Ensure we have updates
                 if (pendingImportUpdates) {
                     pendingImportUpdates.forEach(u => {
@@ -15919,60 +15300,63 @@ const supervisorGroups = new Map();
                 const diffColor = diff >= 0 ? '#22c55e' : '#ef4444';
 
                 if (window.aiFullPageChartInstance) {
-                    window.aiFullPageChartInstance.destroy();
-                }
-
-                window.aiFullPageChartInstance = new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: ['Meta Atual', 'Nova Proposta'],
-                        datasets: [{
-                            label: 'Faturamento Total (R$)',
-                            data: [totalCurrent, totalProposed],
-                            backgroundColor: ['#64748b', diffColor],
-                            borderRadius: 6,
-                            barPercentage: 0.5
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            title: { 
-                                display: true, 
-                                text: `Comparativo Global de Faturamento (Diferença: ${diff > 0 ? '+' : ''}${diff.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})})`, 
-                                color: '#fff',
-                                font: { size: 16 }
-                            },
-                            datalabels: {
-                                color: '#fff',
-                                anchor: 'end',
-                                align: 'top',
-                                formatter: (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-                                font: { weight: 'bold' }
-                            }
+                    window.aiFullPageChartInstance.data.datasets[0].data = [totalCurrent, totalProposed];
+                    window.aiFullPageChartInstance.data.datasets[0].backgroundColor = ['#64748b', diffColor];
+                    window.aiFullPageChartInstance.options.plugins.title.text = `Comparativo Global de Faturamento (Diferença: ${diff > 0 ? '+' : ''}${diff.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})})`;
+                    window.aiFullPageChartInstance.update('none');
+                } else {
+                    window.aiFullPageChartInstance = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['Meta Atual', 'Nova Proposta'],
+                            datasets: [{
+                                label: 'Faturamento Total (R$)',
+                                data: [totalCurrent, totalProposed],
+                                backgroundColor: ['#64748b', diffColor],
+                                borderRadius: 6,
+                                barPercentage: 0.5
+                            }]
                         },
-                        scales: {
-                            y: { 
-                                beginAtZero: false, 
-                                grid: { color: '#334155' }, 
-                                ticks: { color: '#94a3b8' } 
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false },
+                                title: {
+                                    display: true,
+                                    text: `Comparativo Global de Faturamento (Diferença: ${diff > 0 ? '+' : ''}${diff.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})})`,
+                                    color: '#fff',
+                                    font: { size: 16 }
+                                },
+                                datalabels: {
+                                    color: '#fff',
+                                    anchor: 'end',
+                                    align: 'top',
+                                    formatter: (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                                    font: { weight: 'bold' }
+                                }
                             },
-                            x: { 
-                                grid: { display: false }, 
-                                ticks: { color: '#fff', font: { size: 14, weight: 'bold' } } 
+                            scales: {
+                                y: {
+                                    beginAtZero: false,
+                                    grid: { color: '#334155' },
+                                    ticks: { color: '#94a3b8' }
+                                },
+                                x: {
+                                    grid: { display: false },
+                                    ticks: { color: '#fff', font: { size: 14, weight: 'bold' } }
+                                }
                             }
                         }
-                    }
-                });
+                    });
+                }
             }
 
             // Export to HTML Function
             document.getElementById('ai-insights-export-btn')?.addEventListener('click', () => {
                 const content = document.getElementById('ai-insights-full-content').innerHTML;
                 const timestamp = new Date().toLocaleString();
-                
+
                 const fullHtml = `
                     <!DOCTYPE html>
                     <html lang="pt-br">
@@ -15992,7 +15376,7 @@ const supervisorGroups = new Map();
                     </body>
                     </html>
                 `;
-                
+
                 const blob = new Blob([fullHtml], { type: 'text/html' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -16010,10 +15394,818 @@ const supervisorGroups = new Map();
                 // Restore Dashboard (or Goals View specifically since we came from there)
                 // Default to Goals View since the Import Modal is there
                 navigateTo('goals');
-                
+
                 // Re-open the Import Modal to preserve context/flow
                 const modal = document.getElementById('import-goals-modal');
                 if (modal) modal.classList.remove('hidden');
             });
+
+        function initFloatingFilters() {
+            const toggleBtn = document.getElementById('floating-filters-toggle');
+            const sentinels = document.querySelectorAll('.filter-wrapper-sentinel');
+
+            if (!toggleBtn || sentinels.length === 0) return;
+
+            // Scroll Logic to Show/Hide Button and Auto-Dock
+            window.addEventListener('scroll', () => {
+                let visibleSentinel = null;
+                // Find the sentinel in the currently visible view
+                for (const s of sentinels) {
+                    if (s.offsetParent !== null) {
+                        visibleSentinel = s;
+                        break;
+                    }
+                }
+
+                if (visibleSentinel) {
+                    const rect = visibleSentinel.getBoundingClientRect();
+                    // Threshold: When the bottom of the sentinel passes the top navigation area (approx 80px)
+                    const isPassed = rect.bottom < 80;
+
+                    if (isPassed) {
+                        toggleBtn.classList.remove('hidden');
+                    } else {
+                        toggleBtn.classList.add('hidden');
+
+                        // Auto-dock if scrolled back up
+                        const filters = visibleSentinel.querySelector('.sticky-filters');
+                        if (filters && filters.classList.contains('filters-overlay-mode')) {
+                            filters.classList.remove('filters-overlay-mode');
+                            toggleBtn.innerHTML = '<span class="text-lg leading-none mb-0.5">+</span><span>Filtros</span>';
+                        }
+                    }
+                } else {
+                    toggleBtn.classList.add('hidden');
+                }
+            }, { passive: true });
+
+            // Click Handler
+            toggleBtn.addEventListener('click', () => {
+                let visibleFilters = null;
+                // Find visible filters inside visible sentinel
+                for (const s of sentinels) {
+                    if (s.offsetParent !== null) {
+                        visibleFilters = s.querySelector('.sticky-filters');
+                        break;
+                    }
+                }
+
+                if (visibleFilters) {
+                    visibleFilters.classList.toggle('filters-overlay-mode');
+                    const isActive = visibleFilters.classList.contains('filters-overlay-mode');
+
+                    if (isActive) {
+                        toggleBtn.innerHTML = '<span class="text-lg leading-none mb-0.5">-</span><span>Filtros</span>';
+                    } else {
+                        toggleBtn.innerHTML = '<span class="text-lg leading-none mb-0.5">+</span><span>Filtros</span>';
+                    }
+                }
+            });
+        }
+
+            // --- SYSTEM DIAGNOSIS TOOL ---
+            const diagnosisBtn = document.getElementById('system-diagnosis-btn');
+            const diagnosisModal = document.getElementById('diagnosis-modal');
+            const diagnosisCloseBtn = document.getElementById('diagnosis-close-btn');
+            const diagnosisCopyBtn = document.getElementById('diagnosis-copy-btn');
+            const diagnosisContent = document.getElementById('diagnosis-content');
+
+            if (diagnosisBtn && diagnosisModal) {
+                diagnosisBtn.addEventListener('click', () => {
+                    const report = generateSystemDiagnosis();
+                    diagnosisContent.textContent = report;
+                    diagnosisModal.classList.remove('hidden');
+                });
+
+                diagnosisCloseBtn.addEventListener('click', () => diagnosisModal.classList.add('hidden'));
+                
+                diagnosisCopyBtn.addEventListener('click', () => {
+                    navigator.clipboard.writeText(diagnosisContent.textContent).then(() => {
+                        const originalText = diagnosisCopyBtn.innerHTML;
+                        diagnosisCopyBtn.innerHTML = `<span class="text-green-300 font-bold">Copiado!</span>`;
+                        setTimeout(() => diagnosisCopyBtn.innerHTML = originalText, 2000);
+                    });
+                });
+            }
+
+            function generateSystemDiagnosis() {
+                const now = new Date();
+                let report = `=== RELATÓRIO DE DIAGNÓSTICO DO SISTEMA ===\n`;
+                report += `Data: ${now.toLocaleString()}\n`;
+                report += `User Agent: ${navigator.userAgent}\n\n`;
+
+                report += `--- 1. CONTEXTO DO USUÁRIO ---\n`;
+                report += `Role (Window): ${window.userRole}\n`;
+                report += `Contexto Resolvido: ${JSON.stringify(userHierarchyContext, null, 2)}\n\n`;
+
+                report += `--- 2. ESTRUTURA DE DADOS ---\n`;
+                report += `Clientes Totais (Bruto): ${allClientsData ? allClientsData.length : 'N/A'}\n`;
+                report += `Vendas Detalhadas (Bruto): ${allSalesData ? allSalesData.length : 'N/A'}\n`;
+                report += `Histórico (Bruto): ${allHistoryData ? allHistoryData.length : 'N/A'}\n`;
+                report += `Pedidos Agregados: ${aggregatedOrders ? aggregatedOrders.length : 'N/A'}\n`;
+                
+                report += `\n--- 3. HIERARQUIA ---\n`;
+                const hierRaw = embeddedData.hierarchy;
+                report += `Raw Data Length: ${hierRaw ? hierRaw.length : 'N/A (Null)'}\n`;
+                if (hierRaw && hierRaw.length > 0) {
+                    report += `Sample Keys (First Item): ${JSON.stringify(Object.keys(hierRaw[0]))}\n`;
+                }
+                report += `Nós na Árvore de Hierarquia: ${optimizedData.hierarchyMap ? optimizedData.hierarchyMap.size : 'N/A'}\n`;
+                report += `Clientes Mapeados (Client->Promotor): ${optimizedData.clientHierarchyMap ? optimizedData.clientHierarchyMap.size : 'N/A'}\n`;
+                report += `Coordenadores Únicos: ${optimizedData.coordMap ? optimizedData.coordMap.size : 'N/A'}\n`;
+                
+                report += `\n--- 4. FILTROS ATIVOS (MAIN) ---\n`;
+                const mainState = hierarchyState['main'];
+                report += `Coords Selecionados: ${mainState ? Array.from(mainState.coords).join(', ') : 'N/A'}\n`;
+                report += `CoCoords Selecionados: ${mainState ? Array.from(mainState.cocoords).join(', ') : 'N/A'}\n`;
+                report += `Promotores Selecionados: ${mainState ? Array.from(mainState.promotors).join(', ') : 'N/A'}\n`;
+                
+                report += `\n--- 5. TESTE DE FILTRAGEM (Simulação) ---\n`;
+                try {
+                    const filteredClients = getHierarchyFilteredClients('main', allClientsData);
+                    report += `Clientes Após Filtro de Hierarquia: ${filteredClients.length}\n`;
+                    
+                    if (filteredClients.length === 0) {
+                        report += `[ALERTA] Filtro retornou 0 clientes. Verifique se o usuário '${window.userRole}' está mapeado na hierarquia.\n`;
+                    } else {
+                        // Sample check
+                        const sampleClient = filteredClients[0];
+                        const cod = String(sampleClient['Código'] || sampleClient['codigo_cliente']);
+                        const node = optimizedData.clientHierarchyMap.get(normalizeKey(cod));
+                        report += `Exemplo Cliente Aprovado: ${cod} (${sampleClient.fantasia || sampleClient.razaoSocial})\n`;
+                        report += ` -> Mapeado para: ${node ? JSON.stringify(node.promotor) : 'SEM NÓ (Erro?)'}\n`;
+                    }
+                } catch (e) {
+                    report += `Erro ao simular filtro: ${e.message}\n`;
+                }
+
+                report += `\n--- 6. VALIDAÇÃO DE CHAVES ---\n`;
+                if (allClientsData && allClientsData.length > 0) {
+                    const c = allClientsData instanceof ColumnarDataset ? allClientsData.get(0) : allClientsData[0];
+                    report += `Exemplo Chave Cliente (Raw): '${c['Código'] || c['codigo_cliente']}'\n`;
+                    report += `Exemplo Chave Cliente (Normalized): '${normalizeKey(c['Código'] || c['codigo_cliente'])}'\n`;
+                }
+                
+                return report;
+            }
+
+    // --- WALLET MANAGEMENT LOGIC ---
+    let isWalletInitialized = false;
+    let walletState = {
+        selectedPromoter: null,
+        promoters: []
+    };
+
+    function initWalletView() {
+        if (isWalletInitialized) return;
+        isWalletInitialized = true;
+        
+        const role = (window.userRole || '').trim().toUpperCase();
+        
+        // Setup User Menu
+        const userMenuBtn = document.getElementById('user-menu-btn');
+        const userMenuDropdown = document.getElementById('user-menu-dropdown');
+        const userMenuWalletBtn = document.getElementById('user-menu-wallet-btn');
+        const userMenuLogoutBtn = document.getElementById('user-menu-logout-btn');
+        
+        if (userMenuBtn) {
+            // Update User Info in Menu
+            const nameEl = document.getElementById('user-menu-name');
+            const roleEl = document.getElementById('user-menu-role');
+            if (nameEl && roleEl) {
+                 roleEl.textContent = role;
+                 // Try find name
+                 const h = embeddedData.hierarchy || [];
+                 const me = h.find(x => 
+                    (x.cod_coord && x.cod_coord.trim().toUpperCase() === role) || 
+                    (x.cod_cocoord && x.cod_cocoord.trim().toUpperCase() === role) ||
+                    (x.cod_promotor && x.cod_promotor.trim().toUpperCase() === role)
+                 );
+                 if (me) {
+                      if (me.cod_coord && me.cod_coord.trim().toUpperCase() === role) nameEl.textContent = me.nome_coord;
+                      else if (me.cod_cocoord && me.cod_cocoord.trim().toUpperCase() === role) nameEl.textContent = me.nome_cocoord;
+                      else nameEl.textContent = me.nome_promotor;
+                 }
+            }
+
+            userMenuBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                userMenuDropdown.classList.toggle('hidden');
+            });
+            
+            document.addEventListener('click', (e) => {
+                if (!userMenuBtn.contains(e.target) && !userMenuDropdown.contains(e.target)) {
+                    userMenuDropdown.classList.add('hidden');
+                }
+            });
+            
+            userMenuWalletBtn.addEventListener('click', () => {
+                userMenuDropdown.classList.add('hidden');
+                navigateTo('wallet');
+            });
+            
+            userMenuLogoutBtn.addEventListener('click', async () => {
+                 const { error } = await window.supabaseClient.auth.signOut();
+                 if (!error) window.location.reload();
+            });
+        }
+        
+        // Setup Wallet Controls
+        const selectBtn = document.getElementById('wallet-promoter-select-btn');
+        const dropdown = document.getElementById('wallet-promoter-dropdown');
+        
+        if (selectBtn) {
+            selectBtn.addEventListener('click', (e) => {
+                if (walletState.promoters.length <= 1) return;
+                e.stopPropagation();
+                dropdown.classList.toggle('hidden');
+            });
+            
+            document.addEventListener('click', (e) => {
+                if (!selectBtn.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+        }
+        
+        // Search
+        const searchInput = document.getElementById('wallet-client-search');
+        let debounce;
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(debounce);
+                debounce = setTimeout(() => handleWalletSearch(e.target.value), 400);
+            });
+            // Click outside suggestions
+             document.addEventListener('click', (e) => {
+                const sugg = document.getElementById('wallet-search-suggestions');
+                if (sugg && !sugg.contains(e.target) && e.target !== searchInput) {
+                    sugg.classList.add('hidden');
+                }
+            });
+        }
+        
+        // Modal Actions
+        const modalCancel = document.getElementById('wallet-modal-cancel-btn');
+        const modalClose = document.getElementById('wallet-modal-close-btn');
+        if(modalCancel) modalCancel.onclick = () => document.getElementById('wallet-client-modal').classList.add('hidden');
+        if(modalClose) modalClose.onclick = () => document.getElementById('wallet-client-modal').classList.add('hidden');
+    }
+
+    window.renderWalletView = function() {
+        initWalletView();
+        
+        // Populate Promoters if empty
+        if (walletState.promoters.length === 0) {
+             const role = (window.userRole || '').trim().toUpperCase();
+             const hierarchy = embeddedData.hierarchy || [];
+             const myPromoters = new Set();
+             let isManager = (role === 'ADM');
+
+             hierarchy.forEach(h => {
+                 const c = (h.cod_coord||'').trim().toUpperCase();
+                 const cc = (h.cod_cocoord||'').trim().toUpperCase();
+                 const p = (h.cod_promotor||'').trim().toUpperCase();
+                 const pName = h.nome_promotor || p;
+
+                 if (role === 'ADM' || c === role || cc === role) {
+                     if (role !== 'ADM') isManager = true;
+                     if (p) myPromoters.add(JSON.stringify({ code: p, name: pName }));
+                 } else if (p === role) {
+                     myPromoters.add(JSON.stringify({ code: p, name: pName }));
+                 }
+            });
+            
+            walletState.promoters = Array.from(myPromoters).map(s => JSON.parse(s)).sort((a,b) => a.name.localeCompare(b.name));
+            walletState.canEdit = isManager;
+            
+            // UI Toggle based on permission
+            const searchContainer = document.getElementById('wallet-search-container');
+            if (searchContainer) {
+                if (walletState.canEdit) searchContainer.classList.remove('hidden');
+                else searchContainer.classList.add('hidden');
+            }
+            
+            // Build Dropdown
+            const dropdown = document.getElementById('wallet-promoter-dropdown');
+            if (dropdown) {
+                dropdown.innerHTML = '';
+                walletState.promoters.forEach(p => {
+                     const div = document.createElement('div');
+                     div.className = 'px-4 py-2 hover:bg-slate-700 cursor-pointer text-sm text-slate-300 hover:text-white border-b border-slate-700/50 last:border-0';
+                     div.textContent = `${p.code} - ${p.name}`;
+                     div.onclick = () => {
+                         selectWalletPromoter(p.code, p.name);
+                         dropdown.classList.add('hidden');
+                     };
+                     dropdown.appendChild(div);
+                });
+            }
+            
+            // Auto Select
+            if (walletState.promoters.length === 1) {
+                selectWalletPromoter(walletState.promoters[0].code, walletState.promoters[0].name);
+                const btn = document.getElementById('wallet-promoter-select-btn');
+                if(btn) {
+                    btn.classList.add('opacity-75', 'cursor-default');
+                    const svg = btn.querySelector('svg');
+                    if(svg) svg.classList.add('hidden');
+                }
+            } else if (walletState.promoters.length > 0) {
+                 if (!walletState.selectedPromoter) {
+                     // Optionally select first
+                 }
+            }
+        }
+        
+        renderWalletTable();
+    }
+    
+    window.selectWalletPromoter = async function(code, name) {
+        walletState.selectedPromoter = code;
+        const txt = document.getElementById('wallet-promoter-select-text');
+        const btn = document.getElementById('wallet-promoter-select-btn');
+        
+        if (code) {
+             if(txt) txt.textContent = `${code} - ${name}`;
+             
+             // Inject Clear Icon if not exists
+             let clearIcon = document.getElementById('wallet-promoter-clear-icon');
+             if (!clearIcon && btn) {
+                 clearIcon = document.createElement('div');
+                 clearIcon.id = 'wallet-promoter-clear-icon';
+                 clearIcon.className = 'p-1 hover:bg-slate-700 rounded-full cursor-pointer mr-2 transition-colors';
+                 clearIcon.innerHTML = `<svg class="w-4 h-4 text-slate-400 hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`;
+                 
+                 clearIcon.onclick = (e) => {
+                     e.stopPropagation();
+                     selectWalletPromoter(null, null);
+                 };
+                 
+                 // Insert before the arrow icon
+                 const arrow = btn.querySelector('svg:not(#wallet-promoter-clear-icon svg)');
+                 if (arrow) btn.insertBefore(clearIcon, arrow);
+                 else btn.appendChild(clearIcon);
+             }
+        } else {
+             if(txt) txt.textContent = 'Selecione...';
+             const clearIcon = document.getElementById('wallet-promoter-clear-icon');
+             if (clearIcon) clearIcon.remove();
+        }
+        
+        // --- Fetch Missing Clients Logic ---
+        if (code) {
+            const targetPromoter = String(code).trim().toUpperCase();
+            const clientCodes = [];
+            
+            // 1. Identify all clients linked to this promoter in the map
+            if (embeddedData.clientPromoters) {
+                embeddedData.clientPromoters.forEach(cp => {
+                    if (cp.promoter_code && String(cp.promoter_code).trim().toUpperCase() === targetPromoter) {
+                        clientCodes.push(normalizeKey(cp.client_code));
+                    }
+                });
+            }
+            
+            if (clientCodes.length > 0) {
+                // 2. Identify which are missing from local embeddedData.clients
+                const dataset = embeddedData.clients;
+                const existingCodes = new Set();
+                const isColumnar = dataset && dataset.values && dataset.columns;
+                
+                if (isColumnar) {
+                    const col = dataset.values['Código'] || dataset.values['CODIGO_CLIENTE'] || [];
+                    const len = dataset.length || col.length || 0;
+                    for(let i=0; i<len; i++) existingCodes.add(normalizeKey(col[i]));
+                } else if (Array.isArray(dataset)) {
+                    dataset.forEach(c => existingCodes.add(normalizeKey(c['Código'] || c['codigo_cliente'])));
+                }
+                
+                const missing = clientCodes.filter(c => !existingCodes.has(c));
+                
+                if (missing.length > 0) {
+                    const badge = document.getElementById('wallet-count-badge');
+                    if(badge) badge.textContent = '...';
+                    
+                    try {
+                        // 3. Fetch missing clients
+                        const { data, error } = await window.supabaseClient
+                            .from('data_clients')
+                            .select('*')
+                            .in('codigo_cliente', missing);
+                            
+                        if (!error && data && data.length > 0) {
+                            // 4. Inject into embeddedData.clients
+                            data.forEach(newClient => {
+                                // Double check uniqueness before push (race condition)
+                                if (existingCodes.has(normalizeKey(newClient.codigo_cliente))) return;
+                                
+                                const mapped = {
+                                     'Código': newClient.codigo_cliente,
+                                     'Fantasia': newClient.fantasia,
+                                     'Razão Social': newClient.razaosocial,
+                                     'CNPJ/CPF': newClient.cnpj_cpf,
+                                     'Cidade': newClient.cidade,
+                                     'PROMOTOR': code // Use the selected promoter code
+                                 };
+                                 
+                                 if (isColumnar) {
+                                     dataset.columns.forEach(colName => {
+                                         let val = '';
+                                         const c = colName.toUpperCase();
+                                         if(c === 'CÓDIGO' || c === 'CODIGO_CLIENTE') val = newClient.codigo_cliente;
+                                         else if(c === 'FANTASIA' || c === 'NOMECLIENTE') val = newClient.fantasia;
+                                         else if(c === 'RAZÃO SOCIAL' || c === 'RAZAOSOCIAL' || c === 'RAZAO') val = newClient.razaosocial;
+                                         else if(c === 'CNPJ/CPF' || c === 'CNPJ') val = newClient.cnpj_cpf;
+                                         else if(c === 'CIDADE') val = newClient.cidade;
+                                         else if(c === 'PROMOTOR') val = code;
+                                         else if(c === 'RCA1' || c === 'RCA 1') val = newClient.rca1;
+                                         
+                                         if(dataset.values[colName]) dataset.values[colName].push(val);
+                                     });
+                                     dataset.length++;
+                                 } else if (Array.isArray(dataset)) {
+                                     dataset.push(mapped);
+                                 }
+                                 existingCodes.add(normalizeKey(newClient.codigo_cliente));
+                            });
+                        }
+                    } catch (e) {
+                        console.error("Erro ao buscar clientes faltantes:", e);
+                    }
+                }
+            }
+        }
+        
+        renderWalletTable();
+    }
+    
+    function renderWalletTable() {
+        const promoter = walletState.selectedPromoter;
+        const tbody = document.getElementById('wallet-table-body');
+        const empty = document.getElementById('wallet-empty-state');
+        const badge = document.getElementById('wallet-count-badge');
+        
+        // Toggle Action Header
+        const actionHeader = document.getElementById('wallet-table-action-header');
+        if (actionHeader) {
+            if (walletState.canEdit) actionHeader.classList.remove('hidden');
+            else actionHeader.classList.add('hidden');
+        }
+        
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        
+        const dataset = embeddedData.clients;
+        const isColumnar = dataset && dataset.values && dataset.columns;
+        const len = dataset.length || 0;
+        
+        const clientPromoterMap = new Map();
+        
+        // Normalize selected promoter for comparison
+        const targetPromoter = String(promoter).trim().toUpperCase();
+
+        if (embeddedData.clientPromoters) {
+             embeddedData.clientPromoters.forEach(cp => {
+                 // Store normalized promoter code in map
+                 if (cp.promoter_code) {
+                    clientPromoterMap.set(normalizeKey(cp.client_code), String(cp.promoter_code).trim().toUpperCase());
+                 }
+             });
+        }
+        
+        let count = 0;
+        const fragment = document.createDocumentFragment();
+        
+        for(let i=0; i<len; i++) {
+             let rowCode, rowFantasia, rowRazao, rowCnpj;
+
+             if (isColumnar) {
+                 rowCode = dataset.values['Código']?.[i] || dataset.values['CODIGO_CLIENTE']?.[i] || dataset.values['codigo_cliente']?.[i];
+                 rowFantasia = dataset.values['Fantasia']?.[i] || dataset.values['FANTASIA']?.[i] || dataset.values['fantasia']?.[i] || dataset.values['NOMECLIENTE']?.[i] || dataset.values['nomeCliente']?.[i];
+                 rowRazao = dataset.values['Razão Social']?.[i] || dataset.values['RAZAOSOCIAL']?.[i] || dataset.values['razaoSocial']?.[i];
+                 rowCnpj = dataset.values['CNPJ/CPF']?.[i] || dataset.values['CNPJ']?.[i] || dataset.values['cnpj_cpf']?.[i];
+             } else if (Array.isArray(dataset)) {
+                 const item = dataset[i];
+                 if (!item) continue;
+                 rowCode = item['Código'] || item['codigo_cliente'] || item['CODIGO_CLIENTE'];
+                 rowFantasia = item['Fantasia'] || item['fantasia'] || item['FANTASIA'] || item['nomeCliente'] || item['NOMECLIENTE'];
+                 rowRazao = item['Razão Social'] || item['razaosocial'] || item['razaoSocial'] || item['RAZAOSOCIAL'];
+                 rowCnpj = item['CNPJ/CPF'] || item['cnpj_cpf'] || item['CNPJ'];
+             } else {
+                 continue; 
+             }
+             
+             if (!rowCode) continue;
+             
+             const code = normalizeKey(rowCode);
+             const linkedPromoter = clientPromoterMap.get(code);
+             
+             // Compare normalized values OR show all if no promoter selected
+             if (!promoter || linkedPromoter === targetPromoter) {
+                 count++;
+                 const tr = document.createElement('tr');
+                 tr.className = 'hover:bg-slate-800/50 transition-colors border-b border-slate-800/50';
+                 tr.innerHTML = `
+                    <td class="px-6 py-4 font-mono text-xs text-slate-400">${code}</td>
+                    <td class="px-6 py-4">
+                        <div class="text-sm font-bold text-white">${rowFantasia || 'N/A'}</div>
+                        <div class="text-xs text-slate-500">${rowRazao || ''}</div>
+                    </td>
+                    <td class="px-6 py-4 text-xs text-slate-400">${rowCnpj || ''}</td>
+                    <td class="px-6 py-4 text-center">
+                         <button class="p-2 text-blue-400 hover:text-white hover:bg-blue-600 rounded-lg transition-all" onclick="openWalletClientModal('${code}')">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                         </button>
+                    </td>
+                    ${walletState.canEdit ? `
+                    <td class="px-6 py-4 text-center">
+                        <button class="text-red-500 hover:text-red-400 hover:bg-red-500/10 p-2 rounded-lg transition-colors" onclick="handleWalletAction('${code}', 'remove')">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </td>` : ''}
+                 `;
+                 fragment.appendChild(tr);
+             }
+        }
+        
+        tbody.appendChild(fragment);
+        if (badge) badge.textContent = count;
+        
+        if (count === 0) empty.classList.remove('hidden');
+        else empty.classList.add('hidden');
+    }
+    
+    async function handleWalletSearch(query) {
+        const sugg = document.getElementById('wallet-search-suggestions');
+        if (!query || query.length < 3) {
+            sugg.classList.add('hidden');
+            return;
+        }
+        
+        const cleanQ = query.replace(/[^a-zA-Z0-9]/g, '');
+        let filter = `codigo_cliente.ilike.%${query}%,fantasia.ilike.%${query}%,razaosocial.ilike.%${query}%,cnpj_cpf.ilike.%${query}%`;
+        
+        if (cleanQ.length > 0 && cleanQ !== query) {
+             filter += `,cnpj_cpf.ilike.%${cleanQ}%,codigo_cliente.ilike.%${cleanQ}%`;
+        }
+
+        const { data, error } = await window.supabaseClient
+            .from('data_clients')
+            .select('*')
+            .or(filter)
+            .limit(10);
+            
+        if (error || !data || data.length === 0) {
+            sugg.classList.add('hidden');
+            return;
+        }
+        
+        sugg.innerHTML = '';
+        data.forEach(c => {
+            const div = document.createElement('div');
+            div.className = 'px-4 py-3 border-b border-slate-700 hover:bg-slate-700 cursor-pointer flex justify-between items-center group';
+            div.innerHTML = `
+                <div>
+                    <div class="text-sm font-bold text-white group-hover:text-blue-300 transition-colors">
+                        <span class="font-mono text-slate-400 mr-2">${c.codigo_cliente}</span>
+                        ${c.fantasia || c.razaosocial}
+                    </div>
+                    <div class="text-xs text-slate-500">${c.cidade || ''} • ${c.cnpj_cpf || ''}</div>
+                </div>
+                 <div class="p-2 bg-slate-800 rounded-full group-hover:bg-blue-600 transition-colors text-slate-400 group-hover:text-white">
+                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+            `;
+            div.onclick = () => {
+                sugg.classList.add('hidden');
+                document.getElementById('wallet-client-search').value = '';
+                openWalletClientModal(c.codigo_cliente, c);
+            };
+            sugg.appendChild(div);
+        });
+        sugg.classList.remove('hidden');
+    }
+    
+    window.openWalletClientModal = async function(clientCode, clientData = null) {
+        let client = clientData;
+        if (!client) {
+             const { data } = await window.supabaseClient.from('data_clients').select('*').eq('codigo_cliente', clientCode).single();
+             client = data;
+        }
+        if (!client) return;
+        
+        const modal = document.getElementById('wallet-client-modal');
+        document.getElementById('wallet-modal-code').textContent = client.codigo_cliente;
+        document.getElementById('wallet-modal-cnpj').textContent = client.cnpj_cpf;
+        document.getElementById('wallet-modal-razao').textContent = client.razaosocial;
+        document.getElementById('wallet-modal-fantasia').textContent = client.fantasia;
+        const bairro = client.bairro || client.BAIRRO || '';
+        const cidade = client.cidade || client.CIDADE || '';
+        document.getElementById('wallet-modal-city').textContent = (bairro && bairro !== 'N/A') ? `${bairro} - ${cidade}` : cidade;
+        
+        const statusArea = document.getElementById('wallet-modal-status-area');
+        const statusTitle = document.getElementById('wallet-modal-status-title');
+        const statusMsg = document.getElementById('wallet-modal-status-msg');
+        const btn = document.getElementById('wallet-modal-action-btn');
+        const btnText = document.getElementById('wallet-modal-action-text');
+        
+        let currentOwner = null;
+        if (embeddedData.clientPromoters) {
+             const match = embeddedData.clientPromoters.find(cp => normalizeKey(cp.client_code) === normalizeKey(client.codigo_cliente));
+             if (match) currentOwner = match.promoter_code;
+        }
+        
+        const myPromoter = walletState.selectedPromoter;
+        const role = (window.userRole || '').trim().toUpperCase();
+        
+        // Normalize for comparison
+        const normCurrent = currentOwner ? String(currentOwner).trim().toUpperCase() : null;
+        const normMy = myPromoter ? String(myPromoter).trim().toUpperCase() : null;
+
+        // Reset Status Area (Fix for Stale State)
+        statusArea.classList.remove('hidden');
+        statusTitle.textContent = '';
+        statusMsg.textContent = '';
+        statusArea.className = 'mt-4 p-4 rounded-lg hidden';
+        btn.onclick = null;
+        btn.disabled = false;
+        
+        let isPromoterOnly = true;
+        const h = embeddedData.hierarchy || [];
+        const me = h.find(x => 
+            (x.cod_coord && x.cod_coord.trim().toUpperCase() === role) || 
+            (x.cod_cocoord && x.cod_cocoord.trim().toUpperCase() === role)
+        );
+        if (me || role === 'ADM') isPromoterOnly = false;
+        
+        if (!myPromoter) {
+            btn.classList.add('hidden');
+            statusArea.classList.remove('hidden'); // Ensure visible
+            if (currentOwner) {
+                statusArea.className = 'mt-4 p-4 rounded-lg bg-orange-500/10 border border-orange-500/30';
+                statusTitle.textContent = 'Cadastrado';
+                statusTitle.className = 'text-sm font-bold text-orange-400 mb-1';
+                statusMsg.textContent = `Pertence a: ${currentOwner}`;
+            } else {
+                statusArea.className = 'mt-4 p-4 rounded-lg bg-slate-700/50 border border-slate-600/50';
+                statusTitle.textContent = 'Não Cadastrado';
+                statusTitle.className = 'text-sm font-bold text-slate-400 mb-1';
+                statusMsg.textContent = 'Este cliente não pertence a nenhuma carteira.';
+            }
+        } else {
+             btn.classList.remove('hidden');
+             statusArea.classList.remove('hidden');
+
+             if (normCurrent && normMy && normCurrent === normMy) {
+                 statusArea.className = 'mt-4 p-4 rounded-lg bg-green-500/10 border border-green-500/30';
+                 statusTitle.textContent = 'Cliente na Carteira';
+                 statusTitle.className = 'text-sm font-bold text-green-400 mb-1';
+                 statusMsg.textContent = 'Este cliente já pertence à carteira selecionada.';
+                 
+                 btnText.textContent = 'Remover';
+                 btn.className = 'px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold shadow-lg transition-colors flex items-center gap-2';
+                 btn.onclick = () => handleWalletAction(client.codigo_cliente, 'remove');
+                 
+             } else if (currentOwner) {
+                 statusArea.className = 'mt-4 p-4 rounded-lg bg-orange-500/10 border border-orange-500/30';
+                 statusTitle.textContent = 'Conflito';
+                 statusTitle.className = 'text-sm font-bold text-orange-400 mb-1';
+                 statusMsg.textContent = `Pertence a: ${currentOwner}. Transferir?`;
+                 
+                 btnText.textContent = 'Transferir';
+                 btn.className = 'px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-bold shadow-lg transition-colors flex items-center gap-2';
+                 btn.onclick = () => handleWalletAction(client.codigo_cliente, 'upsert');
+
+                 // Co-Coordinator Restriction Check: Prevent cross-base transfers
+                 // Only allows transfer if the current owner belongs to the same Co-Coordinator
+                 if (userHierarchyContext && userHierarchyContext.role === 'cocoord' && optimizedData) {
+                     const ownerNode = optimizedData.hierarchyMap.get(String(currentOwner).trim().toUpperCase());
+                     const myCocoord = userHierarchyContext.cocoord;
+
+                     if (ownerNode && ownerNode.cocoord && ownerNode.cocoord.code) {
+                         const ownerCocoord = ownerNode.cocoord.code;
+                         if (String(ownerCocoord).trim() !== String(myCocoord).trim()) {
+                             btn.disabled = true;
+                             btnText.textContent = 'Não Permitido';
+                             btn.className = 'px-4 py-2 bg-slate-700 text-slate-400 rounded-lg font-bold cursor-not-allowed flex items-center gap-2';
+                             statusMsg.textContent += ' (Bloqueado: Cliente de outra base)';
+                         }
+                     }
+                 }
+                 
+             } else {
+                 statusArea.className = 'mt-4 p-4 rounded-lg bg-slate-700 border border-slate-600';
+                 statusTitle.textContent = 'Disponível';
+                 statusTitle.className = 'text-sm font-bold text-slate-300 mb-1';
+                 statusMsg.textContent = 'Sem vínculo atual.';
+                 
+                 btnText.textContent = 'Adicionar';
+                 btn.className = 'px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-lg transition-colors flex items-center gap-2';
+                 btn.onclick = () => handleWalletAction(client.codigo_cliente, 'upsert');
+             }
+        }
+        
+        if (isPromoterOnly) {
+             btn.classList.add('hidden');
+             statusMsg.textContent += ' (Modo Leitura)';
+        }
+        
+        modal.classList.remove('hidden');
+    }
+    
+    window.handleWalletAction = async function(clientCode, action) {
+         const promoter = walletState.selectedPromoter;
+         if (!promoter) return;
+         
+         const btn = document.getElementById('wallet-modal-action-btn');
+         const txt = document.getElementById('wallet-modal-action-text');
+         const oldTxt = txt.textContent;
+         btn.disabled = true;
+         txt.textContent = '...';
+         
+         try {
+             // Safety check for embeddedData
+             if (!embeddedData.clientPromoters) embeddedData.clientPromoters = [];
+
+             if (action === 'upsert') {
+                 const { error } = await window.supabaseClient.from('data_client_promoters')
+                    .upsert({ client_code: clientCode, promoter_code: promoter }, { onConflict: 'client_code' });
+                 if(error) throw error;
+                 
+                 const idx = embeddedData.clientPromoters.findIndex(cp => normalizeKey(cp.client_code) === normalizeKey(clientCode));
+                 if(idx >= 0) embeddedData.clientPromoters[idx].promoter_code = promoter;
+                 else embeddedData.clientPromoters.push({ client_code: clientCode, promoter_code: promoter });
+                 
+                 // Ensure client exists in local dataset (for display)
+                 const dataset = allClientsData;
+                 let exists = false;
+                 if (dataset instanceof ColumnarDataset) {
+                     const col = dataset._data['Código'] || dataset._data['CODIGO_CLIENTE'];
+                     if (col && col.includes(normalizeKey(clientCode))) exists = true;
+                 } else {
+                     if (dataset.find(c => normalizeKey(c['Código'] || c['codigo_cliente']) === normalizeKey(clientCode))) exists = true;
+                 }
+                 
+                 if (!exists) {
+                     // Fetch and inject
+                     const { data: newClient } = await window.supabaseClient.from('data_clients').select('*').eq('codigo_cliente', clientCode).single();
+                     if (newClient) {
+                         const mapped = {
+                             'Código': newClient.codigo_cliente,
+                             'Fantasia': newClient.fantasia,
+                             'Razão Social': newClient.razaosocial,
+                             'CNPJ/CPF': newClient.cnpj_cpf,
+                             'Cidade': newClient.cidade,
+                             'PROMOTOR': promoter
+                         };
+                         
+                         if (dataset instanceof ColumnarDataset) {
+                             dataset.columns.forEach(col => {
+                                 let val = '';
+                                 const c = col.toUpperCase();
+                                 if(c === 'CÓDIGO' || c === 'CODIGO_CLIENTE') val = newClient.codigo_cliente;
+                                 else if(c === 'FANTASIA' || c === 'NOMECLIENTE') val = newClient.fantasia;
+                                 else if(c === 'RAZÃO SOCIAL' || c === 'RAZAOSOCIAL' || c === 'RAZAO') val = newClient.razaosocial;
+                                 else if(c === 'CNPJ/CPF' || c === 'CNPJ') val = newClient.cnpj_cpf;
+                                 else if(c === 'CIDADE') val = newClient.cidade;
+                                 
+                                 if(dataset.values[col]) dataset.values[col].push(val);
+                             });
+                             dataset.length++;
+                         } else {
+                             dataset.push(mapped);
+                         }
+                     }
+                 }
+                 
+             } else {
+                 const { error } = await window.supabaseClient.from('data_client_promoters').delete().eq('client_code', clientCode);
+                 if(error) throw error;
+                 
+                 const idx = embeddedData.clientPromoters.findIndex(cp => normalizeKey(cp.client_code) === normalizeKey(clientCode));
+                 if(idx >= 0) embeddedData.clientPromoters.splice(idx, 1);
+             }
+             
+             document.getElementById('wallet-client-modal').classList.add('hidden');
+             renderWalletTable();
+             
+         } catch (e) {
+             console.error(e);
+             alert('Erro: ' + e.message);
+         } finally {
+             btn.disabled = false;
+             txt.textContent = oldTxt;
+         }
+    }
+    
+    // Auto-init User Menu on load if ready (for Navbar)
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        initWalletView();
+        updateNavigationVisibility();
+    }
+
+    // Expose renderView globally for HTML onclick handlers
+    window.renderView = renderView;
 
 })();
