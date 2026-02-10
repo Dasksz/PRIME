@@ -990,8 +990,8 @@
 
                 if (coords) {
                     // Jittering: Add small random offset to separate overlapping markers
-                    // 0.0003 degrees is approximately 30 meters
-                    const jitterAmount = 0.0003;
+                    // 0.001 degrees is approximately 110 meters (ensures visibility at zoom 15)
+                    const jitterAmount = 0.0010;
                     const finalLat = coords.lat + (Math.random() - 0.5) * jitterAmount;
                     const finalLng = coords.lng + (Math.random() - 0.5) * jitterAmount;
 
