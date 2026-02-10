@@ -989,6 +989,12 @@
                 const coords = clientCoordinatesMap.get(codCli);
 
                 if (coords) {
+                    // Jittering: Add small random offset to separate overlapping markers
+                    // 0.0003 degrees is approximately 30 meters
+                    const jitterAmount = 0.0003;
+                    const finalLat = coords.lat + (Math.random() - 0.5) * jitterAmount;
+                    const finalLng = coords.lng + (Math.random() - 0.5) * jitterAmount;
+
                     const val = currentFilteredSalesMap.get(codCli) || 0;
                     const formattedVal = val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -1039,7 +1045,7 @@
                         tooltipAnchor: [0, -35]
                     });
 
-                    const marker = L.marker([coords.lat, coords.lng], {
+                    const marker = L.marker([finalLat, finalLng], {
                         icon: svgIcon,
                         opacity: 1
                     });
