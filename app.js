@@ -1090,7 +1090,6 @@
             optimizedData.searchIndices.clients = new Array(allClientsData.length);
             optimizedData.rcasBySupervisor = new Map();
             optimizedData.productsBySupplier = new Map();
-            optimizedData.salesByProduct = { current: new Map(), history: new Map() };
             optimizedData.rcaCodeByName = new Map();
             optimizedData.rcaNameByCode = new Map();
             optimizedData.supervisorCodeByName = new Map();
@@ -1253,14 +1252,6 @@
                         }
                     }
 
-                    if (product) {
-                        const targetMap = isHistory ? optimizedData.salesByProduct.history : optimizedData.salesByProduct.current;
-                        if (!targetMap.has(product)) targetMap.set(product, []);
-                        // Here we still push the item object because consumers expect it.
-                        // Ideally we would store indices, but that requires larger refactor.
-                        // Since this is subset by product, it might be acceptable, or we create Proxy on demand.
-                        targetMap.get(product).push(isColumnar ? data.get(i) : data[i]);
-                    }
                 }
             };
 
