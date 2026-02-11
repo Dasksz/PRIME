@@ -692,6 +692,16 @@
                     // Store user role globally
                     window.userRole = profile.role;
 
+                    // Ocultar página "Metas" para não-admins
+                    const metasBtn = document.querySelector('button[data-target="goals"]');
+                    if (metasBtn && metasBtn.parentElement) {
+                        if (window.userRole !== 'adm') {
+                            metasBtn.parentElement.style.display = 'none';
+                        } else {
+                            metasBtn.parentElement.style.display = '';
+                        }
+                    }
+
                     if (!isAppReady) {
                         telaLoading.classList.add('hidden');
                         carregarDadosDoSupabase(supabaseClient);
