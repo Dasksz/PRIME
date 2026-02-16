@@ -576,6 +576,21 @@
             return { columns, values, length: data.length };
         }
 
+        async function computeHash(data) {
+            try {
+                const json = JSON.stringify(data);
+                const encoder = new TextEncoder();
+                const dataBuffer = encoder.encode(json);
+                const hashBuffer = await self.crypto.subtle.digest('SHA-256', dataBuffer);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                return hashHex;
+            } catch (e) {
+                console.warn("Hashing failed, falling back to timestamp only:", e);
+                return null;
+            }
+        }
+
         self.onmessage = async (event) => {
             const { salesFile, clientsFile, productsFile, historyFile, innovationsFile } = event.data;
 
@@ -970,6 +985,23 @@
                 finalMetadata.push({ key: 'last_update', value: new Date().toISOString() });
                 finalMetadata.push({ key: 'last_sale_date', value: String(maxTs) });
 
+                // --- Calculate Data Hash for Smart Caching ---
+                self.postMessage({ type: 'progress', status: 'Calculando Hash de Verificação...', percentage: 98 });
+
+                // Hash critical datasets
+                const hash1 = await computeHash(columnarDetailed);
+                const hash2 = await computeHash(columnarHistory);
+                const hash3 = await computeHash(columnarClients);
+                const hash4 = await computeHash(finalStockData);
+                const hash5 = await computeHash(finalInnovationsData);
+
+                // Final Hash of Hashes
+                const combinedHash = await computeHash({ h1: hash1, h2: hash2, h3: hash3, h4: hash4, h5: hash5 });
+
+                if (combinedHash) {
+                    finalMetadata.push({ key: 'data_hash', value: combinedHash });
+                }
+
                 self.postMessage({ type: 'progress', status: 'Pronto!', percentage: 100 });
 
                 self.postMessage({
@@ -986,12 +1018,7 @@
                         active_products: finalActiveProductsData,
                         metadata: finalMetadata,
 
-                        // Legacy Maps for Frontend (if needed, or logic script handles it)
-                        // The logic script (report-logic-script) seems to expect stockMap05/08 in 'embeddedData'.
-                        // But wait, the uploader Worker sends data to 'enviarDadosParaSupabase', NOT to the dashboard logic directly.
-                        // The dashboard logic reads from Supabase via 'carregarDadosDoSupabase'.
-                        // So the Worker ONLY needs to satisfy the Uploader requirements.
-                        // However, keeping the Maps might be useful if we ever wanted to hydrate locally.
+                        // Legacy Maps for Frontend
                         stockMap05: Object.fromEntries(stockMap05),
                         stockMap08: Object.fromEntries(stockMap08),
                         activeProductCodes: Array.from(activeProductCodesFromCadastro),
