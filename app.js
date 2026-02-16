@@ -12265,32 +12265,10 @@ const supervisorGroups = new Map();
                 });
             };
 
-            const clearTable = async (table, pkColumn = 'id') => {
+            const performDelete = async (table, ids) => {
+                if (ids.length === 0) return;
                 await retryOperation(async () => {
-                    // Tenta limpar usando a função RPC 'truncate_table' (muito mais rápido e sem timeout)
-                    try {
-                        const rpcResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/truncate_table`, {
-                            method: 'POST',
-                            headers: {
-                                'apikey': apiKeyHeader,
-                                'Authorization': `Bearer ${authToken}`,
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ table_name: table })
-                        });
-
-                        if (rpcResponse.ok) {
-                            return; // Sucesso com TRUNCATE
-                        } else {
-                            const errorText = await rpcResponse.text();
-                            console.warn(`RPC truncate_table falhou para ${table} (Status: ${rpcResponse.status}). Msg: ${errorText}. Tentando DELETE convencional...`);
-                        }
-                    } catch (e) {
-                        console.warn(`Erro ao chamar RPC truncate_table para ${table}, tentando DELETE convencional...`, e);
-                    }
-
-                    // Fallback: Deleta todas as linhas da tabela
-                    const response = await fetch(`${supabaseUrl}/rest/v1/${table}?${pkColumn}=not.is.null`, {
+                    const response = await fetch(`${supabaseUrl}/rest/v1/${table}?id=in.(${ids.join(',')})`, {
                         method: 'DELETE',
                         headers: {
                             'apikey': apiKeyHeader,
@@ -12298,10 +12276,9 @@ const supervisorGroups = new Map();
                             'Content-Type': 'application/json'
                         }
                     });
-
                     if (!response.ok) {
                         const errorText = await response.text();
-                        throw new Error(`Erro ao limpar tabela ${table}: ${errorText}`);
+                        throw new Error(`Erro Delete Supabase (${response.status}): ${errorText}`);
                     }
                 });
             };
@@ -12320,7 +12297,191 @@ const supervisorGroups = new Map();
                 return value;
             };
 
-            // --- Unified Parallel Uploader ---
+            // --- DELTA SYNC LOGIC ---
+            const deltaSyncTable = async (table, localData, isColumnar, pkColumn = 'id') => {
+                const totalLocal = isColumnar ? localData.length : localData.length;
+                if (totalLocal === 0) return;
+
+                updateStatus(`Sincronizando ${table}: Analisando diferenças...`, 0);
+
+                // 1. Fetch Remote State (ID, Hash) - CSV is faster for large datasets
+                let remoteHashesMap = new Map(); // Hash -> ID
+                let remoteRowCount = 0;
+
+                try {
+                    // Check remote count first to detect migration state (Rows exist but Hashes are NULL)
+                    // We optimistically fetch ID and Hash.
+                    // If rows exist but hashes are missing, we MUST truncate to avoid duplication.
+                    const response = await fetch(`${supabaseUrl}/rest/v1/${table}?select=${pkColumn},row_hash`, {
+                        method: 'GET',
+                        headers: {
+                            'apikey': apiKeyHeader,
+                            'Authorization': `Bearer ${authToken}`,
+                            'Accept': 'text/csv'
+                        }
+                    });
+
+                    if (response.ok) {
+                        const csvText = await response.text();
+                        const lines = csvText.split('\n');
+                        // Skip header
+                        for (let i = 1; i < lines.length; i++) {
+                            const line = lines[i].trim();
+                            if (!line) continue;
+                            remoteRowCount++;
+
+                            const parts = line.split(',');
+                            const id = parts[0].replace(/"/g, '');
+                            const hash = parts[1] ? parts[1].replace(/"/g, '') : null;
+
+                            if (hash && hash !== 'null' && hash !== '') {
+                                remoteHashesMap.set(hash, id);
+                            }
+                        }
+
+                        // MIGRATION SAFETY CHECK:
+                        // If we have remote rows (remoteRowCount > 0) but NO valid hashes (remoteHashesMap.size == 0),
+                        // it means the table has data from before the hash column was populated.
+                        // In this case, we CANNOT do a delta sync because we'd insert duplicates.
+                        // We must Fallback to Truncate + Full Upload.
+                        if (remoteRowCount > 0 && remoteHashesMap.size === 0) {
+                            console.warn(`[Migration] Table ${table} has ${remoteRowCount} rows but no hashes. Falling back to Full Upload.`);
+                            await clearTable(table, pkColumn);
+                            await uploadBatchParallel(table, localData, isColumnar);
+                            return;
+                        }
+
+                    } else {
+                        console.warn(`Failed to fetch remote state for ${table}. Status: ${response.status}. Falling back to Full Upload.`);
+                        await clearTable(table, pkColumn);
+                        await uploadBatchParallel(table, localData, isColumnar);
+                        return;
+                    }
+                } catch (e) {
+                    console.warn(`Error fetching remote state for ${table}:`, e);
+                    await clearTable(table, pkColumn);
+                    await uploadBatchParallel(table, localData, isColumnar);
+                    return;
+                }
+
+                // 2. Identify Changes
+                const rowsToInsert = [];
+                const localHashesSet = new Set();
+
+                if (isColumnar) {
+                    const columns = localData.columns;
+                    const values = localData.values;
+                    const colKeys = columns.map(c => c.toLowerCase());
+                    const hashIdx = columns.indexOf('row_hash');
+
+                    if (hashIdx === -1) {
+                        // Fallback if no hash
+                        await clearTable(table, pkColumn);
+                        await uploadBatchParallel(table, localData, isColumnar);
+                        return;
+                    }
+
+                    for (let j = 0; j < totalLocal; j++) {
+                        const hash = values['row_hash'][j];
+                        localHashesSet.add(hash);
+
+                        if (!remoteHashesMap.has(hash)) {
+                            // New row
+                            const row = {};
+                            for (let k = 0; k < columns.length; k++) {
+                                const col = columns[k];
+                                const lowerKey = colKeys[k];
+                                row[lowerKey] = formatValue(lowerKey, values[col][j]);
+                            }
+                            rowsToInsert.push(row);
+                        }
+                    }
+                } else {
+                    for (let j = 0; j < totalLocal; j++) {
+                        const item = localData[j];
+                        const hash = item.row_hash;
+                        if (!hash) continue; // Should have hash
+                        localHashesSet.add(hash);
+
+                        if (!remoteHashesMap.has(hash)) {
+                            // New row
+                            const newItem = {};
+                            for (const key in item) {
+                                const lowerKey = key.toLowerCase();
+                                newItem[lowerKey] = formatValue(lowerKey, item[key]);
+                            }
+                            rowsToInsert.push(newItem);
+                        }
+                    }
+                }
+
+                // Identify Deletes (Remote Hashes NOT in Local)
+                const idsToDelete = [];
+                remoteHashesMap.forEach((id, hash) => {
+                    if (!localHashesSet.has(hash)) {
+                        idsToDelete.push(id);
+                    }
+                });
+
+                // 3. Execute Updates
+                const totalOps = rowsToInsert.length + idsToDelete.length;
+                if (totalOps === 0) {
+                    updateStatus(`${table}: Sincronizado (Sem alterações)`, 100);
+                    return;
+                }
+
+                let processedOps = 0;
+
+                // Deletes
+                if (idsToDelete.length > 0) {
+                    updateStatus(`${table}: Excluindo ${idsToDelete.length} itens obsoletos...`, 10);
+                    const deleteBatches = [];
+                    // Reduced batch size to 200 to prevent URL Too Long (HTTP 414) errors
+                    for (let i = 0; i < idsToDelete.length; i += 200) {
+                        deleteBatches.push(idsToDelete.slice(i, i + 200));
+                    }
+
+                    for (const batch of deleteBatches) {
+                        await performDelete(table, batch);
+                        processedOps += batch.length;
+                    }
+                }
+
+                // Inserts
+                if (rowsToInsert.length > 0) {
+                    updateStatus(`${table}: Inserindo ${rowsToInsert.length} novos itens...`, 30);
+                    await uploadBatchParallel(table, rowsToInsert, false); // reuse upload logic, but treat as Array of Objects always
+                }
+            };
+
+            const clearTable = async (table, pkColumn = 'id') => {
+                await retryOperation(async () => {
+                    try {
+                        const rpcResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/truncate_table`, {
+                            method: 'POST',
+                            headers: {
+                                'apikey': apiKeyHeader,
+                                'Authorization': `Bearer ${authToken}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ table_name: table })
+                        });
+                        if (rpcResponse.ok) return;
+                    } catch (e) { }
+
+                    const response = await fetch(`${supabaseUrl}/rest/v1/${table}?${pkColumn}=not.is.null`, {
+                        method: 'DELETE',
+                        headers: {
+                            'apikey': apiKeyHeader,
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    if (!response.ok) throw new Error(`Erro ao limpar tabela ${table}`);
+                });
+            };
+
+            // --- Unified Parallel Uploader (Standard) ---
             const uploadBatchParallel = async (table, dataObj, isColumnar) => {
                 const totalRows = isColumnar ? dataObj.length : dataObj.length;
                 if (totalRows === 0) return;
@@ -12336,7 +12497,6 @@ const supervisorGroups = new Map();
                     if (isColumnar) {
                         const columns = dataObj.columns;
                         const values = dataObj.values;
-                        // Pre-calculate lower keys to avoid repeated toLowerCase()
                         const colKeys = columns.map(c => c.toLowerCase());
 
                         for (let j = start; j < end; j++) {
@@ -12367,7 +12527,6 @@ const supervisorGroups = new Map();
                     updateStatus(`Enviando ${table}: ${progress}%`, progress);
                 };
 
-                // Queue worker pattern
                 const queue = Array.from({ length: totalBatches }, (_, i) => i);
                 const worker = async () => {
                     while (queue.length > 0) {
@@ -12381,38 +12540,18 @@ const supervisorGroups = new Map();
             };
 
             try {
-                if (data.detailed && data.detailed.length > 0) {
-                    await clearTable('data_detailed');
-                    await uploadBatchParallel('data_detailed', data.detailed, true);
-                }
-                if (data.history && data.history.length > 0) {
-                    await clearTable('data_history');
-                    await uploadBatchParallel('data_history', data.history, true);
-                }
-                if (data.byOrder && data.byOrder.length > 0) {
-                    await clearTable('data_orders');
-                    await uploadBatchParallel('data_orders', data.byOrder, false);
-                }
-                if (data.clients && data.clients.length > 0) {
-                    await clearTable('data_clients');
-                    await uploadBatchParallel('data_clients', data.clients, true);
-                }
-                if (data.stock && data.stock.length > 0) {
-                    await clearTable('data_stock');
-                    await uploadBatchParallel('data_stock', data.stock, false);
-                }
-                if (data.innovations && data.innovations.length > 0) {
-                    await clearTable('data_innovations');
-                    await uploadBatchParallel('data_innovations', data.innovations, false);
-                }
-                if (data.product_details && data.product_details.length > 0) {
-                    await clearTable('data_product_details', 'code');
-                    await uploadBatchParallel('data_product_details', data.product_details, false);
-                }
-                if (data.active_products && data.active_products.length > 0) {
-                    await clearTable('data_active_products', 'code');
-                    await uploadBatchParallel('data_active_products', data.active_products, false);
-                }
+                // Apply Delta Sync for main tables
+                if (data.detailed) await deltaSyncTable('data_detailed', data.detailed, true);
+                if (data.history) await deltaSyncTable('data_history', data.history, true);
+                if (data.clients) await deltaSyncTable('data_clients', data.clients, true);
+                if (data.stock) await deltaSyncTable('data_stock', data.stock, false);
+                if (data.innovations) await deltaSyncTable('data_innovations', data.innovations, false);
+
+                // Support tables (smaller, safer to overwrite or delta if they have row_hash)
+                if (data.product_details) await deltaSyncTable('data_product_details', data.product_details, false, 'code');
+                if (data.active_products) await deltaSyncTable('data_active_products', data.active_products, false, 'code');
+                if (data.byOrder) await deltaSyncTable('data_orders', data.byOrder, false);
+
                 if (data.metadata && data.metadata.length > 0) {
                     // Update last_update timestamp
                     const now = new Date();

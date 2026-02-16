@@ -487,34 +487,28 @@
                 if (filialValue === '5') filialValue = '05';
                 if (filialValue === '8') filialValue = '08';
 
-                results.push({
+                const rowObject = {
                     PEDIDO: pedido, NOME: vendorName, SUPERV: supervisorName, PRODUTO: productCode,
                     DESCRICAO: String(rawRow['DESCRICAO'] || ''), FORNECEDOR: String(rawRow['FORNECEDOR'] || ''),
                     OBSERVACAOFOR: observacaoFor, CODFOR: String(rawRow['CODFOR'] || '').trim(),
                     CODUSUR: codUsur, CODCLI: codCliStr,
-                    // OPTIMIZATION: Removed CLIENTE_NOME, CIDADE, BAIRRO to save file size (Lookup in runtime)
                     QTVENDA: qtVenda,
-                    CODSUPERVISOR: codSupervisor, // Added to ensure supervisor code is available for indexing
-
-                    // --- INÍCIO DA MODIFICAÇÃO: APLICAÇÃO DA REGRA ---
-                    // Se não for faturamento (1 ou 9), VLVENDA é 0
+                    CODSUPERVISOR: codSupervisor,
                     VLVENDA: isFaturamento ? vlVendaOriginal : 0,
-
-                    // Se não for faturamento, soma o que veio em VLVENDA (indevidamente) ao VLBONIFIC
                     VLBONIFIC: isFaturamento ? vlBonificOriginal : (vlVendaOriginal + vlBonificOriginal),
-
-                    // Peso (tonelada) - [Instrução do usuário: Deve somar sempre, mesmo não sendo faturamento]
                     TOTPESOLIQ: pesoOriginal,
-                    DTPED: tsDtPed, DTSAIDA: tsDtSaida, // Optimized: Numbers
+                    DTPED: tsDtPed, DTSAIDA: tsDtSaida,
                     POSICAO: String(rawRow['POSICAO'] || ''),
                     ESTOQUEUNIT: parseBrazilianNumber(rawRow['ESTOQUEUNIT']),
                     QTVENDA_EMBALAGEM_MASTER: isNaN(qtdeMaster) || qtdeMaster === 0 ? 0 : qtVenda / qtdeMaster,
-                    // Garante que o tipo de venda correto é passado
                     TIPOVENDA: tipoVenda,
-                    // Adiciona a filial normalizada para permitir filtragem
                     FILIAL: filialValue
-                    // --- FIM DA MODIFICAÇÃO ---
-                });
+                };
+
+                // Generate Hash for this row
+                rowObject.row_hash = computeChecksum(rowObject);
+
+                results.push(rowObject);
             }
 
             return results;
@@ -576,17 +570,76 @@
             return { columns, values, length: data.length };
         }
 
-        async function computeHash(data) {
+        function computeChecksum(data) {
             try {
-                const json = JSON.stringify(data);
-                const encoder = new TextEncoder();
-                const dataBuffer = encoder.encode(json);
-                const hashBuffer = await self.crypto.subtle.digest('SHA-256', dataBuffer);
-                const hashArray = Array.from(new Uint8Array(hashBuffer));
-                const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-                return hashHex;
+                let h1 = 0xdeadbeef;
+                let h2 = 0x41c6ce57;
+
+                const update = (val) => {
+                    h1 = Math.imul(h1 ^ val, 2654435761);
+                    h2 = Math.imul(h2 ^ val, 1597334677);
+                };
+
+                const updateString = (str) => {
+                    for (let i = 0, l = str.length; i < l; i++) {
+                        update(str.charCodeAt(i));
+                    }
+                };
+
+                if (data && typeof data === 'object') {
+                    if (Array.isArray(data)) {
+                        // Array of Objects
+                        update(data.length);
+                        // Sample first, middle, last to avoid full scan on massive non-columnar arrays if needed,
+                        // but for safety we scan all. Fast math is cheap.
+                        for(let i=0; i<data.length; i++) {
+                            const item = data[i];
+                            // Sort keys to ensure deterministic order
+                            const keys = Object.keys(item).sort();
+                            for(const k of keys) {
+                                if (k === 'row_hash') continue; // Skip own hash
+                                updateString(k);
+                                const v = item[k];
+                                if(typeof v === 'number') updateString(String(v));
+                                else if (typeof v === 'string') updateString(v);
+                            }
+                        }
+                    } else if (data.columns && data.values) {
+                        // Columnar Dataset
+                        update(data.length);
+                        // Sort columns
+                        const cols = [...data.columns].sort();
+                        for (const col of cols) {
+                            if (col === 'row_hash') continue; // Skip own hash
+                            updateString(col);
+                            const arr = data.values[col];
+                            if (arr) {
+                                for(let i=0; i<arr.length; i++) {
+                                    const v = arr[i];
+                                    if(typeof v === 'number') updateString(String(v));
+                                    else if (typeof v === 'string') updateString(v);
+                                }
+                            }
+                        }
+                    } else {
+                        // Generic Object (like hash collection)
+                        const keys = Object.keys(data).sort();
+                        for(const k of keys) {
+                            if (k === 'row_hash') continue; // Skip own hash
+                            updateString(k);
+                            const v = data[k];
+                            if(typeof v === 'string') updateString(v);
+                            else if(typeof v === 'number') updateString(String(v));
+                        }
+                    }
+                }
+
+                // Finalize
+                const h1Hex = (h1 >>> 0).toString(16).padStart(8, '0');
+                const h2Hex = (h2 >>> 0).toString(16).padStart(8, '0');
+                return h1Hex + h2Hex;
             } catch (e) {
-                console.warn("Hashing failed, falling back to timestamp only:", e);
+                console.warn("Checksum failed:", e);
                 return null;
             }
         }
@@ -761,6 +814,10 @@
                         inscricaoEstadual: String(getVal(client, ['Insc. Est. / Produtor', 'Inscricao Estadual', 'IE', 'INSCRICAO']) || 'N/A')
                     };
                     if (clientRcaOverrides.has(codCli)) clientData.rcas.unshift(clientRcaOverrides.get(codCli));
+
+                    // Generate Hash for Client Row
+                    clientData.row_hash = computeChecksum(clientData);
+
                     clientMap.set(codCli, clientData);
                 });
 
@@ -968,35 +1025,59 @@
                 const finalStockData = [];
                 // Reconstruct stock array from Maps (05 and 08)
                 stockMap05.forEach((qty, code) => {
-                    finalStockData.push({ product_code: code, filial: '05', stock_qty: qty });
+                    const row = { product_code: code, filial: '05', stock_qty: qty };
+                    row.row_hash = computeChecksum(row);
+                    finalStockData.push(row);
                 });
                 stockMap08.forEach((qty, code) => {
-                    finalStockData.push({ product_code: code, filial: '08', stock_qty: qty });
+                    const row = { product_code: code, filial: '08', stock_qty: qty };
+                    row.row_hash = computeChecksum(row);
+                    finalStockData.push(row);
                 });
 
-                const finalInnovationsData = innovationsDataRaw.map(item => ({
-                    codigo: item['Codigo'] || item['codigo'] || null,
-                    produto: item['Produto'] || item['produto'] || null,
-                    inovacoes: item['Inovacoes'] || item['inovacoes'] || null
-                }));
+                const finalInnovationsData = innovationsDataRaw.map(item => {
+                    const row = {
+                        codigo: item['Codigo'] || item['codigo'] || null,
+                        produto: item['Produto'] || item['produto'] || null,
+                        inovacoes: item['Inovacoes'] || item['inovacoes'] || null
+                    };
+                    row.row_hash = computeChecksum(row);
+                    return row;
+                });
+
+                // Add hashes to support tables (Active Products, Product Details) if they are sent to DB
+                // Product Details
+                const finalProductDetailsDataWithHash = finalProductDetailsData.map(p => {
+                    // Clone to avoid mutation issues if used elsewhere (though here it's fine)
+                    const row = { ...p };
+                    row.row_hash = computeChecksum(row);
+                    return row;
+                });
+
+                // Active Products
+                const finalActiveProductsDataWithHash = finalActiveProductsData.map(p => {
+                    const row = { ...p };
+                    row.row_hash = computeChecksum(row);
+                    return row;
+                });
 
                 const finalMetadata = [];
                 finalMetadata.push({ key: 'passed_working_days', value: String(passedWorkingDaysCurrentMonth) });
                 finalMetadata.push({ key: 'last_update', value: new Date().toISOString() });
                 finalMetadata.push({ key: 'last_sale_date', value: String(maxTs) });
 
-                // --- Calculate Data Hash for Smart Caching ---
-                self.postMessage({ type: 'progress', status: 'Calculando Hash de Verificação...', percentage: 98 });
+                // --- Calculate Data Hash for Smart Caching (Optimized Checksum) ---
+                self.postMessage({ type: 'progress', status: 'Calculando Assinatura Digital (Checksum)...', percentage: 98 });
 
-                // Hash critical datasets
-                const hash1 = await computeHash(columnarDetailed);
-                const hash2 = await computeHash(columnarHistory);
-                const hash3 = await computeHash(columnarClients);
-                const hash4 = await computeHash(finalStockData);
-                const hash5 = await computeHash(finalInnovationsData);
+                // Checksum critical datasets
+                const hash1 = computeChecksum(columnarDetailed);
+                const hash2 = computeChecksum(columnarHistory);
+                const hash3 = computeChecksum(columnarClients);
+                const hash4 = computeChecksum(finalStockData);
+                const hash5 = computeChecksum(finalInnovationsData);
 
                 // Final Hash of Hashes
-                const combinedHash = await computeHash({ h1: hash1, h2: hash2, h3: hash3, h4: hash4, h5: hash5 });
+                const combinedHash = computeChecksum({ h1: hash1, h2: hash2, h3: hash3, h4: hash4, h5: hash5 });
 
                 if (combinedHash) {
                     finalMetadata.push({ key: 'data_hash', value: combinedHash });
@@ -1014,8 +1095,8 @@
                         // Upload Support Arrays
                         stock: finalStockData,
                         innovations: finalInnovationsData,
-                        product_details: finalProductDetailsData,
-                        active_products: finalActiveProductsData,
+                        product_details: finalProductDetailsDataWithHash,
+                        active_products: finalActiveProductsDataWithHash,
                         metadata: finalMetadata,
 
                         // Legacy Maps for Frontend
