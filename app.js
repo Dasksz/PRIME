@@ -14816,7 +14816,8 @@ const supervisorGroups = new Map();
                 
                 // 1. Explicit Blocklist
                 if (upperName === 'BALCAO' || upperName === 'BALCÃO' || 
-                    upperName.includes('TOTAL') || upperName.includes('SUPERVISOR') || upperName.includes('GERAL')) {
+                    upperName.includes('TOTAL') || upperName.includes('SUPERVISOR') || upperName.includes('GERAL') ||
+                    upperName === 'VENDEDOR' || upperName === 'NOME' || upperName === 'CODIGO' || upperName === 'CÓDIGO') {
                     continue;
                 }
 
