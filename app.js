@@ -9,72 +9,90 @@
                 this._data = columnarData.values; // Renamed to avoid shadowing values() method
                 this.length = columnarData.length;
                 this._overrides = new Map(); // Stores mutations: Map<index, Object>
-            }
 
-            get(index) {
-                if (index < 0 || index >= this.length) return undefined;
-
-                const overrides = this._overrides;
-                const values = this._data;
-                const columns = this.columns;
-
-                // Return a Lazy Proxy that constructs properties only on access
-                // and supports write-back for mutations (e.g. seller remapping)
-                return new Proxy({}, {
-                    get(target, prop) {
+                // Shared Proxy Handler to avoid allocation per row
+                this._proxyHandler = {
+                    get: (target, prop) => {
                         if (prop === 'toJSON') return () => "ColumnarRowProxy"; // Debug help
 
+                        const index = target.index;
+                        const ds = target.dataset;
+
                         // 1. Check overrides first (mutations)
-                        const ov = overrides.get(index);
+                        const ov = ds._overrides.get(index);
                         if (ov && prop in ov) {
                             return ov[prop];
                         }
 
                         // 2. Check columnar data (lazy read)
-                        // Note: values[prop] is the array for that column
-                        if (values && values[prop]) {
-                            return values[prop][index];
+                        const colData = ds._data[prop];
+                        if (colData) {
+                            return colData[index];
                         }
 
-                        return target[prop]; // Fallback (e.g. prototype methods)
+                        return undefined;
                     },
 
-                    set(target, prop, value) {
-                        let ov = overrides.get(index);
+                    set: (target, prop, value) => {
+                        const index = target.index;
+                        const ds = target.dataset;
+
+                        let ov = ds._overrides.get(index);
                         if (!ov) {
                             ov = {};
-                            overrides.set(index, ov);
+                            ds._overrides.set(index, ov);
                         }
                         ov[prop] = value;
                         return true;
                     },
 
-                    ownKeys(target) {
+                    ownKeys: (target) => {
+                        const index = target.index;
+                        const ds = target.dataset;
+                        const ov = ds._overrides.get(index);
+
                         // Return all original columns plus any new keys added via mutation
-                        const ov = overrides.get(index);
                         if (ov) {
-                            // Create a set of keys to ensure uniqueness
-                            const keys = new Set(columns);
+                            const keys = new Set(ds.columns);
                             Object.keys(ov).forEach(k => keys.add(k));
                             return Array.from(keys);
                         }
-                        return columns;
+                        return ds.columns;
                     },
 
-                    getOwnPropertyDescriptor(target, prop) {
+                    getOwnPropertyDescriptor: (target, prop) => {
+                        const index = target.index;
+                        const ds = target.dataset;
+                        const ov = ds._overrides.get(index);
+
                         // Check overrides or values to confirm existence
-                        const ov = overrides.get(index);
-                        if ((ov && prop in ov) || (values && values[prop])) {
+                        if ((ov && prop in ov) || (ds._data && ds._data[prop])) {
                             return { enumerable: true, configurable: true, writable: true };
                         }
                         return undefined;
                     },
 
-                    has(target, prop) {
-                        const ov = overrides.get(index);
-                        return (ov && prop in ov) || (values && prop in values);
+                    has: (target, prop) => {
+                        const index = target.index;
+                        const ds = target.dataset;
+                        const ov = ds._overrides.get(index);
+                        return (ov && prop in ov) || (ds._data && prop in ds._data);
                     }
-                });
+                };
+
+                // Lightweight Target Class to avoid object literal allocation
+                this.RowTarget = class RowTarget {
+                    constructor(index, dataset) {
+                        this.index = index;
+                        this.dataset = dataset;
+                    }
+                };
+            }
+
+            get(index) {
+                if (index < 0 || index >= this.length) return undefined;
+                // Use shared handler and lightweight target
+                return new Proxy(new this.RowTarget(index, this), this._proxyHandler);
             }
 
             // Implement basic Array methods to behave like an array
