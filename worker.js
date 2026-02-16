@@ -973,7 +973,7 @@
                     }
                     return Array.from(orders.values()).map(order => {
                         // Construct a clean object matching data_orders schema to avoid "column not found" errors
-                        return {
+                        const orderObj = {
                             PEDIDO: order.PEDIDO,
                             CODCLI: order.CODCLI,
                             CLIENTE_NOME: order.CLIENTE_NOME,
@@ -992,6 +992,11 @@
                             FORNECEDORES_LIST: Array.from(order.FORNECEDORES),
                             CODFORS_LIST: Array.from(order.CODFORS)
                         };
+
+                        // Compute Hash for Orders
+                        orderObj.row_hash = computeChecksum(orderObj);
+
+                        return orderObj;
                     });
                 };
                 const aggregatedByOrder = aggregateOrders(finalSalesData);

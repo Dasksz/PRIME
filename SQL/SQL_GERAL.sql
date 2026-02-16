@@ -502,3 +502,7 @@ CREATE INDEX IF NOT EXISTS idx_data_active_products_row_hash ON public.data_acti
 -- 7. Product Details (Support Table)
 ALTER TABLE public.data_product_details ADD COLUMN IF NOT EXISTS row_hash TEXT;
 CREATE INDEX IF NOT EXISTS idx_data_product_details_row_hash ON public.data_product_details (row_hash);
+
+-- 8. Orders Data (Aggregated)
+ALTER TABLE public.data_orders ADD COLUMN IF NOT EXISTS row_hash TEXT;
+CREATE INDEX IF NOT EXISTS idx_data_orders_row_hash ON public.data_orders (row_hash);
