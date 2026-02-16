@@ -1767,8 +1767,8 @@
             });
 
             // Optimization: Detect if history is columnar and IndexMap is available
-            const isHistoryColumnar = optimizedData.historyById instanceof IndexMap && optimizedData.historyById._source.values;
-            const historyValues = isHistoryColumnar ? optimizedData.historyById._source.values : null;
+            const isHistoryColumnar = optimizedData.historyById instanceof ColumnarDataset;
+            const historyValues = isHistoryColumnar ? optimizedData.historyById._data : null;
 
             activeClients.forEach(client => {
                 const codCli = String(client['Código'] || client['codigo_cliente']);
@@ -1781,8 +1781,7 @@
                     if (isHistoryColumnar) {
                         // Optimized Path: Use indices
                         clientHistoryIds.forEach(id => {
-                            const idx = optimizedData.historyById.getIndex(id);
-                            if (idx === undefined) return;
+                            const idx = id;
 
                             const codUsur = historyValues['CODUSUR'][idx];
                              // EXCEPTION: Exclude Balcão (53) sales for Client 9569 from Summary Metrics
