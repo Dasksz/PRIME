@@ -14641,68 +14641,108 @@ const supervisorGroups = new Map();
 
             console.log(`[Parser] Linhas encontradas: ${rows.length}`);
 
-            // 2. Identify Header Rows
-            // We look for 3 consecutive rows that might be the header structure
-            // Row A: Categories (EXTRUSADOS, ETC)
-            // Row B: Metrics (FATURAMENTO, ETC)
-            // Row C: Submetrics (META, AJUSTE)
-            let startRow = 0;
+            // 2. Identify Header Rows and Construct ColMap
+            const colMap = {};
+            let dataStartRow = 0;
+
             if (rows.length >= 3) {
                 // Standard logic: Rows 0, 1, 2
-                startRow = 0;
+                const startRow = 0;
+
+                const header0 = rows[startRow].map(h => h ? h.trim().toUpperCase() : '');
+                const header1 = rows[startRow + 1].map(h => h ? h.trim().toUpperCase() : '');
+                const header2 = rows[startRow + 2].map(h => h ? h.trim().toUpperCase() : '');
+
+                console.log("[Parser] Header 0:", header0.join('|'));
+                console.log("[Parser] Header 1:", header1.join('|'));
+                console.log("[Parser] Header 2:", header2.join('|'));
+
+                let currentCategory = null;
+                let currentMetric = null;
+
+                // Map Headers
+                for (let i = 0; i < header0.length; i++) {
+                    if (header0[i]) currentCategory = header0[i];
+                    if (header1[i]) currentMetric = header1[i];
+                    let subMetric = header2[i]; // Meta, Ajuste, etc.
+
+                    if (currentCategory && subMetric) {
+                        if (subMetric === 'AJ.' || subMetric === 'AJ') subMetric = 'AJUSTE';
+
+                        let catKey = currentCategory;
+                        // Normalize Category Names to IDs (Fuzzy Matching)
+                        if (catKey.includes('NÃO EXTRUSADOS') || catKey.includes('NAO EXTRUSADOS')) catKey = '708';
+                        else if (catKey.includes('EXTRUSADOS')) catKey = '707';
+                        else if (catKey.includes('TORCIDA')) catKey = '752';
+                        else if (catKey.includes('TODDYNHO')) catKey = '1119_TODDYNHO';
+                        else if (catKey.includes('TODDY')) catKey = '1119_TODDY';
+                        else if (catKey.includes('QUAKER') || catKey.includes('KEROCOCO')) catKey = '1119_QUAKER_KEROCOCO';
+                        else if (catKey === 'KG ELMA') catKey = 'tonelada_elma';
+                        else if (catKey === 'KG FOODS') catKey = 'tonelada_foods';
+                        else if (catKey === 'TOTAL ELMA') catKey = 'total_elma';
+                        else if (catKey === 'TOTAL FOODS') catKey = 'total_foods';
+                        else if (catKey === 'MIX SALTY') catKey = 'mix_salty';
+                        else if (catKey === 'MIX FOODS') catKey = 'mix_foods';
+                        else if (catKey === 'PEPSICO_ALL_POS' || catKey === 'PEPSICO_ALL' || catKey === 'GERAL') catKey = 'pepsico_all';
+
+                        let metricKey = 'OTHER';
+                        if (currentMetric === 'FATURAMENTO' || currentMetric === 'MÉDIA TRIM.') metricKey = 'FAT';
+                        else if (currentMetric === 'POSITIVAÇÃO' || currentMetric === 'POSITIVACAO' || currentMetric.includes('POSITIVA')) metricKey = 'POS';
+                        else if (currentMetric === 'TONELADA' || currentMetric === 'META KG') metricKey = 'VOL';
+                        else if (currentMetric === 'META MIX' || currentMetric === 'MIX' || currentMetric === 'QTD') metricKey = 'MIX';
+
+                        const key = `${catKey}_${metricKey}_${subMetric}`;
+                        colMap[key] = i;
+                    }
+                }
+
+                dataStartRow = startRow + 3;
             } else {
                 console.warn("[Parser] Menos de 3 linhas. Tentando modo simplificado...");
-                // TODO: Implement simplified mode for single-row updates if needed
-                // For now, abort to avoid garbage data
-                return null;
-            }
+                // Simplified Mode: Hardcoded Column Map based on Standard Export
+                // Columns structure matches exportGoalsSvXLSX
 
-            const header0 = rows[startRow].map(h => h ? h.trim().toUpperCase() : '');
-            const header1 = rows[startRow + 1].map(h => h ? h.trim().toUpperCase() : '');
-            const header2 = rows[startRow + 2].map(h => h ? h.trim().toUpperCase() : '');
+                let colIdx = 2; // Start after Vendedor (Index 2)
+                const addKeys = (cat, keys) => {
+                    keys.forEach((k, i) => {
+                        if (k) colMap[`${cat}_${k}`] = colIdx + i;
+                    });
+                    colIdx += keys.length;
+                };
 
-            console.log("[Parser] Header 0:", header0.join('|'));
-            console.log("[Parser] Header 1:", header1.join('|'));
-            console.log("[Parser] Header 2:", header2.join('|'));
+                // 1. TOTAL ELMA (Standard Agg)
+                addKeys('total_elma', ['FAT_META', 'FAT_AJUSTE', 'POS_META', 'POS_AJUSTE']);
+                // 2. EXTRUSADOS (707)
+                addKeys('707', ['FAT_META', 'FAT_AJUSTE', 'POS_META', 'POS_AJUSTE']);
+                // 3. NÃO EXTRUSADOS (708)
+                addKeys('708', ['FAT_META', 'FAT_AJUSTE', 'POS_META', 'POS_AJUSTE']);
+                // 4. TORCIDA (752)
+                addKeys('752', ['FAT_META', 'FAT_AJUSTE', 'POS_META', 'POS_AJUSTE']);
+                // 5. KG ELMA (tonnage)
+                addKeys('tonelada_elma', [null, 'VOL_VOLUME', 'VOL_AJUSTE']);
+                // 6. MIX SALTY (mix)
+                addKeys('mix_salty', [null, 'MIX_META', 'MIX_AJUSTE']);
 
-            const colMap = {};
-            let currentCategory = null;
-            let currentMetric = null;
+                // 7. TOTAL FOODS (Standard Agg)
+                addKeys('total_foods', ['FAT_META', 'FAT_AJUSTE', 'POS_META', 'POS_AJUSTE']);
+                // 8. TODDYNHO (1119_TODDYNHO)
+                addKeys('1119_TODDYNHO', ['FAT_META', 'FAT_AJUSTE', 'POS_META', 'POS_AJUSTE']);
+                // 9. TODDY (1119_TODDY)
+                addKeys('1119_TODDY', ['FAT_META', 'FAT_AJUSTE', 'POS_META', 'POS_AJUSTE']);
+                // 10. QUAKER/KEROCOCO
+                addKeys('1119_QUAKER_KEROCOCO', ['FAT_META', 'FAT_AJUSTE', 'POS_META', 'POS_AJUSTE']);
+                // 11. KG FOODS (tonnage)
+                addKeys('tonelada_foods', [null, 'VOL_VOLUME', 'VOL_AJUSTE']);
+                // 12. MIX FOODS (mix)
+                addKeys('mix_foods', [null, 'MIX_META', 'MIX_AJUSTE']);
 
-            // Map Headers
-            for (let i = 0; i < header0.length; i++) {
-                if (header0[i]) currentCategory = header0[i];
-                if (header1[i]) currentMetric = header1[i];
-                let subMetric = header2[i]; // Meta, Ajuste, etc.
+                // 13. GERAL (pepsico_all)
+                addKeys('pepsico_all', [null, 'FAT_META', 'VOL_META', 'POS_META']);
 
-                if (currentCategory && subMetric) {
-                    if (subMetric === 'AJ.' || subMetric === 'AJ') subMetric = 'AJUSTE';
+                // 14. PEDEV
+                colIdx += 1;
 
-                    let catKey = currentCategory;
-                    // Normalize Category Names to IDs (Fuzzy Matching)
-                    if (catKey.includes('NÃO EXTRUSADOS') || catKey.includes('NAO EXTRUSADOS')) catKey = '708';
-                    else if (catKey.includes('EXTRUSADOS')) catKey = '707';
-                    else if (catKey.includes('TORCIDA')) catKey = '752';
-                    else if (catKey.includes('TODDYNHO')) catKey = '1119_TODDYNHO';
-                    else if (catKey.includes('TODDY')) catKey = '1119_TODDY';
-                    else if (catKey.includes('QUAKER') || catKey.includes('KEROCOCO')) catKey = '1119_QUAKER_KEROCOCO';
-                    else if (catKey === 'KG ELMA') catKey = 'tonelada_elma';
-                    else if (catKey === 'KG FOODS') catKey = 'tonelada_foods';
-                    else if (catKey === 'TOTAL ELMA') catKey = 'total_elma';
-                    else if (catKey === 'TOTAL FOODS') catKey = 'total_foods';
-                    else if (catKey === 'MIX SALTY') catKey = 'mix_salty';
-                    else if (catKey === 'MIX FOODS') catKey = 'mix_foods';
-                    else if (catKey === 'PEPSICO_ALL_POS' || catKey === 'PEPSICO_ALL' || catKey === 'GERAL') catKey = 'pepsico_all';
-
-                    let metricKey = 'OTHER';
-                    if (currentMetric === 'FATURAMENTO' || currentMetric === 'MÉDIA TRIM.') metricKey = 'FAT';
-                    else if (currentMetric === 'POSITIVAÇÃO' || currentMetric === 'POSITIVACAO' || currentMetric.includes('POSITIVA')) metricKey = 'POS';
-                    else if (currentMetric === 'TONELADA' || currentMetric === 'META KG') metricKey = 'VOL';
-                    else if (currentMetric === 'META MIX' || currentMetric === 'MIX' || currentMetric === 'QTD') metricKey = 'MIX';
-
-                    const key = `${catKey}_${metricKey}_${subMetric}`;
-                    colMap[key] = i;
-                }
+                dataStartRow = 0; // Parse all rows
             }
 
             const updates = [];
@@ -14727,8 +14767,6 @@ const supervisorGroups = new Map();
                 }
                 return parseFloat(clean);
             };
-
-            const dataStartRow = startRow + 3;
             // Identify Vendor Column Index (Name)
             // Usually Index 1 (Code, Name, ...)
             // We scan first few rows to find valid seller names
