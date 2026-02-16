@@ -579,25 +579,48 @@
             });
         }
 
-        async function saveCoordinateToSupabase(clientCode, lat, lng, address) {
-            if (window.userRole !== 'adm') return;
+        let pendingCoordinateWrites = [];
+        const COORD_WRITE_BATCH_SIZE = 5;
 
-            try {
+        async function flushCoordinatesToSupabase() {
+             if (pendingCoordinateWrites.length === 0) return;
+
+             if (window.userRole !== 'adm') {
+                 pendingCoordinateWrites = [];
+                 return;
+             }
+
+             const batch = [...pendingCoordinateWrites];
+             pendingCoordinateWrites = [];
+
+             try {
                 const { error } = await window.supabaseClient
                     .from('data_client_coordinates')
-                    .upsert({
-                        client_code: String(clientCode),
-                        lat: lat,
-                        lng: lng,
-                        address: address
-                    });
+                    .upsert(batch);
 
-                if (error) console.error("Error saving coordinate:", error);
+                if (error) console.error("Error saving coordinate batch:", error);
                 else {
-                    clientCoordinatesMap.set(String(clientCode), { lat, lng, address });
+                    console.log(`[GeoSync] Batch salvo: ${batch.length} itens.`);
                 }
             } catch (e) {
-                console.error("Error saving coordinate:", e);
+                console.error("Error saving coordinate batch:", e);
+            }
+        }
+
+        async function queueCoordinateSave(clientCode, lat, lng, address) {
+            clientCoordinatesMap.set(String(clientCode), { lat, lng, address });
+
+            if (window.userRole !== 'adm') return;
+
+            pendingCoordinateWrites.push({
+                client_code: String(clientCode),
+                lat: lat,
+                lng: lng,
+                address: address
+            });
+
+            if (pendingCoordinateWrites.length >= COORD_WRITE_BATCH_SIZE) {
+                await flushCoordinatesToSupabase();
             }
         }
 
@@ -657,6 +680,7 @@
             const processNext = async () => {
                 if (nominatimQueue.length === 0) {
                     isProcessingQueue = false;
+                    await flushCoordinatesToSupabase();
                     console.log("[GeoSync] Fila de download finalizada.");
                     return;
                 }
@@ -692,7 +716,7 @@
                     if (result) {
                         console.log(`[GeoSync] Sucesso: ${client.nomeCliente} -> Salvo.`);
                         const codCli = String(client['Código'] || client['codigo_cliente']);
-                        await saveCoordinateToSupabase(codCli, result.lat, result.lng, result.formatted_address);
+                        await queueCoordinateSave(codCli, result.lat, result.lng, result.formatted_address);
 
                         const cityMapContainer = document.getElementById('city-map-container');
                         if (heatLayer && cityMapContainer && !cityMapContainer.classList.contains('hidden')) {
