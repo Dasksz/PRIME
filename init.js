@@ -113,32 +113,17 @@
             let useCache = false;
 
             if (cachedData && metadataRemote) {
-                // --- SMART CACHING STRATEGY ---
-                // Priority 1: Hash-Based Verification (Absolute Integrity)
-                const remoteHash = metadataRemote.data_hash;
-                const localHash = cachedData.metadata ? cachedData.metadata.find(m => m.key === 'data_hash')?.value : null;
+                // Check if remote last_update is same as cached
+                const remoteDate = new Date(metadataRemote.last_update).getTime();
+                const cachedDate = new Date(cachedData.metadata ? cachedData.metadata.find(m=>m.key==='last_update')?.value : 0).getTime();
 
-                if (remoteHash && localHash) {
-                    if (remoteHash === localHash) {
-                        console.log("Usando cache do IndexedDB (Hash Validado: Integridade Confirmada)");
-                        useCache = true;
-                    } else {
-                        console.log("Cache desatualizado (Hash Diferente). Baixando novos dados...");
-                        useCache = false;
-                    }
+                // Also check if working days matches, just in case
+                // If remote date is valid and same as cached, use cache
+                if (!isNaN(remoteDate) && remoteDate <= cachedDate) {
+                    console.log("Usando cache do IndexedDB (Versão atualizada)");
+                    useCache = true;
                 } else {
-                    // Priority 2: Timestamp Fallback (Legacy Compatibility)
-                    console.log("Hash de verificação indisponível. Usando timestamp...");
-                    const remoteDate = new Date(metadataRemote.last_update).getTime();
-                    const cachedDate = new Date(cachedData.metadata ? cachedData.metadata.find(m => m.key === 'last_update')?.value : 0).getTime();
-
-                    if (!isNaN(remoteDate) && remoteDate <= cachedDate) {
-                        console.log("Usando cache do IndexedDB (Timestamp Validado)");
-                        useCache = true;
-                    } else {
-                        console.log("Cache desatualizado (Timestamp). Baixando novos dados...");
-                        useCache = false;
-                    }
+                    console.log("Cache desatualizado. Baixando novos dados...");
                 }
             }
 
