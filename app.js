@@ -2123,57 +2123,109 @@
             const city = document.getElementById('mix-city-filter').value.trim().toLowerCase();
             const filial = document.getElementById('mix-filial-filter').value;
 
-            let clients = allClientsData;
-
-            if (excludeFilter !== 'rede') {
-                 if (mixRedeGroupFilter === 'com_rede') {
-                    clients = clients.filter(c => c.ramo && c.ramo !== 'N/A');
-                    if (selectedMixRedes.length > 0) {
-                        const redeSet = new Set(selectedMixRedes);
-                        clients = clients.filter(c => redeSet.has(c.ramo));
-                    }
-                } else if (mixRedeGroupFilter === 'sem_rede') {
-                    clients = clients.filter(c => !c.ramo || c.ramo === 'N/A');
-                }
-            }
-
-            if (filial !== 'ambas') {
-                clients = clients.filter(c => clientLastBranch.get(c['Código']) === filial);
-            }
-
-            if (excludeFilter !== 'supervisor' && selectedMixSupervisors.length > 0) {
-                const rcasSet = new Set();
-                selectedMixSupervisors.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
+            // Pre-calculate RCA sets for performance
+            const supervisorRcasSet = new Set();
+            if (excludeFilter !== 'supervisor' && supervisorsSet.size > 0) {
+                supervisorsSet.forEach(sup => {
+                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => supervisorRcasSet.add(rca));
                 });
-                clients = clients.filter(c => c.rcas.some(r => rcasSet.has(r)));
             }
 
+            const sellerRcasSet = new Set();
             if (excludeFilter !== 'seller' && sellersSet.size > 0) {
-                const rcasSet = new Set();
                 sellersSet.forEach(name => {
                     const code = optimizedData.rcaCodeByName.get(name);
-                    if(code) rcasSet.add(code);
+                    if(code) sellerRcasSet.add(code);
                 });
-                clients = clients.filter(c => c.rcas.some(r => rcasSet.has(r)));
             }
 
-            if (excludeFilter !== 'supplier' && selectedCitySuppliers.length > 0) {
-                 // No filtering of clients list based on supplier for now.
+            const redeSet = (excludeFilter !== 'rede' && mixRedeGroupFilter === 'com_rede' && selectedMixRedes.length > 0) ? new Set(selectedMixRedes) : null;
+
+            // Single pass loop over allClientsData using direct column access (Fast Path)
+            const clients = [];
+            const clientCodes = new Set();
+            const len = allClientsData.length;
+            const isColumnar = allClientsData instanceof ColumnarDataset;
+            const data = isColumnar ? allClientsData._data : null;
+            const overrides = isColumnar ? allClientsData._overrides : null;
+            const hasOverrides = overrides && overrides.size > 0;
+
+            for (let i = 0; i < len; i++) {
+                let codCli, ramo, rcas, cidade, rca1, razaoSocial;
+
+                if (isColumnar) {
+                    if (hasOverrides) {
+                        const ov = overrides.get(i);
+                        codCli = (ov && 'Código' in ov) ? ov['Código'] : data['Código'][i];
+                        ramo = (ov && 'ramo' in ov) ? ov['ramo'] : data['ramo'][i];
+                        rcas = (ov && 'rcas' in ov) ? ov['rcas'] : data['rcas'][i];
+                        cidade = (ov && 'cidade' in ov) ? ov['cidade'] : data['cidade'][i];
+                        rca1 = (ov && 'rca1' in ov) ? ov['rca1'] : data['rca1'][i];
+                        razaoSocial = (ov && 'razaoSocial' in ov) ? ov['razaoSocial'] : data['razaoSocial'][i];
+                    } else {
+                        codCli = data['Código'][i];
+                        ramo = data['ramo'][i];
+                        rcas = data['rcas'][i];
+                        cidade = data['cidade'][i];
+                        rca1 = data['rca1'][i];
+                        razaoSocial = data['razaoSocial'][i];
+                    }
+                } else {
+                    const c = allClientsData[i];
+                    codCli = c['Código'];
+                    ramo = c['ramo'];
+                    rcas = c['rcas'];
+                    cidade = c['cidade'];
+                    rca1 = c['rca1'];
+                    razaoSocial = c['razaoSocial'];
+                }
+
+                // Rede filter
+                if (excludeFilter !== 'rede') {
+                    if (mixRedeGroupFilter === 'com_rede') {
+                        if (!ramo || ramo === 'N/A') continue;
+                        if (redeSet && !redeSet.has(ramo)) continue;
+                    } else if (mixRedeGroupFilter === 'sem_rede') {
+                        if (ramo && ramo !== 'N/A') continue;
+                    }
+                }
+
+                // Filial filter
+                if (filial !== 'ambas') {
+                    if (clientLastBranch.get(codCli) !== filial) continue;
+                }
+
+                // Supervisor filter
+                if (supervisorRcasSet.size > 0) {
+                    const clientRcas = rcas || [];
+                    if (!clientRcas.some(r => supervisorRcasSet.has(r))) continue;
+                }
+
+                // Seller filter
+                if (sellerRcasSet.size > 0) {
+                    const clientRcas = rcas || [];
+                    if (!clientRcas.some(r => sellerRcasSet.has(r))) continue;
+                }
+
+                if (excludeFilter !== 'supplier' && selectedCitySuppliers.length > 0) {
+                    // No filtering of clients list based on supplier for now.
+                }
+
+                // City filter
+                if (excludeFilter !== 'city' && city) {
+                    if (!cidade || cidade.toLowerCase() !== city) continue;
+                }
+
+                // Active / Americanas / RCA 53 filter
+                const rca1Str = String(rca1 || '').trim();
+                const isAmericanas = (razaoSocial || '').toUpperCase().includes('AMERICANAS');
+                const isActive = (isAmericanas || rca1Str !== '53' || clientsWithSalesThisMonth.has(codCli));
+                if (!isActive) continue;
+
+                // Match found: populate results
+                clients.push(isColumnar ? allClientsData.get(i) : allClientsData[i]);
+                clientCodes.add(codCli);
             }
-
-            if (excludeFilter !== 'city' && city) {
-                clients = clients.filter(c => c.cidade && c.cidade.toLowerCase() === city);
-            }
-
-            // Include only active or Americanas or not RCA 53
-            clients = clients.filter(c => {
-                const rca1 = String(c.rca1 || '').trim();
-                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(c['Código']));
-            });
-
-            const clientCodes = new Set(clients.map(c => c['Código']));
 
             const filters = {
                 supervisor: supervisorsSet,
