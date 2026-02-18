@@ -934,7 +934,15 @@
             return null;
         }
 
-        async function updateCityMap() {
+        async function updateCityMap(overrideRenderId) {
+            let currentRenderId;
+            if (overrideRenderId !== undefined) {
+                currentRenderId = overrideRenderId;
+            } else {
+                cityRenderId++;
+                currentRenderId = cityRenderId;
+            }
+
             const cityMapContainer = document.getElementById('city-map-container');
             if (!leafletMap || (cityMapContainer && cityMapContainer.classList.contains('hidden'))) return;
 
@@ -978,8 +986,8 @@
             const missingCoordsClients = [];
             const validBounds = [];
 
-            // Heatmap Loop (Sync - Fast)
-            clients.forEach(client => {
+            // Heatmap Loop (Async Chunked)
+            runAsyncChunked(clients, (client) => {
                 const codCli = String(client['Código'] || client['codigo_cliente']);
                 const coords = clientCoordinatesMap.get(codCli);
 
@@ -989,20 +997,22 @@
                 } else {
                     missingCoordsClients.push(client);
                 }
-            });
+            }, () => {
+                if (currentRenderId !== cityRenderId) return;
 
-            // Update Heatmap
-            if (heatLayer) {
-                heatLayer.setLatLngs(heatData);
-            }
+                // Update Heatmap
+                if (heatLayer) {
+                    heatLayer.setLatLngs(heatData);
+                }
 
-            // Fit Bounds
-            if (validBounds.length > 0) {
-                leafletMap.fitBounds(validBounds);
-            }
+                // Fit Bounds
+                if (validBounds.length > 0) {
+                    leafletMap.fitBounds(validBounds);
+                }
 
-            // Trigger Marker Logic
-            updateMarkersVisibility();
+                // Trigger Marker Logic
+                updateMarkersVisibility();
+            }, () => currentRenderId !== cityRenderId);
         }
 
         function updateMarkersVisibility() {
@@ -8747,7 +8757,7 @@ const supervisorGroups = new Map();
             cityRenderId++;
             const currentRenderId = cityRenderId;
 
-            updateCityMap();
+            updateCityMap(currentRenderId);
 
             let { clients: clientsForAnalysis, sales: salesForAnalysis } = getCityFilteredData();
             const cidadeFiltro = cityNameFilter.value.trim();
