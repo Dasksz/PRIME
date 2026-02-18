@@ -94,19 +94,45 @@
             return !isNaN(isoDateFromDateOnly.getTime()) ? isoDateFromDateOnly : null;
         }
 
+        // Optimization: Pre-compile regex and avoid regex if possible
+        const RE_CURRENCY = /R\$\s?/g;
+        const RE_DOT = /\./g;
+        const RE_COMMA = /,/g;
+
         function parseBrazilianNumber(value) {
             if (typeof value === 'number') return value;
             if (typeof value !== 'string' || !value) return 0;
 
-            let numberString = value.replace(/R\$\s?/g, '').trim();
+            let numberString = value.trim();
+
+            // Fast check for R$ prefix (avoid regex)
+            // 'R' (82) and '$' (36)
+            if (numberString.charCodeAt(0) === 82 && numberString.charCodeAt(1) === 36) {
+                // Check for space (32)
+                if (numberString.charCodeAt(2) === 32) {
+                    numberString = numberString.substring(3);
+                } else {
+                    numberString = numberString.substring(2);
+                }
+            } else if (numberString.indexOf('R$') !== -1) {
+                // Fallback for R$ elsewhere
+                numberString = numberString.replace(RE_CURRENCY, '');
+            }
 
             const lastComma = numberString.lastIndexOf(',');
             const lastDot = numberString.lastIndexOf('.');
 
             if (lastComma > lastDot) {
-                numberString = numberString.replace(/\./g, '').replace(',', '.');
+                // Brazilian format: 1.234,56
+                if (lastDot !== -1) {
+                    numberString = numberString.replace(RE_DOT, '');
+                }
+                numberString = numberString.replace(',', '.');
             } else {
-                numberString = numberString.replace(/,/g, '');
+                // US/Other: 1,234.56
+                if (lastComma !== -1) {
+                    numberString = numberString.replace(RE_COMMA, '');
+                }
             }
 
             const number = parseFloat(numberString);
