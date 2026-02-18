@@ -1191,6 +1191,10 @@
 
                 client.rcas = rcas; // Normalize for later use if needed
 
+                // --- OPTIMIZATION: Cache lowercase city for performance ---
+                // Pre-calculate to avoid redundant .toLowerCase() in loops (e.g. processDatasetForIndices)
+                client.cityLower = (client.cidade || client['Nome da Cidade'] || 'N/A').toLowerCase();
+
                 if (rcas) {
                     for (let j = 0; j < rcas.length; j++) {
                         const rca = rcas[j];
@@ -1201,7 +1205,7 @@
                     }
                 }
 
-                optimizedData.searchIndices.clients[i] = { code: codCli, nameLower: (client.nomeCliente || '').toLowerCase(), cityLower: (client.cidade || '').toLowerCase() };
+                optimizedData.searchIndices.clients[i] = { code: codCli, nameLower: (client.nomeCliente || '').toLowerCase(), cityLower: client.cityLower };
             }
 
             const supervisorToRcaMap = new Map();
@@ -1256,7 +1260,8 @@
                     const product = getVal(i, 'PRODUTO');
                     // Optimized: Lookup City from Client Map (Removed from Sales Data to save space)
                     const clientObj = clientMapForKPIs.get(String(client));
-                    const city = (clientObj ? (clientObj.cidade || clientObj['Nome da Cidade']) : 'N/A').toLowerCase();
+                    // --- OPTIMIZATION: Use cached lowercase city ---
+                    const city = clientObj ? (clientObj.cityLower || (clientObj.cidade || clientObj['Nome da Cidade'] || 'N/A').toLowerCase()) : 'n/a';
                     const filial = getVal(i, 'FILIAL');
                     const codUsur = getVal(i, 'CODUSUR');
                     const codSupervisor = getVal(i, 'CODSUPERVISOR');
