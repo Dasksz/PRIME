@@ -315,14 +315,44 @@
             // Since we're trying to fix garbage, it's safer to check if we can filter.
 
             if (Array.isArray(data)) {
-                return data.filter(item => {
+                const len = data.length;
+                const result = [];
+
+                for (let i = 0; i < len; i++) {
+                    const item = data[i];
+                    if (!item) continue;
+
+                    // Optimization: Heuristic check for CODUSUR (Seller Code)
+                    // If it starts with a digit, it's very likely a valid data row, not a header.
+                    const codUsur = item.CODUSUR;
+                    if (codUsur) {
+                        if (typeof codUsur === 'number') {
+                            result.push(item);
+                            continue;
+                        }
+                        if (typeof codUsur === 'string') {
+                            const firstChar = codUsur.charCodeAt(0);
+                            // Check for digits 0-9 (ASCII 48-57)
+                            if (firstChar >= 48 && firstChar <= 57) {
+                                result.push(item);
+                                continue;
+                            }
+                        }
+                    }
+
+                    // Slow Path: Check against forbidden headers
                     const superv = String(item.SUPERV || '').trim().toUpperCase();
+                    if (SANITIZE_FORBIDDEN_SET.has(superv)) continue;
+
                     const nome = String(item.NOME || '').trim().toUpperCase();
-                    const codUsur = String(item.CODUSUR || '').trim().toUpperCase();
-                    // Check against headers
-                    if (SANITIZE_FORBIDDEN_SET.has(superv) || SANITIZE_FORBIDDEN_SET.has(nome) || SANITIZE_FORBIDDEN_SET.has(codUsur)) return false;
-                    return true;
-                });
+                    if (SANITIZE_FORBIDDEN_SET.has(nome)) continue;
+
+                    const codUsurStr = String(item.CODUSUR || '').trim().toUpperCase();
+                    if (SANITIZE_FORBIDDEN_SET.has(codUsurStr)) continue;
+
+                    result.push(item);
+                }
+                return result;
             }
             // If Columnar, we assume the worker already did a good job, OR we might need to implement filtering for ColumnarDataset.
             // But since 'fromColumnar' was removed/replaced by 'ColumnarDataset' class usage?
