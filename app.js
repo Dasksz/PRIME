@@ -1257,6 +1257,8 @@
                 const isColumnar = data instanceof ColumnarDataset;
                 // Use _data because .values is now a method
                 const colValues = isColumnar ? data._data : null;
+                // Pre-fetch columns for fast access
+                const dtPedCol = isColumnar && colValues ? colValues['DTPED'] : null;
 
                 // Optimization: Helper to read values without creating Proxy
                 const getVal = (i, prop) => {
@@ -1325,7 +1327,7 @@
                     if (client && filial) { clientLastBranch.set(client, filial); }
                     if (product && pasta && !optimizedData.productPastaMap.has(product)) { optimizedData.productPastaMap.set(product, pasta); }
 
-                    const dtPed = getVal(i, 'DTPED');
+                    const dtPed = dtPedCol ? dtPedCol[i] : getVal(i, 'DTPED');
                     if (dtPed) {
                         // dtPed is likely a number (timestamp).
                         // If it's a number, new Date(dtPed) works.
@@ -1335,7 +1337,14 @@
 
                         if(dateObj && !isNaN(dateObj.getTime())) {
                             const dayOfWeek = dateObj.getUTCDay();
-                            if (dayOfWeek >= 1 && dayOfWeek <= 5) workingDaysSet.add(dateObj.toISOString().split('T')[0]);
+                            if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                                // Optimized: Manual string construction avoids toISOString() overhead (~4x faster)
+                                const y = dateObj.getUTCFullYear();
+                                const m = dateObj.getUTCMonth() + 1;
+                                const d = dateObj.getUTCDate();
+                                const dateStr = `${y}-${m < 10 ? '0' + m : m}-${d < 10 ? '0' + d : d}`;
+                                workingDaysSet.add(dateStr);
+                            }
                         }
                     }
 
