@@ -1474,6 +1474,7 @@
         const fornecedorToggleContainerEl = document.getElementById('fornecedor-toggle-container');
 
         const citySupervisorFilter = document.getElementById('city-supervisor-filter');
+        const cityFilialFilter = document.getElementById('city-filial-filter');
         const cityVendedorFilterBtn = document.getElementById('city-vendedor-filter-btn');
         const cityVendedorFilterText = document.getElementById('city-vendedor-filter-text');
         const cityVendedorFilterDropdown = document.getElementById('city-vendedor-filter-dropdown');
@@ -8558,6 +8559,7 @@ const supervisorGroups = new Map();
             selectedCitySupervisors = [];
             cityNameFilter.value = '';
             cityCodCliFilter.value = '';
+            if (cityFilialFilter) cityFilialFilter.value = 'ambas';
             selectedCitySellers = [];
             selectedCityRedes = [];
             cityRedeGroupFilter = '';
@@ -8580,6 +8582,8 @@ const supervisorGroups = new Map();
             selectedWeeklySupervisors = [];
             selectedWeeklySellers = [];
             currentWeeklyFornecedor = '';
+            const weeklyFilialFilter = document.getElementById('weekly-filial-filter');
+            if (weeklyFilialFilter) weeklyFilialFilter.value = 'ambas';
             document.querySelectorAll('#weekly-fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
 
             // Re-populate will handle resetting the dropdown UI text and checkboxes based on empty selected arrays
@@ -8646,8 +8650,13 @@ const supervisorGroups = new Map();
             const cityInput = cityNameFilter.value.trim().toLowerCase();
             const codCli = cityCodCliFilter.value.trim();
             const tiposVendaSet = new Set(selectedCityTiposVenda);
+            const filial = cityFilialFilter ? cityFilialFilter.value : 'ambas';
 
             let clients = allClientsData;
+
+            if (filial !== 'ambas') {
+                clients = clients.filter(c => clientLastBranch.get(String(c['Código'] || c['codigo_cliente'])) === filial);
+            }
 
             if (excludeFilter !== 'rede') {
                  if (cityRedeGroupFilter === 'com_rede') {
@@ -8698,6 +8707,7 @@ const supervisorGroups = new Map();
                 supervisor: supervisorSet,
                 seller: sellersSet,
                 city: cityInput,
+                filial: filial,
                 tipoVenda: tiposVendaSet,
                 clientCodes: clientCodes,
                 supplier: new Set(selectedCitySuppliers)
@@ -9094,15 +9104,19 @@ const supervisorGroups = new Map();
         function updateWeeklyView() {
             let dataForGeneralCharts;
 
+            const weeklyFilialFilter = document.getElementById('weekly-filial-filter');
+            const filial = weeklyFilialFilter ? weeklyFilialFilter.value : 'ambas';
+
             // Use the generic filtering helper which supports multiple selections
             const filters = {
                 supervisor: selectedWeeklySupervisors.length > 0 ? new Set(selectedWeeklySupervisors) : null,
                 seller: selectedWeeklySellers.length > 0 ? new Set(selectedWeeklySellers) : null,
-                pasta: currentWeeklyFornecedor || null
+                pasta: currentWeeklyFornecedor || null,
+                filial: filial !== 'ambas' ? filial : null
             };
 
             // If we have filters, use optimized lookup
-            if (filters.supervisor || filters.seller || filters.pasta) {
+            if (filters.supervisor || filters.seller || filters.pasta || filters.filial) {
                 dataForGeneralCharts = getFilteredDataFromIndices(optimizedData.indices.current, optimizedData.salesById, filters);
             } else {
                 dataForGeneralCharts = allSalesData;
@@ -12839,6 +12853,8 @@ const supervisorGroups = new Map();
                 }
             });
 
+            cityFilialFilter.addEventListener('change', handleCityFilterChange);
+
             cityComRedeBtn.addEventListener('click', () => cityRedeFilterDropdown.classList.toggle('hidden'));
             cityRedeGroupContainer.addEventListener('click', (e) => {
                 if(e.target.closest('button')) {
@@ -13033,6 +13049,13 @@ const supervisorGroups = new Map();
                     updateWeekly();
                 }
             });
+
+            const weeklyFilialFilter = document.getElementById('weekly-filial-filter');
+            if (weeklyFilialFilter) {
+                weeklyFilialFilter.addEventListener('change', () => {
+                    updateWeekly();
+                });
+            }
 
             clearWeeklyFiltersBtn.addEventListener('click', () => { resetWeeklyFilters(); markDirty('semanal'); });
 
