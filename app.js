@@ -7324,25 +7324,51 @@ const supervisorGroups = new Map();
             if (selectedCoverageDateRange && selectedCoverageDateRange.length === 2) {
                 const startDate = selectedCoverageDateRange[0];
                 const endDate = selectedCoverageDateRange[1];
-                // Ensure boundaries
+
+                // Boundaries for Current Period
                 const startTs = new Date(startDate).setHours(0,0,0,0);
                 const endTs = new Date(endDate).setHours(23,59,59,999);
 
-                const filterByDate = (item) => {
+                // Boundaries for Previous Period (Shifted -1 Month) to maintain comparative KPIs
+                // We shift the filter window back by 1 month for history
+                const histStart = new Date(startTs);
+                histStart.setUTCMonth(histStart.getUTCMonth() - 1);
+                const histStartTs = histStart.getTime();
+
+                const histEnd = new Date(endTs);
+                histEnd.setUTCMonth(histEnd.getUTCMonth() - 1);
+
+                // Handle end of month edge cases (e.g. March 31 -> Feb 28/29)
+                // JS Date auto-corrects overflow (Mar 31 - 1 mo -> March 3 if Feb is short), but we want end of Feb.
+                // However, standard setMonth behavior is usually acceptable for simple window shifting unless strictly end-of-month.
+                const histEndTs = histEnd.getTime();
+
+                const filterByDateCurrent = (item) => {
                     const dt = item.DTPED;
                     if (!dt) return false;
                     const ts = (typeof dt === 'number') ? dt : (dt instanceof Date ? dt.getTime() : parseDate(dt)?.getTime());
                     return ts >= startTs && ts <= endTs;
                 };
 
-                sales = sales.filter(filterByDate);
-                history = history.filter(filterByDate);
+                const filterByDateHistory = (item) => {
+                    const dt = item.DTPED;
+                    if (!dt) return false;
+                    const ts = (typeof dt === 'number') ? dt : (dt instanceof Date ? dt.getTime() : parseDate(dt)?.getTime());
+                    return ts >= histStartTs && ts <= histEndTs;
+                };
+
+                sales = sales.filter(filterByDateCurrent);
+                history = history.filter(filterByDateHistory);
             }
 
             // Post-filtering for logic not supported by indices
             const unitPriceInput = document.getElementById('coverage-unit-price-filter');
-            const unitPrice = unitPriceInput && unitPriceInput.value ? parseFloat(unitPriceInput.value) : null;
-            if (unitPrice !== null) {
+            // Support comma as decimal separator by replacing ',' with '.'
+            const unitPrice = unitPriceInput && unitPriceInput.value
+                ? parseFloat(unitPriceInput.value.replace(',', '.'))
+                : null;
+
+            if (unitPrice !== null && !isNaN(unitPrice)) {
                 const unitPriceFilter = s => (s.QTVENDA > 0 && Math.abs((s.VLVENDA / s.QTVENDA) - unitPrice) < 0.01);
                 sales = sales.filter(unitPriceFilter);
                 history = history.filter(unitPriceFilter);
@@ -14445,6 +14471,10 @@ const supervisorGroups = new Map();
                     onClose: (selectedDates) => {
                         if (selectedDates.length === 2) {
                             selectedCoverageDateRange = selectedDates;
+                            updateCoverage();
+                        } else if (selectedDates.length === 1) {
+                            // Fix: Handle single day selection as a range [Start, Start]
+                            selectedCoverageDateRange = [selectedDates[0], selectedDates[0]];
                             updateCoverage();
                         } else if (selectedDates.length === 0) {
                             selectedCoverageDateRange = null;
