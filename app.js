@@ -12690,11 +12690,13 @@ const supervisorGroups = new Map();
                 if (viewState[view]) viewState[view].dirty = true;
             };
 
-            document.querySelectorAll('.sidebar-toggle').forEach(btn => btn.addEventListener('click', toggleSidebar));
-            const closeSidebarBtn = document.getElementById('close-sidebar-btn');
-            if(closeSidebarBtn) closeSidebarBtn.addEventListener('click', toggleSidebar);
-            const sidebarOverlay = document.getElementById('sidebar-overlay');
-            if(sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
+            // Enhanced Sidebar Toggle using Event Delegation (Fixes potential race conditions/dynamic elements)
+            document.addEventListener('click', (e) => {
+                const target = e.target;
+                if (target.closest('.sidebar-toggle') || target.closest('#close-sidebar-btn') || target.id === 'sidebar-overlay') {
+                    toggleSidebar();
+                }
+            });
 
             document.querySelectorAll('.nav-link').forEach(link => {
                 link.addEventListener('click', (e) => {
