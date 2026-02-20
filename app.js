@@ -1525,6 +1525,7 @@
         const comparisonVendedorFilterDropdown = document.getElementById('comparison-vendedor-filter-dropdown');
         const comparisonFornecedorToggleContainer = document.getElementById('comparison-fornecedor-toggle-container');
         const comparisonFilialFilter = document.getElementById('comparison-filial-filter');
+        const metaRealizadoFilialFilter = document.getElementById('meta-realizado-filial-filter');
 
         const comparisonSupplierFilterBtn = document.getElementById('comparison-supplier-filter-btn');
         const comparisonSupplierFilterText = document.getElementById('comparison-supplier-filter-text');
@@ -3516,6 +3517,7 @@
             const sellersSet = new Set(selectedMetaRealizadoSellers);
             const suppliersSet = new Set(selectedMetaRealizadoSuppliers);
             const pasta = currentMetaRealizadoPasta;
+            const filial = metaRealizadoFilialFilter ? metaRealizadoFilialFilter.value : 'ambas';
 
             // Determine Goal Keys based on Pasta (Moved to top level scope)
             let goalKeys = [];
@@ -3553,6 +3555,10 @@
             let clients = allClientsData.filter(c => {
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
+                const codCli = String(c['Código'] || c['codigo_cliente']);
+
+                if (filial !== 'ambas' && clientLastBranch.get(codCli) !== filial) return false;
+
                 // Same active logic as Goals
                 if (isAmericanas) return true;
                 if (rca1 === '53') return false;
@@ -14124,6 +14130,7 @@ const supervisorGroups = new Map();
                 selectedMetaRealizadoSellers = [];
                 selectedMetaRealizadoSuppliers = [];
                 currentMetaRealizadoPasta = 'PEPSICO'; // Reset to default
+                if (metaRealizadoFilialFilter) metaRealizadoFilialFilter.value = 'ambas';
 
                 // Reset UI
                 updateSupervisorFilter(metaRealizadoSupervisorFilterDropdown, document.getElementById('meta-realizado-supervisor-filter-text'), [], allSalesData);
@@ -14141,6 +14148,10 @@ const supervisorGroups = new Map();
 
                 debouncedUpdateMetaRealizado();
             });
+
+            if (metaRealizadoFilialFilter) {
+                metaRealizadoFilialFilter.addEventListener('change', debouncedUpdateMetaRealizado);
+            }
 
             // Close Dropdowns on Click Outside
             document.addEventListener('click', (e) => {
