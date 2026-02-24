@@ -8854,18 +8854,8 @@ const supervisorGroups = new Map();
 
             const selectedTiposVendaSet = new Set(selectedCityTiposVenda);
 
-            // Pre-aggregate "Sales This Month" for Status Classification
-            const clientTotalsThisMonth = new Map();
-            // Sync Pre-aggregation (O(N) is fast)
-            for(let i=0; i<allSalesData.length; i++) {
-                const s = (allSalesData instanceof ColumnarDataset) ? allSalesData.get(i) : allSalesData[i];
-                if (selectedTiposVendaSet.size > 0 && !selectedTiposVendaSet.has(s.TIPOVENDA)) continue;
-
-                const d = parseDate(s.DTPED);
-                if (d && d.getUTCFullYear() === currentYear && d.getUTCMonth() === currentMonth) {
-                    clientTotalsThisMonth.set(s.CODCLI, (clientTotalsThisMonth.get(s.CODCLI) || 0) + s.VLVENDA);
-                }
-            }
+            // Removed: clientTotalsThisMonth logic was using global sales data, ignoring current filters.
+            // We now rely on detailedDataByClient (derived from salesForAnalysis) to determine active status in context.
 
             const detailedDataByClient = new Map(); // Map<CODCLI, { total, pepsico, multimarcas, maxDate }>
 
@@ -8911,13 +8901,13 @@ const supervisorGroups = new Map();
                 const registrationDate = parseDate(client.dataCadastro);
                 client.isNew = registrationDate && registrationDate.getUTCMonth() === currentMonth && registrationDate.getUTCFullYear() === currentYear;
 
-                const totalFaturamentoMes = clientTotalsThisMonth.get(codcli) || 0;
+                // Use detailedDataByClient (filtered sales) instead of global clientTotalsThisMonth
+                const details = detailedDataByClient.get(codcli);
+                const totalFaturamentoMes = details ? details.total : 0;
 
                 if (totalFaturamentoMes >= 1) {
                     activeClientsList.push(client);
 
-                    // Detailed Data check
-                    const details = detailedDataByClient.get(codcli);
                     if (details && details.total >= 1) {
                         const outrosTotal = details.total - details.pepsico - details.multimarcas;
                         salesByActiveClient[codcli] = {
