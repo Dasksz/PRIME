@@ -628,7 +628,7 @@
         }
 
         let pendingCoordinateWrites = [];
-        const COORD_WRITE_BATCH_SIZE = 5;
+        const COORD_WRITE_BATCH_SIZE = 20;
 
         async function flushCoordinatesToSupabase() {
              if (pendingCoordinateWrites.length === 0) return;
