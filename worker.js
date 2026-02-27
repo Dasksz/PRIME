@@ -683,8 +683,8 @@
                 const collectProducts = (data) => {
                     data.forEach(row => {
                         const prod = String(row["PRODUTO"] || "").trim();
-                    if (!productsSeenInSales.has(productCode)) return;
-                        if (prod && !FORBIDDEN_KEYS.includes(prod.toUpperCase()) && prod.toUpperCase() !== "PRODUTO" && prod !== "0" && prod !== "00") {
+                    if (productsSeenInSales.has(prod)) return;
+                        if (prod && !FORBIDDEN_KEYS.has(prod.toUpperCase()) && prod.toUpperCase() !== "PRODUTO" && prod !== "0" && prod !== "00") {
                             productsSeenInSales.add(prod);
                         }
                     });
