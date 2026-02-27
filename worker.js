@@ -1,8 +1,7 @@
         self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
         self.importScripts('https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js');
 
-        const FORBIDDEN_KEYS = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR', 'PASTA', 'RAMO', 'ATIVIDADE', 'CIDADE', 'MUNICIPIO', 'BAIRRO'];
-        const FORBIDDEN_SET = new Set(FORBIDDEN_KEYS);
+        const FORBIDDEN_KEYS = new Set(['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR', 'PASTA', 'RAMO', 'ATIVIDADE', 'CIDADE', 'MUNICIPIO', 'BAIRRO']);
 
         const mandatoryColumns = {
             sales: ['CODCLI', 'PEDIDO', 'CODUSUR', 'CODSUPERVISOR', 'DTPED', 'DTSAIDA', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX'],
@@ -310,28 +309,23 @@
                 const rawRow = rawData[i];
 
                 // --- HEADER DETECTION: Ignore rows that look like headers ---
-                // --- HEADER DETECTION: Ignore rows that look like headers ---
-                // Optimization: Use Set for O(1) lookup and avoid string allocation for numbers
-                const isHeaderValue = (val) => {
-                    if (!val) return false;
-                    if (typeof val === 'number') return false;
-                    const s = String(val).trim().toUpperCase();
-                    return FORBIDDEN_SET.has(s);
-                };
+                // Enhanced robust detection: Check against forbidden keys list
+                const checkHeader = (val) => val && FORBIDDEN_KEYS.has(val.trim().toUpperCase());
 
-                // Optimized checks:
-                // 1. Check CODCLI (often a number, so fast fail)
-                if (isHeaderValue(rawRow['CODCLI'])) continue;
-
-                // 2. Check PRODUTO (plus specific 'CÓDIGO' check)
-                const produtoVal = rawRow['PRODUTO'];
-                if (isHeaderValue(produtoVal)) continue;
-                if (produtoVal && typeof produtoVal === 'string' && produtoVal.trim().toUpperCase() === 'CÓDIGO') continue;
-
-                // 3. Check other key columns
-                if (isHeaderValue(rawRow['SUPERV'])) continue;
-                if (isHeaderValue(rawRow['NOME'])) continue;
-                if (isHeaderValue(rawRow['TIPOVENDA'])) continue;
+                if (
+                    checkHeader(String(rawRow['CODCLI'] || '')) ||
+                    checkHeader(String(rawRow['PRODUTO'] || '')) ||
+                    checkHeader(String(rawRow['SUPERV'] || '')) ||
+                    checkHeader(String(rawRow['NOME'] || '')) ||
+                    String(rawRow['CODCLI'] || '').trim().toUpperCase() === 'CODCLI' ||
+                    String(rawRow['PRODUTO'] || '').trim().toUpperCase() === 'PRODUTO' ||
+                    String(rawRow['PRODUTO'] || '').trim().toUpperCase() === 'CÓDIGO' ||
+                    String(rawRow['SUPERV'] || '').trim().toUpperCase() === 'SUPERV' ||
+                    String(rawRow['NOME'] || '').trim().toUpperCase() === 'NOME' ||
+                    String(rawRow['TIPOVENDA'] || '').trim().toUpperCase() === 'TIPOVENDA'
+                ) {
+                    continue;
+                }
 
                 // --- NOVA LÓGICA: Derivação de OBSERVACAOFOR se vazio ---
                 let observacaoFor = String(rawRow['OBSERVACAOFOR'] || '').trim();
@@ -685,6 +679,18 @@
                 const productMasterMap = new Map();
                 const activeProductCodesFromCadastro = new Set();
                 const productDetailsMap = new Map();
+                const productsSeenInSales = new Set();
+                const collectProducts = (data) => {
+                    data.forEach(row => {
+                        const prod = String(row["PRODUTO"] || "").trim();
+                    if (productsSeenInSales.has(prod)) return;
+                        if (prod && !FORBIDDEN_KEYS.has(prod.toUpperCase()) && prod.toUpperCase() !== "PRODUTO" && prod !== "0" && prod !== "00") {
+                            productsSeenInSales.add(prod);
+                        }
+                    });
+                };
+                collectProducts(salesDataRaw);
+                collectProducts(historyDataRaw);
 
                 productsDataRaw.forEach(prod => {
                     const productCode = String(prod['Código'] || '').trim();
