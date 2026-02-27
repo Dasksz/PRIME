@@ -1,7 +1,7 @@
         self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
         self.importScripts('https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js');
 
-        const FORBIDDEN_KEYS = new Set(['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR', 'PASTA', 'RAMO', 'ATIVIDADE', 'CIDADE', 'MUNICIPIO', 'BAIRRO']);
+        const FORBIDDEN_KEYS = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR', 'PASTA', 'RAMO', 'ATIVIDADE', 'CIDADE', 'MUNICIPIO', 'BAIRRO'];
 
         const mandatoryColumns = {
             sales: ['CODCLI', 'PEDIDO', 'CODUSUR', 'CODSUPERVISOR', 'DTPED', 'DTSAIDA', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX'],
@@ -310,7 +310,7 @@
 
                 // --- HEADER DETECTION: Ignore rows that look like headers ---
                 // Enhanced robust detection: Check against forbidden keys list
-                const checkHeader = (val) => val && FORBIDDEN_KEYS.has(val.trim().toUpperCase());
+                const checkHeader = (val) => val && FORBIDDEN_KEYS.includes(val.trim().toUpperCase());
 
                 if (
                     checkHeader(String(rawRow['CODCLI'] || '')) ||
@@ -679,18 +679,6 @@
                 const productMasterMap = new Map();
                 const activeProductCodesFromCadastro = new Set();
                 const productDetailsMap = new Map();
-                const productsSeenInSales = new Set();
-                const collectProducts = (data) => {
-                    data.forEach(row => {
-                        const prod = String(row["PRODUTO"] || "").trim();
-                    if (!productsSeenInSales.has(productCode)) return;
-                        if (prod && !FORBIDDEN_KEYS.includes(prod.toUpperCase()) && prod.toUpperCase() !== "PRODUTO" && prod !== "0" && prod !== "00") {
-                            productsSeenInSales.add(prod);
-                        }
-                    });
-                };
-                collectProducts(salesDataRaw);
-                collectProducts(historyDataRaw);
 
                 productsDataRaw.forEach(prod => {
                     const productCode = String(prod['Código'] || '').trim();
