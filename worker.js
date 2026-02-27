@@ -679,6 +679,18 @@
                 const productMasterMap = new Map();
                 const activeProductCodesFromCadastro = new Set();
                 const productDetailsMap = new Map();
+                const productsSeenInSales = new Set();
+                const collectProducts = (data) => {
+                    data.forEach(row => {
+                        const prod = String(row["PRODUTO"] || "").trim();
+                    if (!productsSeenInSales.has(productCode)) return;
+                        if (prod && !FORBIDDEN_KEYS.includes(prod.toUpperCase()) && prod.toUpperCase() !== "PRODUTO" && prod !== "0" && prod !== "00") {
+                            productsSeenInSales.add(prod);
+                        }
+                    });
+                };
+                collectProducts(salesDataRaw);
+                collectProducts(historyDataRaw);
 
                 productsDataRaw.forEach(prod => {
                     const productCode = String(prod['Código'] || '').trim();
