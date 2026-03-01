@@ -12431,22 +12431,61 @@ const supervisorGroups = new Map();
                         console.warn(`Erro ao chamar RPC truncate_table para ${table}, tentando DELETE convencional...`, e);
                     }
 
-                    // Fallback: Deleta todas as linhas da tabela
-                    const response = await fetch(`${supabaseUrl}/rest/v1/${table}?${pkColumn}=not.is.null`, {
-                        method: 'DELETE',
-                        headers: {
-                            'apikey': apiKeyHeader,
-                            'Authorization': `Bearer ${authToken}`,
-                            'Content-Type': 'application/json'
-                        }
-                    });
+                    // Fallback: Batched Delete para evitar Statement Timeout (57014)
+                    console.info(`Iniciando exclusão em lote para a tabela ${table}...`);
+                    let hasMore = true;
+                    // Utiliza lote de 200 para garantir que a URL gerada com in.(id1,id2...)
+                    // não exceda o limite de ~8KB de requisições HTTP do Supabase/NGINX.
+                    const batchSize = 200;
 
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        if (errorText.includes('57014') || errorText.includes('statement timeout')) {
-                            throw new Error(`Erro de Timeout (57014) ao limpar a tabela ${table}. O banco de dados demorou muito para deletar os dados antigos.\n\nPara resolver isso permanentemente, você precisa criar a função 'truncate_table' no Supabase. Copie todo o conteúdo do arquivo 'SQL/SQL_GERAL.sql' e execute-o no SQL Editor do seu projeto Supabase.`);
+                    while (hasMore) {
+                        // Busca um lote de IDs
+                        const fetchResponse = await fetch(`${supabaseUrl}/rest/v1/${table}?select=${pkColumn}&limit=${batchSize}`, {
+                            method: 'GET',
+                            headers: {
+                                'apikey': apiKeyHeader,
+                                'Authorization': `Bearer ${authToken}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+
+                        if (!fetchResponse.ok) {
+                            const errorText = await fetchResponse.text();
+                            throw new Error(`Erro ao buscar IDs para exclusão em lote na tabela ${table}: ${errorText}`);
                         }
-                        throw new Error(`Erro ao limpar tabela ${table}: ${errorText}`);
+
+                        const rows = await fetchResponse.json();
+
+                        if (rows.length === 0) {
+                            hasMore = false;
+                            break;
+                        }
+
+                        const ids = rows.map(r => r[pkColumn]);
+
+                        // Deleta o lote
+                        const deleteUrl = new URL(`${supabaseUrl}/rest/v1/${table}`);
+
+                        // Para evitar URL too long, não passamos todos os ids na URL se forem muitos (limitamos a 1000 que geralmente é seguro)
+                        deleteUrl.searchParams.append(pkColumn, `in.(${ids.join(',')})`);
+
+                        const deleteResponse = await fetch(deleteUrl.toString(), {
+                            method: 'DELETE',
+                            headers: {
+                                'apikey': apiKeyHeader,
+                                'Authorization': `Bearer ${authToken}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+
+                        if (!deleteResponse.ok) {
+                            const errorText = await deleteResponse.text();
+                            // If it still times out on 1000 rows (unlikely but possible), show the helpful message
+                            if (errorText.includes('57014') || errorText.includes('statement timeout')) {
+                                throw new Error(`Erro de Timeout (57014) ao limpar a tabela ${table} em lotes. O banco de dados está extremamente lento.\n\nPara resolver isso permanentemente, você precisa criar a função 'truncate_table' no Supabase. Copie todo o conteúdo do arquivo 'SQL/SQL_GERAL.sql' e execute-o no SQL Editor do seu projeto Supabase.`);
+                            }
+                            throw new Error(`Erro ao deletar lote na tabela ${table}: ${errorText}`);
+                        }
                     }
                 });
             };
