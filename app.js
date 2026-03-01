@@ -12443,6 +12443,9 @@ const supervisorGroups = new Map();
 
                     if (!response.ok) {
                         const errorText = await response.text();
+                        if (errorText.includes('57014') || errorText.includes('statement timeout')) {
+                            throw new Error(`Erro de Timeout (57014) ao limpar a tabela ${table}. O banco de dados demorou muito para deletar os dados antigos.\n\nPara resolver isso permanentemente, você precisa criar a função 'truncate_table' no Supabase. Copie todo o conteúdo do arquivo 'SQL/SQL_GERAL.sql' e execute-o no SQL Editor do seu projeto Supabase.`);
+                        }
                         throw new Error(`Erro ao limpar tabela ${table}: ${errorText}`);
                     }
                 });
