@@ -7,6 +7,12 @@
 -- To make a user an admin, run the following SQL (replace with the user's email):
 -- UPDATE public.profiles SET role = 'adm', status = 'aprovado' WHERE email = 'user@example.com';
 -- ==============================================================================
+
+-- Disable statement timeout for this script execution to prevent "upstream timeout" errors
+-- caused by altering large tables or replacing policies that might be locked by active connections.
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+
 -- Enable UUID extension
 create extension if not exists "uuid-ossp";
 
