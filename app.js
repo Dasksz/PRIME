@@ -12434,9 +12434,10 @@ const supervisorGroups = new Map();
                     // Fallback: Batched Delete para evitar Statement Timeout (57014)
                     console.info(`Iniciando exclusão em lote para a tabela ${table}...`);
                     let hasMore = true;
-                    // Utiliza lote de 200 para garantir que a URL gerada com in.(id1,id2...)
-                    // não exceda o limite de ~8KB de requisições HTTP do Supabase/NGINX.
-                    const batchSize = 200;
+                    // Utiliza lote de 50 para garantir que a URL gerada com in.(id1,id2...)
+                    // não exceda o limite de ~8KB de requisições HTTP do Supabase/NGINX
+                    // (50 UUIDs * 37 chars = ~1850 bytes).
+                    const batchSize = 50;
 
                     while (hasMore) {
                         // Busca um lote de IDs
@@ -12466,7 +12467,7 @@ const supervisorGroups = new Map();
                         // Deleta o lote
                         const deleteUrl = new URL(`${supabaseUrl}/rest/v1/${table}`);
 
-                        // Para evitar URL too long, não passamos todos os ids na URL se forem muitos (limitamos a 1000 que geralmente é seguro)
+                        // Para evitar URL too long, não passamos todos os ids na URL se forem muitos (limitamos a 50 que é seguro)
                         deleteUrl.searchParams.append(pkColumn, `in.(${ids.join(',')})`);
 
                         const deleteResponse = await fetch(deleteUrl.toString(), {
@@ -12474,17 +12475,24 @@ const supervisorGroups = new Map();
                             headers: {
                                 'apikey': apiKeyHeader,
                                 'Authorization': `Bearer ${authToken}`,
-                                'Content-Type': 'application/json'
+                                'Content-Type': 'application/json',
+                                'Prefer': 'return=representation'
                             }
                         });
 
                         if (!deleteResponse.ok) {
                             const errorText = await deleteResponse.text();
-                            // If it still times out on 1000 rows (unlikely but possible), show the helpful message
                             if (errorText.includes('57014') || errorText.includes('statement timeout')) {
                                 throw new Error(`Erro de Timeout (57014) ao limpar a tabela ${table} em lotes. O banco de dados está extremamente lento.\n\nPara resolver isso permanentemente, você precisa criar a função 'truncate_table' no Supabase. Copie todo o conteúdo do arquivo 'SQL/SQL_GERAL.sql' e execute-o no SQL Editor do seu projeto Supabase.`);
                             }
                             throw new Error(`Erro ao deletar lote na tabela ${table}: ${errorText}`);
+                        }
+
+                        const deletedRows = await deleteResponse.json();
+
+                        // Prevent infinite loop if RLS blocks deletion (i.e. we fetch rows but cannot delete them)
+                        if (deletedRows.length === 0) {
+                            throw new Error(`Permissão Negada: Nenhuma linha foi deletada na tabela ${table}. Suas políticas de segurança (RLS) permitem leitura mas bloqueiam exclusão.`);
                         }
                     }
                 });
