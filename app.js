@@ -222,51 +222,77 @@
         function parseDate(dateString) {
             if (!dateString) return null;
 
-            // Se já for um objeto Date, retorna diretamente
+            if (typeof dateString === 'string') {
+                const len = dateString.length;
+
+                // Fast paths for fixed-length dates
+                if (len === 10) {
+                    // Check for YYYY-MM-DD
+                    if (dateString.charCodeAt(4) === 45 && dateString.charCodeAt(7) === 45) { // '-' is 45
+                        const c0 = dateString.charCodeAt(0), c1 = dateString.charCodeAt(1), c2 = dateString.charCodeAt(2), c3 = dateString.charCodeAt(3);
+                        const c5 = dateString.charCodeAt(5), c6 = dateString.charCodeAt(6);
+                        const c8 = dateString.charCodeAt(8), c9 = dateString.charCodeAt(9);
+                        if (c0 >= 48 && c0 <= 57 && c1 >= 48 && c1 <= 57 && c2 >= 48 && c2 <= 57 && c3 >= 48 && c3 <= 57 &&
+                            c5 >= 48 && c5 <= 57 && c6 >= 48 && c6 <= 57 && c8 >= 48 && c8 <= 57 && c9 >= 48 && c9 <= 57) {
+                            const y = (c0 - 48) * 1000 + (c1 - 48) * 100 + (c2 - 48) * 10 + (c3 - 48);
+                            const m = (c5 - 48) * 10 + (c6 - 48);
+                            const d = (c8 - 48) * 10 + (c9 - 48);
+                            if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+                                return new Date(Date.UTC(y, m - 1, d));
+                            }
+                        }
+                    }
+                    // Check for DD/MM/YYYY
+                    else if (dateString.charCodeAt(2) === 47 && dateString.charCodeAt(5) === 47) { // '/' is 47
+                        const c0 = dateString.charCodeAt(0), c1 = dateString.charCodeAt(1);
+                        const c3 = dateString.charCodeAt(3), c4 = dateString.charCodeAt(4);
+                        const c6 = dateString.charCodeAt(6), c7 = dateString.charCodeAt(7), c8 = dateString.charCodeAt(8), c9 = dateString.charCodeAt(9);
+                        if (c0 >= 48 && c0 <= 57 && c1 >= 48 && c1 <= 57 && c3 >= 48 && c3 <= 57 && c4 >= 48 && c4 <= 57 &&
+                            c6 >= 48 && c6 <= 57 && c7 >= 48 && c7 <= 57 && c8 >= 48 && c8 <= 57 && c9 >= 48 && c9 <= 57) {
+                            const d = (c0 - 48) * 10 + (c1 - 48);
+                            const m = (c3 - 48) * 10 + (c4 - 48);
+                            const y = (c6 - 48) * 1000 + (c7 - 48) * 100 + (c8 - 48) * 10 + (c9 - 48);
+                            if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+                                return new Date(Date.UTC(y, m - 1, d));
+                            }
+                        }
+                    }
+                }
+
+                // Fast path for ISO 'YYYY-MM-DDTHH:mm:ss...' strings
+                if (len >= 19 && dateString.charCodeAt(4) === 45 && dateString.charCodeAt(7) === 45 && dateString.charCodeAt(10) === 84) { // 'T' is 84
+                     const isoString = dateString.charCodeAt(len - 1) === 90 ? dateString : dateString + 'Z'; // 'Z' is 90
+                     const isoDate = new Date(isoString);
+                     if (!isNaN(isoDate.getTime())) return isoDate;
+                }
+
+                if (dateString.includes('T') || dateString.includes('-')) {
+                    const isoString = dateString.endsWith('Z') ? dateString : dateString + 'Z';
+                    const isoDate = new Date(isoString);
+                    if (!isNaN(isoDate.getTime())) {
+                        return isoDate;
+                    }
+                }
+
+                // Fallback para outros formatos
+                const genericDate = new Date(dateString);
+                if (!isNaN(genericDate.getTime())) {
+                    return genericDate;
+                }
+
+                return null;
+            }
+
+            if (typeof dateString === 'number') {
+                if (dateString < 100000) return new Date(Math.round((dateString - 25569) * 86400 * 1000));
+                return new Date(dateString);
+            }
+
             if (dateString instanceof Date) {
                 return !isNaN(dateString.getTime()) ? dateString : null;
             }
 
-            // Se for um número (formato Excel ou Timestamp)
-            if (typeof dateString === 'number') {
-                // Excel Serial Date (approx < 50000 for current dates, Timestamp is > 1000000000000)
-                if (dateString < 100000) return new Date(Math.round((dateString - 25569) * 86400 * 1000));
-                // Timestamp
-                return new Date(dateString);
-            }
-
-            if (typeof dateString !== 'string') return null;
-
-            // Tentativa de parse para 'YYYY-MM-DDTHH:mm:ss.sssZ' ou 'YYYY-MM-DD'
-            // O construtor do Date já lida bem com isso, mas vamos garantir o UTC.
-            if (dateString.includes('T') || dateString.includes('-')) {
-                 // Adiciona 'Z' se não tiver informação de fuso horário para forçar UTC
-                const isoString = dateString.endsWith('Z') ? dateString : dateString + 'Z';
-                const isoDate = new Date(isoString);
-                if (!isNaN(isoDate.getTime())) {
-                    return isoDate;
-                }
-            }
-
-            // Tentativa de parse para 'DD/MM/YYYY'
-            if (dateString.length === 10 && dateString.charAt(2) === '/' && dateString.charAt(5) === '/') {
-                const [day, month, year] = dateString.split('/');
-                if (year && month && day && year.length === 4) {
-                    // Cria a data em UTC para evitar problemas de fuso horário
-                    const utcDate = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
-                    if (!isNaN(utcDate.getTime())) {
-                        return utcDate;
-                    }
-                }
-            }
-
-            // Fallback para outros formatos que o `new Date()` consegue interpretar
-            const genericDate = new Date(dateString);
-            if (!isNaN(genericDate.getTime())) {
-                return genericDate;
-            }
-
-            return null; // Retorna nulo se nenhum formato corresponder
+            return null;
         }
 
         // --- OPTIMIZATION: Chunked Processor to prevent UI Freeze ---
