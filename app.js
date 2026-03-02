@@ -9,6 +9,7 @@
                 this._data = columnarData.values; // Renamed to avoid shadowing values() method
                 this.length = columnarData.length;
                 this._overrides = new Map(); // Stores mutations: Map<index, Object>
+                this._rowCache = new Array(this.length); // Caches row proxies to prevent reallocation
 
                 // Shared Proxy Handler to avoid allocation per row
                 this._proxyHandler = {
@@ -91,8 +92,14 @@
 
             get(index) {
                 if (index < 0 || index >= this.length) return undefined;
-                // Use shared handler and lightweight target
-                return new Proxy(new this.RowTarget(index, this), this._proxyHandler);
+                // Use cached row proxy if available
+                if (this._rowCache[index] !== undefined) {
+                    return this._rowCache[index];
+                }
+                // Instantiate new proxy and cache it
+                const proxy = new Proxy(new this.RowTarget(index, this), this._proxyHandler);
+                this._rowCache[index] = proxy;
+                return proxy;
             }
 
             // Implement basic Array methods to behave like an array
