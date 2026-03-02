@@ -2627,6 +2627,55 @@
             }, () => currentRenderId !== mixRenderId);
         }
 
+        async function exportMixExcel() {
+            if (typeof XLSX === 'undefined') {
+                alert("Erro: Biblioteca XLSX não carregada. Verifique sua conexão com a internet.");
+                return;
+            }
+
+            const supervisor = document.getElementById('mix-supervisor-filter-text').textContent;
+            const vendedor = document.getElementById('mix-vendedor-filter-text').textContent;
+            const city = document.getElementById('mix-city-filter').value.trim();
+
+            const saltyCols = MIX_SALTY_CATEGORIES.map(c => c.substring(0, 8));
+            const foodsCols = MIX_FOODS_CATEGORIES.map(c => c.substring(0, 8));
+
+            // Create Excel data structure
+            const excelData = mixTableDataForExport.map(row => {
+                const rowData = {
+                    'Cód': row.codcli,
+                    'Cliente': row.name,
+                    'Cidade': row.city || '',
+                    'Vendedor': row.vendedor || ''
+                };
+
+                // Add Salty Categories
+                MIX_SALTY_CATEGORIES.forEach((b, idx) => {
+                    rowData[saltyCols[idx]] = row.brands.has(b) ? 'OK' : 'X';
+                });
+
+                // Add Foods Categories
+                MIX_FOODS_CATEGORIES.forEach((b, idx) => {
+                    rowData[foodsCols[idx]] = row.brands.has(b) ? 'OK' : 'X';
+                });
+
+                // Add final summary columns
+                rowData['Mix Salty'] = row.hasSalty ? 'VERDADEIRO' : 'FALSO';
+                rowData['Mix Foods'] = row.hasFoods ? 'VERDADEIRO' : 'FALSO';
+
+                return rowData;
+            });
+
+            const ws = XLSX.utils.json_to_sheet(excelData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Mix Salty & Foods");
+
+            // Define safe filename string
+            const safeName = (supervisor !== 'Todos os Supervisores' ? supervisor : (vendedor !== 'Todos os Vendedores' ? vendedor : 'Todos')).replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
+            XLSX.writeFile(wb, `Relatorio_Mix_${safeName}.xlsx`);
+        }
+
         async function exportMixPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('landscape');
@@ -14386,7 +14435,32 @@ const supervisorGroups = new Map();
             });
 
             document.getElementById('clear-mix-filters-btn').addEventListener('click', () => { resetMixFilters(); markDirty('mix'); });
-            document.getElementById('export-mix-pdf-btn').addEventListener('click', exportMixPDF);
+
+            const exportMixDropdownBtn = document.getElementById('export-mix-dropdown-btn');
+            const exportMixDropdownMenu = document.getElementById('export-mix-dropdown-menu');
+
+            exportMixDropdownBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                exportMixDropdownMenu.classList.toggle('hidden');
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!exportMixDropdownBtn.contains(e.target) && !exportMixDropdownMenu.contains(e.target)) {
+                    exportMixDropdownMenu.classList.add('hidden');
+                }
+            });
+
+            document.getElementById('export-mix-pdf-btn').addEventListener('click', (e) => {
+                e.preventDefault();
+                exportMixDropdownMenu.classList.add('hidden');
+                exportMixPDF();
+            });
+
+            document.getElementById('export-mix-excel-btn').addEventListener('click', (e) => {
+                e.preventDefault();
+                exportMixDropdownMenu.classList.add('hidden');
+                exportMixExcel();
+            });
 
             document.getElementById('mix-kpi-toggle').addEventListener('change', (e) => {
                 mixKpiMode = e.target.checked ? 'atendidos' : 'total';

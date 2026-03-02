@@ -1407,7 +1407,18 @@
                                                 </div>
                                             </div>
                                         </div>
-                                        <button id="export-mix-pdf-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Exportar PDF</button>
+                                        <div class="relative inline-block text-left">
+                                            <button id="export-mix-dropdown-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2">
+                                                Exportar
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                            </button>
+                                            <div id="export-mix-dropdown-menu" class="hidden origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-slate-800 ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+                                                <div class="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
+                                                    <a href="#" id="export-mix-pdf-btn" class="block px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white" role="menuitem">Exportar PDF</a>
+                                                    <a href="#" id="export-mix-excel-btn" class="block px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white" role="menuitem">Exportar EXCEL</a>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </header>
