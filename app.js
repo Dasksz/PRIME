@@ -319,7 +319,7 @@
                     processItemFn(item, index);
                     index++;
 
-                    if (index % 5 === 0 && performance.now() - start >= 12) { // Check budget frequently to avoid long tasks
+                    if (index % 100 === 0 && performance.now() - start >= 40) { // Check budget to avoid long tasks (>50ms)
                         break;
                     }
                 }
