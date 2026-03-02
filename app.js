@@ -2483,6 +2483,7 @@
                     name: client.fantasia || client.razaoSocial,
                     city: client.cidade || client.CIDADE || client['Nome da Cidade'] || 'N/A',
                     vendedor: vendorName,
+                    codvendedor: rcaCode || 'N/A',
                     hasSalty: hasSalty,
                     hasFoods: hasFoods,
                     brands: positivatedCats,
@@ -2646,6 +2647,7 @@
                     'Cód': row.codcli,
                     'Cliente': row.name,
                     'Cidade': row.city || '',
+                    'Cód Vendedor': row.codvendedor || '',
                     'Vendedor': row.vendedor || ''
                 };
 
