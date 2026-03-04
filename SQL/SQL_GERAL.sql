@@ -186,6 +186,15 @@ create table if not exists public.data_client_coordinates (
   updated_at timestamp with time zone default now()
 );
 
+-- 1.13 Tabela de Configuração de Filiais por Cidade
+create table if not exists public.config_city_branches (
+  id uuid default uuid_generate_v4 () primary key,
+  cidade text not null,
+  filial text not null,
+  updated_at timestamp with time zone default now(),
+  created_at timestamp with time zone default now()
+);
+
 -- Ensure columns exist (Idempotency for older schemas)
 do $$
 BEGIN
@@ -384,7 +393,8 @@ BEGIN
             'data_metadata',
             'data_orders',
             'data_product_details',
-            'data_stock'
+            'data_stock',
+            'config_city_branches'
         )
     LOOP
         -- Cleanup
