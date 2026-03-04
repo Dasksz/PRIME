@@ -1522,7 +1522,7 @@
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
                 
                 // Logic identical to 'updateCoverageView' active clients KPI
-                return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(codcli));
+                return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(codcli));
             });
         }
         const cityCodCliFilter = document.getElementById('city-codcli-filter');
@@ -1892,8 +1892,8 @@
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
                 if (isAmericanas) return true;
                 // STRICT FILTER: Exclude RCA 53 (Balcão) and INATIVOS (Empty RCA1)
-                if (rca1 === '53') return false;
-                if (rca1 === '') return false; // Exclude INATIVOS
+                // if (rca1 === '53') return false;
+                // if (rca1 === '') return false; // Exclude INATIVOS
                 return true;
             });
 
@@ -2308,7 +2308,7 @@
                 // Active / Americanas / RCA 53 filter
                 const rca1Str = String(rca1 || '').trim();
                 const isAmericanas = (razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                const isActive = (isAmericanas || rca1Str !== '53' || clientsWithSalesThisMonth.has(codCli));
+                const isActive = true; // const isActive = (isAmericanas || rca1Str !== '53' || clientsWithSalesThisMonth.has(codCli));
                 if (!isActive) continue;
 
                 // Match found: populate results
@@ -2838,7 +2838,7 @@
                 const cod = String(c['Código'] || c['codigo_cliente']);
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
+                return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
             });
 
             if (activeClients.length === 0) return;
@@ -3477,7 +3477,7 @@
                 const cod = String(c['Código'] || c['codigo_cliente']);
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
+                return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
             });
 
             // Iterate Active Clients
@@ -4701,7 +4701,7 @@
                 const cod = String(c['Código'] || c['codigo_cliente']);
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
+                return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
             });
 
             let count = 0;
@@ -5900,7 +5900,7 @@
                 const cod = String(c['Código'] || c['codigo_cliente']);
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
+                return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
             });
 
             let count = 0;
@@ -7539,7 +7539,7 @@ const supervisorGroups = new Map();
                 const rca1 = String(c.rca1 || '').trim();
 
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(codcli));
+                return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(codcli));
             });
             const activeClientsCount = activeClientsForCoverage.length;
             const activeClientCodes = new Set(activeClientsForCoverage.map(c => c['Código']));
@@ -8346,7 +8346,7 @@ const supervisorGroups = new Map();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
 
                 // Regra de inclusão (Americanas ou RCA 1 diferente de 53)
-                return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(c['Código']));
+                return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(c['Código']));
             });
 
             if (mainRedeGroupFilter === 'com_rede') {
@@ -8967,7 +8967,7 @@ const supervisorGroups = new Map();
             clientsForAnalysis = clientsForAnalysis.filter(c => {
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(c['Código']));
+                return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(c['Código']));
             });
 
             // Show Loading
@@ -11281,7 +11281,7 @@ const supervisorGroups = new Map();
                 const rca1 = String(c.rca1 || '').trim();
                 if (rca1 === '306' || rca1 === '300') return false;
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(codcli));
+                return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(codcli));
             });
             const activeClientsCount = activeClients.length;
             const activeClientCodes = new Set(activeClients.map(c => c['Código']));
@@ -14907,7 +14907,7 @@ const supervisorGroups = new Map();
                 const cod = String(c["Código"] || c["codigo_cliente"]);
                 const rca1 = String(c.rca1 || "").trim();
                 const isAmericanas = (c.razaoSocial || "").toUpperCase().includes("AMERICANAS");
-                return (isAmericanas || rca1 !== "53" || clientsWithSalesThisMonth.has(cod));
+                return true; // return (isAmericanas || rca1 !== "53" || clientsWithSalesThisMonth.has(cod));
             });
 
             activeClients.forEach(client => {
@@ -15531,7 +15531,7 @@ const supervisorGroups = new Map();
                         const cod = String(c['Código'] || c['codigo_cliente']);
                         const rca1 = String(c.rca1 || '').trim();
                         const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                        return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
+                        return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
                     });
 
                     let total = 0;
