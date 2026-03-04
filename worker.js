@@ -173,9 +173,7 @@
             for (let i = 0; i < scanLimit; i++) {
                 Object.keys(data[i]).forEach(k => headersSet.add(k));
             }
-            const headers = Array.from(headersSet);
-
-            const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+            const missingColumns = requiredColumns.filter(col => !headersSet.has(col));
 
             if (missingColumns.length > 0) {
                 throw new Error(`Erro no arquivo '${fileName}'. Colunas obrigatórias não encontradas: ${missingColumns.join(', ')}.`);
