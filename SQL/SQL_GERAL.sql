@@ -304,7 +304,7 @@ BEGIN
     FOR t IN 
         SELECT table_name FROM information_schema.tables 
         WHERE table_schema = 'public' 
-        AND (table_name LIKE 'data_%' OR table_name = 'goals_distribution' OR table_name = 'profiles')
+        AND (table_name LIKE 'data_%' OR table_name LIKE 'config_%' OR table_name = 'goals_distribution' OR table_name = 'profiles')
     LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', t);
         
