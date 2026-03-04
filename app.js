@@ -12773,7 +12773,7 @@ const supervisorGroups = new Map();
 
             const generateBtn = document.getElementById('generate-btn');
             if (generateBtn) {
-                generateBtn.addEventListener('click', () => {
+                generateBtn.addEventListener('click', async () => {
                     const salesFile = document.getElementById('sales-file-input').files[0];
                     const clientsFile = document.getElementById('clients-file-input').files[0];
                     const productsFile = document.getElementById('products-file-input').files[0];
@@ -12785,20 +12785,38 @@ const supervisorGroups = new Map();
                         return;
                     }
 
+                    document.getElementById('status-container').classList.remove('hidden');
+                    document.getElementById('status-text').textContent = "Buscando configurações de filiais...";
+                    document.getElementById('progress-bar').style.width = '5%';
+
+                    let configCityBranches = [];
+                    try {
+                        const { data, error } = await window.supabaseClient
+                            .from('config_city_branches')
+                            .select('cidade, filial');
+                        if (error) throw error;
+                        if (data) configCityBranches = data;
+                    } catch (err) {
+                        console.error("Erro ao buscar config_city_branches:", err);
+                        alert("Não foi possível carregar a tabela de configuração de filiais. O processamento continuará sem essas regras.");
+                    }
+
                     // Initialize Worker
                     const worker = new Worker('worker.js');
 
-                    document.getElementById('status-container').classList.remove('hidden');
                     document.getElementById('status-text').textContent = "Processando arquivos...";
 
-                    worker.postMessage({ salesFile, clientsFile, productsFile, historyFile, innovationsFile });
+                    worker.postMessage({ salesFile, clientsFile, productsFile, historyFile, innovationsFile, configCityBranches });
 
                     worker.onmessage = (e) => {
-                        const { type, data, status, percentage, message } = e.data;
+                        const { type, data, status, percentage, message, missingCities } = e.data;
                         if (type === 'progress') {
                             document.getElementById('status-text').textContent = status;
                             document.getElementById('progress-bar').style.width = percentage + '%';
                         } else if (type === 'result') {
+                            if (missingCities && missingCities.length > 0) {
+                                alert("Aviso: As seguintes cidades presentes no cadastro de clientes não foram encontradas na tabela 'config_city_branches':\n" + missingCities.join('\n'));
+                            }
                             enviarDadosParaSupabase(data);
                             worker.terminate();
                         } else if (type === 'error') {

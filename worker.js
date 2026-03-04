@@ -601,7 +601,7 @@
         }
 
         self.onmessage = async (event) => {
-            const { salesFile, clientsFile, productsFile, historyFile, innovationsFile } = event.data;
+            const { salesFile, clientsFile, productsFile, historyFile, innovationsFile, configCityBranches } = event.data;
 
             try {
                 self.postMessage({ type: 'progress', status: 'Lendo arquivos...', percentage: 10 });
@@ -820,42 +820,44 @@
                     }
                 });
 
-                self.postMessage({ type: 'progress', status: 'Aplicando regra de filial...', percentage: 75 });
+                self.postMessage({ type: 'progress', status: 'Aplicando regra de filial por cidade...', percentage: 75 });
 
-                const allProcessedSales = [...processedSalesData, ...processedHistoryData].sort((a, b) => {
-                    const dateA = parseDate(a.DTPED) || new Date(0);
-                    const dateB = parseDate(b.DTPED) || new Date(0);
-                    return dateA - dateB;
-                });
+                // Normaliza texto: remove acentos e converte para minúsculas
+                const normalizeText = (text) => {
+                    if (!text) return '';
+                    return String(text).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+                };
 
-                const clientLastBranch = new Map();
-                const clientsWith05Purchase = new Set();
+                const cityBranchMap = new Map();
+                if (configCityBranches && Array.isArray(configCityBranches)) {
+                    configCityBranches.forEach(row => {
+                        const cityNorm = normalizeText(row.cidade);
+                        if (cityNorm) cityBranchMap.set(cityNorm, String(row.filial));
+                    });
+                }
 
-                allProcessedSales.forEach(sale => {
-                    const codCli = sale.CODCLI;
-                    const filial = sale.FILIAL;
-                    if (codCli && filial) {
-                        clientLastBranch.set(codCli, filial);
-                        if (filial === '05') {
-                            clientsWith05Purchase.add(codCli);
+                const clientBranchOverride = new Map();
+                const missingCitiesSet = new Set();
+
+                clientMap.forEach((clientData, codcli) => {
+                    const city = clientData.cidade;
+                    if (city) {
+                        const cityNorm = normalizeText(city);
+                        if (cityBranchMap.has(cityNorm)) {
+                            clientBranchOverride.set(codcli, cityBranchMap.get(cityNorm));
+                        } else {
+                            missingCitiesSet.add(city.trim());
                         }
                     }
                 });
 
-                const clientBranchOverride = new Map();
-                clientsWith05Purchase.forEach(codCli => {
-                    const lastBranch = clientLastBranch.get(codCli);
-                    if (lastBranch && lastBranch === '08') {
-                        clientBranchOverride.set(codCli, '08');
-                    }
-                });
+                const missingCities = Array.from(missingCitiesSet).sort();
 
                 const applyBranchOverride = (salesArray, overrideMap) => {
-                    // Use standard loop for better performance in worker
                     for(let i=0; i<salesArray.length; i++) {
                         const sale = salesArray[i];
                         const override = overrideMap.get(sale.CODCLI);
-                        if (override && sale.FILIAL === '05') {
+                        if (override) {
                             sale.FILIAL = override;
                         }
                     }
@@ -864,23 +866,6 @@
 
                 let finalSalesData = applyBranchOverride(processedSalesData, clientBranchOverride);
                 let finalHistoryData = applyBranchOverride(processedHistoryData, clientBranchOverride);
-
-                self.postMessage({ type: 'progress', status: 'Aplicando regra específica para Supervisor Tiago...', percentage: 78 });
-                const tiagoSellersToMoveTo08 = new Set(['291', '292', '293', '284', '289', '287', '286']);
-
-                const applyTiagoRule = (salesArray) => {
-                    for(let i=0; i<salesArray.length; i++) {
-                        const sale = salesArray[i];
-                        if (sale.CODSUPERVISOR === '12' && tiagoSellersToMoveTo08.has(sale.CODUSUR)) {
-                            sale.FILIAL = '08';
-                        }
-                    }
-                    return salesArray;
-                };
-
-                finalSalesData = applyTiagoRule(finalSalesData);
-                finalHistoryData = applyTiagoRule(finalHistoryData);
-
 
                 self.postMessage({ type: 'progress', status: 'Atualizando datas de compra...', percentage: 80 });
                 const latestSaleDateByClient = new Map();
@@ -1010,6 +995,7 @@
 
                 self.postMessage({
                     type: 'result',
+                    missingCities: missingCities,
                     data: {
                         detailed: columnarDetailed,
                         history: columnarHistory,
