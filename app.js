@@ -9720,7 +9720,7 @@ const supervisorGroups = new Map();
             const firstOfMonth = new Date(Date.UTC(currentYear, currentMonth, 1));
             const hasOverlap = firstWeekStart < firstOfMonth;
 
-            const pepsicoCodfors = new Set(['707', '708']);
+            const pepsicoCodfors = new Set(['707', '708', '752']);
             const saltyCategories = ['CHEETOS', 'DORITOS', 'FANDANGOS', 'RUFFLES', 'TORCIDA'];
             const foodsCategories = ['TODDYNHO', 'TODDY ', 'QUAKER', 'KEROCOCO'];
 
@@ -10528,7 +10528,7 @@ const supervisorGroups = new Map();
             const firstWeekStart = currentMonthWeeks[0].start;
             const firstOfMonth = new Date(Date.UTC(currentYear, currentMonth, 1));
             const hasOverlap = firstWeekStart < firstOfMonth;
-            const pepsicoCodfors = new Set(['707', '708']);
+            const pepsicoCodfors = new Set(['707', '708', '752']);
             const saltyCategories = ['CHEETOS', 'DORITOS', 'FANDANGOS', 'RUFFLES', 'TORCIDA'];
             const foodsCategories = ['TODDYNHO', 'TODDY ', 'QUAKER', 'KEROCOCO'];
             const norm = (s) => s ? s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase() : '';
