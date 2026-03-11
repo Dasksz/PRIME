@@ -8537,8 +8537,18 @@ const supervisorGroups = new Map();
                 const totalFaturamentoFornecedor = Object.values(faturamentoPorFornecedorData).reduce((a, b) => a + b, 0);
                 const fornecedorTooltipOptions = { indexAxis: 'y', plugins: { tooltip: { callbacks: { label: function(context) { let label = context.label || ''; if (label) label += ': '; const value = context.parsed.x; if (value !== null) { label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); if (totalFaturamentoFornecedor > 0) { const percentage = ((value / totalFaturamentoFornecedor) * 100).toFixed(2); label += ` (${percentage}%)`; } } return label; } } } } };
                 const sortedFornecedores = Object.entries(faturamentoPorFornecedorData).sort(([, a], [, b]) => a - b);
-                if (sortedFornecedores.length > 0) createChart('faturamentoPorFornecedorChart', 'bar', sortedFornecedores.map(([name]) => name), sortedFornecedores.map(([, total]) => total), fornecedorTooltipOptions);
-                else showNoDataMessage('faturamentoPorFornecedorChart', 'Sem dados de faturamento.');
+                const len = sortedFornecedores.length;
+                if (len > 0) {
+                    const labels = new Array(len);
+                    const values = new Array(len);
+                    for (let i = 0; i < len; i++) {
+                        labels[i] = sortedFornecedores[i][0];
+                        values[i] = sortedFornecedores[i][1];
+                    }
+                    createChart('faturamentoPorFornecedorChart', 'bar', labels, values, fornecedorTooltipOptions);
+                } else {
+                    showNoDataMessage('faturamentoPorFornecedorChart', 'Sem dados de faturamento.');
+                }
                 updateProductBarChart(summary);
             }
         }
