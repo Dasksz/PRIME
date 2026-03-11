@@ -14637,13 +14637,14 @@ const supervisorGroups = new Map();
                     mode: 'range',
                     dateFormat: 'd/m/Y',
                     locale: 'pt',
-                    onClose: (selectedDates) => {
+                    onClose: (selectedDates, dateStr, instance) => {
                         if (selectedDates.length === 2) {
                             selectedCoverageDateRange = selectedDates;
                             updateCoverage();
                         } else if (selectedDates.length === 1) {
                             // Fix: Handle single day selection as a range [Start, Start]
                             selectedCoverageDateRange = [selectedDates[0], selectedDates[0]];
+                            instance.setDate(selectedCoverageDateRange, false);
                             updateCoverage();
                         } else if (selectedDates.length === 0) {
                             selectedCoverageDateRange = null;
