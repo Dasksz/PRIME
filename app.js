@@ -1,6 +1,7 @@
 (function() {
         const embeddedData = window.embeddedData;
         let metaRealizadoDataForExport = { sellers: [], clients: [], weeks: [] };
+        let cachedActiveClientsData = null;
 
         // --- OPTIMIZATION: Lazy Columnar Accessor with Write-Back Support ---
         class ColumnarDataset {
@@ -1516,7 +1517,8 @@
         const citySupplierFilterDropdown = document.getElementById('city-supplier-filter-dropdown');
         const cityNameFilter = document.getElementById('city-name-filter');
         function getActiveClientsData() {
-            return allClientsData.filter(c => {
+            if (cachedActiveClientsData) return cachedActiveClientsData;
+            cachedActiveClientsData = allClientsData.filter(c => {
                 const codcli = String(c['Código'] || c['codigo_cliente']);
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
@@ -1524,6 +1526,7 @@
                 // Logic identical to 'updateCoverageView' active clients KPI
                 return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(codcli));
             });
+            return cachedActiveClientsData;
         }
         const cityCodCliFilter = document.getElementById('city-codcli-filter');
         const citySuggestions = document.getElementById('city-suggestions');
