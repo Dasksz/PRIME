@@ -3743,13 +3743,30 @@
             // Apply Overrides from goalsSellerTargets (Imported Absolute Values for Pos, Fat, Vol)
 
             // --- FIX: Ensure all sellers with Manual Targets are present in goalsBySeller ---
+            // Build a set of sellers active in the current Filial (if filtered)
+            const sellersInFilial = new Set();
+            if (filial !== 'ambas') {
+                clients.forEach(c => {
+                    const rcaCode = String(c.rca1 || '');
+                    const rcaName = optimizedData.rcaNameByCode.get(rcaCode) || rcaCode;
+                    if (rcaName) sellersInFilial.add(rcaName);
+                });
+            }
+
             goalsSellerTargets.forEach((targets, sellerName) => {
-                // Check if seller matches current filters
+                // 1. Basic Filters (Supervisor/Seller)
                 if (supervisorsSet.size > 0) {
                     const supervisorName = (sellerDetailsMap.get(optimizedData.rcaCodeByName.get(sellerName) || '') || {}).supervisor;
                     if (!supervisorName || !supervisorsSet.has(supervisorName)) return; 
                 }
                 if (sellersSet.size > 0 && !sellersSet.has(sellerName)) return;
+
+                // 2. Filial Filter: Only include sellers active in the selected filial
+                if (filial !== 'ambas' && !sellersInFilial.has(sellerName)) return;
+
+                // 3. Garbage Filter: Ignore aggregate/special sellers
+                const upperName = sellerName.toUpperCase();
+                if (upperName === 'BALCAO' || upperName === 'BALCÃO' || upperName.includes('TOTAL') || upperName.includes('GERAL')) return;
 
                 // Add to map if missing
                 if (!goalsBySeller.has(sellerName)) {
@@ -3955,6 +3972,9 @@
                     if (codFor !== '1119') continue;
                 }
                 // If pasta === 'PEPSICO', we include all (already filtered for PEPSICO rowPasta)
+
+                // Filial Filter
+                if (filial !== 'ambas' && String(s.FILIAL) !== filial) continue;
 
                 // Client Filter (Must be in the filtered list of clients? Or just match filters?)
                 // If we filtered clients by Supervisor/Seller, we should only count sales for those clients?
