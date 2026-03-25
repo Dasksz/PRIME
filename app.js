@@ -664,11 +664,14 @@
         let pendingCoordinateWrites = [];
         const COORD_WRITE_BATCH_SIZE = 20;
 
+        let isFlushingCoordinates = false;
         async function flushCoordinatesToSupabase() {
-             if (pendingCoordinateWrites.length === 0) return;
+             if (pendingCoordinateWrites.length === 0 || isFlushingCoordinates) return;
+             isFlushingCoordinates = true;
 
              if (window.userRole !== 'adm') {
                  pendingCoordinateWrites = [];
+                 isFlushingCoordinates = false;
                  return;
              }
 
@@ -686,6 +689,12 @@
                 }
             } catch (e) {
                 console.error("Error saving coordinate batch:", e);
+            } finally {
+                isFlushingCoordinates = false;
+                // If more items were added during the flush, trigger another flush
+                if (pendingCoordinateWrites.length >= COORD_WRITE_BATCH_SIZE) {
+                    flushCoordinatesToSupabase();
+                }
             }
         }
 
@@ -702,7 +711,7 @@
             });
 
             if (pendingCoordinateWrites.length >= COORD_WRITE_BATCH_SIZE) {
-                await flushCoordinatesToSupabase();
+                flushCoordinatesToSupabase();
             }
         }
 
@@ -759,30 +768,32 @@
             if (isProcessingQueue || nominatimQueue.length === 0) return;
             isProcessingQueue = true;
 
+            const RATE_LIMIT_MS = 1200;
+            let activeRequests = 0;
+
             const processNext = async () => {
                 if (nominatimQueue.length === 0) {
-                    isProcessingQueue = false;
-                    await flushCoordinatesToSupabase();
-                    console.log("[GeoSync] Fila de download finalizada.");
+                    // Finalization: Wait for remaining active requests to finish
+                    if (activeRequests === 0) {
+                        isProcessingQueue = false;
+                        await flushCoordinatesToSupabase();
+                        console.log("[GeoSync] Fila de download finalizada.");
+                    } else {
+                        setTimeout(processNext, 200); // Polling for finalization
+                    }
                     return;
                 }
 
                 const item = nominatimQueue.shift();
                 const client = item.client;
-                // Determine level (default 0)
                 let level = item.level !== undefined ? item.level : 0;
                 
-                // Construct address or use legacy
-                let address = item.address;
-                if (!address) {
-                    address = buildAddress(client, level);
-                    
-                    // If address is null (e.g. invalid level data), auto-advance
-                    if (!address && level < 4) {
-                        nominatimQueue.unshift({ client, level: level + 1 });
-                        setTimeout(processNext, 0);
-                        return;
-                    }
+                let address = item.address || buildAddress(client, level);
+
+                if (!address && level < 4) {
+                    nominatimQueue.unshift({ client, level: level + 1 });
+                    setTimeout(processNext, 0);
+                    return;
                 }
 
                 if (!address) {
@@ -791,35 +802,37 @@
                      return;
                 }
 
-                console.log(`[GeoSync] Baixando (L${level}): ${client.nomeCliente} [${address}] (${nominatimQueue.length} restantes)...`);
+                // Concurrent Request Launch
+                (async () => {
+                    activeRequests++;
+                    try {
+                        console.log(`[GeoSync] Baixando (L${level}): ${client.nomeCliente} [${address}] (${nominatimQueue.length} restantes)...`);
+                        const result = await geocodeAddressNominatim(address);
 
-                try {
-                    const result = await geocodeAddressNominatim(address);
-                    if (result) {
-                        console.log(`[GeoSync] Sucesso: ${client.nomeCliente} -> Salvo.`);
-                        const codCli = String(client['Código'] || client['codigo_cliente']);
-                        await queueCoordinateSave(codCli, result.lat, result.lng, result.formatted_address);
+                        if (result) {
+                            console.log(`[GeoSync] Sucesso: ${client.nomeCliente} -> Salvo.`);
+                            const codCli = String(client['Código'] || client['codigo_cliente']);
+                            await queueCoordinateSave(codCli, result.lat, result.lng, result.formatted_address);
 
-                        const cityMapContainer = document.getElementById('city-map-container');
-                        if (heatLayer && cityMapContainer && !cityMapContainer.classList.contains('hidden')) {
-                            heatLayer.addLatLng([result.lat, result.lng, 1]);
-                        }
-                    } else {
-                        // Retry Logic: If failed, try next level of fallback
-                        if (level < 4) {
-                             console.log(`[GeoSync] Falha L${level} para ${client.nomeCliente}. Tentando nível ${level+1}...`);
-                             // Push back to front with incremented level
+                            const cityMapContainer = document.getElementById('city-map-container');
+                            if (heatLayer && cityMapContainer && !cityMapContainer.classList.contains('hidden')) {
+                                heatLayer.addLatLng([result.lat, result.lng, 1]);
+                            }
+                        } else if (level < 4) {
+                             console.log(`[GeoSync] Falha L${level} para ${client.nomeCliente}. Reenfileirando para nível ${level+1}...`);
                              nominatimQueue.unshift({ client, level: level + 1 });
                         } else {
                              console.log(`[GeoSync] Falha Definitiva (Não encontrado): ${client.nomeCliente}`);
                         }
+                    } catch (e) {
+                        console.error(`[GeoSync] Erro API: ${client.nomeCliente}`, e);
+                    } finally {
+                        activeRequests--;
                     }
-                } catch (e) {
-                    console.error(`[GeoSync] Erro API: ${client.nomeCliente}`, e);
-                }
+                })();
 
-                // Respect Rate Limit: 1200ms
-                setTimeout(processNext, 1200);
+                // Respect global launch rate limit
+                setTimeout(processNext, RATE_LIMIT_MS);
             };
 
             processNext();
