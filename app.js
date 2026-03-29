@@ -337,6 +337,7 @@
 
         const FORBIDDEN_KEYS = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR', 'PASTA', 'RAMO', 'ATIVIDADE', 'CIDADE', 'MUNICIPIO', 'BAIRRO'];
         let allSalesData, allHistoryData, allClientsData;
+        let pepsicoSuppliersSource = [];
 
         const SANITIZE_FORBIDDEN_SET = new Set(['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR']);
 
@@ -405,6 +406,38 @@
             allSalesData = sanitizeData(embeddedData.detailed);
             allHistoryData = sanitizeData(embeddedData.history);
             allClientsData = embeddedData.clients;
+        }
+
+        // Optimized pepsicoSuppliersSource calculation
+        const datasetsToProcess = [allSalesData, allHistoryData];
+        for (const ds of datasetsToProcess) {
+            const len = ds.length;
+            if (ds instanceof ColumnarDataset) {
+                const obsCol = ds._data['OBSERVACAOFOR'] || [];
+                const fornCol = ds._data['FORNECEDOR'] || [];
+                for (let i = 0; i < len; i++) {
+                    let rowPasta = obsCol[i];
+                    if (!rowPasta || rowPasta === '0' || rowPasta === '00' || rowPasta === 'N/A') {
+                        const rawFornecedor = String(fornCol[i] || '').toUpperCase();
+                        rowPasta = rawFornecedor.includes('PEPSICO') ? 'PEPSICO' : 'MULTIMARCAS';
+                    }
+                    if (rowPasta === 'PEPSICO') {
+                        pepsicoSuppliersSource.push(ds.get(i));
+                    }
+                }
+            } else {
+                for (let i = 0; i < len; i++) {
+                    const s = ds[i];
+                    let rowPasta = s.OBSERVACAOFOR;
+                    if (!rowPasta || rowPasta === '0' || rowPasta === '00' || rowPasta === 'N/A') {
+                        const rawFornecedor = String(s.FORNECEDOR || '').toUpperCase();
+                        rowPasta = rawFornecedor.includes('PEPSICO') ? 'PEPSICO' : 'MULTIMARCAS';
+                    }
+                    if (rowPasta === 'PEPSICO') {
+                        pepsicoSuppliersSource.push(s);
+                    }
+                }
+            }
         }
 
         let aggregatedOrders = embeddedData.byOrder;
@@ -14803,15 +14836,7 @@ const supervisorGroups = new Map();
         selectedMetaRealizadoSupervisors = updateSupervisorFilter(document.getElementById('meta-realizado-supervisor-filter-dropdown'), document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
         updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData]);
 
-        // Fix: Pre-filter Suppliers for Meta Realizado (Only PEPSICO)
-        const pepsicoSuppliersSource = [...allSalesData, ...allHistoryData].filter(s => {
-            let rowPasta = s.OBSERVACAOFOR;
-            if (!rowPasta || rowPasta === '0' || rowPasta === '00' || rowPasta === 'N/A') {
-                 const rawFornecedor = String(s.FORNECEDOR || '').toUpperCase();
-                 rowPasta = rawFornecedor.includes('PEPSICO') ? 'PEPSICO' : 'MULTIMARCAS';
-            }
-            return rowPasta === 'PEPSICO';
-        });
+        // Initial Population for Meta Realizado Suppliers (already pre-filtered to PEPSICO)
         selectedMetaRealizadoSuppliers = updateSupplierFilter(document.getElementById('meta-realizado-supplier-filter-dropdown'), document.getElementById('meta-realizado-supplier-filter-text'), selectedMetaRealizadoSuppliers, pepsicoSuppliersSource, 'metaRealizado');
 
         updateAllComparisonFilters();
