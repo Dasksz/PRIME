@@ -2919,12 +2919,13 @@
                 targetCategories.forEach(subCat => {
                     let share = 0;
                     if (totalSellerHistory > 0) {
-                        share = (subCatMap.get(subCat) || 0) / totalSellerHistory;
+                        share = ((subCatMap ? subCatMap.get(subCat) : 0) || 0) / totalSellerHistory;
                     } else {
-                        // Fallback: Even split across all clients and subcats?
+                        // Fallback: Even split across all clients and subcats
                         share = 1 / (clientCount * subCatCount);
                     }
 
+                    if (isNaN(share) || !isFinite(share)) share = 0;
                     const goalVal = newTotalValue * share;
 
                     // Update Global
@@ -7099,7 +7100,18 @@
                             if (colId.startsWith('mix_')) {
                                 data.metaMix = explicitTarget;
                             } else {
-                                data.metaPos = explicitTarget;
+                                const targets = goalsSellerTargets.get(sellerName) || {};
+                                // IMPORTANT FIX: Only overwrite MetaPos if the target key exactly matches
+                                // the column ID (e.g. 'total_elma' which is Positivação).
+                                // If the column is 'tonelada_elma', and we only have 'tonelada_elma_VOL' in targets,
+                                // the 'targets[colId]' (which is targets['tonelada_elma']) will be undefined.
+                                // The legacy explicitTarget check above matched targets[colId.toUpperCase()] by mistake for volume
+                                // but we shouldn't apply volume (tonelada_elma_VOL) as Positivation (metaPos).
+                                if (targets[colId] !== undefined || targets[colId.toUpperCase()] !== undefined) {
+                                    // Make sure it is actually the Positivation target (no suffix)
+                                    // Volume and FAT have the _VOL and _FAT suffix.
+                                    data.metaPos = explicitTarget;
+                                }
                             }
                         } else {
                             // Fallback: Legacy Adjustment Logic (Session only)
