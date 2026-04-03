@@ -15176,10 +15176,20 @@ const supervisorGroups = new Map();
                     if (dotIdx > commaIdx) clean = clean.replace(/,/g, ''); 
                     else clean = clean.replace(/\./g, '').replace(',', '.');
                 } else if (commaIdx > -1) {
-                    if (/,\d{3}$/.test(clean)) clean = clean.replace(/,/g, '');
-                    else clean = clean.replace(',', '.');
+                    // Has comma, no dot. Assume comma is decimal in Brazil
+                    // However, if the user exported raw CSV without decimals for thousands (e.g. 1,234 meaning 1234)
+                    // it is highly ambiguous. In this system, we mostly use Brazilian format (1,234 is 1.234)
+                    // We remove the old /,\d{3}$/ check because volume is often 3 decimals (e.g., 2,600 kg = 2.6).
+                    clean = clean.replace(',', '.');
                 } else if (dotIdx > -1) {
-                    if (/\.\d{3}$/.test(clean)) clean = clean.replace(/\./g, '');
+                    // Has dot, no comma.
+                    // If it has multiple dots, they are definitely thousands separators.
+                    if (clean.split('.').length > 2) {
+                        clean = clean.replace(/\./g, '');
+                    } else {
+                        // Single dot. In raw Excel data or standard floats (e.g., 1359.041), this is a decimal point.
+                        // We DO NOT remove it. Removing it would inflate the value 1000x for volume.
+                    }
                 }
                 return parseFloat(clean);
             };
