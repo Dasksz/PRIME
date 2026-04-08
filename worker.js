@@ -171,7 +171,12 @@
             const headersSet = new Set();
             const scanLimit = Math.min(data.length, 50);
             for (let i = 0; i < scanLimit; i++) {
-                Object.keys(data[i]).forEach(k => headersSet.add(k));
+                const row = data[i];
+                for (const k in row) {
+                    if (Object.prototype.hasOwnProperty.call(row, k)) {
+                        headersSet.add(k);
+                    }
+                }
             }
             const missingColumns = requiredColumns.filter(col => !headersSet.has(col));
 
@@ -585,7 +590,12 @@
             const keysSet = new Set();
             const limit = Math.min(data.length, 50);
             for(let i=0; i<limit; i++) {
-                Object.keys(data[i]).forEach(k => keysSet.add(k));
+                const row = data[i];
+                for (const k in row) {
+                    if (Object.prototype.hasOwnProperty.call(row, k)) {
+                        keysSet.add(k);
+                    }
+                }
             }
             const columns = Array.from(keysSet);
 
@@ -729,10 +739,16 @@
                         if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== '') return row[k];
                     }
                     // Case-insensitive match
-                    const rowKeys = Object.keys(row);
-                    for (const k of keys) {
-                        const match = rowKeys.find(rk => rk.trim().toUpperCase() === k.toUpperCase());
-                        if (match && row[match] !== undefined && row[match] !== null && String(row[match]).trim() !== '') return row[match];
+                    for (const targetKey of keys) {
+                        const targetUpper = targetKey.toUpperCase();
+                        for (const rk in row) {
+                            if (Object.prototype.hasOwnProperty.call(row, rk)) {
+                                if (rk.trim().toUpperCase() === targetUpper) {
+                                    const val = row[rk];
+                                    if (val !== undefined && val !== null && String(val).trim() !== '') return val;
+                                }
+                            }
+                        }
                     }
                     return undefined;
                 };
