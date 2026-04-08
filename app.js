@@ -337,6 +337,7 @@
 
         const FORBIDDEN_KEYS = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR', 'PASTA', 'RAMO', 'ATIVIDADE', 'CIDADE', 'MUNICIPIO', 'BAIRRO'];
         let allSalesData, allHistoryData, allClientsData;
+        let pepsicoSuppliersSource = [];
 
         const SANITIZE_FORBIDDEN_SET = new Set(['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR']);
 
@@ -406,6 +407,33 @@
             allHistoryData = sanitizeData(embeddedData.history);
             allClientsData = embeddedData.clients;
         }
+
+        // Pre-calculate Pepsico Suppliers for Meta Realizado
+        const pepsicoSuppliersMap = new Map();
+        const extractPepsico = (data) => {
+            if (!data) return;
+            const isCol = data instanceof ColumnarDataset;
+            const len = data.length;
+            const values = isCol ? data._data : null;
+            for (let i = 0; i < len; i++) {
+                let p, c, n;
+                if (isCol && values) {
+                    p = values['OBSERVACAOFOR'] ? values['OBSERVACAOFOR'][i] : null;
+                    c = values['CODFOR'] ? values['CODFOR'][i] : null;
+                    n = values['FORNECEDOR'] ? values['FORNECEDOR'][i] : null;
+                } else {
+                    const s = data[i];
+                    p = s.OBSERVACAOFOR; c = s.CODFOR; n = s.FORNECEDOR;
+                }
+                if (!p || p === '0' || p === '00' || p === 'N/A') {
+                    p = String(n || '').toUpperCase().includes('PEPSICO') ? 'PEPSICO' : 'MULTIMARCAS';
+                }
+                if (p === 'PEPSICO' && c) pepsicoSuppliersMap.set(String(c), n);
+            }
+        };
+        extractPepsico(allSalesData);
+        extractPepsico(allHistoryData);
+        pepsicoSuppliersSource = Array.from(pepsicoSuppliersMap).map(([CODFOR, FORNECEDOR]) => ({ CODFOR, FORNECEDOR }));
 
         let aggregatedOrders = embeddedData.byOrder;
         const stockData05 = new Map(Object.entries(embeddedData.stockMap05 || {}));
@@ -14816,14 +14844,6 @@ const supervisorGroups = new Map();
         updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData]);
 
         // Fix: Pre-filter Suppliers for Meta Realizado (Only PEPSICO)
-        const pepsicoSuppliersSource = [...allSalesData, ...allHistoryData].filter(s => {
-            let rowPasta = s.OBSERVACAOFOR;
-            if (!rowPasta || rowPasta === '0' || rowPasta === '00' || rowPasta === 'N/A') {
-                 const rawFornecedor = String(s.FORNECEDOR || '').toUpperCase();
-                 rowPasta = rawFornecedor.includes('PEPSICO') ? 'PEPSICO' : 'MULTIMARCAS';
-            }
-            return rowPasta === 'PEPSICO';
-        });
         selectedMetaRealizadoSuppliers = updateSupplierFilter(document.getElementById('meta-realizado-supplier-filter-dropdown'), document.getElementById('meta-realizado-supplier-filter-text'), selectedMetaRealizadoSuppliers, pepsicoSuppliersSource, 'metaRealizado');
 
         updateAllComparisonFilters();
