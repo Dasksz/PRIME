@@ -213,9 +213,11 @@
 
             values() {
                 // Warning: Heavy operation
-                const objects = [];
+                const size = this._indices.size;
+                const objects = new Array(size);
+                let i = 0;
                 for (const index of this._indices.values()) {
-                    objects.push(this._source.get(index));
+                    objects[i++] = this._source.get(index);
                 }
                 return objects;
             }
