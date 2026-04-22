@@ -4407,9 +4407,35 @@
 
             // Determine Goal Keys based on Pasta (Copy logic)
             let goalKeys = [];
-            if (pasta === 'PEPSICO') goalKeys = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
-            else if (pasta === 'ELMA') goalKeys = ['707', '708', '752'];
-            else if (pasta === 'FOODS') goalKeys = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+
+            // If Supplier Filter is Active, restricting goals to selected supplier ONLY
+            if (suppliersSet.size > 0) {
+                // Map selections to goal keys
+                suppliersSet.forEach(sup => {
+                    // Filter validation: Ensure they belong to current Pasta
+                    let valid = false;
+                    if (pasta === 'PEPSICO') valid = true;
+                    else if (pasta === 'ELMA') valid = ['707', '708', '752'].includes(sup);
+                    else if (pasta === 'FOODS') valid = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'].includes(sup) || sup === '1119';
+
+                    if (valid) {
+                        if (sup === '1119') {
+                            goalKeys.push('1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO');
+                        } else {
+                            goalKeys.push(sup);
+                        }
+                    }
+                });
+            } else {
+                // Default Pasta Groups
+                if (pasta === 'PEPSICO') {
+                    goalKeys = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+                } else if (pasta === 'ELMA') {
+                    goalKeys = ['707', '708', '752'];
+                } else if (pasta === 'FOODS') {
+                    goalKeys = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
+                }
+            }
 
             // A. Populate Goals
             clients.forEach(client => {
