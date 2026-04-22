@@ -732,12 +732,25 @@
                 const clientMap = new Map();
 
                 // Helper to get value from multiple possible keys
-                const getVal = (row, keys) => {
+                const getVal = (row, keys, normalizedRow) => {
                     if (!row) return undefined;
                     // Direct match first
                     for (const k of keys) {
                         if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== '') return row[k];
                     }
+
+                    if (normalizedRow) {
+                        for (const targetKey of keys) {
+                            const targetUpper = targetKey.toUpperCase();
+                            const rk = normalizedRow[targetUpper];
+                            if (rk !== undefined) {
+                                const val = row[rk];
+                                if (val !== undefined && val !== null && String(val).trim() !== '') return val;
+                            }
+                        }
+                        return undefined;
+                    }
+
                     // Case-insensitive match
                     for (const targetKey of keys) {
                         const targetUpper = targetKey.toUpperCase();
@@ -754,24 +767,34 @@
                 };
 
                 clientsDataRaw.forEach(client => {
-                    const codCliRaw = getVal(client, ['Código', 'CODIGO', 'Codigo', 'Cod. Cliente', 'CODCLI', 'CodCliente']);
+                    const normalizedClient = {};
+                    for (const rk in client) {
+                        if (Object.prototype.hasOwnProperty.call(client, rk)) {
+                            const norm = rk.trim().toUpperCase();
+                            if (normalizedClient[norm] === undefined) {
+                                normalizedClient[norm] = rk;
+                            }
+                        }
+                    }
+
+                    const codCliRaw = getVal(client, ['Código', 'CODIGO', 'Codigo', 'Cod. Cliente', 'CODCLI', 'CodCliente'], normalizedClient);
                     const codCli = normalizeKey(codCliRaw);
                     if (!codCli) return;
 
-                    const rca1 = String(getVal(client, ['RCA 1', 'RCA', 'Rca 1', 'Vendedor 1', 'VENDEDOR']) || '').trim();
+                    const rca1 = String(getVal(client, ['RCA 1', 'RCA', 'Rca 1', 'Vendedor 1', 'VENDEDOR'], normalizedClient) || '').trim();
                     const rcas = new Set();
                     if (rca1) rcas.add(rca1);
 
-                    const ucRaw = getVal(client, ['Data da Última Compra', 'Ultima Compra', 'DTULTCOMPRA', 'Data Ultima Compra']);
-                    const dcRaw = getVal(client, ['Data e Hora de Cadastro', 'Data Cadastro', 'DTCADASTRO', 'Data de Cadastro']);
+                    const ucRaw = getVal(client, ['Data da Última Compra', 'Ultima Compra', 'DTULTCOMPRA', 'Data Ultima Compra'], normalizedClient);
+                    const dcRaw = getVal(client, ['Data e Hora de Cadastro', 'Data Cadastro', 'DTCADASTRO', 'Data de Cadastro'], normalizedClient);
 
                     const uc = parseDate(ucRaw);
                     const dc = parseDate(dcRaw);
 
-                    const cidade = String(getVal(client, ['Nome da Cidade', 'Cidade', 'CIDADE', 'MUNICIPIO', 'Município', 'City', 'CIDADE_CLIENTE']) || 'N/A');
-                    const bairro = String(getVal(client, ['Bairro', 'BAIRRO', 'Bairro/Distrito', 'BAIRRO_CLIENTE']) || 'N/A');
-                    const fantasia = String(getVal(client, ['Fantasia', 'Nome Fantasia', 'NOME FANTASIA', 'NOME_FANTASIA', 'Nome', 'NOME']) || 'N/A');
-                    const razao = String(getVal(client, ['Cliente', 'Razão Social', 'RAZAO SOCIAL', 'RAZAOSOCIAL', 'Nome Cliente', 'Razão']) || 'N/A');
+                    const cidade = String(getVal(client, ['Nome da Cidade', 'Cidade', 'CIDADE', 'MUNICIPIO', 'Município', 'City', 'CIDADE_CLIENTE'], normalizedClient) || 'N/A');
+                    const bairro = String(getVal(client, ['Bairro', 'BAIRRO', 'Bairro/Distrito', 'BAIRRO_CLIENTE'], normalizedClient) || 'N/A');
+                    const fantasia = String(getVal(client, ['Fantasia', 'Nome Fantasia', 'NOME FANTASIA', 'NOME_FANTASIA', 'Nome', 'NOME'], normalizedClient) || 'N/A');
+                    const razao = String(getVal(client, ['Cliente', 'Razão Social', 'RAZAO SOCIAL', 'RAZAOSOCIAL', 'Nome Cliente', 'Razão'], normalizedClient) || 'N/A');
 
                     // Fallback logic for Name
                     const nomeCliente = (fantasia !== 'N/A') ? fantasia : razao;
@@ -785,17 +808,17 @@
                         bairro: bairro,
                         razaoSocial: razao,
                         fantasia: fantasia,
-                        cnpj_cpf: String(getVal(client, ['CNPJ/CPF', 'CNPJ', 'CPF', 'Cgc/Cpf']) || 'N/A'),
-                        endereco: String(getVal(client, ['Endereço Comercial', 'Endereço', 'ENDERECO', 'Logradouro', 'Rua']) || 'N/A'),
-                        numero: String(getVal(client, ['Número', 'Numero', 'NUMERO', 'No']) || 'SN'),
-                        cep: String(getVal(client, ['CEP', 'Cep']) || 'N/A'),
-                        telefone: String(getVal(client, ['Telefone Comercial', 'Telefone', 'TELEFONE', 'Tel']) || 'N/A'),
-                        email: String(getVal(client, ['E-mail', 'Email', 'EMAIL', 'Correo']) || 'N/A'),
-                        ramo: String(getVal(client, ['Descricao', 'Ramo', 'Atividade', 'RAMO_ATIVIDADE']) || 'N/A'),
+                        cnpj_cpf: String(getVal(client, ['CNPJ/CPF', 'CNPJ', 'CPF', 'Cgc/Cpf'], normalizedClient) || 'N/A'),
+                        endereco: String(getVal(client, ['Endereço Comercial', 'Endereço', 'ENDERECO', 'Logradouro', 'Rua'], normalizedClient) || 'N/A'),
+                        numero: String(getVal(client, ['Número', 'Numero', 'NUMERO', 'No'], normalizedClient) || 'SN'),
+                        cep: String(getVal(client, ['CEP', 'Cep'], normalizedClient) || 'N/A'),
+                        telefone: String(getVal(client, ['Telefone Comercial', 'Telefone', 'TELEFONE', 'Tel'], normalizedClient) || 'N/A'),
+                        email: String(getVal(client, ['E-mail', 'Email', 'EMAIL', 'Correo'], normalizedClient) || 'N/A'),
+                        ramo: String(getVal(client, ['Descricao', 'Ramo', 'Atividade', 'RAMO_ATIVIDADE'], normalizedClient) || 'N/A'),
                         ultimaCompra: uc ? uc.getTime() : null,
                         dataCadastro: dc ? dc.getTime() : null,
-                        bloqueio: String(getVal(client, ['Bloqueio', 'BLOQUEIO', 'Status']) || '').trim().toUpperCase(),
-                        inscricaoEstadual: String(getVal(client, ['Insc. Est. / Produtor', 'Inscricao Estadual', 'IE', 'INSCRICAO']) || 'N/A')
+                        bloqueio: String(getVal(client, ['Bloqueio', 'BLOQUEIO', 'Status'], normalizedClient) || '').trim().toUpperCase(),
+                        inscricaoEstadual: String(getVal(client, ['Insc. Est. / Produtor', 'Inscricao Estadual', 'IE', 'INSCRICAO'], normalizedClient) || 'N/A')
                     };
                     if (clientRcaOverrides.has(codCli)) clientData.rcas.unshift(clientRcaOverrides.get(codCli));
                     clientMap.set(codCli, clientData);
