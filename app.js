@@ -1823,7 +1823,7 @@
         let selectedComparisonTiposVenda = [];
         let selectedCityTiposVenda = [];
         let historicalBests = {};
-        let selectedHolidays = [];
+        let selectedHolidays = new Set();
         let stockTrendFilter = 'all';
 
         let selectedMainRedes = [];
@@ -8370,6 +8370,9 @@ const supervisorGroups = new Map();
         function isHoliday(date, holidays) {
             if (!date || !holidays) return false;
             const dateString = date.toISOString().split('T')[0];
+            if (holidays instanceof Set) {
+                return holidays.has(dateString);
+            }
             return holidays.includes(dateString);
         }
 
@@ -12310,7 +12313,7 @@ const supervisorGroups = new Map();
             for (let day = 1; day <= daysInMonth; day++) {
                 const date = new Date(Date.UTC(year, month, day));
                 const dateString = date.toISOString().split('T')[0];
-                const isSelected = selectedHolidays.includes(dateString);
+                const isSelected = selectedHolidays.has(dateString);
                 const isToday = date.getTime() === lastSaleDate.getTime();
                 let dayClasses = 'p-2 rounded-full cursor-pointer hover:bg-slate-600 flex items-center justify-center';
                 if (isSelected) dayClasses += ' bg-red-500 text-white font-bold';
@@ -13647,7 +13650,7 @@ const supervisorGroups = new Map();
             holidayModalCloseBtn.addEventListener('click', () => holidayModal.classList.add('hidden'));
             holidayModalDoneBtn.addEventListener('click', () => {
                 holidayModal.classList.add('hidden');
-                const holidayBtnText = selectedHolidays.length > 0 ? `${selectedHolidays.length} feriado(s)` : 'Selecionar Feriados';
+                const holidayBtnText = selectedHolidays.size > 0 ? `${selectedHolidays.size} feriado(s)` : 'Selecionar Feriados';
                 comparisonHolidayPickerBtn.textContent = holidayBtnText;
                 mainHolidayPickerBtn.textContent = holidayBtnText;
                 updateComparison();
@@ -13670,11 +13673,10 @@ const supervisorGroups = new Map();
                     renderCalendar(calendarState.year, calendarState.month);
                 } else if (e.target.dataset.date) {
                     const dateString = e.target.dataset.date;
-                    const index = selectedHolidays.indexOf(dateString);
-                    if (index > -1) {
-                        selectedHolidays.splice(index, 1);
+                    if (selectedHolidays.has(dateString)) {
+                        selectedHolidays.delete(dateString);
                     } else {
-                        selectedHolidays.push(dateString);
+                        selectedHolidays.add(dateString);
                     }
                     renderCalendar(calendarState.year, calendarState.month);
                 }
