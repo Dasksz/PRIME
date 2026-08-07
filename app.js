@@ -12408,7 +12408,8 @@ const supervisorGroups = new Map();
                 semanal: 'Semanal',
                 'inovacoes-mes': 'Inovações',
                 mix: 'Mix',
-                'meta-realizado': 'Meta Vs. Realizado'
+                'meta-realizado': 'Meta Vs. Realizado',
+                goals: 'Metas'
             };
             const friendlyName = viewNameMap[view] || 'a página';
 
@@ -14922,7 +14923,7 @@ const supervisorGroups = new Map();
         if (targetPage) {
             navigateTo(targetPage);
         } else {
-            navigateTo('dashboard');
+            navigateTo('goals');
         }
         renderTable(aggregatedOrders);
 
