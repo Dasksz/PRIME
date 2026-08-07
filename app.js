@@ -8681,6 +8681,7 @@ const supervisorGroups = new Map();
         }
 
         function updateSellerFilter(supervisors, dropdown, filterText, selectedArray, dataSource, skipRender = false) {
+            if (!dropdown || !filterText) return selectedArray;
             const forbidden = ['NOME', 'VENDEDOR', 'SUPERV', 'CODUSUR', 'CODCLI', 'SUPERVISOR', 'INATIVOS'];
             let sellersToShow;
             if (supervisors && supervisors.length > 0) {
@@ -8709,6 +8710,7 @@ const supervisorGroups = new Map();
         }
 
         function updateTipoVendaFilter(dropdown, filterText, selectedArray, dataSource, skipRender = false) {
+            if (!dropdown || !filterText) return selectedArray;
             // Collect unique types from data source
             const forbidden = ['TIPOVENDA', 'TIPO VENDA', 'TIPO', 'CODUSUR', 'CODCLI', 'SUPERV', 'NOME'];
             const uniqueTypes = new Set(dataSource.map(item => item.TIPOVENDA).filter(t => t && !forbidden.includes(t.toUpperCase())));
