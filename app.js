@@ -8681,7 +8681,6 @@ const supervisorGroups = new Map();
         }
 
         function updateSellerFilter(supervisors, dropdown, filterText, selectedArray, dataSource, skipRender = false) {
-            if (!dropdown || !filterText) return selectedArray;
             const forbidden = ['NOME', 'VENDEDOR', 'SUPERV', 'CODUSUR', 'CODCLI', 'SUPERVISOR', 'INATIVOS'];
             let sellersToShow;
             if (supervisors && supervisors.length > 0) {
@@ -8710,7 +8709,6 @@ const supervisorGroups = new Map();
         }
 
         function updateTipoVendaFilter(dropdown, filterText, selectedArray, dataSource, skipRender = false) {
-            if (!dropdown || !filterText) return selectedArray;
             // Collect unique types from data source
             const forbidden = ['TIPOVENDA', 'TIPO VENDA', 'TIPO', 'CODUSUR', 'CODCLI', 'SUPERV', 'NOME'];
             const uniqueTypes = new Set(dataSource.map(item => item.TIPOVENDA).filter(t => t && !forbidden.includes(t.toUpperCase())));
@@ -8743,7 +8741,6 @@ const supervisorGroups = new Map();
         }
 
         function updateRedeFilter(dropdown, buttonTextElement, selectedArray, dataSource, baseText = 'C/Rede') {
-            if (!dropdown || !buttonTextElement) return selectedArray;
             const forbidden = ['RAMO', 'RAMO DE ATIVIDADE', 'RAMO_ATIVIDADE', 'DESCRICAO', 'ATIVIDADE'];
             const redesToShow = [...new Set(dataSource.map(item => item.ramo).filter(r => r && r !== 'N/A' && !forbidden.includes(r.toUpperCase())))].sort();
             const validSelected = selectedArray.filter(rede => redesToShow.includes(rede));
@@ -9533,7 +9530,6 @@ const supervisorGroups = new Map();
         }
 
         function updateSupplierFilter(dropdown, filterText, selectedArray, dataSource, filterType = 'comparison', skipRender = false) {
-            if (!dropdown || !filterText) return selectedArray;
             const forbidden = ['CODFOR', 'FORNECEDOR', 'COD FOR', 'NOME DO FORNECEDOR', 'FORNECEDOR_NOME'];
             const suppliers = new Map();
             dataSource.forEach(s => {
@@ -12420,7 +12416,7 @@ const supervisorGroups = new Map();
 
             // This function now runs after the loader is visible
             const updateContent = () => {
-                [document.getElementById('goals-view')].forEach(el => {
+                [mainDashboard, cityView, weeklyView, comparisonView, stockView, innovationsMonthView, coverageView, document.getElementById('mix-view'), goalsView, document.getElementById('meta-realizado-view')].forEach(el => {
                     if(el) el.classList.add('hidden');
                 });
 
@@ -12439,7 +12435,7 @@ const supervisorGroups = new Map();
 
                 switch(view) {
                     case 'dashboard':
-                        if(mainDashboard) mainDashboard.classList.remove('hidden');
+                        mainDashboard.classList.remove('hidden');
                         chartView.classList.remove('hidden');
                         tableView.classList.add('hidden');
                         tablePaginationControls.classList.add('hidden');
@@ -12449,7 +12445,7 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'pedidos':
-                        if(mainDashboard) mainDashboard.classList.remove('hidden');
+                        mainDashboard.classList.remove('hidden');
                         chartView.classList.add('hidden');
                         tableView.classList.remove('hidden');
                         tablePaginationControls.classList.remove('hidden');
@@ -12459,7 +12455,7 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'comparativo':
-                        if(comparisonView) comparisonView.classList.remove('hidden');
+                        comparisonView.classList.remove('hidden');
                         if (viewState.comparativo.dirty) {
                             updateAllComparisonFilters();
                             updateComparisonView();
@@ -12467,14 +12463,14 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'estoque':
-                        if(stockView) stockView.classList.remove('hidden');
+                        stockView.classList.remove('hidden');
                         if (viewState.estoque.dirty) {
                             handleStockFilterChange();
                             viewState.estoque.dirty = false;
                         }
                         break;
                     case 'cobertura':
-                        if(coverageView) coverageView.classList.remove('hidden');
+                        coverageView.classList.remove('hidden');
                         if (viewState.cobertura.dirty) {
                             updateAllCoverageFilters();
                             updateCoverageView();
@@ -12482,7 +12478,7 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'cidades':
-                        if(cityView) cityView.classList.remove('hidden');
+                        cityView.classList.remove('hidden');
                         // Always trigger background sync if admin
                         syncGlobalCoordinates();
                         if (viewState.cidades.dirty) {
@@ -12492,7 +12488,7 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'semanal':
-                        if(weeklyView) weeklyView.classList.remove('hidden');
+                        weeklyView.classList.remove('hidden');
                         if (viewState.semanal.dirty) {
                             populateWeeklyFilters();
                             updateWeeklyView();
@@ -12500,7 +12496,7 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'inovacoes-mes':
-                        if(innovationsMonthView) innovationsMonthView.classList.remove('hidden');
+                        innovationsMonthView.classList.remove('hidden');
                         if (viewState.inovacoes.dirty) {
                             selectedInnovationsSupervisors = updateSupervisorFilter(document.getElementById('innovations-month-supervisor-filter-dropdown'), document.getElementById('innovations-month-supervisor-filter-text'), selectedInnovationsSupervisors, allSalesData);
                             updateSellerFilter(selectedInnovationsSupervisors, innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, [], allSalesData);
@@ -12510,7 +12506,7 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'mix':
-                        const mixView = document.getElementById('mix-view'); if(mixView) mixView.classList.remove('hidden');
+                        document.getElementById('mix-view').classList.remove('hidden');
                         if (viewState.mix.dirty) {
                             updateAllMixFilters();
                             updateMixView();
@@ -12518,14 +12514,14 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'goals':
-                        if(goalsView) goalsView.classList.remove('hidden');
+                        goalsView.classList.remove('hidden');
                         if (viewState.goals.dirty) {
                             updateGoalsView();
                             viewState.goals.dirty = false;
                         }
                         break;
                     case 'meta-realizado':
-                        const metaRealizadoView = document.getElementById('meta-realizado-view'); if(metaRealizadoView) metaRealizadoView.classList.remove('hidden');
+                        document.getElementById('meta-realizado-view').classList.remove('hidden');
                         if (viewState.metaRealizado.dirty) {
                             // Initial filter logic if needed, similar to other views
                             selectedMetaRealizadoSupervisors = updateSupervisorFilter(document.getElementById('meta-realizado-supervisor-filter-dropdown'), document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
@@ -14926,7 +14922,7 @@ const supervisorGroups = new Map();
         if (targetPage) {
             navigateTo(targetPage);
         } else {
-            navigateTo('goals');
+            navigateTo('dashboard');
         }
         renderTable(aggregatedOrders);
 
