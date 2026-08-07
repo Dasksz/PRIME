@@ -1,7 +1,4 @@
-
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
+<!DOCTYPE html><html lang="pt-br"><head>
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -26,23 +23,23 @@
 
     <title>Painel de Vendas - PRIME DISTRIBUIÇÃO</title>
     <link rel="icon" type="image/png" href="logo.png">
-    <script src="https://cdn.tailwindcss.com" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0" defer></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.min.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js" defer></script>
+    <script src="https://cdn.tailwindcss.com" defer=""></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer=""></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0" defer=""></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer=""></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js" defer=""></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer=""></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer=""></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.min.js" defer=""></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js" defer=""></script>
+    <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js" defer=""></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://npmcdn.com/flatpickr/dist/l10n/pt.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body class="bg-[#0d1126] text-slate-300 antialiased">
@@ -54,7 +51,7 @@
         <h1 style="margin-top: 0; font-size: 1.8rem; font-weight: 700; color: #1f2937;">Acesso Restrito</h1>
         <p style="color: #64748b; line-height: 1.6; margin-bottom: 2rem;">Este é um sistema privado.</p>
         <button id="login-button" class="gatekeeper-btn">
-            <svg class="w-5 h-5 mr-3" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
+            <svg class="w-5 h-5 mr-3" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"></path><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"></path><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"></path><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"></path></svg>
             <span>Entrar com Google</span>
         </button>
     </div>
@@ -94,7 +91,7 @@
 
 <div id="admin-uploader-modal" class="modal-overlay hidden">
         <div class="bg-modal-content rounded-lg shadow-2xl max-w-lg w-full m-4 border border-primary relative text-center p-8">
-            <button id="admin-modal-close-btn" class="absolute top-2 right-4 text-3xl font-bold hover:text-red-500 transition-colors">&times;</button>
+            <button id="admin-modal-close-btn" class="absolute top-2 right-4 text-3xl font-bold hover:text-red-500 transition-colors">×</button>
 
             <h1 class="text-2xl font-bold mb-4">Uploader⬆️</h1>
             <p class="mb-6">Carregue os arquivos para enviar os dados ao Supabase. Você pode carregar um ou mais arquivos de cada vez.</p>
@@ -109,23 +106,23 @@
             <div class="space-y-4 mb-6 border-t border-primary pt-6 text-left">
                 <div>
                     <label for="sales-file-input" class="block text-sm font-medium mb-2">1. Arquivo de Vendas (Mês Atual)</label>
-                    <input type="file" id="sales-file-input" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-button file:text-secondary hover:file:bg-button-hover" accept=".csv, .xls, .xlsx"/>
+                    <input type="file" id="sales-file-input" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-button file:text-secondary hover:file:bg-button-hover" accept=".csv, .xls, .xlsx">
                 </div>
                 <div>
                     <label for="clients-file-input" class="block text-sm font-medium mb-2">2. Cadastro de Clientes</label>
-                    <input type="file" id="clients-file-input" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-button file:text-secondary hover:file:bg-button-hover" accept=".csv, .xls, .xlsx"/>
+                    <input type="file" id="clients-file-input" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-button file:text-secondary hover:file:bg-button-hover" accept=".csv, .xls, .xlsx">
                 </div>
                 <div>
                     <label for="products-file-input" class="block text-sm font-medium mb-2">3. Cadastro de Produtos</label>
-                    <input type="file" id="products-file-input" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-button file:text-secondary hover:file:bg-button-hover" accept=".csv, .xls, .xlsx"/>
+                    <input type="file" id="products-file-input" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-button file:text-secondary hover:file:bg-button-hover" accept=".csv, .xls, .xlsx">
                 </div>
                 <div>
                     <label for="history-file-input" class="block text-sm font-medium mb-2">4. Histórico de Vendas (Trimestre Anterior)</label>
-                    <input type="file" id="history-file-input" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-button file:text-secondary hover:file:bg-button-hover" accept=".csv, .xls, .xlsx"/>
+                    <input type="file" id="history-file-input" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-button file:text-secondary hover:file:bg-button-hover" accept=".csv, .xls, .xlsx">
                 </div>
                  <div>
                     <label for="innovations-file-input" class="block text-sm font-medium mb-2">5. Planilha de Inovações (Mês)</label>
-                    <input type="file" id="innovations-file-input" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-button file:text-secondary hover:file:bg-button-hover" accept=".csv, .xls, .xlsx"/>
+                    <input type="file" id="innovations-file-input" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-button file:text-secondary hover:file:bg-button-hover" accept=".csv, .xls, .xlsx">
                 </div>
             </div>
 
@@ -155,60 +152,6 @@
                             <div class="flex-1 overflow-y-auto custom-scrollbar py-4 px-3">
                                 <ul class="space-y-2 font-medium">
                                     <li>
-                                        <button data-target="dashboard" class="nav-link flex items-center p-2 text-slate-300 rounded-lg hover:bg-slate-700 group w-full text-left">
-                                            <svg class="w-5 h-5 text-slate-400 transition duration-75 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
-                                            <span class="ml-3">Dashboard</span>
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button data-target="pedidos" class="nav-link flex items-center p-2 text-slate-300 rounded-lg hover:bg-slate-700 group w-full text-left">
-                                            <svg class="w-5 h-5 text-slate-400 transition duration-75 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
-                                            <span class="ml-3">Pedidos</span>
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button data-target="comparativo" class="nav-link flex items-center p-2 text-slate-300 rounded-lg hover:bg-slate-700 group w-full text-left">
-                                            <svg class="w-5 h-5 text-slate-400 transition duration-75 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
-                                            <span class="ml-3">Comparativo</span>
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button data-target="estoque" class="nav-link flex items-center p-2 text-slate-300 rounded-lg hover:bg-slate-700 group w-full text-left">
-                                            <svg class="w-5 h-5 text-slate-400 transition duration-75 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
-                                            <span class="ml-3">Estoque</span>
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button data-target="cobertura" class="nav-link flex items-center p-2 text-slate-300 rounded-lg hover:bg-slate-700 group w-full text-left">
-                                            <svg class="w-5 h-5 text-slate-400 transition duration-75 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-                                            <span class="ml-3">Cobertura</span>
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button data-target="cidades" class="nav-link flex items-center p-2 text-slate-300 rounded-lg hover:bg-slate-700 group w-full text-left">
-                                            <svg class="w-5 h-5 text-slate-400 transition duration-75 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                                            <span class="ml-3">Cidades</span>
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button data-target="semanal" class="nav-link flex items-center p-2 text-slate-300 rounded-lg hover:bg-slate-700 group w-full text-left">
-                                            <svg class="w-5 h-5 text-slate-400 transition duration-75 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                            <span class="ml-3">Semanal</span>
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button data-target="inovacoes-mes" class="nav-link flex items-center p-2 text-slate-300 rounded-lg hover:bg-slate-700 group w-full text-left">
-                                            <svg class="w-5 h-5 text-slate-400 transition duration-75 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                                            <span class="ml-3">Inovações</span>
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button data-target="mix" class="nav-link flex items-center p-2 text-slate-300 rounded-lg hover:bg-slate-700 group w-full text-left">
-                                            <svg class="w-5 h-5 text-slate-400 transition duration-75 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"></path></svg>
-                                            <span class="ml-3">Mix Salty & Foods</span>
-                                        </button>
-                                    </li>
-                                    <li>
                                         <button data-target="goals" class="nav-link flex items-center p-2 text-slate-300 rounded-lg hover:bg-slate-700 group w-full text-left">
                                             <svg class="w-5 h-5 text-slate-400 transition duration-75 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 21a9 9 0 100-18 9 9 0 000 18z"></path>
@@ -217,17 +160,7 @@
                                             <span class="ml-3">Metas</span>
                                         </button>
                                     </li>
-                                    <li>
-                                        <button data-target="meta-realizado" class="nav-link flex items-center p-2 text-slate-300 rounded-lg hover:bg-slate-700 group w-full text-left">
-                                            <svg class="w-5 h-5 text-slate-400 transition duration-75 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                                            </svg>
-                                            <span class="ml-3">Meta Vs. Realizado</span>
-                                        </button>
-                                    </li>
-                                
-                            
-</ul>
+                                </ul>
                             </div>
                             <div class="p-4 border-t border-slate-700">
                                 <ul class="space-y-2 font-medium mb-4">
@@ -240,7 +173,7 @@
                                 </ul>
                                 <div class="flex items-center">
                                     <label class="theme-switch" for="checkbox-theme">
-                                        <input type="checkbox" id="checkbox-theme" />
+                                        <input type="checkbox" id="checkbox-theme">
                                         <div class="slider round"></div>
                                     </label>
                                     <span class="text-sm font-medium">Tema</span>
@@ -259,593 +192,19 @@
                             </div>
                         </div>
 
-                        <div id="main-dashboard">
-                            <div class="container mx-auto p-4 sm:p-6 lg:p-8">
-                                <!-- Cabeçalho com gradiente escuro -->
-                                    <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
-                                        <div class="flex items-center gap-4">
-                                            <button class="sidebar-toggle text-white focus:outline-none">
-                                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                                            </button>
-                                            <div class="flex-1 flex flex-col sm:flex-row justify-between items-center gap-4">
-                                                <div class="text-center sm:text-left">
-                                                    <h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1>
-                                                    <p id="last-update-text" class="text-slate-300 mt-1">Dados atualizados em: ${generationDate}</p>
-                                                </div>
-                                                <a href="https://dasksz.github.io/ANUAL-EVOLUTION/" target="_blank" class="w-full sm:w-auto flex justify-center items-center gap-2 px-6 py-2 bg-slate-800/50 hover:bg-slate-700 text-white text-sm font-semibold tracking-wider uppercase border border-slate-600 hover:border-slate-500 rounded-lg shadow-sm transition-all duration-300 backdrop-blur-sm group">
-                                                    <span>ANUAL</span>
-                                                    <svg class="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                                                    </svg>
-                                                </a>
-                                            </div>
-                                        </div>
-                                    </header>
 
-                                <!-- KPIs com bordas e cores atualizadas -->
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                                    <div class="kpi-card kpi-glow-base kpi-glow-blue transition transform hover:-translate-y-1 duration-200">
-                                        <h3 class="text-slate-300 font-medium uppercase text-sm">Volume Kg</h3>
-                                        <p id="total-peso" class="text-4xl font-bold text-white my-2">0,0</p>
-                                    </div>
-                                    <div class="kpi-card kpi-glow-base kpi-glow-green transition transform hover:-translate-y-1 duration-200">
-                                        <h3 class="text-slate-300 font-medium uppercase text-sm">Faturamento R$</h3>
-                                        <p id="total-vendas" class="text-4xl font-bold text-white my-2">R$ 0,00</p>
-                                    </div>
-                                    <div class="kpi-card kpi-glow-base kpi-glow-yellow transition transform hover:-translate-y-1 duration-200">
-                                        <h3 class="text-slate-300 font-medium uppercase text-sm">SKU/PDV</h3>
-                                        <p id="kpi-sku-pdv" class="text-4xl font-bold text-white my-2">0,0</p>
-                                    </div>
-                                    <div class="kpi-card kpi-glow-base kpi-glow-purple transition transform hover:-translate-y-1 duration-200">
-                                        <h3 class="text-slate-300 font-medium uppercase text-sm">Cobertura PDVs</h3>
-                                        <p id="kpi-positivacao" class="text-4xl font-bold text-white my-2">0,0%</p>
-                                        <p id="kpi-positivacao-percent" class="text-sm text-slate-300 -mt-1">0 PDVs</p>
-                                    </div>
-                                </div>
-
-                                <div class="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-                                    <!-- Botões de Categoria (Pepsico/Multimarcas) -->
-                                    <div id="fornecedor-toggle-container" class="w-full sm:w-auto rounded-lg p-1 flex justify-center sm:justify-start gap-2">
-                                        <button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">PEPSICO</button>
-                                        <button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">MULTIMARCAS</button>
-                                    </div>
-                                    <!-- Botões de Navegação removidos (movidos para sidebar) -->
-                                </div>
-                                
-                                <!-- Container de Filtros -->
-                                <div id="main-filters" class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
-                                    <div class="flex flex-wrap gap-4 items-end">
-                                        <!-- Filtro de Rede -->
-                                        <div id="main-rede-filter-wrapper" class="relative flex-1 min-w-[260px] z-50">
-                                            <label class="block mb-2 text-sm font-medium text-slate-400">Rede</label>
-                                            <div id="main-rede-group-container" class="inline-flex rounded-md shadow-sm w-full" role="group">
-                                                <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-l-lg hover:bg-slate-600 flex-1">Todos</button>
-                                                <button type="button" data-group="com_rede" id="main-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border-t border-b border-slate-600 hover:bg-slate-600 flex items-center justify-center gap-2 flex-1">
-                                                    <span id="main-com-rede-btn-text">C/Rede</span>
-                                                    <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                                </button>
-                                                <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-r-lg hover:bg-slate-600 flex-1">S/Rede</button>
-                                            </div>
-                                            <div id="main-rede-filter-dropdown" class="hidden absolute z-20 w-full mt-1 top-full left-0 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left text-white"></div>
-                                        </div>
-                                        <!-- Outros Filtros -->
-                                         <div class="relative flex-1 min-w-[200px] z-40">
-                                            <label for="supervisor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label>
-                                            <button id="supervisor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                                <span id="supervisor-filter-text">Todos</span>
-                                                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                            </button>
-                                            <div id="supervisor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                         </div>
-                                        <div class="relative flex-1 min-w-[200px] z-30"><label for="vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="vendedor-filter-text">Todos Vendedores</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></button><div id="vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
-                                        <div class="relative flex-1 min-w-[200px] z-20"><label for="tipo-venda-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Tipo Venda</label><button id="tipo-venda-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="tipo-venda-filter-text">Todos os Tipos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="tipo-venda-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
-                                         <div class="relative flex-1 min-w-[200px] z-10">
-                                            <label for="fornecedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Fornecedor</label>
-                                            <button id="fornecedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                                <span id="fornecedor-filter-text">Todos</span>
-                                                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                            </button>
-                                            <div id="fornecedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                         </div>
-                                        <div class="flex-1 min-w-[200px]"><label for="codcli-filter" class="block mb-2 text-sm font-medium text-slate-400">Cód. Cliente</label><input type="text" id="codcli-filter" placeholder="Digite o código..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"></div>
-                                        <div class="flex-1 min-w-[200px]"><label for="posicao-filter" class="block mb-2 text-sm font-medium text-slate-400">Posição</label><select id="posicao-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todas</option><option value="L">Liberado</option><option value="M">Montado</option><option value="F">Faturado</option></select></div>
-                                        <div class="flex-1 min-w-[200px]"><button id="clear-filters-btn" class="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button></div>
-                                    </div>
-                                </div>
-                                <main id="app-container">
-                                    <div id="chartView" class="">
-                                        <!-- Gráfico de Tendência -->
-                                        <div class="mb-6 bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                            <div class="flex justify-between items-center mb-4">
-                                                <div class="w-1/3">
-                                                    <label for="main-holiday-picker-btn" class="block mb-2 text-sm font-medium text-slate-400">Feriados do Mês</label>
-                                                    <button id="main-holiday-picker-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left focus:outline-none focus:ring-2 focus:ring-teal-500">Selecionar Feriados</button>
-                                                </div>
-                                                <div class="w-1/3 text-center">
-                                                    <h2 class="text-lg font-semibold text-white">Tendência de Faturamento</h2>
-                                                </div>
-                                                <div class="w-1/3"></div>
-                                            </div>
-                                            <div id="trendChartContainer" class="relative h-80"></div>
-                                        </div>
-                                        <!-- Gráficos menores -->
-                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm"><h2 id="sales-by-person-title" class="text-lg font-semibold text-white mb-4 text-center">Vendas por Supervisor</h2><div id="salesByPersonChartContainer" class="relative h-80"></div></div>
-                                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm"><h2 id="faturamentoPorFornecedorTitle" class="text-lg font-semibold text-white mb-4 text-center">Faturamento por Categoria</h2><div id="faturamentoPorFornecedorChartContainer" class="relative h-80"></div></div>
-                                        </div>
-                                        <!-- Gráfico de Produtos -->
-                                        <div class="mt-6 bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                            <div class="flex justify-between items-center mb-4"><h2 class="text-lg font-semibold text-white">Vendas por Produto</h2>
-                                                <div class="bg-slate-700 rounded-lg p-1 flex">
-                                                    <button id="faturamentoBtn" class="metric-btn active px-3 py-1 text-sm rounded-md text-white">Faturamento</button>
-                                                    <button id="pesoBtn" class="metric-btn px-3 py-1 text-sm rounded-md text-slate-300">Peso Kg</button>
-                                                </div>
-                                            </div>
-                                            <div id="salesByProductBarChartContainer" class="relative h-80"></div>
-                                        </div>
-                                    </div>
-                                    <!-- Visão de Tabela (Pedidos) -->
-                                    <div id="tableView" class="hidden">
-                                        <div class="overflow-x-auto bg-[#1d2347] rounded-lg border border-slate-700 shadow-sm" style="max-height: 60vh;">
-                                            <table class="min-w-full text-sm text-left text-slate-300">
-                                                <thead class="text-xs text-slate-400 uppercase sticky-header"> <!-- Sticky header já estilizado no <style>
-    :root {
-        --bg-main: #0d1126;
-        --bg-card: #1d2347;
-        --bg-header: #1e2a5a;
-        --text-primary: #cbd5e1; /* slate-300 */
-        --text-heading: #ffffff;
-        --border-color: #334155; /* slate-700 */
-    }
-    
-    html.light {
-        --bg-main: #f1f5f9; /* slate-100 */
-        --bg-card: #ffffff;
-        --bg-header: #3b82f6; /* blue-500 */
-        --text-primary: #1e293b; /* slate-800 */
-        --text-heading: #0f172a; /* slate-900 */
-        --border-color: #cbd5e1; /* slate-300 */
-    }
-
-    body { background-color: var(--bg-main); color: var(--text-primary); transition: background-color 0.3s, color 0.3s; }
-    .kpi-card, .bg-\[\#1d2347\] { background-color: var(--bg-card) !important; border-color: var(--border-color) !important; }
-    .bg-\[\#0d1126\] { background-color: var(--bg-main) !important; }
-    header.bg-gradient-to-r { background: var(--bg-header) !important; }
-    
-    /* Light Mode Specific Overrides for Text */
-    html.light .text-white { color: var(--text-heading) !important; }
-    html.light .text-slate-300 { color: var(--text-primary) !important; }
-    html.light .text-slate-400 { color: #64748b !important; } /* slate-500 */
-
-    /* Fix Buttons with White Text in Light Mode (Override the global .text-white rule) */
-    html.light button.text-white, 
-    html.light .metric-btn.text-white,
-    html.light .bg-green-600.text-white, 
-    html.light .bg-red-600.text-white, 
-    html.light .bg-blue-600.text-white, 
-    html.light .bg-teal-500.text-white,
-    html.light .bg-indigo-600.text-white,
-    html.light .bg-orange-500.text-white { 
-        color: #ffffff !important; 
-    }
-    
-    /* Theme Toggle Switch */
-    .theme-switch-wrapper { display: flex; align-items: center; margin-top: auto; padding: 1rem; border-top: 1px solid var(--border-color); }
-    .theme-switch { display: inline-block; height: 24px; position: relative; width: 48px; margin-right: 10px; }
-    .theme-switch input { display: none; }
-    .slider { background-color: #ccc; bottom: 0; cursor: pointer; left: 0; position: absolute; right: 0; top: 0; transition: .4s; border-radius: 34px; }
-    .slider:before { background-color: #fff; bottom: 4px; content: ""; height: 16px; left: 4px; position: absolute; transition: .4s; width: 16px; border-radius: 50%; }
-    input:checked + .slider { background-color: #38b2ac; }
-    input:checked + .slider:before { transform: translateX(24px); }
- -->
-                                                    <tr><th class="px-4 py-3">Nº Pedido</th><th class="px-4 py-3">Cód. Cliente</th><th class="px-4 py-3">Vendedor</th><th class="px-4 py-3">Fornecedor</th><th class="px-4 py-3">Data Pedido</th><th class="px-4 py-3">Data Fat.</th><th class="px-4 py-3 text-right">Peso Total</th><th class="px-4 py-3 text-right">Faturamento Total</th><th class="px-4 py-3 text-center">Posição</th></tr>
-                                                </thead>
-                                                <tbody id="report-table-body" class="divide-y divide-slate-700"></tbody>
-                                            </table>
-                                        </div>
-                                        <!-- Paginação da Tabela -->
-                                        <div id="table-pagination-controls" class="hidden mt-4 flex justify-between items-center">
-                                            <button id="prev-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Anterior</button>
-                                            <span id="page-info-text" class="text-slate-400">Página 1 de 1</span>
-                                            <button id="next-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Próxima</button>
-                                        </div>
-                                    </div>
-                                </main>
-                            </div>
-                        </div>
                         
                         <!-- Ecrã de Cidades -->
-                        <div id="city-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
-                            <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
-                                <div class="flex items-center gap-4">
-                                    <button class="sidebar-toggle text-white focus:outline-none">
-                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                                    </button>
-                                    <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Vendas por Cidade</p></div>
-                                </div>
-                            </header>
-                            <div id="city-view-content">
-                                <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
-                                    <div class="flex justify-between items-center mb-4">
-                                        <h3 class="text-white font-semibold">Filtros</h3>
-                                        <button id="toggle-city-map-btn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg text-sm flex items-center gap-2">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
-                                            Ver Mapa
-                                        </button>
-                                    </div>
-                                    <div class="flex flex-wrap gap-4 items-end">
-                                        <!-- Filtro de Rede (Cidades) -->
-                                        <div id="city-rede-filter-wrapper" class="relative flex-1 min-w-[260px] z-50">
-                                            <label class="block mb-2 text-sm font-medium text-slate-400">Rede</label>
-                                            <div id="city-rede-group-container" class="inline-flex rounded-md shadow-sm w-full" role="group">
-                                                <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-l-lg hover:bg-slate-600 flex-1">Todos</button>
-                                                <div class="relative flex-1">
-                                                    <button type="button" data-group="com_rede" id="city-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border-t border-b border-slate-600 hover:bg-slate-600 flex items-center justify-center gap-2 w-full">
-                                                        <span id="city-com-rede-btn-text">C/Rede</span>
-                                                        <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                                    </button>
-                                                    <div id="city-rede-filter-dropdown" class="hidden absolute z-20 w-full mt-1 top-full left-0 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left text-white"></div>
-                                                </div>
-                                                <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-r-lg hover:bg-slate-600 flex-1">S/Rede</button>
-                                            </div>
-                                        </div>
-                                        <!-- Outros Filtros (Cidades) -->
-                                        <div class="relative flex-1 min-w-[200px] z-40">
-                                            <label for="city-supervisor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label>
-                                            <button id="city-supervisor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                                <span id="city-supervisor-filter-text">Todos</span>
-                                                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                            </button>
-                                            <div id="city-supervisor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                        </div>
-                                        <div class="relative flex-1 min-w-[200px] z-30"><label for="city-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="city-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="city-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="city-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
-                                        <div class="relative flex-1 min-w-[200px] z-20"><label for="city-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Fornecedor</label><button id="city-supplier-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="city-supplier-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="city-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
-                                        <div class="relative flex-1 min-w-[200px]"><label for="city-filial-filter" class="block mb-2 text-sm font-medium text-slate-400">Filial</label><select id="city-filial-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="ambas" selected>Ambas</option><option value="05">Filial 05</option><option value="08">Filial 08</option></select></div>
-                                        <div class="relative flex-1 min-w-[200px]"><label for="city-name-filter" class="block mb-2 text-sm font-medium text-slate-400">Cidade</label><input type="text" id="city-name-filter" placeholder="Digite a cidade..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off"><div id="city-suggestions" class="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar text-white"></div></div>
-                                        <div class="flex-1 min-w-[200px]"><label for="city-codcli-filter" class="block mb-2 text-sm font-medium text-slate-400">Cód. Cliente</label><input type="text" id="city-codcli-filter" placeholder="Digite o código..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"></div>
-                                        <div class="relative flex-1 min-w-[200px]">
-                                            <label for="city-tipo-venda-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Tipo Venda</label>
-                                            <button id="city-tipo-venda-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                                <span id="city-tipo-venda-filter-text">Todos os Tipos</span>
-                                                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                            </button>
-                                            <div id="city-tipo-venda-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                        </div>
-                                    </div>
-                                    <div class="mt-4 flex justify-center">
-                                        <button id="clear-city-filters-btn" class="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg">Limpar Filtros</button>
-                                    </div>
-                                </div>
 
-                                <!-- Mapa (Cidades) -->
-                                <div id="city-map-container" class="hidden bg-[#1d2347] p-4 rounded-lg shadow-sm border border-slate-700 mb-6 h-[600px] relative z-0">
-                                    <div id="leaflet-map" class="w-full h-full rounded-lg z-0"></div>
-                                    <div id="map-loading-overlay" class="absolute inset-0 bg-black/50 flex flex-col items-center justify-center rounded-lg hidden z-[1000]">
-                                        <div class="spinner-orange mb-2"></div>
-                                        <div class="text-white font-bold" id="map-loading-text">Carregando coordenadas...</div>
-                                    </div>
-                                </div>
-
-                                <!-- Gráficos (Cidades) -->
-                                <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                                    <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                        <div class="flex justify-between items-center mb-4">
-                                            <div class="w-1/4"><span class="text-xl font-bold text-indigo-400">Top 10</span></div>
-                                            <div class="w-1/2 text-center"><h2 id="city-chart-title" class="text-lg font-semibold text-white"></h2></div>
-                                            <div class="w-1/4 text-right"><p class="text-slate-300 text-sm">Total Vendido</p><p id="total-faturamento-cidade" class="text-xl font-bold text-green-400">R$ 0,00</p></div>
-                                        </div>
-                                        <div id="salesByClientInCityChartContainer" class="relative h-96"></div>
-                                    </div>
-                                    <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                        <div class="flex justify-between items-center mb-4">
-                                            <div class="w-1/4"></div>
-                                            <div class="w-1/2 text-center"><h2 class="text-lg font-semibold text-white">Status dos Clientes</h2></div>
-                                            <div class="w-1/4 text-right">
-                                                <p class="text-slate-300 text-sm">Total Clientes</p>
-                                                <p id="total-clientes-cidade" class="text-xl font-bold text-teal-400">0</p>
-                                            </div>
-                                        </div>
-                                        <div id="customerStatusChartContainer" class="relative h-96"></div>
-                                    </div>
-                                </div>
-                                <!-- Tabelas (Cidades) -->
-                                <div class="bg-[#1d2347] p-4 rounded-lg mt-6 border border-slate-700 shadow-sm"><div class="flex justify-between items-center mb-4 px-4"><h3 class="text-lg font-semibold text-white">Clientes Ativos no Mês</h3><button id="export-active-pdf-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg text-sm">Exportar Relatório</button></div><div class="overflow-x-auto custom-scrollbar" style="max-height: 40vh;"><table class="min-w-full text-sm text-left text-slate-300"><thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-4 py-3">Código</th><th class="px-4 py-3">Nome Fantasia</th><th class="px-4 py-3 text-right">Faturamento</th><th class="px-4 py-3">Cidade</th><th class="px-4 py-3">Bairro</th><th class="px-4 py-3 text-center">Última Compra</th><th class="px-4 py-3">RCA 1</th></tr></thead><tbody id="city-active-detail-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg mt-6 border border-slate-700 shadow-sm"><div class="flex justify-between items-center mb-4 px-4"><h3 class="text-lg font-semibold text-white">Clientes S/ Vendas no Mês</h3><button id="export-inactive-pdf-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg text-sm">Exportar Relatório</button></div><div class="overflow-x-auto custom-scrollbar" style="max-height: 40vh;"><table class="min-w-full text-sm text-left text-slate-300"><thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-4 py-3">Código</th><th class="px-4 py-3">Nome Fantasia</th><th class="px-4 py-3">Cidade</th><th class="px-4 py-3">Bairro</th><th class="px-4 py-3 text-center">Última Compra</th><th class="px-4 py-3">RCA 1</th></tr></thead><tbody id="city-inactive-detail-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
-                            </div>
-                        </div>
                         
                         <!-- Ecrã Semanal -->
-                        <div id="weekly-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
-                            <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
-                                <div class="flex items-center gap-4">
-                                    <button class="sidebar-toggle text-white focus:outline-none">
-                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                                    </button>
-                                    <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Acompanhamento Semanal</p></div>
-                                </div>
-                            </header>
-                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
-                                <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
-                                    <div id="weekly-fornecedor-toggle-container" class="w-full sm:w-auto rounded-lg p-1 flex justify-center sm:justify-start gap-2"><button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">PEPSICO</button><button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">MULTIMARCAS</button></div>
-                                    <button id="clear-weekly-filters-btn" class="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg">Limpar Filtros</button>
-                                </div>
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-                                    <div class="relative">
-                                        <label for="weekly-supervisor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label>
-                                        <button id="weekly-supervisor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                            <span id="weekly-supervisor-filter-text">Todos</span>
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="weekly-supervisor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="weekly-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label>
-                                        <button id="weekly-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                            <span id="weekly-vendedor-filter-text">Todos</span>
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="weekly-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                    </div>
-                                    <div><label for="weekly-filial-filter" class="block mb-2 text-sm font-medium text-slate-400">Filial</label><select id="weekly-filial-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="ambas" selected>Ambas</option><option value="05">Filial 05</option><option value="08">Filial 08</option></select></div>
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-1 gap-6">
-                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                    <div class="flex justify-between items-center mb-4"><h2 class="text-lg font-semibold text-white text-center">Faturamento Mensal por Dia da Semana</h2><div class="text-right"><p class="text-slate-300 text-sm">Total do Mês</p><p id="total-mes-semanal" class="text-xl font-bold text-green-400">R$ 0,00</p></div></div><div id="weeklySalesChartContainer" class="relative h-96"></div>
-                                    <div class="mt-6 border-t border-slate-700 pt-4"><h3 class="text-md font-semibold text-white mb-3 text-center">Resumo de Faturamento Semanal</h3><div class="overflow-x-auto"><table class="min-w-full text-sm text-left text-slate-300"><thead class="text-xs text-slate-400 uppercase"><tr><th class="px-4 py-2 bg-slate-800 rounded-l-lg">Semana</th><th class="px-4 py-2 bg-slate-800 text-right rounded-r-lg">Faturamento Total</th></tr></thead><tbody id="weekly-summary-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
-                                </div>
-                                <div class="grid grid-cols-1 gap-6"><div class="grid grid-cols-1 lg:grid-cols-2 gap-6"><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm"><h2 class="text-lg font-semibold text-white mb-4 text-center">Ranking de Positivação</h2><div id="positivacaoChartContainer" class="relative h-80"></div></div><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm"><h2 class="text-lg font-semibold text-white mb-4 text-center">Ranking de Mix de Produtos (Por PDV)</h2><div id="mixChartContainer" class="relative h-80"></div></div></div><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm"><h2 class="text-lg font-semibold text-white mb-4 text-center">Top 10 Vendedores (Faturamento)</h2><div id="topSellersChartContainer" class="relative h-80"></div></div></div>
-                            </div>
-                        </div>
+
                         
                         <!-- Ecrã Comparativo -->
-                        <div id="comparison-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
-                            <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
-                                <div class="flex items-center gap-4">
-                                    <button class="sidebar-toggle text-white focus:outline-none">
-                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                                    </button>
-                                    <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Comparativo entre Meses</p></div>
-                                </div>
-                            </header>
-                            <!-- Filtros (Comparativo) -->
-                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
-                                <div id="comparison-rede-filter-wrapper" class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
-                                    <div class="relative w-full sm:w-1/2">
-                                        <label class="block mb-2 text-sm font-medium text-slate-400">Rede</label>
-                                        <div id="comparison-rede-group-container" class="inline-flex rounded-md shadow-sm w-full" role="group">
-                                            <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-l-lg hover:bg-slate-600 flex-1">Todos</button>
-                                            <button type="button" data-group="com_rede" id="comparison-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border-t border-b border-slate-600 hover:bg-slate-600 flex items-center justify-center gap-2 flex-1">
-                                                <span id="comparison-com-rede-btn-text">C/Rede</span>
-                                                <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                            </button>
-                                            <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-r-lg hover:bg-slate-600 flex-1">S/Rede</button>
-                                        </div>
-                                        <div id="comparison-rede-filter-dropdown" class="hidden absolute z-20 w-full mt-1 top-full left-0 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left text-white"></div>
-                                    </div>
-                                    <div class="w-full sm:w-1/2">
-                                        <label class="block mb-2 text-sm font-medium text-slate-400">Pasta</label>
-                                        <div id="comparison-fornecedor-toggle-container" class="w-full rounded-lg p-1 flex justify-center gap-2">
-                                            <button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg flex-1">PEPSICO</button>
-                                            <button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg flex-1">MULTIMARCAS</button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                                    <div class="relative">
-                                        <label for="comparison-supervisor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label>
-                                        <button id="comparison-supervisor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                            <span id="comparison-supervisor-filter-text">Todos</span>
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="comparison-supervisor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                    </div>
-                                    <div class="relative"><label for="comparison-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="comparison-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="comparison-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="comparison-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
-                                    <div class="relative"><label for="comparison-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Fornecedor</label><button id="comparison-supplier-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="comparison-supplier-filter-text">Todos Fornecedores</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="comparison-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
-                                    <div class="relative"><label for="comparison-city-filter" class="block mb-2 text-sm font-medium text-slate-400">Cidade</label><input type="text" id="comparison-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off"><div id="comparison-city-suggestions" class="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar text-white"></div></div>
-                                </div>
-                                <div class="grid grid-cols-1 mt-4">
-                                    <div class="relative">
-                                        <label for="comparison-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Filtrar por Produto</label>
-                                        <button id="comparison-product-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="comparison-product-filter-text">Todos os Produtos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button>
-                                        <div id="comparison-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg">
-                                            <div class="p-2 border-b border-slate-700"><input type="text" id="comparison-product-search-input" placeholder="Buscar produto..." class="bg-slate-600 text-xs rounded-lg block w-full p-2 border border-slate-500 placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-teal-500"></div>
-                                            <div id="comparison-product-list" class="max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end border-t border-slate-700 pt-4 mt-4">
-                                    <div><label for="comparison-filial-filter" class="block mb-2 text-sm font-medium text-slate-400">Filial</label><select id="comparison-filial-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="ambas" selected>Ambas</option><option value="05">Filial 05</option><option value="08">Filial 08</option></select></div>
-                                    <div class="relative">
-                                        <label for="comparison-tipo-venda-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Tipo Venda</label>
-                                        <button id="comparison-tipo-venda-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                            <span id="comparison-tipo-venda-filter-text">Todos os Tipos</span>
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="comparison-tipo-venda-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                    </div>
-                                    <button id="comparison-tendency-toggle" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2.5 px-4 rounded-lg">Calcular Tendência</button>
-                                    <div>
-                                        <label for="comparison-holiday-picker-btn" class="block mb-2 text-sm font-medium text-slate-400">Feriados do Mês</label>
-                                        <button id="comparison-holiday-picker-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left focus:outline-none focus:ring-2 focus:ring-teal-500">Selecionar Feriados</button>
-                                    </div>
-                                    <button id="clear-comparison-filters-btn" class="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
-                                </div>
-                            </div>
-                            <!-- KPIs (Comparativo) -->
-                            <div id="comparison-kpi-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
-                                <!-- KPIs serão renderizados aqui pelo JS -->
-                            </div>
-                            <!-- Gráficos (Comparativo) -->
-                            <div class="grid grid-cols-1 gap-6">
-                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                    <div class="flex justify-center items-center mb-4 relative">
-                                        <!-- Metric Toggle (Left Side) - Only visible for Monthly View -->
-                                        <div id="comparison-monthly-metric-container" class="absolute left-0 top-0 bottom-0 flex items-center hidden">
-                                            <div class="flex bg-slate-700 rounded-lg p-1">
-                                                <button id="toggle-monthly-fat-btn" class="monthly-metric-btn active px-3 py-1 text-sm rounded-md text-white">Faturamento</button>
-                                                <button id="toggle-monthly-clients-btn" class="monthly-metric-btn px-3 py-1 text-sm rounded-md text-slate-300">Clientes</button>
-                                            </div>
-                                        </div>
 
-                                        <h2 id="comparison-chart-title" class="text-lg font-semibold text-white text-center">Comparativo de Faturamento Semanal</h2>
-                                        <div class="absolute right-0 top-0 bottom-0 flex items-center">
-                                            <div id="comparison-chart-toggle" class="flex bg-slate-700 rounded-lg p-1">
-                                                <button id="toggle-weekly-btn" class="comparison-toggle-btn active px-3 py-1 text-sm rounded-md text-white">Semanal</button>
-                                                <button id="toggle-monthly-btn" class="comparison-toggle-btn px-3 py-1 text-sm rounded-md text-slate-300">Mensal</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div id="weeklyComparisonChartContainer" class="relative h-96"></div>
-                                    <div id="monthlyComparisonChartContainer" class="relative h-96 hidden"></div>
-                                </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                    <h2 class="text-lg font-semibold text-white text-center mb-4">Faturamento por Dia da Semana</h2>
-                                    <div id="dailyWeeklyComparisonChartContainer" class="relative h-96"></div>
-                                </div>
-                                <!-- Tabela (Comparativo) -->
-                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm"><h2 class="text-lg font-semibold text-white text-center mb-4">Variação de Faturamento por Supervisor</h2><div class="overflow-x-auto custom-scrollbar" style="max-height: 40vh;"><table class="min-w-full text-sm text-left text-slate-300"><thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-4 py-3">Supervisor</th><th class="px-4 py-3 text-right">Média Trim.</th><th class="px-4 py-3 text-right">Fat. Mês Atual</th><th class="px-4 py-3 text-right">Variação</th></tr></thead><tbody id="supervisorComparisonTableBody" class="divide-y divide-slate-700"></tbody></table></div></div>
-                            </div>
-                        </div>
                         
                         <!-- Ecrã Estoque -->
-                        <div id="stock-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
-                            <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
-                                <div class="flex items-center gap-4">
-                                    <button class="sidebar-toggle text-white focus:outline-none">
-                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                                    </button>
-                                    <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Estoque</p></div>
-                                </div>
-                            </header>
-                            <!-- Filtros (Estoque) -->
-                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
-                                <div id="stock-rede-filter-wrapper" class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
-                                    <div class="relative w-full sm:w-1/2">
-                                        <label class="block mb-2 text-sm font-medium text-slate-400">Rede</label>
-                                        <div id="stock-rede-group-container" class="inline-flex rounded-md shadow-sm w-full" role="group">
-                                            <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-l-lg hover:bg-slate-600 flex-1">Todos</button>
-                                            <button type="button" data-group="com_rede" id="stock-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border-t border-b border-slate-600 hover:bg-slate-600 flex items-center justify-center gap-2 flex-1">
-                                                <span id="stock-com-rede-btn-text">C/Rede</span>
-                                                <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                            </button>
-                                            <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-r-lg hover:bg-slate-600 flex-1">S/Rede</button>
-                                        </div>
-                                        <div id="stock-rede-filter-dropdown" class="hidden absolute z-20 w-full mt-1 top-full left-0 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left text-white"></div>
-                                    </div>
-                                    <div class="w-full sm:w-1/2">
-                                        <label class="block mb-2 text-sm font-medium text-slate-400">Pasta</label>
-                                        <div id="stock-fornecedor-toggle-container" class="w-full rounded-lg p-1 flex justify-center gap-2">
-                                            <button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg flex-1">PEPSICO</button>
-                                            <button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg flex-1">MULTIMARCAS</button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                                    <div class="relative">
-                                        <label for="stock-supervisor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label>
-                                        <button id="stock-supervisor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                            <span id="stock-supervisor-filter-text">Todos</span>
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="stock-supervisor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                    </div>
-                                    <div class="relative"><label for="stock-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="stock-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="stock-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="stock-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
-                                    <div class="relative"><label for="stock-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Fornecedor</label><button id="stock-supplier-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="stock-supplier-filter-text">Todos Fornecedores</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="stock-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
-                                    <div class="relative"><label for="stock-city-filter" class="block mb-2 text-sm font-medium text-slate-400">Cidade</label><input type="text" id="stock-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off"><div id="stock-city-suggestions" class="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar text-white"></div></div>
-                                </div>
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                                    <div class="lg:col-span-2 relative">
-                                        <label for="stock-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Produto</label>
-                                        <button id="stock-product-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="stock-product-filter-text">Todos os Produtos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button>
-                                        <div id="stock-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg">
-                                            <div class="p-2 border-b border-slate-700"><input type="text" id="stock-product-search-input" placeholder="Buscar produto..." class="bg-slate-600 text-xs rounded-lg block w-full p-2 border border-slate-500 placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-teal-500"></div>
-                                            <div id="stock-product-list" class="max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label for="stock-filial-filter" class="block mb-2 text-sm font-medium text-slate-400">Filial</label>
-                                        <select id="stock-filial-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5">
-                                            <option value="ambas" selected>Ambas</option>
-                                            <option value="05">Filial 05</option>
-                                            <option value="08">Filial 08</option>
-                                        </select>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="stock-tipo-venda-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Tipo Venda</label>
-                                        <button id="stock-tipo-venda-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                            <span id="stock-tipo-venda-filter-text">Todos os Tipos</span>
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="stock-tipo-venda-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                    </div>
-                                    <button id="clear-stock-filters-btn" class="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
-                                </div>
-                            </div>
-                            <!-- Tabela Principal (Estoque) -->
-                             <div class="bg-[#1d2347] p-4 rounded-lg mb-6 border border-slate-700 shadow-sm">
-                                <div class="flex justify-between items-center mb-4">
-                                    <h2 class="text-lg font-semibold text-white">Análise de Estoque e Tendência de Saída</h2>
-                                    <div class="flex items-end gap-4">
-                                        <div>
-                                            <label for="stock-working-days-input" class="block text-xs font-medium text-slate-400 mb-1 text-center">Dias Úteis</la bel>
-                                            <div class="flex items-center justify-center gap-1">
-                                                <input type="number" id="stock-working-days-input" value="0" min="1" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg block w-20 p-1.5 text-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                                <span id="max-working-days-label" class="text-xs text-slate-400 whitespace-nowrap">(Máx: 0)</span>
-                                            </div>
-                                        </div>
-                                        <div id="stock-trend-filter-container" class="flex items-center gap-2">
-                                            <button data-trend="all" class="stock-trend-btn active p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-gray-400"></div></button>
-                                            <button data-trend="low" class="stock-trend-btn p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-red-500"></div></button>
-                                            <button data-trend="medium" class="stock-trend-btn p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-yellow-500"></div></button>
-                                            <button data-trend="good" class="stock-trend-btn p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-green-500"></div></button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
-                                    <table class="min-w-full text-sm text-left text-slate-300">
-                                        <thead class="text-xs text-slate-400 uppercase sticky-header">
-                                            <tr>
-                                                <th class="px-4 py-3">Produto</th>
-                                                <th class="px-4 py-3">Fornecedor</th>
-                                                <th class="px-4 py-3 text-right">Estoque Atual (CX.)</th>
-                                                <th class="px-4 py-3 text-right">Venda Média Mensal (CX.)</th>
-                                                <th class="px-4 py-3 text-right">Média diária (CX.)</th>
-                                                <th class="px-4 py-3 text-right">Tendência (Dias)</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="stock-analysis-table-body" class="divide-y divide-slate-700"></tbody>
-                                    </table>
-                                </div>
-                            </div>
-                            <!-- Tabelas Secundárias (Estoque) -->
-                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                    <h2 class="text-lg font-semibold text-white text-center mb-4">Produtos com Crescimento</h2>
-                                    <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
-                                        <table class="min-w-full text-sm text-slate-300"><thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Variação</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead><tbody id="growth-table-body" class="divide-y divide-slate-700"></tbody></table>
-                                    </div>
-                                </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                    <h2 class="text-lg font-semibold text-white text-center mb-4">Produtos com Queda</h2>
-                                    <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
-                                        <table class="min-w-full text-sm text-slate-300"><thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Variação</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead><tbody id="decline-table-body" class="divide-y divide-slate-700"></tbody></table>
-                                    </div>
-                                </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                    <h2 class="text-lg font-semibold text-white text-center mb-4">Novos - Vendidos este Mês</h2>
-                                    <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
-                                        <table class="min-w-full text-sm text-slate-300"><thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead><tbody id="new-products-table-body" class="divide-y divide-slate-700"></tbody></table>
-                                    </div>
-                                </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                    <h2 class="text-lg font-semibold text-white text-center mb-4">Perdidos - Não vendidos este Mês</h2>
-                                    <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
-                                        <table class="min-w-full text-sm text-slate-300"><thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead><tbody id="lost-products-table-body" class="divide-y divide-slate-700"></tbody></table>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+
 
                         <!-- Ecrã AI Insights Full Page -->
                         <div id="ai-insights-full-page" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
@@ -883,20 +242,20 @@
                                         </button>
                                         <div>
                                             <h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1>
-                                            <p class="text-slate-300">Planejamento de Metas (GV & SV)</p>
+                                            <p class="text-slate-300">Planejamento de Metas (GV &amp; SV)</p>
                                         </div>
                                     </div>
                                     <!-- Top Right Tabs -->
                                     
     <button id="save-goals-btn" class="ml-4 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
         </svg>
         Salvar Metas
     </button>
     <button id="clear-goals-btn" class="ml-4 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
         </svg>
         Limpar Metas
     </button>
@@ -1035,7 +394,7 @@
                                     <div class="bg-[#3b0764] kpi-glow-base kpi-glow-purple rounded-lg p-3 relative overflow-hidden group shadow-md">
                                         <label class="text-[10px] font-bold text-purple-300 uppercase tracking-wider mb-1 block">META POSITIVAÇÃO</label>
                                         <div class="flex gap-2">
-                                            <input type="text" id="goal-global-mix" class="w-full bg-[#0f172a] border border-purple-900/50 text-white font-bold text-lg p-2 rounded focus:outline-none focus:border-purple-500" value="0" readonly>
+                                            <input type="text" id="goal-global-mix" class="w-full bg-[#0f172a] border border-purple-900/50 text-white font-bold text-lg p-2 rounded focus:outline-none focus:border-purple-500" value="0" readonly="">
                                             <button id="btn-distribute-mix" class="bg-purple-600 hover:bg-purple-500 text-white px-3 rounded flex items-center justify-center transition-colors" style="display: none;">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
                                             </button>
@@ -1049,7 +408,7 @@
                                     <div id="card-mix-salty" class="hidden bg-[#064e3b] kpi-glow-base kpi-glow-green rounded-lg p-3 relative overflow-hidden group shadow-md">
                                         <label class="text-[10px] font-bold text-emerald-300 uppercase tracking-wider mb-1 block">META MIX SALTY</label>
                                         <div class="flex gap-2">
-                                            <input type="text" id="goal-global-mix-salty" class="w-full bg-[#0f172a] border border-emerald-900/50 text-white font-bold text-lg p-2 rounded focus:outline-none focus:border-emerald-500" value="0" readonly>
+                                            <input type="text" id="goal-global-mix-salty" class="w-full bg-[#0f172a] border border-emerald-900/50 text-white font-bold text-lg p-2 rounded focus:outline-none focus:border-emerald-500" value="0" readonly="">
                                             <button id="btn-distribute-mix-salty" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 rounded flex items-center justify-center transition-colors" style="display: none;">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
                                             </button>
@@ -1062,7 +421,7 @@
                                     <div id="card-mix-foods" class="hidden bg-[#713f12] kpi-glow-base kpi-glow-yellow rounded-lg p-3 relative overflow-hidden group shadow-md">
                                         <label class="text-[10px] font-bold text-yellow-300 uppercase tracking-wider mb-1 block">META MIX FOODS</label>
                                         <div class="flex gap-2">
-                                            <input type="text" id="goal-global-mix-foods" class="w-full bg-[#0f172a] border border-yellow-900/50 text-white font-bold text-lg p-2 rounded focus:outline-none focus:border-yellow-500" value="0" readonly>
+                                            <input type="text" id="goal-global-mix-foods" class="w-full bg-[#0f172a] border border-yellow-900/50 text-white font-bold text-lg p-2 rounded focus:outline-none focus:border-yellow-500" value="0" readonly="">
                                             <button id="btn-distribute-mix-foods" class="bg-yellow-600 hover:bg-yellow-500 text-white px-3 rounded flex items-center justify-center transition-colors" style="display: none;">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
                                             </button>
@@ -1148,9 +507,9 @@
                                             </button>
                                         </div>
                                         <div class="flex items-center gap-4">
-                                            <button id="goals-prev-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50 text-xs" disabled>Anterior</button>
+                                            <button id="goals-prev-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50 text-xs" disabled="">Anterior</button>
                                             <span id="goals-page-info-text" class="text-slate-400 text-xs">Página 1 de 1</span>
-                                            <button id="goals-next-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50 text-xs" disabled>Próxima</button>
+                                            <button id="goals-next-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50 text-xs" disabled="">Próxima</button>
                                         </div>
                                     </div>
                                 </div>
@@ -1196,7 +555,7 @@
                             <div class="bg-slate-800 rounded-lg shadow-2xl max-w-6xl w-full m-4 text-slate-300 border border-slate-700 flex flex-col max-h-[90vh]">
                                 <div class="p-4 border-b border-slate-700 flex justify-between items-center">
                                     <h2 class="text-lg font-bold text-white">Importar / Analisar Planilha de Metas</h2>
-                                    <button id="import-goals-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button>
+                                    <button id="import-goals-close-btn" class="text-slate-400 hover:text-white text-3xl">×</button>
                                 </div>
                                 <div class="p-6 flex-1 overflow-y-auto custom-scrollbar">
                                     <div id="import-drop-zone" class="border-2 border-dashed border-slate-600 rounded-lg p-8 mb-6 flex flex-col items-center justify-center transition-colors hover:border-teal-500 hover:bg-slate-700/30 cursor-pointer">
@@ -1246,7 +605,7 @@
                                         <div id="ai-insights-result" class="hidden mb-6 p-1 rounded-lg bg-gradient-to-r from-slate-700 to-slate-800 p-[1px]">
                                             <div class="bg-slate-900 rounded-lg p-6 relative overflow-hidden">
                                                 <div class="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-                                                    <svg class="w-32 h-32 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/><path d="M12 6a1 1 0 0 0-1 1v4H8a1 1 0 0 0 0 2h3v3a1 1 0 0 0 2 0v-3h3a1 1 0 0 0 0-2h-3V7a1 1 0 0 0-1-1z"/></svg>
+                                                    <svg class="w-32 h-32 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"></path><path d="M12 6a1 1 0 0 0-1 1v4H8a1 1 0 0 0 0 2h3v3a1 1 0 0 0 2 0v-3h3a1 1 0 0 0 0-2h-3V7a1 1 0 0 0-1-1z"></path></svg>
                                                 </div>
                                                 <div class="flex flex-col md:flex-row gap-6">
                                                     <div class="flex-1">
@@ -1292,7 +651,7 @@
                                 </div>
                                 <div class="p-4 border-t border-slate-700 flex justify-end gap-3 bg-slate-800 rounded-b-lg">
                                     <button id="import-goals-cancel-btn" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">Cancelar</button>
-                                    <button id="import-goals-confirm-btn" class="px-6 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                    <button id="import-goals-confirm-btn" class="px-6 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled="">
                                         Carregar Metas
                                     </button>
                                 </div>
@@ -1301,525 +660,21 @@
 
 
                         <!-- Ecrã Inovações Mês -->
-                        <div id="innovations-month-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
-                             <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
-                                <div class="flex items-center gap-4">
-                                    <button class="sidebar-toggle text-white focus:outline-none">
-                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                                    </button>
-                                    <div class="flex-1 flex flex-col sm:flex-row justify-between items-center gap-4">
-                                        <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Gráfico de Cobertura por Categoria de Inovação</p></div>
-                                        <button id="export-innovations-month-pdf-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Exportar PDF</button>
-                                    </div>
-                                </div>
-                            </header>
-                             <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-6">
-                                <div class="kpi-card kpi-glow-base kpi-glow-blue transition transform hover:-translate-y-1 duration-200"><p class="text-slate-300 text-sm font-medium">Clientes Ativos (Filtro)</p><p id="innovations-month-active-clients-kpi" class="text-3xl font-bold text-teal-400 my-1">0</p><p class="text-xs text-slate-300">Base para os KPIs</p></div>
-                                <div class="kpi-card kpi-glow-base kpi-glow-yellow transition transform hover:-translate-y-1 duration-200"><p class="text-slate-300 text-sm font-medium">Cobertura Mês Anterior</p><p id="innovations-month-selection-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p><p id="innovations-month-selection-coverage-count-kpi-previous" class="text-xs text-slate-300">0 de 0 clientes</p></div>
-                                <div class="kpi-card kpi-glow-base kpi-glow-green transition transform hover:-translate-y-1 duration-200"><p class="text-slate-300 text-sm font-medium">Cobertura Mês Atual</p><p id="innovations-month-selection-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p><p id="innovations-month-selection-coverage-count-kpi" class="text-xs text-slate-300">0 de 0 clientes</p></div>
-                                <div class="kpi-card kpi-glow-base kpi-glow-yellow transition transform hover:-translate-y-1 duration-200"><p class="text-slate-300 text-sm font-medium">Cobertura Bonificação Ant.</p><p id="innovations-month-bonus-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p><p id="innovations-month-bonus-coverage-count-kpi-previous" class="text-xs text-slate-300">0 de 0 clientes</p></div>
-                                <div class="kpi-card kpi-glow-base kpi-glow-green transition transform hover:-translate-y-1 duration-200"><p class="text-slate-300 text-sm font-medium">Cobertura Bonificação Atual</p><p id="innovations-month-bonus-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p><p id="innovations-month-bonus-coverage-count-kpi" class="text-xs text-slate-300">0 de 0 clientes</p></div>
-                                <div class="kpi-card kpi-glow-base kpi-glow-purple transition transform hover:-translate-y-1 duration-200"><p id="innovations-month-top-coverage-title" class="text-slate-300 text-sm font-medium">Item com Maior Cobertura</p><p id="innovations-month-top-coverage-value-kpi" class="text-3xl font-bold text-purple-400 my-1">0%</p><p id="innovations-month-top-coverage-kpi" class="text-xs text-slate-300 truncate" title="Nenhum item analisado">-</p><p id="innovations-month-top-coverage-count-kpi" class="text-xs text-slate-300">0 PDVs</p></div>
-                            </div>
-                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
-                                    <div class="relative">
-                                        <label for="innovations-month-supervisor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label>
-                                        <button id="innovations-month-supervisor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                            <span id="innovations-month-supervisor-filter-text">Todos</span>
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="innovations-month-supervisor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                    </div>
-                                    <div class="relative"><label for="innovations-month-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="innovations-month-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="innovations-month-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="innovations-month-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
-                                    <div class="relative"><label for="innovations-month-city-filter" class="block mb-2 text-sm font-medium text-slate-400">Cidade</label><input type="text" id="innovations-month-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off"><div id="innovations-month-city-suggestions" class="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar text-white"></div></div>
-                                    <div><label for="innovations-month-filial-filter" class="block mb-2 text-sm font-medium text-slate-400">Filial</label><select id="innovations-month-filial-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="ambas" selected>Ambas</option><option value="05">Filial 05</option><option value="08">Filial 08</option></select></div>
-                                    <div class="relative">
-                                        <label for="innovations-month-tipo-venda-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Tipo Venda</label>
-                                        <button id="innovations-month-tipo-venda-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                            <span id="innovations-month-tipo-venda-filter-text">Todos os Tipos</span>
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="innovations-month-tipo-venda-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                    </div>
-                                    <button id="clear-innovations-month-filters-btn" class="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
-                                </div>
-                                <div class="mt-4 border-t border-slate-700 pt-4">
-                                    <label for="innovations-month-category-filter" class="block mb-2 text-sm font-medium text-slate-400">Filtrar por Categoria de Inovação</label>
-                                    <select id="innovations-month-category-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todas as Categorias</option></select>
-                                </div>
-                            </div>
-                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm mb-6">
-                                <div id="innovations-month-chartContainer" class="relative h-96"></div>
-                            </div>
-                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm mb-6">
-                                <h2 class="text-lg font-semibold text-white mb-4 text-center">Dados do Gráfico</h2>
-                                <div class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
-                                    <table class="min-w-full text-sm text-left text-slate-300">
-                                        <thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-2 py-2">CATEGORIA</th><th class="px-2 py-2">PRODUTO</th><th class="px-2 py-2 text-right">ESTOQUE CAIXAS</th><th class="px-2 py-2 text-right">COBERTURA MÊS ANT.</th><th class="px-2 py-2 text-right">COBERTURA MÊS ATUAL</th><th class="px-2 py-2 text-right">VARIAÇÃO</th></tr></thead>
-                                        <tbody id="innovations-month-table-body" class="divide-y divide-slate-700"></tbody>
-                                    </table>
-                                </div>
-                            </div>
-                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                <h2 class="text-lg font-semibold text-white mb-2 text-center">Inovações por cliente</h2>
-                                <div id="innovations-by-client-legend" class="text-xs text-slate-400 mb-4 p-2 bg-slate-800 rounded"></div>
-                                <div class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
-                                    <table class="min-w-full text-sm text-left text-slate-300">
-                                        <thead id="innovations-by-client-table-head" class="text-xs text-slate-400 uppercase sticky-header"></thead>
-                                        <tbody id="innovations-by-client-table-body" class="divide-y divide-slate-700"></tbody>
-                                    </table>
-                                </div>
-                                <!-- Paginação da Tabela Inovações -->
-                                <div id="innovations-pagination-controls" class="hidden mt-4 flex justify-between items-center">
-                                    <button id="innovations-prev-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Anterior</button>
-                                    <span id="innovations-page-info-text" class="text-slate-400">Página 1 de 1</span>
-                                    <button id="innovations-next-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Próxima</button>
-                                </div>
-                            </div>
-                        </div>
+
 
                         <!-- Ecrã Mix (Novo) -->
-                        <div id="mix-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
-                            <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
-                                <div class="flex items-center gap-4">
-                                    <button class="sidebar-toggle text-white focus:outline-none">
-                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                                    </button>
-                                    <div class="flex-1 flex flex-col sm:flex-row justify-between items-center gap-4">
-                                        <div>
-                                            <h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1>
-                                            <div class="flex items-center gap-2">
-                                                <p class="text-lg text-slate-300 -mt-1">Análise de Oportunidades (Mix Salty & Foods)</p>
-                                                <div class="relative group">
-                                                    <svg class="w-5 h-5 text-slate-400 cursor-help hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                                    <div class="absolute left-0 top-full mt-2 w-72 p-4 bg-slate-800 border border-slate-600 rounded-lg shadow-xl text-xs text-slate-300 hidden group-hover:block z-50">
-                                                        <p class="font-bold text-white mb-2 border-b border-slate-600 pb-1">Requisitos de Positivação:</p>
-                                                        <ul class="list-disc list-inside mb-3 text-slate-400 space-y-1">
-                                                            <li>Venda com Quantidade > 0</li>
-                                                            <li>Respeita filtros ativos (ex: Tipo Venda)</li>
-                                                        </ul>
-                                                        <p class="font-bold text-teal-400 mb-1">Mix Salty (Marcas):</p>
-                                                        <p class="mb-2">CHEETOS, DORITOS, FANDANGOS, RUFFLES, TORCIDA</p>
-                                                        <p class="font-bold text-yellow-400 mb-1">Mix Foods (Marcas):</p>
-                                                        <p>TODDYNHO, TODDY, QUAKER, KEROCOCO</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="relative inline-block text-left">
-                                            <button id="export-mix-dropdown-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2">
-                                                Exportar
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                            </button>
-                                            <div id="export-mix-dropdown-menu" class="hidden origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-slate-800 ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
-                                                <div class="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
-                                                    <a href="#" id="export-mix-pdf-btn" class="block px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white" role="menuitem">Exportar PDF</a>
-                                                    <a href="#" id="export-mix-excel-btn" class="block px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white" role="menuitem">Exportar EXCEL</a>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </header>
 
-                            <!-- KPIs -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                                <div class="kpi-card transition transform hover:-translate-y-1 duration-200">
-                                    <div class="grid grid-cols-3 items-center mb-1">
-                                        <div class="col-span-1"></div> <!-- Spacer -->
-                                        <div class="col-span-1 text-center">
-                                            <span id="mix-kpi-title" class="text-slate-300 text-sm font-medium">Total Clientes (Filtro)</span>
-                                        </div>
-                                        <div class="col-span-1 flex justify-end">
-                                            <label for="mix-kpi-toggle" class="flex items-center cursor-pointer" title="Alternar base de cálculo">
-                                                <div class="relative">
-                                                    <input type="checkbox" id="mix-kpi-toggle" class="sr-only peer">
-                                                    <div class="w-10 h-5 bg-slate-600 rounded-full peer-checked:bg-teal-800 transition-colors"></div>
-                                                    <div class="absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform peer-checked:translate-x-full peer-checked:bg-teal-300"></div>
-                                                </div>
-                                            </label>
-                                        </div>
-                                    </div>
-                                    <p id="mix-total-clients-kpi" class="text-3xl font-bold text-white my-1">0</p>
-                                    <p class="text-xs text-slate-300">Base para análise</p>
-                                </div>
-                                <div class="kpi-card kpi-glow-base kpi-glow-green transition transform hover:-translate-y-1 duration-200">
-                                    <p class="text-slate-300 text-sm font-medium">Positivados Salty</p>
-                                    <p id="mix-salty-kpi" class="text-3xl font-bold text-teal-400 my-1">0%</p>
-                                    <p id="mix-salty-count-kpi" class="text-xs text-slate-300">0 clientes</p>
-                                </div>
-                                <div class="kpi-card kpi-glow-base kpi-glow-yellow transition transform hover:-translate-y-1 duration-200">
-                                    <p class="text-slate-300 text-sm font-medium">Positivados Foods</p>
-                                    <p id="mix-foods-kpi" class="text-3xl font-bold text-yellow-400 my-1">0%</p>
-                                    <p id="mix-foods-count-kpi" class="text-xs text-slate-300">0 clientes</p>
-                                </div>
-                                <div class="kpi-card kpi-glow-base kpi-glow-purple transition transform hover:-translate-y-1 duration-200">
-                                    <p class="text-slate-300 text-sm font-medium">Mix Ideal (Ambos)</p>
-                                    <p id="mix-both-kpi" class="text-3xl font-bold text-purple-400 my-1">0%</p>
-                                    <p id="mix-both-count-kpi" class="text-xs text-slate-300">0 clientes</p>
-                                </div>
-                            </div>
-
-                            <!-- Filtros -->
-                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
-                                <div id="mix-rede-filter-wrapper" class="mb-4">
-                                    <label class="block mb-2 text-sm font-medium text-slate-400">Rede</label>
-                                    <div id="mix-rede-group-container" class="inline-flex rounded-md shadow-sm" role="group">
-                                        <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-l-lg hover:bg-slate-600">Todos</button>
-                                        <div class="relative">
-                                            <button type="button" data-group="com_rede" id="mix-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border-t border-b border-slate-600 hover:bg-slate-600 flex items-center justify-center gap-2">
-                                                <span id="mix-com-rede-btn-text">C/Rede</span>
-                                                <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                            </button>
-                                            <div id="mix-rede-filter-dropdown" class="hidden absolute z-20 w-56 mt-1 top-full left-0 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left text-white"></div>
-                                        </div>
-                                        <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-r-lg hover:bg-slate-600">S/Rede</button>
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-                                    <div class="relative">
-                                        <label for="mix-supervisor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label>
-                                        <button id="mix-supervisor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                            <span id="mix-supervisor-filter-text">Todos</span>
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="mix-supervisor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="mix-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label>
-                                        <button id="mix-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                            <span id="mix-vendedor-filter-text">Todos</span>
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="mix-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="mix-city-filter" class="block mb-2 text-sm font-medium text-slate-400">Cidade</label>
-                                        <input type="text" id="mix-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off">
-                                        <div id="mix-city-suggestions" class="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar text-white"></div>
-                                    </div>
-                                    <div>
-                                        <label for="mix-filial-filter" class="block mb-2 text-sm font-medium text-slate-400">Filial</label>
-                                        <select id="mix-filial-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5">
-                                            <option value="ambas" selected>Ambas</option>
-                                            <option value="05">Filial 05</option>
-                                            <option value="08">Filial 08</option>
-                                        </select>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="mix-tipo-venda-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Tipo Venda</label>
-                                        <button id="mix-tipo-venda-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                            <span id="mix-tipo-venda-filter-text">Todos os Tipos</span>
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="mix-tipo-venda-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                    </div>
-                                </div>
-                                <div class="mt-4 flex justify-center">
-                                    <button id="clear-mix-filters-btn" class="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg">Limpar Filtros</button>
-                                </div>
-                            </div>
-
-                            <!-- Gráficos -->
-                            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                                <div class="lg:col-span-1 bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                    <h2 class="text-lg font-semibold text-white mb-4 text-center">Distribuição do Mix</h2>
-                                    <div id="mixDistributionChartContainer" class="relative h-64"></div>
-                                </div>
-                                <div class="lg:col-span-2 bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                    <h2 class="text-lg font-semibold text-white mb-4 text-center">Eficiência por Vendedor (Top 10)</h2>
-                                    <div id="mixSellerChartContainer" class="relative h-64"></div>
-                                </div>
-                            </div>
-
-                            <!-- Tabela Detalhada -->
-                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                <div class="flex justify-between items-center mb-4">
-                                    <h2 class="text-lg font-semibold text-white">Detalhamento de Oportunidades por Cliente</h2>
-                                </div>
-                                <div class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
-                                    <table class="min-w-full text-sm text-left text-slate-300">
-                                        <thead class="text-xs text-slate-400 uppercase sticky top-0 z-20 bg-slate-800">
-                                            <tr>
-                                                <th rowspan="2" class="px-2 py-3 text-left border-b border-slate-500">Cód</th>
-                                                <th rowspan="2" class="px-2 py-3 text-left border-b border-slate-500">Cliente</th>
-                                                <th rowspan="2" class="px-2 py-3 text-left border-b border-slate-500">Cidade</th>
-                                                <th rowspan="2" class="px-2 py-3 text-left border-b border-slate-500">Vendedor</th>
-                                                <th colspan="5" class="px-1 py-2 text-center border-b-0 border-slate-500 text-teal-400">Mix Salty</th>
-                                                <th colspan="4" class="px-1 py-2 text-center border-b-0 border-slate-500 text-yellow-400">Mix Foods</th>
-                                            </tr>
-                                            <tr>
-                                                <th class="px-1 py-1 text-center border-l border-b border-slate-500 text-[10px]">CHEETOS</th>
-                                                <th class="px-1 py-1 text-center border-l border-b border-slate-500 text-[10px]">DORITOS</th>
-                                                <th class="px-1 py-1 text-center border-l border-b border-slate-500 text-[10px]">FANDANGOS</th>
-                                                <th class="px-1 py-1 text-center border-l border-b border-slate-500 text-[10px]">RUFFLES</th>
-                                                <th class="px-1 py-1 text-center border-l border-b border-slate-500 text-[10px]">TORCIDA</th>
-                                                <th class="px-1 py-1 text-center border-l border-b border-slate-500 text-[10px]">TODDYNHO</th>
-                                                <th class="px-1 py-1 text-center border-l border-b border-slate-500 text-[10px]">TODDY</th>
-                                                <th class="px-1 py-1 text-center border-l border-b border-slate-500 text-[10px]">QUAKER</th>
-                                                <th class="px-1 py-1 text-center border-l border-b border-slate-500 text-[10px]">KEROCOCO</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="mix-table-body" class="divide-y divide-slate-700"></tbody>
-                                    </table>
-                                </div>
-                                <!-- Paginação da Tabela Mix -->
-                                <div id="mix-pagination-controls" class="hidden mt-4 flex justify-between items-center">
-                                    <button id="mix-prev-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Anterior</button>
-                                    <span id="mix-page-info-text" class="text-slate-400">Página 1 de 1</span>
-                                    <button id="mix-next-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Próxima</button>
-                                </div>
-                            </div>
-                        </div>
 
                         <!-- Ecrã Meta Vs. Realizado -->
-                        <div id="meta-realizado-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
-                            <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
-                                <div class="flex items-center gap-4">
-                                    <button class="sidebar-toggle text-white focus:outline-none">
-                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                                    </button>
-                                    <div class="flex-1 flex flex-col sm:flex-row justify-between items-center gap-4">
-                                        <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Meta Vs. Realizado</p></div>
-                                        <button id="export-meta-realizado-pdf-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Exportar PDF</button>
-                                    </div>
-                                </div>
-                            </header>
-                            
-                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                                    <div class="relative">
-                                        <label for="meta-realizado-supervisor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label>
-                                        <button id="meta-realizado-supervisor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                            <span id="meta-realizado-supervisor-filter-text">Todos</span>
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="meta-realizado-supervisor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="meta-realizado-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label>
-                                        <button id="meta-realizado-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                            <span id="meta-realizado-vendedor-filter-text">Todos</span>
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="meta-realizado-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="meta-realizado-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Fornecedor</label>
-                                        <button id="meta-realizado-supplier-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                            <span id="meta-realizado-supplier-filter-text">Todos</span>
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="meta-realizado-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                    </div>
-                                    <div><label for="meta-realizado-filial-filter" class="block mb-2 text-sm font-medium text-slate-400">Filial</label><select id="meta-realizado-filial-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="ambas" selected>Ambas</option><option value="05">Filial 05</option><option value="08">Filial 08</option></select></div>
-                                    <div class="relative">
-                                        <label class="block mb-2 text-sm font-medium text-slate-400">Pasta</label>
-                                        <div id="meta-realizado-pasta-toggle-container" class="w-full rounded-lg flex justify-start gap-2">
-                                            <button data-pasta="ELMA" class="pasta-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg flex-1">ELMA</button>
-                                            <button data-pasta="FOODS" class="pasta-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg flex-1">FOODS</button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="mt-4 flex justify-end">
-                                    <button id="clear-meta-realizado-filters-btn" class="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg">Limpar Filtros</button>
-                                </div>
-                            </div>
 
-                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                                <!-- Gráfico Meta Vs Realizado (Financeiro/Volume) -->
-                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                    <div class="relative flex justify-center items-center mb-4">
-                                        <h2 id="metaRealizadoChartTitle" class="text-lg font-semibold text-white">Meta Vs Realizado - Faturamento</h2>
-                                        <div class="absolute right-0 flex bg-slate-700 rounded-lg p-1">
-                                            <button id="metaRealizadoMetricToggleBtn" class="metric-btn active px-3 py-1 text-sm rounded-md text-white">R$ / Ton</button>
-                                        </div>
-                                    </div>
-                                    <div id="metaRealizadoChartContainer" class="relative h-96"></div>
-                                </div>
-                                <!-- Gráfico Meta Vs Realizado (Positivação) -->
-                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                    <h2 class="text-lg font-semibold text-white mb-4 text-center">Meta Vs Realizado - Positivação</h2>
-                                    <div id="metaRealizadoPosChartContainer" class="relative h-96"></div>
-                                </div>
-                            </div>
-
-                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm relative">
-                                <div class="absolute top-4 right-4 group z-50">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-400 cursor-pointer" viewBox="0 0 20 20" fill="currentColor">
-                                        <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z" />
-                                    </svg>
-                                    <div class="absolute top-full right-0 w-64 pt-2 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity duration-300 z-[100]">
-                                        <div class="bg-slate-800 border border-slate-600 rounded-lg shadow-xl p-2 text-xs text-slate-300 text-center">
-                                            As números em vermelho se tratam das Semanas que já se passaram, a diferença entre meta e realizado foram redistribuídas para as semanas em aberto.
-                                        </div>
-                                    </div>
-                                </div>
-                                <h2 class="text-lg font-semibold text-white mb-4 text-center">Detalhamento Semanal - Vendedor</h2>
-                                <div id="metaRealizadoTableContainer" class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
-                                    <table class="min-w-full text-sm text-left text-slate-300 border-collapse">
-                                        <thead id="meta-realizado-table-head" class="text-xs text-slate-400 uppercase sticky top-0 z-40 bg-[#161e3d] shadow-md">
-                                            <!-- Headers populated dynamically -->
-                                        </thead>
-                                        <tbody id="meta-realizado-table-body" class="divide-y divide-slate-700"></tbody>
-                                    </table>
-                                </div>
-                            </div>
-
-                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm mt-6 relative">
-                                <div class="absolute top-4 right-4 group z-50">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-400 cursor-pointer" viewBox="0 0 20 20" fill="currentColor">
-                                        <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z" />
-                                    </svg>
-                                    <div class="absolute top-full right-0 w-64 pt-2 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity duration-300 z-[100]">
-                                        <div class="bg-slate-800 border border-slate-600 rounded-lg shadow-xl p-2 text-xs text-slate-300 text-center">
-                                            As números em vermelho se tratam das Semanas que já se passaram, a diferença entre meta e realizado foram redistribuídas para as semanas em aberto.
-                                        </div>
-                                    </div>
-                                </div>
-                                <h2 class="text-lg font-semibold text-white mb-4 text-center">Detalhamento por Cliente</h2>
-                                <div id="metaRealizadoClientsTableContainer" class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
-                                    <table class="min-w-full text-sm text-left text-slate-300 border-collapse">
-                                        <thead id="meta-realizado-clients-table-head" class="text-xs text-slate-400 uppercase sticky top-0 z-40 bg-[#161e3d] shadow-md">
-                                            <!-- Headers populated dynamically -->
-                                        </thead>
-                                        <tbody id="meta-realizado-clients-table-body" class="divide-y divide-slate-700"></tbody>
-                                    </table>
-                                </div>
-                                <!-- Paginação da Tabela Clientes Meta Realizado -->
-                                <div id="meta-realizado-clients-pagination-controls" class="hidden mt-4 flex flex-col sm:flex-row justify-between items-center gap-4 p-4 bg-[#161e3d] border-t border-slate-700 rounded-b-lg">
-                                    <div class="flex gap-2">
-                                        <button id="export-meta-realizado-pdf-btn-bottom" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-xs flex items-center gap-2">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                                            Exportar PDF
-                                        </button>
-                                    </div>
-                                    <div class="flex items-center gap-4">
-                                        <button id="meta-realizado-clients-prev-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Anterior</button>
-                                        <span id="meta-realizado-clients-page-info-text" class="text-slate-400">Página 1 de 1</span>
-                                        <button id="meta-realizado-clients-next-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Próxima</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
 
                         <!-- Ecrã Cobertura (Novo) -->
-                        <div id="coverage-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
-                            <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
-                                <div class="flex items-center gap-4">
-                                    <button class="sidebar-toggle text-white focus:outline-none">
-                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                                    </button>
-                                    <div class="flex-1 flex flex-col sm:flex-row justify-between items-center gap-4">
-                                        <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Cobertura (Estoque x PDVs)</p></div>
-                                        <button id="export-coverage-pdf-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Exportar PDF</button>
-                                    </div>
-                                </div>
-                            </header>
-                            <!-- KPIs (Cobertura) -->
-                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                                <div class="kpi-card kpi-glow-base kpi-glow-blue transition transform hover:-translate-y-1 duration-200">
-                                    <p class="text-slate-300 text-sm font-medium">Clientes Ativos (Filtro)</p>
-                                    <p id="coverage-active-clients-kpi" class="text-3xl font-bold text-teal-400 my-1">0</p>
-                                    <p class="text-xs text-slate-300">Base para os KPIs</p>
-                                </div>
-                                <div class="kpi-card kpi-glow-base kpi-glow-yellow transition transform hover:-translate-y-1 duration-200">
-                                    <p class="text-slate-300 text-sm font-medium">Cobertura Mês Anterior</p>
-                                    <p id="coverage-selection-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p>
-                                    <p id="coverage-selection-coverage-count-kpi-previous" class="text-xs text-slate-300">0 de 0 clientes</p>
-                                </div>
-                                <div class="kpi-card kpi-glow-base kpi-glow-green transition transform hover:-translate-y-1 duration-200">
-                                    <p class="text-slate-300 text-sm font-medium">Cobertura Mês Atual</p>
-                                    <p id="coverage-selection-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p>
-                                    <p id="coverage-selection-coverage-count-kpi" class="text-xs text-slate-300">0 de 0 clientes</p>
-                                </div>
-                                <div class="kpi-card kpi-glow-base kpi-glow-purple transition transform hover:-translate-y-1 duration-200">
-                                    <p class="text-slate-300 text-sm font-medium">Item com Maior Cobertura</p>
-                                    <p id="coverage-top-coverage-value-kpi" class="text-3xl font-bold text-purple-400 my-1">0%</p>
-                                    <p id="coverage-top-coverage-product-kpi" class="text-xs text-slate-300 truncate" title="Nenhum item analisado">-</p>
-                                </div>
-                            </div>
-                            <!-- Filtros (Cobertura) -->
-                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
-                                    <div class="relative">
-                                        <label for="coverage-supervisor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label>
-                                        <button id="coverage-supervisor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                            <span id="coverage-supervisor-filter-text">Todos</span>
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="coverage-supervisor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                    </div>
-                                    <div class="relative"><label for="coverage-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="coverage-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="coverage-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="coverage-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
-                                    <div class="relative"><label for="coverage-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Fornecedor</LabeL><button id="coverage-supplier-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="coverage-supplier-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="coverage-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
-                                    <div class="relative"><label for="coverage-city-filter" class="block mb-2 text-sm font-medium text-slate-400">Cidade</label><input type="text" id="coverage-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off"><div id="coverage-city-suggestions" class="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar text-white"></div></div>
-                                    <div><label for="coverage-filial-filter" class="block mb-2 text-sm font-medium text-slate-400">Filial</label><select id="coverage-filial-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="ambas" selected>Ambas</option><option value="05">Filial 05</option><option value="08">Filial 08</option></select></div>
-                                </div>
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
-                                    <div class="lg:col-span-2 relative">
-                                        <label for="coverage-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Produto</label>
-                                        <button id="coverage-product-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="coverage-product-filter-text">Todos os Produtos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button>
-                                        <div id="coverage-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg">
-                                            <div class="p-2 border-b border-slate-700"><input type="text" id="coverage-product-search-input" placeholder="Buscar produto..." class="bg-slate-600 text-xs rounded-lg block w-full p-2 border border-slate-500 placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-teal-500"></div>
-                                            <div id="coverage-product-list" class="max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                        </div>
-                                    </div>
-                                     <div class="relative">
-                                        <label for="coverage-tipo-venda-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Tipo Venda</label>
-                                        <button id="coverage-tipo-venda-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500">
-                                            <span id="coverage-tipo-venda-filter-text">Todos os Tipos</span>
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="coverage-tipo-venda-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
-                                    </div>
-                                    <div>
-                                        <label for="coverage-unit-price-filter" class="block mb-2 text-sm font-medium text-slate-400">Valor Unitário</label>
-                                        <input type="number" id="coverage-unit-price-filter" placeholder="Ex: 1.89" step="0.01" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5">
-                                    </div>
-                                    <div>
-                                        <label for="coverage-date-filter" class="block mb-2 text-sm font-medium text-slate-400">Data (Período)</label>
-                                        <input type="text" id="coverage-date-filter" placeholder="Selecione..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5">
-                                    </div>
-                                    <button id="clear-coverage-filters-btn" class="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
-                                </div>
-                            </div>
-                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm mb-6">
-                                <div class="flex justify-between items-center mb-4 relative">
-                                    <div class="absolute left-0 top-0 bottom-0 flex items-center">
-                                        <div class="text-left">
-                                            <p class="text-xs text-slate-400">Total Caixas</p>
-                                            <p id="coverage-total-boxes" class="text-lg font-bold text-white">0</p>
-                                        </div>
-                                    </div>
-                                    <h2 id="coverage-chart-title" class="text-lg font-semibold text-white text-center w-full">Top 10 Cidades (Quantidade de Caixas)</h2>
-                                    <div class="absolute right-0 top-0 bottom-0 flex items-center">
-                                        <button id="coverage-chart-toggle-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-1 px-3 rounded shadow">Ver Vendedores</button>
-                                    </div>
-                                </div>
-                                <div id="coverageCityChartContainer" class="relative h-80"></div>
-                                <div id="coverageSellerChartContainer" class="relative h-80 hidden"></div>
-                            </div>
-                            <!-- Tabela (Cobertura) -->
-                            <div id="coverage-table-container" class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
-                                <div class="flex justify-between items-center mb-4">
-                                    <h2 class="text-lg font-semibold text-white">Resultados da Análise</h2>
-                                </div>
-                                <div id="coverage-results" class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
-                                    <table class="min-w-full text-sm text-left text-slate-300">
-                                        <thead class="text-xs text-slate-400 uppercase sticky-header">
-                                            <tr><th class="px-2 py-2">PRODUTO</th><th class="px-2 py-2 text-right">ESTOQUE (Cx)</th><th class="px-2 py-2 text-right">QTD. CAIXAS (MÊS ANT.)</th><th class="px-2 py-2 text-right">QTD. CAIXAS (MÊS)</th><th class="px-2 py-2 text-right">CAIXAS (%)</th><th class="px-2 py-2 text-right">PDVs MÊS ANT.</th><th class="px-2 py-2 text-right">PDVs MÊS ATUAL</th><th class="px-2 py-2 text-right">COBERTURA (%)</th></tr>
-                                        </thead>
-                                        <tbody id="coverage-table-body" class="divide-y divide-slate-700"></tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
+
 
                         <!-- Modal Detalhes do Pedido -->
                         <div id="order-details-modal" class="modal-overlay hidden">
                             <div class="bg-slate-800 rounded-lg shadow-2xl max-w-4xl w-full m-4 border border-slate-700">
-                                <div class="p-6 border-b border-slate-700 flex justify-between items-center"><h2 class="text-xl font-bold text-white">Detalhes do Pedido <span id="modal-pedido-id"></span></h2><button id="modal-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button></div>
+                                <div class="p-6 border-b border-slate-700 flex justify-between items-center"><h2 class="text-xl font-bold text-white">Detalhes do Pedido <span id="modal-pedido-id"></span></h2><button id="modal-close-btn" class="text-slate-400 hover:text-white text-3xl">×</button></div>
                                 <div id="modal-header-info" class="p-6 text-left grid grid-cols-2 md:grid-cols-3 gap-4 text-sm text-slate-300"></div>
                                 <div class="custom-scrollbar" style="max-height: 50vh; overflow-y: auto; overflow-x: hidden;">
                                     <table class="min-w-full text-sm text-left text-slate-300">
@@ -1834,7 +689,7 @@
                         <!-- Modal Detalhes do Cliente -->
                         <div id="client-details-modal" class="modal-overlay hidden">
                             <div class="bg-slate-800 rounded-lg shadow-2xl max-w-2xl w-full m-4 border border-slate-700">
-                                <div class="p-6 border-b border-slate-700 flex justify-between items-center"><h2 class="text-xl font-bold text-white">Resumo Cadastral</h2><button id="client-modal-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button></div>
+                                <div class="p-6 border-b border-slate-700 flex justify-between items-center"><h2 class="text-xl font-bold text-white">Resumo Cadastral</h2><button id="client-modal-close-btn" class="text-slate-400 hover:text-white text-3xl">×</button></div>
                                 <div id="client-modal-content" class="p-6 text-slate-300"></div>
                             </div>
                         </div>
@@ -1844,7 +699,7 @@
                             <div class="bg-slate-800 rounded-lg shadow-2xl max-w-xs w-full m-4 text-slate-300 border border-slate-700">
                                 <div class="p-4 border-b border-slate-700 flex justify-between items-center">
                                     <h2 class="text-lg font-bold text-white">Selecionar Feriados</h2>
-                                    <button id="holiday-modal-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button>
+                                    <button id="holiday-modal-close-btn" class="text-slate-400 hover:text-white text-3xl">×</button>
                                 </div>
                                 <div class="p-4">
                                     <div id="calendar-container"></div>
@@ -1874,8 +729,9 @@
                         
                         
 
-</div>
 
-<script src="init.js?v=5.2.3" defer></script>
-</body>
-</html>
+
+<script src="init.js?v=5.2.3" defer=""></script>
+
+
+</body></html>
