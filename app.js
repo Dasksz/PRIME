@@ -12416,7 +12416,7 @@ const supervisorGroups = new Map();
 
             // This function now runs after the loader is visible
             const updateContent = () => {
-                [mainDashboard, cityView, weeklyView, comparisonView, stockView, innovationsMonthView, coverageView, document.getElementById('mix-view'), goalsView, document.getElementById('meta-realizado-view')].forEach(el => {
+                [document.getElementById('goals-view')].forEach(el => {
                     if(el) el.classList.add('hidden');
                 });
 
@@ -12435,7 +12435,7 @@ const supervisorGroups = new Map();
 
                 switch(view) {
                     case 'dashboard':
-                        mainDashboard.classList.remove('hidden');
+                        if(mainDashboard) mainDashboard.classList.remove('hidden');
                         chartView.classList.remove('hidden');
                         tableView.classList.add('hidden');
                         tablePaginationControls.classList.add('hidden');
@@ -12445,7 +12445,7 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'pedidos':
-                        mainDashboard.classList.remove('hidden');
+                        if(mainDashboard) mainDashboard.classList.remove('hidden');
                         chartView.classList.add('hidden');
                         tableView.classList.remove('hidden');
                         tablePaginationControls.classList.remove('hidden');
@@ -12455,7 +12455,7 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'comparativo':
-                        comparisonView.classList.remove('hidden');
+                        if(comparisonView) comparisonView.classList.remove('hidden');
                         if (viewState.comparativo.dirty) {
                             updateAllComparisonFilters();
                             updateComparisonView();
@@ -12463,14 +12463,14 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'estoque':
-                        stockView.classList.remove('hidden');
+                        if(stockView) stockView.classList.remove('hidden');
                         if (viewState.estoque.dirty) {
                             handleStockFilterChange();
                             viewState.estoque.dirty = false;
                         }
                         break;
                     case 'cobertura':
-                        coverageView.classList.remove('hidden');
+                        if(coverageView) coverageView.classList.remove('hidden');
                         if (viewState.cobertura.dirty) {
                             updateAllCoverageFilters();
                             updateCoverageView();
@@ -12478,7 +12478,7 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'cidades':
-                        cityView.classList.remove('hidden');
+                        if(cityView) cityView.classList.remove('hidden');
                         // Always trigger background sync if admin
                         syncGlobalCoordinates();
                         if (viewState.cidades.dirty) {
@@ -12488,7 +12488,7 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'semanal':
-                        weeklyView.classList.remove('hidden');
+                        if(weeklyView) weeklyView.classList.remove('hidden');
                         if (viewState.semanal.dirty) {
                             populateWeeklyFilters();
                             updateWeeklyView();
@@ -12496,7 +12496,7 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'inovacoes-mes':
-                        innovationsMonthView.classList.remove('hidden');
+                        if(innovationsMonthView) innovationsMonthView.classList.remove('hidden');
                         if (viewState.inovacoes.dirty) {
                             selectedInnovationsSupervisors = updateSupervisorFilter(document.getElementById('innovations-month-supervisor-filter-dropdown'), document.getElementById('innovations-month-supervisor-filter-text'), selectedInnovationsSupervisors, allSalesData);
                             updateSellerFilter(selectedInnovationsSupervisors, innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, [], allSalesData);
@@ -12506,7 +12506,7 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'mix':
-                        document.getElementById('mix-view').classList.remove('hidden');
+                        const mixView = document.getElementById('mix-view'); if(mixView) mixView.classList.remove('hidden');
                         if (viewState.mix.dirty) {
                             updateAllMixFilters();
                             updateMixView();
@@ -12514,14 +12514,14 @@ const supervisorGroups = new Map();
                         }
                         break;
                     case 'goals':
-                        goalsView.classList.remove('hidden');
+                        if(goalsView) goalsView.classList.remove('hidden');
                         if (viewState.goals.dirty) {
                             updateGoalsView();
                             viewState.goals.dirty = false;
                         }
                         break;
                     case 'meta-realizado':
-                        document.getElementById('meta-realizado-view').classList.remove('hidden');
+                        const metaRealizadoView = document.getElementById('meta-realizado-view'); if(metaRealizadoView) metaRealizadoView.classList.remove('hidden');
                         if (viewState.metaRealizado.dirty) {
                             // Initial filter logic if needed, similar to other views
                             selectedMetaRealizadoSupervisors = updateSupervisorFilter(document.getElementById('meta-realizado-supervisor-filter-dropdown'), document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
@@ -14922,7 +14922,7 @@ const supervisorGroups = new Map();
         if (targetPage) {
             navigateTo(targetPage);
         } else {
-            navigateTo('dashboard');
+            navigateTo('goals');
         }
         renderTable(aggregatedOrders);
 
