@@ -485,3 +485,29 @@ BEGIN
                        func_record.schema_name, func_record.function_name, func_record.args);
     END LOOP;
 END $$;
+
+-- ==============================================================================
+-- KEEP-ALIVE CONFIGURATION
+-- This section creates a dummy table and a pg_cron job to keep the database
+-- active, preventing Supabase from pausing the free tier project due to inactivity.
+-- ==============================================================================
+
+-- Create a dummy table for the keep-alive job
+CREATE TABLE IF NOT EXISTS public.keep_alive (
+    id SERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable pg_cron extension
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+
+-- Schedule the keep-alive job to run every day at midnight (GMT)
+-- The job inserts a new record and deletes records older than 7 days
+SELECT cron.schedule(
+    'keep-alive-job',
+    '0 0 * * *',
+    $$
+    INSERT INTO public.keep_alive (created_at) VALUES (NOW());
+    DELETE FROM public.keep_alive WHERE created_at < NOW() - INTERVAL '7 days';
+    $$
+);
