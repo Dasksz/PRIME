@@ -1938,7 +1938,8 @@
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
                 if (isAmericanas) return true;
                 // STRICT FILTER: Exclude RCA 53 (Balcão) and INATIVOS (Empty RCA1)
-                // if (rca1 === '53') return false;
+                // const codCliLocal = String(c['Código'] || c['codigo_cliente']);
+                // if (rca1 === '53' && codCliLocal !== '12034') return false;
                 // if (rca1 === '') return false; // Exclude INATIVOS
                 return true;
             });
@@ -3466,7 +3467,8 @@
             const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
             if (isAmericanas) return true;
             // STRICT FILTER: Exclude RCA 53 (Balcão) and INATIVOS
-            if (rca1 === '53') return false;
+            const codCli = String(c['Código'] || c['codigo_cliente']);
+            if (rca1 === '53' && codCli !== '12034') return false;
             if (rca1 === '') return false; // Exclude INATIVOS
             return true;
         }
@@ -3692,7 +3694,8 @@
 
                 // Same active logic as Goals
                 if (isAmericanas) return true;
-                if (rca1 === '53') return false;
+                const codCliLocal = String(c['Código'] || c['codigo_cliente']);
+                if (rca1 === '53' && codCliLocal !== '12034') return false;
                 if (rca1 === '') return false;
                 return true;
             });
@@ -4370,7 +4373,8 @@
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
                 if (isAmericanas) return true;
-                if (rca1 === '53') return false;
+                const codCliLocal = String(c['Código'] || c['codigo_cliente']);
+                if (rca1 === '53' && codCliLocal !== '12034') return false;
                 if (rca1 === '') return false;
                 return true;
             });
@@ -4856,7 +4860,8 @@
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
                 if (isAmericanas) return true;
-                if (rca1 === '53') return false;
+                const codCliLocal = String(c['Código'] || c['codigo_cliente']);
+                if (rca1 === '53' && codCliLocal !== '12034') return false;
                 if (rca1 === '') return false; 
                 return true;
             });
@@ -5116,7 +5121,7 @@
                 if (rca1 === '1001' || isAmericanas) continue;
 
                 // Exclude Balcão (53) and Inativos
-                if (rca1 === '53' || rca1 === '') continue;
+                if ((rca1 === '53' && codCli !== '12034') || rca1 === '') continue;
 
                 // 2. Active Seller Check
                 let belongsToActiveSeller = true;
@@ -5222,8 +5227,9 @@
                     const rca1 = String(c.rca1 || '').trim();
                     const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
                     if (isAmericanas) return true;
-                // STRICT FILTER: Exclude RCA 53 (Balcão) and INATIVOS
-                    if (rca1 === '53') return false;
+                    // STRICT FILTER: Exclude RCA 53 (Balcão) and INATIVOS
+                    const codCliLocal = String(c['Código'] || c['codigo_cliente']);
+                    if (rca1 === '53' && codCliLocal !== '12034') return false;
                 if (rca1 === '') return false; // Exclude INATIVOS
                     return true;
                 });
@@ -5551,7 +5557,8 @@
                 // Is client active check (Same as others)
                 // Exclude Americanas explicitly from this calculation as per requirement
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                if (isAmericanas || (rca1 === '53' || rca1 === '053' || rca1 === '' || rca1 === 'INATIVOS')) return false;
+                const codCliLocal = String(c['Código'] || c['codigo_cliente']);
+                if (isAmericanas || (((rca1 === '53' || rca1 === '053') && codCliLocal !== '12034') || rca1 === '' || rca1 === 'INATIVOS')) return false;
 
                 // Does client belong to seller? (Current Hierarchy)
                 return c.rcas.includes(sellerCode);
@@ -6698,8 +6705,9 @@
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
                 if (isAmericanas) return true;
-                // STRICT FILTER: Exclude RCA 53 (Balcão) and INATIVOS
-                if (rca1 === '53') return false;
+                    // STRICT FILTER: Exclude RCA 53 (Balcão) and INATIVOS
+                    const codCliLocal = String(c['Código'] || c['codigo_cliente']);
+                    if (rca1 === '53' && codCliLocal !== '12034') return false;
                 if (rca1 === '') return false; // Exclude INATIVOS
                 return true;
             });
