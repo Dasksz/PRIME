@@ -2828,27 +2828,69 @@
         let goalsSellerTargets = new Map(); // Stores Seller-Level Targets (Positivation, etc.)
         window.goalsSellerTargets = goalsSellerTargets; // Export for init.js
 
+        function serializeGoalAdjustments(maps) {
+            return Object.fromEntries(Object.entries(maps).map(([key, values]) => [key, Object.fromEntries(values)]));
+        }
+
+        window.getGoalsSnapshot = () => ({
+            clients: Object.fromEntries(Array.from(globalClientGoals, ([id, values]) => [id, Object.fromEntries(values)])),
+            targets: goalsTargets,
+            seller_targets: Object.fromEntries(goalsSellerTargets),
+            adjustments: {
+                pos: serializeGoalAdjustments(goalsPosAdjustments),
+                salty: serializeGoalAdjustments(goalsMixSaltyAdjustments),
+                foods: serializeGoalAdjustments(goalsMixFoodsAdjustments)
+            }
+        });
+
+        window.restoreGoalsSnapshot = gd => {
+            globalClientGoals.clear();
+            for (const [id, values] of Object.entries(gd.clients || {})) globalClientGoals.set(id, new Map(Object.entries(values)));
+            for (const key of Object.keys(goalsTargets)) goalsTargets[key] = gd.targets?.[key] || {fat: 0, vol: 0};
+            goalsSellerTargets.clear();
+            for (const [seller, values] of Object.entries(gd.seller_targets || {})) goalsSellerTargets.set(seller, values);
+            for (const [name, maps] of Object.entries({pos: goalsPosAdjustments, salty: goalsMixSaltyAdjustments, foods: goalsMixFoodsAdjustments})) {
+                Object.values(maps).forEach(map => map.clear());
+                for (const [key, values] of Object.entries(gd.adjustments?.[name] || {})) {
+                    if (!maps[key]) maps[key] = new Map();
+                    for (const [seller, value] of Object.entries(values)) maps[key].set(seller, value);
+                }
+            }
+        };
+
+        window.resetGoalsState = () => window.restoreGoalsSnapshot({});
+
+        function updateGoalsDistributionStatus(fat, vol) {
+            const status = document.getElementById('goals-distribution-status');
+            if (!status) return;
+            const checks = [];
+            for (const [id, actual, precision] of [['goal-global-fat', fat, 2], ['goal-global-vol', vol, 3]]) {
+                try {
+                    const target = GoalsCore.parseInput(document.getElementById(id)?.value || '0');
+                    if (target > 0) checks.push({target, actual, precision});
+                    else if (actual > 0) checks.push({target, actual, precision});
+                } catch (_) { status.textContent = 'Meta inválida'; return; }
+            }
+            status.textContent = !checks.length ? 'Sem meta distribuída'
+                : checks.every(c => Math.round(c.target * 10 ** c.precision) === Math.round(c.actual * 10 ** c.precision)) ? '100% Distribuído'
+                : 'Rateio pendente';
+        }
+
+        function readGoalInput(id, integer = false) {
+            const value = GoalsCore.parseInput(document.getElementById(id)?.value || '0');
+            if (integer && !Number.isInteger(value)) throw new Error('A meta de clientes deve ser um número inteiro.');
+            return value;
+        }
+
+        function sellerMixBase(seller) {
+            if (optimizedData.rcaCodeByName.get(seller) === '1001') return 0;
+            const override = getSellerTargetOverride(seller, 'pos', 'ELMA_ALL');
+            return override !== null ? override : Math.max(0, getSellerNaturalCount(seller, 'total_elma') + (goalsPosAdjustments['ELMA_ALL']?.get(seller) || 0));
+        }
+
         async function saveGoalsToSupabase() {
             try {
                 const monthKey = new Date().toISOString().slice(0, 7);
-                
-                // Serialize globalClientGoals (Map<CodCli, Map<Key, {fat: 0, vol: 0}>>)
-                const clientsObj = {};
-                for (const [clientId, clientMap] of globalClientGoals) {
-                    clientsObj[clientId] = Object.fromEntries(clientMap);
-                }
-
-                // Serialize goalsSellerTargets (Map<Seller, Targets>)
-                const sellerTargetsObj = {};
-                for (const [seller, targets] of goalsSellerTargets) {
-                    sellerTargetsObj[seller] = targets;
-                }
-
-                const payload = {
-                    clients: clientsObj,
-                    targets: goalsTargets,
-                    seller_targets: sellerTargetsObj
-                };
 
                 const { error } = await window.supabaseClient
                     .from('goals_distribution')
@@ -2856,7 +2898,7 @@
                         month_key: monthKey,
                         supplier: 'ALL',
                         brand: 'GENERAL',
-                        goals_data: payload
+                        goals_data: window.getGoalsSnapshot()
                     });
 
                 if (error) {
@@ -2881,13 +2923,7 @@
             if (!sellerCode) { console.warn(`[Goals] Seller not found: ${sellerName}`); return; }
 
             const clients = optimizedData.clientsByRca.get(sellerCode) || [];
-            const activeClients = clients.filter(c => {
-                const cod = String(c['Código'] || c['codigo_cliente']);
-                const rca1 = String(c.rca1 || '').trim();
-                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
-            });
-
+            const activeClients = clients.filter(isActiveClient);
             if (activeClients.length === 0) return;
 
             // Define Sub-Categories for Cascade Logic
@@ -2910,6 +2946,8 @@
                 if (historyIds) {
                     historyIds.forEach(id => {
                         const sale = optimizedData.historyById.get(id);
+                            if (codCli === '9569' && ['53', '053'].includes(String(sale.CODUSUR))) return;
+                        if (sale.TIPOVENDA !== '1' && sale.TIPOVENDA !== '9') return;
                         const codFor = String(sale.CODFOR);
                         const desc = normalize(sale.DESCRICAO || '');
                         
@@ -2921,7 +2959,7 @@
                             else if (subCat === '752' && codFor === '752') isMatch = true;
                             else if (codFor === '1119') {
                                 if (subCat === '1119_TODDYNHO' && desc.includes('TODDYNHO')) isMatch = true;
-                                else if (subCat === '1119_TODDY' && desc.includes('TODDY')) isMatch = true;
+                                else if (subCat === '1119_TODDY' && desc.includes('TODDY') && !desc.includes('TODDYNHO')) isMatch = true;
                                 else if (subCat === '1119_QUAKER_KEROCOCO' && (desc.includes('QUAKER') || desc.includes('KEROCOCO'))) isMatch = true;
                             }
 
@@ -2940,35 +2978,16 @@
             // 2. Distribute
             // NewGoal(Client, SubCat) = NewTotalValue * (ClientSubCatHistory / TotalSellerHistory)
             
-            const clientCount = activeClients.length;
-            const subCatCount = targetCategories.length;
-
-            activeClients.forEach(client => {
-                const codCli = String(client['Código'] || client['codigo_cliente']);
-                const subCatMap = clientSubCatHistory.get(codCli);
-
-                targetCategories.forEach(subCat => {
-                    let share = 0;
-                    if (totalSellerHistory > 0) {
-                        share = ((subCatMap ? subCatMap.get(subCat) : 0) || 0) / totalSellerHistory;
-                    } else {
-                        // Fallback: Even split across all clients and subcats
-                        share = 1 / (clientCount * subCatCount);
-                    }
-
-                    if (isNaN(share) || !isFinite(share)) share = 0;
-                    const goalVal = newTotalValue * share;
-
-                    // Update Global
-                    if (!globalClientGoals.has(codCli)) globalClientGoals.set(codCli, new Map());
-                    const cGoals = globalClientGoals.get(codCli);
-                    
-                    if (!cGoals.has(subCat)) cGoals.set(subCat, { fat: 0, vol: 0 });
-                    const target = cGoals.get(subCat);
-
-                    if (metric === 'fat') target.fat = goalVal;
-                    else if (metric === 'vol') target.vol = goalVal;
-                });
+            const pairs = activeClients.flatMap(client => {
+                const id = String(client['Código'] || client['codigo_cliente']);
+                return targetCategories.map(category => ({id, category, weight: clientSubCatHistory.get(id)?.get(category) || 0}));
+            });
+            const allocated = GoalsCore.allocate(newTotalValue, pairs.map(pair => pair.weight), metric === 'fat' ? 2 : 3);
+            pairs.forEach((pair, index) => {
+                if (!globalClientGoals.has(pair.id)) globalClientGoals.set(pair.id, new Map());
+                const goals = globalClientGoals.get(pair.id);
+                if (!goals.has(pair.category)) goals.set(pair.category, {fat: 0, vol: 0});
+                goals.get(pair.category)[metric] = allocated[index];
             });
             console.log(`[Goals] Distributed ${newTotalValue} (${metric}) for ${sellerName} / ${categoryId} (Cascade: ${targetCategories.join(',')})`);
         }
@@ -3521,13 +3540,7 @@
             if (!sellerCode) return 0;
 
             const clients = optimizedData.clientsByRca.get(sellerCode) || [];
-            // Filter active clients same as main view
-            const activeClients = clients.filter(c => {
-                const cod = String(c['Código'] || c['codigo_cliente']);
-                const rca1 = String(c.rca1 || '').trim();
-                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
-            });
+            const activeClients = clients.filter(isActiveClient);
 
             // Iterate Active Clients
             let totalMixMonths = 0;
@@ -3543,6 +3556,8 @@
                     
                     historyIds.forEach(id => {
                         const sale = optimizedData.historyById.get(id);
+                        if (!['1', '9'].includes(sale.TIPOVENDA) || sale.VLVENDA < 1) return;
+                        if (codCli === '9569' && ['53', '053'].includes(String(sale.CODUSUR))) return;
                         // Using same date parsing as elsewhere
                         let dateObj = null;
                         if (typeof sale.DTPED === 'number') dateObj = new Date(sale.DTPED);
@@ -4792,60 +4807,21 @@
         function getSellerNaturalCount(sellerName, category) {
             const sellerCode = optimizedData.rcaCodeByName.get(sellerName);
             if (!sellerCode) return 0;
-
-            const clients = optimizedData.clientsByRca.get(sellerCode) || [];
-            const activeClients = clients.filter(c => {
-                const cod = String(c['Código'] || c['codigo_cliente']);
-                const rca1 = String(c.rca1 || '').trim();
-                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
-            });
-
-            let count = 0;
-
-            activeClients.forEach(client => {
-                const codCli = String(client['Código'] || client['codigo_cliente']);
-                
-                // For Mix Salty/Foods, we exclude Americanas from the base count (Seller 1001)
-                const rca1 = String(client.rca1 || '').trim();
-                if ((category === 'mix_salty' || category === 'mix_foods') && rca1 === '1001') return;
-
-                const historyIds = optimizedData.indices.history.byClient.get(codCli);
-                if (historyIds) {
-                    let hasSale = false;
-                    
-                    for (const id of historyIds) {
-                        if (hasSale) break;
-                        const sale = optimizedData.historyById.get(id);
-                        // Exclude 9569 / 53 case
-                        if (String(codCli).trim() === '9569' && (String(sale.CODUSUR).trim() === '53' || String(sale.CODUSUR).trim() === '053')) continue;
-
-                        const isRev = (sale.TIPOVENDA === '1' || sale.TIPOVENDA === '9');
-                        if (!isRev) continue;
-
-                        const codFor = String(sale.CODFOR);
-                        const desc = (sale.DESCRICAO || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
-
-                        if (category === 'pepsico_all') {
-                             if (['707', '708', '752'].includes(codFor) || (codFor === '1119' && (desc.includes('TODDYNHO') || desc.includes('TODDY') || desc.includes('QUAKER') || desc.includes('KEROCOCO')))) {
-                                 hasSale = true;
-                             }
-                        } else if (category === 'total_elma') {
-                             if (['707', '708', '752'].includes(codFor)) hasSale = true;
-                        } else if (category === 'total_foods') {
-                             if (codFor === '1119' && (desc.includes('TODDYNHO') || desc.includes('TODDY') || desc.includes('QUAKER') || desc.includes('KEROCOCO'))) hasSale = true;
-                        } else if (category === '707' && codFor === '707') hasSale = true;
-                        else if (category === '708' && codFor === '708') hasSale = true;
-                        else if (category === '752' && codFor === '752') hasSale = true;
-                        else if (category === '1119_TODDYNHO' && codFor === '1119' && desc.includes('TODDYNHO')) hasSale = true;
-                        else if (category === '1119_TODDY' && codFor === '1119' && desc.includes('TODDY') && !desc.includes('TODDYNHO')) hasSale = true;
-                        else if (category === '1119_QUAKER_KEROCOCO' && codFor === '1119' && (desc.includes('QUAKER') || desc.includes('KEROCOCO'))) hasSale = true;
-                    }
-
-                    if (hasSale) count++;
+            return (optimizedData.clientsByRca.get(sellerCode) || []).filter(isActiveClient).filter(client => {
+                const id = String(client['Código'] || client['codigo_cliente']);
+                let balance = 0;
+                for (const saleId of optimizedData.indices.history.byClient.get(id) || []) {
+                    const sale = optimizedData.historyById.get(saleId);
+                    if (!['1', '9'].includes(sale.TIPOVENDA)) continue;
+                    if (id === '9569' && ['53', '053'].includes(String(sale.CODUSUR))) continue;
+                    const supplier = String(sale.CODFOR);
+                    const match = category === 'pepsico_all' ? ['707', '708', '752', '1119'].includes(supplier)
+                        : category === 'total_elma' ? ['707', '708', '752'].includes(supplier)
+                        : category === 'total_foods' ? supplier === '1119' : GoalsCore.category(sale) === category;
+                    if (match) balance += Number(sale.VLVENDA) || 0;
                 }
-            });
-            return count;
+                return balance >= 1;
+            }).length;
         }
 
         function updateGoalsSummaryView() {
@@ -4971,7 +4947,8 @@
                         } else {
                             // Standard Category
                             const natural = getSellerNaturalCount(sellerName, category);
-                            const adjMap = goalsPosAdjustments[category];
+                            const adjustmentKey = {pepsico_all: 'PEPSICO_ALL', total_elma: 'ELMA_ALL', total_foods: 'FOODS_ALL'}[category] || category;
+                            const adjMap = goalsPosAdjustments[adjustmentKey];
                             const adj = adjMap ? (adjMap.get(sellerName) || 0) : 0;
                             total += Math.max(0, natural + adj);
                         }
@@ -5000,8 +4977,6 @@
                 let displayFat = target.fat;
                 let displayVol = target.vol;
 
-                if (displayFat < 0.01) displayFat = metrics.prevFat;
-                if (displayVol < 0.001) displayVol = metrics.prevVol;
 
                 totalFat += displayFat;
                 totalVol += displayVol;
@@ -5093,88 +5068,9 @@
             if(mixFoodsEl) mixFoodsEl.textContent = mixFoodsTarget.toLocaleString('pt-BR');
         }
 
-        function getElmaTargetBase(displayMetrics, goalsPosAdjustments, activeSellersSet) {
-            // MATCH LOGIC WITH "RELATÓRIO" (SV): Base is "Total ELMA" (707, 708, 752)
-            // Logic derived from `updateGoalsSvView`:
-            // - The Grand Total for Mix Salty/Foods EXCLUDES Americanas (Seller 1001) from the base.
-            // - It INCLUDES normal clients.
-
-            // 1. Iterate ALL valid clients (Active Structure)
-            // 2. EXCLUDE Americanas (RCA 1001) for this specific KPI base (matches SV footer logic)
-            // 3. Exclude Balcão (53) and Inativos
-            // 4. Check if Client has > 1 Total Sales in History (Elma: 707, 708, 752)
-            // 5. Match Active Sellers
-
-            let naturalCount = 0;
-
-            // Iterate all clients (global allClientsData)
-            // Use standard loop for performance
-            for (let i = 0; i < allClientsData.length; i++) {
-                const client = allClientsData instanceof ColumnarDataset ? allClientsData.get(i) : allClientsData[i];
-                const codCli = String(client['Código'] || client['codigo_cliente']);
-
-                // 1. Exclusions (Structure)
-                const rca1 = String(client.rca1 || '').trim();
-                const isAmericanas = (client.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-
-                // Exclude Americanas (Specific Rule for Mix Base)
-                if (rca1 === '1001' || isAmericanas) continue;
-
-                // Exclude Balcão (53) and Inativos
-                if ((rca1 === '53' && codCli !== '12034') || rca1 === '') continue;
-
-                // 2. Active Seller Check
-                let belongsToActiveSeller = true;
-                if (activeSellersSet && activeSellersSet.size > 0) {
-                    let sellerName = 'N/A';
-                    // In SV, we map rcas[0] to Name.
-                    const rcaCode = (client.rcas && client.rcas.length > 0) ? client.rcas[0] : '';
-                    if (rcaCode) {
-                         sellerName = optimizedData.rcaNameByCode.get(rcaCode) || rcaCode;
-                    } else {
-                        sellerName = 'INATIVOS';
-                    }
-
-                    // Strict Exclusion of INATIVOS from Base Calculation
-                    if (sellerName === 'INATIVOS') continue;
-
-                    if (!activeSellersSet.has(sellerName)) belongsToActiveSeller = false;
-                }
-
-                if (!belongsToActiveSeller) continue;
-
-                // 3. Check History (Positive ELMA: 707, 708, 752)
-                const hIds = optimizedData.indices.history.byClient.get(codCli);
-                let totalFat = 0;
-                if (hIds) {
-                    // hIds is Set<string> (id)
-                    for (const id of hIds) {
-                        const s = optimizedData.historyById.get(id);
-                        const codFor = String(s.CODFOR);
-                         if (['707', '708', '752'].includes(codFor)) {
-                            if (s.TIPOVENDA === '1' || s.TIPOVENDA === '9') totalFat += s.VLVENDA;
-                        }
-                    }
-                }
-
-                if (totalFat >= 1) {
-                    naturalCount++;
-                }
-            }
-
-            // 2. Adjustments (Meta Pos) - Preserve Logic
-            let adjustment = 0;
-            const elmaAdj = goalsPosAdjustments['ELMA_ALL'];
-            if (elmaAdj) {
-                elmaAdj.forEach((val, sellerName) => {
-                    // Check if seller is in current view (activeSellersSet)
-                    if (!activeSellersSet || activeSellersSet.has(sellerName)) {
-                        adjustment += val;
-                    }
-                });
-            }
-
-            return naturalCount + adjustment;
+        function getElmaTargetBase(displayMetrics, adjustments, activeSellersSet) {
+            const sellers = activeSellersSet || new Set(allClientsData.filter(isActiveClient).map(client => optimizedData.rcaNameByCode.get(client.rcas[0])).filter(Boolean));
+            return Array.from(sellers).reduce((sum, seller) => sum + sellerMixBase(seller), 0);
         }
 
                 function calculateDistributedGoals(filteredClients, currentGoalsSupplier, currentGoalsBrand, goalFat, goalVol) {
@@ -5404,7 +5300,8 @@
 
         function distributeGoals(type) {
             const inputId = type === 'fat' ? 'goal-global-fat' : 'goal-global-vol';
-            const inputValue = parseInputMoney(inputId);
+            let inputValue;
+            try { inputValue = readGoalInput(inputId); } catch (error) { alert(error.message); return; }
 
             const filteredClients = getGoalsFilteredData();
             if (filteredClients.length === 0) return;
@@ -5437,6 +5334,7 @@
                     if (clientHistoryIds) {
                         clientHistoryIds.forEach(id => {
                             const sale = optimizedData.historyById.get(id);
+                            if (codCli === '9569' && ['53', '053'].includes(String(sale.CODUSUR))) return;
 
                             // Check if sale belongs to targetKey
                             let saleKey = String(sale.CODFOR);
@@ -5469,33 +5367,17 @@
                 });
             });
 
-            // 2. Distribute
-            filteredClients.forEach(client => {
-                const codCli = String(client['Código'] || client['codigo_cliente']);
-                const clientMap = distributionMap.get(codCli);
-
-                if (!globalClientGoals.has(codCli)) globalClientGoals.set(codCli, new Map());
-                const cGoals = globalClientGoals.get(codCli);
-
-                keysToProcess.forEach(key => {
-                    const avg = clientMap.get(key) || 0;
-                    let share = totalDenominator > 0 ? (avg / totalDenominator) : 0;
-
-                    if (totalDenominator === 0) {
-                         const totalItems = filteredClients.length * keysToProcess.length;
-                         if (totalItems > 0) share = 1 / totalItems;
-                    }
-
-                    const newGoal = share * inputValue;
-
-                    if (!cGoals.has(key)) cGoals.set(key, { fat: 0, vol: 0 });
-                    const g = cGoals.get(key);
-
-                    if (type === 'fat') g.fat = newGoal;
-                    else g.vol = newGoal;
-                });
+            const pairs = filteredClients.flatMap(client => {
+                const id = String(client['Código'] || client['codigo_cliente']);
+                return keysToProcess.map(key => ({id, key, weight: distributionMap.get(id)?.get(key) || 0}));
             });
-
+            const allocation = GoalsCore.allocate(inputValue, pairs.map(pair => pair.weight), type === 'fat' ? 2 : 3);
+            pairs.forEach((pair, index) => {
+                if (!globalClientGoals.has(pair.id)) globalClientGoals.set(pair.id, new Map());
+                const goals = globalClientGoals.get(pair.id);
+                if (!goals.has(pair.key)) goals.set(pair.key, {fat: 0, vol: 0});
+                goals.get(pair.key)[type] = allocation[index];
+            });
             recalculateTotalGoals();
             updateGoalsView();
         }
@@ -5546,53 +5428,13 @@
         }
 
         function saveMixAdjustment(type, value, sellerName) {
-            // Find natural base for this seller based on ELMA metrics (excluding Americanas)
-            const sellerCode = optimizedData.rcaCodeByName.get(sellerName);
-
-            // Re-use logic for Active Clients counting
-            const sellerClients = allClientsData.filter(c => {
-                const rca1 = String(c.rca1 || '').trim();
-                if (!sellerCode) return false;
-
-                // Is client active check (Same as others)
-                // Exclude Americanas explicitly from this calculation as per requirement
-                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                const codCliLocal = String(c['Código'] || c['codigo_cliente']);
-                if (isAmericanas || (((rca1 === '53' || rca1 === '053') && codCliLocal !== '12034') || rca1 === '' || rca1 === 'INATIVOS')) return false;
-
-                // Does client belong to seller? (Current Hierarchy)
-                return c.rcas.includes(sellerCode);
-            });
-
-            let naturalCount = 0;
-            // Count "Meta Pos" (Revenue > 1 in ELMA_ALL: 707, 708, 752) for these clients
-            sellerClients.forEach(c => {
-                const codCli = c['Código'];
-                const hIds = optimizedData.indices.history.byClient.get(codCli);
-                let sumFat = 0;
-                if (hIds) {
-                    hIds.forEach(id => {
-                        const s = optimizedData.historyById.get(id);
-                        if (['707', '708', '752'].includes(String(s.CODFOR))) {
-                            if (s.TIPOVENDA === '1' || s.TIPOVENDA === '9') sumFat += s.VLVENDA;
-                        }
-                    });
-                }
-                if (sumFat >= 1) naturalCount++;
-            });
-
-            // Check if seller has specific adjustment for ELMA_ALL (Meta Pos)
-            let adjustmentPos = 0;
-            if (goalsPosAdjustments['ELMA_ALL'] && goalsPosAdjustments['ELMA_ALL'].has(sellerName)) {
-                adjustmentPos = goalsPosAdjustments['ELMA_ALL'].get(sellerName);
-            }
-
-            // Base = Natural Elma Count + Elma Adjustment
-            const totalElmaBase = naturalCount + adjustmentPos;
+            const totalElmaBase = sellerMixBase(sellerName);
 
             // Apply 50% / 30% rule
             const base = type === 'salty' ? Math.round(totalElmaBase * 0.50) : Math.round(totalElmaBase * 0.30);
             const adjustment = value - base;
+            if (!goalsSellerTargets.has(sellerName)) goalsSellerTargets.set(sellerName, {});
+            goalsSellerTargets.get(sellerName)[type === 'salty' ? 'mix_salty' : 'mix_foods'] = value;
 
             // ALWAYS STORE IN PEPSICO_ALL (Unify Inputs)
             if (type === 'salty') {
@@ -5981,6 +5823,7 @@
                     // Check pepsico_all first (new standard) then GERAL (legacy)
                     if (targets['pepsico_all'] !== undefined) return targets['pepsico_all'];
                     if (targets['GERAL'] !== undefined) return targets['GERAL'];
+                    if (targets['geral'] !== undefined) return targets['geral'];
                     return null;
                 }
                 // Check direct key match (e.g. 707, 708, 1119_TODDYNHO)
@@ -5991,57 +5834,7 @@
 
         // Helper to get historical positivation count for a seller/category
         function getHistoricalPositivation(sellerName, category) {
-            const sellerCode = optimizedData.rcaCodeByName.get(sellerName);
-            if (!sellerCode) return 0;
-
-            const clients = optimizedData.clientsByRca.get(sellerCode) || [];
-            // Filter active clients same as main view
-            const activeClients = clients.filter(c => {
-                const cod = String(c['Código'] || c['codigo_cliente']);
-                const rca1 = String(c.rca1 || '').trim();
-                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(cod));
-            });
-
-            let count = 0;
-            // Identify which products belong to this category
-            // Reuse logic from 'shouldIncludeSale' or similar but specific to categories
-            // Mapping Category -> Condition
-            const checkSale = (codFor, desc) => {
-                if (category === 'pepsico_all') return ['707', '708', '752', '1119'].includes(codFor);
-                if (category === 'total_elma') return ['707', '708', '752'].includes(codFor);
-                if (category === 'total_foods') return codFor === '1119';
-                
-                // Specifics
-                if (category === '707') return codFor === '707';
-                if (category === '708') return codFor === '708';
-                if (category === '752') return codFor === '752';
-                if (category === '1119_TODDYNHO') return codFor === '1119' && desc.includes('TODDYNHO');
-                if (category === '1119_TODDY') return codFor === '1119' && desc.includes('TODDY') && !desc.includes('TODDYNHO');
-                if (category === '1119_QUAKER_KEROCOCO') return codFor === '1119' && (desc.includes('QUAKER') || desc.includes('KEROCOCO'));
-                
-                return false;
-            };
-
-            activeClients.forEach(client => {
-                const codCli = String(client['Código'] || client['codigo_cliente']);
-                const historyIds = optimizedData.indices.history.byClient.get(codCli);
-                if (historyIds) {
-                    // Check if client bought ANY product in category
-                    for (let id of historyIds) {
-                        const sale = optimizedData.historyById.get(id);
-                        const codFor = String(sale.CODFOR);
-                        const desc = normalize(sale.DESCRICAO || '');
-                        
-                        // Check Rev Type only? Usually yes for Positivação.
-                        if ((sale.TIPOVENDA === '1' || sale.TIPOVENDA === '9') && checkSale(codFor, desc)) {
-                            count++;
-                            break; // Counted this client
-                        }
-                    }
-                }
-            });
-            return count;
+            return getSellerNaturalCount(sellerName, category);
         }
 
         function distributeDown(sellerName, parentCategory, parentTargetValue) {
@@ -6104,20 +5897,9 @@
                 totalHistoryPos += hist;
             });
 
-            // 2. Distribute Total Goal
-            // We use Largest Remainder Method or simple rounding? Simple rounding for now.
-            
-            sellersHistory.forEach(item => {
-                let share = 0;
-                if (totalHistoryPos > 0) {
-                    share = item.hist / totalHistoryPos;
-                }
-                
-                // If totalHistory is 0 but we have a Goal, distribute evenly? 
-                // Or leave 0? User said "proporcional". 0 history -> 0 share seems fair.
-                
-                const sellerTarget = Math.round(totalGoal * share);
-                
+            const allocations = GoalsCore.allocate(totalGoal, sellersHistory.map(item => item.hist));
+            sellersHistory.forEach((item, index) => {
+                const sellerTarget = allocations[index];
                 // Update Primary Target
                 if (!goalsSellerTargets.has(item.seller)) goalsSellerTargets.set(item.seller, {});
                 const t = goalsSellerTargets.get(item.seller);
@@ -6129,8 +5911,9 @@
 
             // Auto-Redistribute Mix for PEPSICO_ALL context
             if (contextKey === 'PEPSICO_ALL') {
-                const newSalty = Math.round(totalGoal * 0.50);
-                const newFoods = Math.round(totalGoal * 0.30);
+                const mixBase = Array.from(uniqueSellers).reduce((sum, seller) => sum + sellerMixBase(seller), 0);
+                const newSalty = Math.round(mixBase * 0.50);
+                const newFoods = Math.round(mixBase * 0.30);
                 
                 // Update UI Inputs
                 const inputSalty = document.getElementById('goal-global-mix-salty');
@@ -6158,20 +5941,21 @@
             const uniqueSellers = new Set(filteredClientMetrics.map(c => c.seller));
             
             uniqueSellers.forEach(seller => {
+                if (optimizedData.rcaCodeByName.get(seller) === '1001') {
+                    if (!goalsSellerTargets.has(seller)) goalsSellerTargets.set(seller, {});
+                    goalsSellerTargets.get(seller)[targetKey] = 0;
+                    return;
+                }
                 const hist = getHistoricalMix(seller, type);
                 sellersHistory.push({ seller, hist });
                 totalHistoryMix += hist;
             });
 
-            // 2. Distribute Total Goal
-            sellersHistory.forEach(item => {
-                let share = 0;
-                if (totalHistoryMix > 0) {
-                    share = item.hist / totalHistoryMix;
-                }
-                
-                const sellerTarget = Math.round(totalGoal * share);
-                
+            if (totalGoal > 0 && !sellersHistory.length) { alert('Não há vendedores elegíveis para distribuir esta meta de mix.'); return; }
+
+            const allocations = GoalsCore.allocate(totalGoal, sellersHistory.map(item => item.hist));
+            sellersHistory.forEach((item, index) => {
+                const sellerTarget = allocations[index];
                 // Update Primary Target
                 if (!goalsSellerTargets.has(item.seller)) goalsSellerTargets.set(item.seller, {});
                 const t = goalsSellerTargets.get(item.seller);
@@ -6371,20 +6155,22 @@
 
                 if (fatInput) {
                     if (document.activeElement !== fatInput) {
-                        const displayFat = (sumFat === 0 && totalPrevFat > 0) ? totalPrevFat : sumFat;
+                        const displayFat = sumFat;
                         fatInput.value = displayFat.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
                     fatInput.readOnly = false; fatInput.classList.remove('opacity-50', 'cursor-not-allowed');
                 }
                 if (volInput) {
                     if (document.activeElement !== volInput) {
-                        const displayVol = (sumVol === 0 && totalPrevVol > 0) ? totalPrevVol : sumVol;
+                        const displayVol = sumVol;
                         volInput.value = displayVol.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
                     }
                     volInput.readOnly = false; volInput.classList.remove('opacity-50', 'cursor-not-allowed');
                 }
                 if (btnDistributeFat) btnDistributeFat.style.display = '';
                 if (btnDistributeVol) btnDistributeVol.style.display = '';
+
+                updateGoalsDistributionStatus(sumFat, sumVol);
 
                 // KPIs
                 const refAvgFat = document.getElementById('ref-avg-fat'); if(refAvgFat) refAvgFat.textContent = totalAvgFat.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -6461,7 +6247,8 @@
 
                             newBtnDistributeMix.onclick = () => {
                                 const valStr = newMixInput.value;
-                                const val = parseFloat(valStr.replace(/\./g, '').replace(',', '.')) || 0;
+                                let val;
+                        try { val = GoalsCore.parseInput(valStr); if (!Number.isInteger(val)) throw new Error('A meta de clientes deve ser inteira.'); } catch (error) { alert(error.message); return; }
 
                                 if (isAggregatedTab) {
                                     const contextName = currentGoalsSupplier.replace('_ALL', '');
@@ -6504,7 +6291,9 @@
                                     showConfirmationModal(`Confirmar ajuste de Meta Positivação para ${valStr} (Cliente: ${filterDesc})?`, () => {
                                         const newAdjustment = val - naturalTotalPos;
                                         if (adjustmentMap) {
-                                            adjustmentMap.set(selectedGoalsGvSellers[0], newAdjustment);
+                                            if (!goalsSellerTargets.has(sellerName)) goalsSellerTargets.set(sellerName, {});
+                                            goalsSellerTargets.get(sellerName)[contextKey] = val;
+                                            adjustmentMap.delete(sellerName);
                                             updateGoalsView();
                                         }
                                     });
@@ -6551,18 +6340,6 @@
                         } else {
                             // Aggregate Logic for Multiple Sellers (Mix)
                             const visibleSellers = new Set(clientMetrics.map(c => c.seller));
-                            const naturalBaseBySeller = new Map();
-
-                            // 1. Calculate Natural Base per Seller
-                            clientMetrics.forEach(c => {
-                                const sellerCode = optimizedData.rcaCodeByName.get(c.seller) || '';
-                                if (sellerCode !== '1001') {
-                                    if (c.metaPos > 0) {
-                                        naturalBaseBySeller.set(c.seller, (naturalBaseBySeller.get(c.seller) || 0) + 1);
-                                    }
-                                }
-                            });
-
                             // 2. Sum
                             let sumTotal = 0;
                             visibleSellers.forEach(seller => {
@@ -6570,7 +6347,7 @@
                                 if (override !== null) {
                                     sumTotal += override;
                                 } else {
-                                    const base = naturalBaseBySeller.get(seller) || 0;
+                                    const base = sellerMixBase(seller);
                                     const nat = Math.round(base * (type === 'salty' ? 0.5 : 0.3));
                                     const adj = adjustmentsMap ? (adjustmentsMap.get(seller) || 0) : 0;
                                     sumTotal += (nat + adj);
@@ -6596,7 +6373,8 @@
                                     
                                     newBtn.onclick = () => {
                                         const valStr = input.value;
-                                        const val = parseFloat(valStr.replace(/\./g, '').replace(',', '.')) || 0;
+                                        let val;
+                        try { val = GoalsCore.parseInput(valStr); if (!Number.isInteger(val)) throw new Error('A meta de clientes deve ser inteira.'); } catch (error) { alert(error.message); return; }
                                         
                                         if (isAggregatedTab) {
                                             const contextName = currentGoalsSupplier.replace('_ALL', '');
@@ -7097,7 +6875,7 @@
                     // Calculate Mix Targets using ELMA Base (Natural + Adjustment) to match GV 'RESUMO' Logic
                     // Base logic: Active Elma Clients (elmaPos) + ELMA Adjustments
                     const elmaAdjForMix = goalsPosAdjustments['ELMA_ALL'] ? (goalsPosAdjustments['ELMA_ALL'].get(sellerObj.name) || 0) : 0;
-                    const elmaBaseForMix = (sellerObj.elmaPos || 0) + elmaAdjForMix;
+                    const elmaBaseForMix = sellerMixBase(sellerObj.name);
 
                     let mixSaltyMeta = Math.round(elmaBaseForMix * 0.50);
                     let mixFoodsMeta = Math.round(elmaBaseForMix * 0.30);
@@ -7155,7 +6933,8 @@
                         if (goalsSellerTargets && goalsSellerTargets.has(sellerName)) {
                             const targets = goalsSellerTargets.get(sellerName);
                             // Check exact key or upper case key
-                            if (targets[colId] !== undefined) explicitTarget = targets[colId];
+                            if (colId === 'geral' && targets.pepsico_all !== undefined) explicitTarget = targets.pepsico_all;
+                            else if (targets[colId] !== undefined) explicitTarget = targets[colId];
                             else if (targets[colId.toUpperCase()] !== undefined) explicitTarget = targets[colId.toUpperCase()];
                         }
 
@@ -7171,7 +6950,7 @@
                                 // the 'targets[colId]' (which is targets['tonelada_elma']) will be undefined.
                                 // The legacy explicitTarget check above matched targets[colId.toUpperCase()] by mistake for volume 
                                 // but we shouldn't apply volume (tonelada_elma_VOL) as Positivation (metaPos).
-                                if (targets[colId] !== undefined || targets[colId.toUpperCase()] !== undefined) {
+                                if ((colId === 'geral' && targets.pepsico_all !== undefined) || targets[colId] !== undefined || targets[colId.toUpperCase()] !== undefined) {
                                     // Make sure it is actually the Positivation target (no suffix)
                                     // Volume and FAT have the _VOL and _FAT suffix.
                                     data.metaPos = explicitTarget;
@@ -7375,13 +7154,13 @@ const supervisorGroups = new Map();
                                 const posCellBg = isPosEditable ? 'bg-[#1e293b]' : 'bg-[#151c36]';
 
                                 quarterMonths.forEach(m => bodyHTML += `<td class="px-1 py-1 text-right text-slate-400 border-r border-slate-800/50 text-[10px] bg-blue-900/5">${(d.monthlyValues[m.key] || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`);
-                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 bg-blue-900/10 font-medium">${d.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right ${col.colorClass} border-r border-slate-800/50 text-xs font-mono">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 ${fatCellBg} border-r border-slate-800/50"><input type="text" value="${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}" class="goals-sv-input bg-transparent text-right w-full outline-none ${fatInputClass} text-xs font-mono" ${fatReadonlyAttr}></td><td class="px-1 py-1 text-center text-slate-300 border-r border-slate-800/50">${d.metaPos}</td><td class="px-1 py-1 ${posCellBg} border-r border-slate-800/50"><input type="text" value="${d.metaPos}" class="goals-sv-input bg-transparent text-center w-full outline-none ${posInputClass} text-xs font-mono" ${posReadonlyAttr}></td>`;
+                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 bg-blue-900/10 font-medium">${d.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right ${col.colorClass} border-r border-slate-800/50 text-xs font-mono">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 ${fatCellBg} border-r border-slate-800/50"><input type="text" value="${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}" data-goal-seller="${encodeURIComponent(seller.name)}" data-goal-category="${col.id}" data-goal-metric="fat" class="goals-sv-input bg-transparent text-right w-full outline-none ${fatInputClass} text-xs font-mono" ${fatReadonlyAttr}></td><td class="px-1 py-1 text-center text-slate-300 border-r border-slate-800/50">${d.metaPos}</td><td class="px-1 py-1 ${posCellBg} border-r border-slate-800/50"><input type="text" value="${d.metaPos}" data-goal-seller="${encodeURIComponent(seller.name)}" data-goal-category="${col.id}" data-goal-metric="pos" class="goals-sv-input bg-transparent text-center w-full outline-none ${posInputClass} text-xs font-mono" ${posReadonlyAttr}></td>`;
                             } else if (col.type === 'tonnage') {
-                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 font-mono text-xs">${d.avgVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 font-bold font-mono text-xs">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 bg-[#1e293b] border-r border-slate-800/50"><input type="text" value="${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}" class="goals-sv-input bg-transparent text-right w-full outline-none text-yellow-300 text-xs font-mono"></td>`;
+                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 font-mono text-xs">${d.avgVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 font-bold font-mono text-xs">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3})} Kg</td><td class="px-1 py-1 bg-[#1e293b] border-r border-slate-800/50"><input type="text" value="${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3})}" data-goal-seller="${encodeURIComponent(seller.name)}" data-goal-category="${col.id}" data-goal-metric="vol" class="goals-sv-input bg-transparent text-right w-full outline-none text-yellow-300 text-xs font-mono"></td>`;
                             } else if (col.type === 'mix') {
-                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50">${d.avgMix.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})}</td><td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 font-bold">${d.metaMix}</td><td class="px-1 py-1 bg-[#1e293b] border-r border-slate-800/50"><input type="text" value="${d.metaMix}" class="goals-sv-input bg-transparent text-right w-full outline-none text-yellow-300 text-xs font-mono"></td>`;
+                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50">${d.avgMix.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})}</td><td class="px-1 py-1 text-right text-slate-300 border-r border-slate-800/50 font-bold">${d.metaMix}</td><td class="px-1 py-1 bg-[#1e293b] border-r border-slate-800/50"><input type="text" value="${d.metaMix}" data-goal-seller="${encodeURIComponent(seller.name)}" data-goal-category="${col.id}" data-goal-metric="mix" class="goals-sv-input bg-transparent text-right w-full outline-none text-yellow-300 text-xs font-mono"></td>`;
                             } else if (col.type === 'geral') {
-                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-400 border-r border-slate-800/50 font-mono text-xs">${d.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right text-white font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="geral" data-field="fat" id="geral-${seller.id || seller.name.replace(/\s+/g,'_')}-fat">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right text-white font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="geral" data-field="ton" id="geral-${seller.id || seller.name.replace(/\s+/g,'_')}-ton">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 text-center text-yellow-300 font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="geral" data-field="pos" id="geral-${seller.id || seller.name.replace(/\s+/g,'_')}-pos">${d.metaPos}</td>`;
+                                bodyHTML += `<td class="px-1 py-1 text-right text-slate-400 border-r border-slate-800/50 font-mono text-xs">${d.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right text-white font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="geral" data-field="fat" id="geral-${seller.id || seller.name.replace(/\s+/g,'_')}-fat">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right text-white font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="geral" data-field="ton" id="geral-${seller.id || seller.name.replace(/\s+/g,'_')}-ton">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3})} Kg</td><td class="px-1 py-1 text-center text-yellow-300 font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="geral" data-field="pos" id="geral-${seller.id || seller.name.replace(/\s+/g,'_')}-pos">${d.metaPos}</td>`;
                             } else if (col.type === 'pedev') {
                                 bodyHTML += `<td class="px-1 py-1 text-center text-pink-400 font-bold border-r border-slate-800/50 font-mono text-xs goals-sv-text" data-sup-id="${sup.id}" data-col-id="pedev" data-field="pos" id="pedev-${seller.id || seller.name.replace(/\s+/g,'_')}-pos">${d.metaPos}</td>`;
                             }
@@ -7395,9 +7174,9 @@ const supervisorGroups = new Map();
                         if (col.type === 'standard') {
                             quarterMonths.forEach(m => bodyHTML += `<td class="px-1 py-1 text-right text-slate-400 border-r border-slate-700 text-[10px] bg-blue-900/5">${(d.monthlyValues[m.key] || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`);
                             bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-700 bg-blue-900/10 font-medium">${d.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right ${color} border-r border-slate-700">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right text-yellow-500/70 border-r border-slate-700" id="total-sup-${sup.id}-${col.id}-fat">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-center ${color} border-r border-slate-700">${d.metaPos}</td><td class="px-1 py-1 text-center text-yellow-500/70 border-r border-slate-700" id="total-sup-${sup.id}-${col.id}-pos">${d.metaPos}</td>`;
-                        } else if (col.type === 'tonnage') bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-700">${d.avgVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 text-right ${color} border-r border-slate-700">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 text-right text-yellow-500/70 border-r border-slate-700" id="total-sup-${sup.id}-${col.id}-vol">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td>`;
+                        } else if (col.type === 'tonnage') bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-700">${d.avgVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 text-right ${color} border-r border-slate-700">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3})} Kg</td><td class="px-1 py-1 text-right text-yellow-500/70 border-r border-slate-700" id="total-sup-${sup.id}-${col.id}-vol">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3})} Kg</td>`;
                         else if (col.type === 'mix') bodyHTML += `<td class="px-1 py-1 text-right text-slate-300 border-r border-slate-700">${d.avgMix.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})}</td><td class="px-1 py-1 text-right ${color} border-r border-slate-700">${d.metaMix}</td><td class="px-1 py-1 text-right text-yellow-500/70 border-r border-slate-700" id="total-sup-${sup.id}-${col.id}-mix">${d.metaMix}</td>`;
-                        else if (col.type === 'geral') bodyHTML += `<td class="px-1 py-1 text-right text-slate-400 border-r border-slate-700">${d.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right text-white border-r border-slate-700" id="total-sup-${sup.id}-geral-fat">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right text-white border-r border-slate-700" id="total-sup-${sup.id}-geral-ton">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Kg</td><td class="px-1 py-1 text-center text-white border-r border-slate-700" id="total-sup-${sup.id}-geral-pos">${d.metaPos}</td>`;
+                        else if (col.type === 'geral') bodyHTML += `<td class="px-1 py-1 text-right text-slate-400 border-r border-slate-700">${d.avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right text-white border-r border-slate-700" id="total-sup-${sup.id}-geral-fat">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-1 text-right text-white border-r border-slate-700" id="total-sup-${sup.id}-geral-ton">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3})} Kg</td><td class="px-1 py-1 text-center text-white border-r border-slate-700" id="total-sup-${sup.id}-geral-pos">${d.metaPos}</td>`;
                         else if (col.type === 'pedev') bodyHTML += `<td class="px-1 py-1 text-center text-pink-400 border-r border-slate-700" id="total-sup-${sup.id}-pedev-pos">${Math.round(sup.totals['total_elma']?.metaPos * 0.9)}</td>`;
                     });
                     bodyHTML += `</tr>`;
@@ -7419,9 +7198,9 @@ const supervisorGroups = new Map();
                     if (col.type === 'standard') {
                         quarterMonths.forEach(m => bodyHTML += `<td class="px-1 py-2 text-right text-slate-400 border-r border-slate-700 text-[10px] bg-blue-900/5">${(monthlyVals[m.key] || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`);
                         bodyHTML += `<td class="px-1 py-2 text-right text-teal-400 border-r border-slate-700 bg-blue-900/10">${avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-2 text-right text-teal-400 border-r border-slate-700">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-2 text-right text-teal-600/70 border-r border-slate-700" id="total-grand-${col.id}-fat">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-2 text-center text-purple-400 border-r border-slate-700">${d.metaPos}</td><td class="px-1 py-2 text-center text-purple-600/70 border-r border-slate-700" id="total-grand-${col.id}-pos">${d.metaPos}</td>`;
-                    } else if (col.type === 'tonnage') bodyHTML += `<td class="px-1 py-2 text-right text-slate-400 border-r border-slate-700">${avgVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-2 text-right text-orange-400 border-r border-slate-700">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-2 text-right text-orange-600/70 border-r border-slate-700" id="total-grand-${col.id}-vol">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`;
+                    } else if (col.type === 'tonnage') bodyHTML += `<td class="px-1 py-2 text-right text-slate-400 border-r border-slate-700">${avgVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-2 text-right text-orange-400 border-r border-slate-700">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3})}</td><td class="px-1 py-2 text-right text-orange-600/70 border-r border-slate-700" id="total-grand-${col.id}-vol">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3})}</td>`;
                     else if (col.type === 'mix') bodyHTML += `<td class="px-1 py-2 text-right text-slate-400 border-r border-slate-700">${avgMix.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1})}</td><td class="px-1 py-2 text-right text-cyan-400 border-r border-slate-700">${d.metaMix}</td><td class="px-1 py-2 text-right text-cyan-600/70 border-r border-slate-700" id="total-grand-${col.id}-mix">${d.metaMix}</td>`;
-                    else if (col.type === 'geral') bodyHTML += `<td class="px-1 py-2 text-right text-slate-500 border-r border-slate-700">${avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-2 text-right text-white border-r border-slate-700" id="total-grand-geral-fat">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-2 text-right text-white border-r border-slate-700" id="total-grand-geral-ton">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-2 text-center text-white border-r border-slate-700" id="total-grand-geral-pos">${d.metaPos}</td>`;
+                    else if (col.type === 'geral') bodyHTML += `<td class="px-1 py-2 text-right text-slate-500 border-r border-slate-700">${avgFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-2 text-right text-white border-r border-slate-700" id="total-grand-geral-fat">${d.metaFat.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td class="px-1 py-2 text-right text-white border-r border-slate-700" id="total-grand-geral-ton">${d.metaVol.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3})}</td><td class="px-1 py-2 text-center text-white border-r border-slate-700" id="total-grand-geral-pos">${d.metaPos}</td>`;
                     else if (col.type === 'pedev') bodyHTML += `<td class="px-1 py-2 text-center text-pink-400 border-r border-slate-700" id="total-grand-pedev-pos">${Math.round(grandTotalRow.totals['total_elma']?.metaPos * 0.9)}</td>`;
                 });
                 bodyHTML += `</tr></tbody>`;
@@ -7451,8 +7230,8 @@ const supervisorGroups = new Map();
             selectedGoalsGvSellers = [];
             goalsGvCodcliFilter.value = '';
 
-            selectedGoalsGvSupervisors = updateSupervisorFilter(goalsGvSupervisorFilterDropdown, goalsGvSupervisorFilterText, selectedGoalsGvSupervisors, allSalesData);
-            selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, allSalesData);
+            selectedGoalsGvSupervisors = updateSupervisorFilter(goalsGvSupervisorFilterDropdown, goalsGvSupervisorFilterText, selectedGoalsGvSupervisors, [...allSalesData, ...allHistoryData]);
+            selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, [...allSalesData, ...allHistoryData]);
 
             updateGoalsView();
         }
@@ -13835,28 +13614,7 @@ const supervisorGroups = new Map();
                             clientsData = gd;
                         }
 
-                        globalClientGoals = new Map();
-                        for (const [key, val] of Object.entries(clientsData)) {
-                            const clientMap = new Map();
-                            for (const [k, v] of Object.entries(val)) {
-                                clientMap.set(k, v);
-                            }
-                            globalClientGoals.set(key, clientMap);
-                        }
-                        window.globalClientGoals = globalClientGoals;
-
-                        if (targetsData && Object.keys(targetsData).length > 0) {
-                            for (const key in targetsData) {
-                                goalsTargets[key] = targetsData[key];
-                            }
-                        }
-
-                        if (gd.seller_targets) {
-                            goalsSellerTargets.clear();
-                            for (const [seller, targets] of Object.entries(gd.seller_targets)) {
-                                goalsSellerTargets.set(seller, targets);
-                            }
-                        }
+                        window.restoreGoalsSnapshot({...gd, clients: clientsData, targets: targetsData});
 
                         console.log('Metas carregadas do Supabase.');
                         updateGoals();
@@ -13908,12 +13666,6 @@ const supervisorGroups = new Map();
                         goalsTargets[cacheKey] = { fat: 0, vol: 0 };
                     }
                     const target = goalsTargets[cacheKey];
-
-                    if (metrics) {
-                        // PRE-FILL logic: If target is 0 (uninitialized), use Previous Month values as default suggestion
-                        if (target.fat === 0) target.fat = metrics.prevFat;
-                        if (target.vol === 0) target.vol = metrics.prevVol;
-                    }
 
                     // Update Input Fields
                     const fatInput = document.getElementById('goal-global-fat');
@@ -14108,11 +13860,11 @@ const supervisorGroups = new Map();
                         if (checked) selectedGoalsSummarySupervisors.push(value);
                         else selectedGoalsSummarySupervisors = selectedGoalsSummarySupervisors.filter(s => s !== value);
 
-                        selectedGoalsSummarySupervisors = updateSupervisorFilter(goalsSummarySupervisorFilterDropdown, document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, allSalesData, true);
+                        selectedGoalsSummarySupervisors = updateSupervisorFilter(goalsSummarySupervisorFilterDropdown, document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, [...allSalesData, ...allHistoryData], true);
                         
                         // Update Seller Filter Cascade
                         selectedGoalsSummarySellers = [];
-                        selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, goalsSummarySellerFilterDropdown, document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData);
+                        selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, goalsSummarySellerFilterDropdown, document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, [...allSalesData, ...allHistoryData]);
                         
                         updateGoalsSummaryView();
                     }
@@ -14130,7 +13882,7 @@ const supervisorGroups = new Map();
                         } else {
                             selectedGoalsSummarySellers = selectedGoalsSummarySellers.filter(s => s !== value);
                         }
-                        selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, goalsSummarySellerFilterDropdown, document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData, true);
+                        selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, goalsSummarySellerFilterDropdown, document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, [...allSalesData, ...allHistoryData], true);
                         updateGoalsSummaryView();
                     }
                 });
@@ -14140,8 +13892,8 @@ const supervisorGroups = new Map();
                 clearGoalsSummaryFiltersBtn.addEventListener('click', () => {
                     selectedGoalsSummarySupervisors = [];
                     selectedGoalsSummarySellers = [];
-                    updateSupervisorFilter(goalsSummarySupervisorFilterDropdown, document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, allSalesData, true);
-                    updateSellerFilter(selectedGoalsSummarySupervisors, goalsSummarySellerFilterDropdown, document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData);
+                    updateSupervisorFilter(goalsSummarySupervisorFilterDropdown, document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, [...allSalesData, ...allHistoryData], true);
+                    updateSellerFilter(selectedGoalsSummarySupervisors, goalsSummarySellerFilterDropdown, document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, [...allSalesData, ...allHistoryData]);
                     updateGoalsSummaryView();
                 });
             }
@@ -14159,6 +13911,13 @@ const supervisorGroups = new Map();
                     }
                 }
             });
+
+            for (const id of ['goal-global-fat', 'goal-global-vol']) {
+                document.getElementById(id)?.addEventListener('input', () => {
+                    const data = goalsTableState.filteredData || [];
+                    updateGoalsDistributionStatus(data.reduce((sum, c) => sum + c.metaFat, 0), data.reduce((sum, c) => sum + c.metaVol, 0));
+                });
+            }
 
             const btnDistributeFat = document.getElementById('btn-distribute-fat');
             if (btnDistributeFat) {
@@ -14189,7 +13948,8 @@ const supervisorGroups = new Map();
                     if (!sellerName) return;
                     const valStr = document.getElementById('goal-global-mix-salty').value;
                     showConfirmationModal(`Confirmar ajuste de Meta Mix Salty para ${valStr} (Vendedor: ${getFirstName(sellerName)})?`, () => {
-                        const val = parseFloat(valStr.replace(/\./g, '').replace(',', '.')) || 0;
+                        let val;
+                        try { val = GoalsCore.parseInput(valStr); if (!Number.isInteger(val)) throw new Error('A meta de clientes deve ser inteira.'); } catch (error) { alert(error.message); return; }
 
                         // Calculate Natural Base again to store Delta
                         // We need the natural base for THIS seller to calculate delta (Input - Natural)
@@ -14217,7 +13977,8 @@ const supervisorGroups = new Map();
                     if (!sellerName) return;
                     const valStr = document.getElementById('goal-global-mix-foods').value;
                     showConfirmationModal(`Confirmar ajuste de Meta Mix Foods para ${valStr} (Vendedor: ${getFirstName(sellerName)})?`, () => {
-                        const val = parseFloat(valStr.replace(/\./g, '').replace(',', '.')) || 0;
+                        let val;
+                        try { val = GoalsCore.parseInput(valStr); if (!Number.isInteger(val)) throw new Error('A meta de clientes deve ser inteira.'); } catch (error) { alert(error.message); return; }
                         saveMixAdjustment('foods', val, sellerName);
                     });
                 });
@@ -14240,7 +14001,32 @@ const supervisorGroups = new Map();
                     if (checked) selectedGoalsSvSupervisors.push(value);
                     else selectedGoalsSvSupervisors = selectedGoalsSvSupervisors.filter(s => s !== value);
 
-                    selectedGoalsSvSupervisors = updateSupervisorFilter(goalsSvSupervisorFilterDropdown, goalsSvSupervisorFilterText, selectedGoalsSvSupervisors, allSalesData, true);
+                    selectedGoalsSvSupervisors = updateSupervisorFilter(goalsSvSupervisorFilterDropdown, goalsSvSupervisorFilterText, selectedGoalsSvSupervisors, [...allSalesData, ...allHistoryData], true);
+                    updateGoalsSvView();
+                }
+            });
+
+            document.getElementById('goals-sv-main-table').addEventListener('change', event => {
+                const input = event.target;
+                if (!input.dataset.goalSeller || input.readOnly || input.disabled) return;
+                const seller = decodeURIComponent(input.dataset.goalSeller);
+                const category = input.dataset.goalCategory;
+                const metric = input.dataset.goalMetric;
+                try {
+                    const value = GoalsCore.parseInput(input.value);
+                    if ((metric === 'pos' || metric === 'mix') && !Number.isInteger(value)) throw new Error('A meta de clientes deve ser inteira.');
+                    if (metric === 'fat' || metric === 'vol') {
+                        distributeSellerGoal(seller, category, value, metric);
+                        recalculateTotalGoals();
+                    } else {
+                        if (!goalsSellerTargets.has(seller)) goalsSellerTargets.set(seller, {});
+                        goalsSellerTargets.get(seller)[category] = value;
+                        if (metric === 'pos') distributeDown(seller, category, value);
+                    }
+                    markDirty('goals');
+                    updateGoalsSvView();
+                } catch (error) {
+                    alert(error.message);
                     updateGoalsSvView();
                 }
             });
@@ -14866,14 +14652,14 @@ const supervisorGroups = new Map();
         updateRedeFilter(stockRedeFilterDropdown, stockComRedeBtnText, selectedStockRedes, allClientsData, 'Com Rede');
 
         // Initial Population for Goals Filters
-        selectedGoalsGvSupervisors = updateSupervisorFilter(goalsGvSupervisorFilterDropdown, goalsGvSupervisorFilterText, selectedGoalsGvSupervisors, allSalesData);
+        selectedGoalsGvSupervisors = updateSupervisorFilter(goalsGvSupervisorFilterDropdown, goalsGvSupervisorFilterText, selectedGoalsGvSupervisors, [...allSalesData, ...allHistoryData]);
         selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, [...allSalesData, ...allHistoryData]);
         // Initialize SV Supervisor filter just in case
-        selectedGoalsSvSupervisors = updateSupervisorFilter(goalsSvSupervisorFilterDropdown, goalsSvSupervisorFilterText, selectedGoalsSvSupervisors, allSalesData);
+        selectedGoalsSvSupervisors = updateSupervisorFilter(goalsSvSupervisorFilterDropdown, goalsSvSupervisorFilterText, selectedGoalsSvSupervisors, [...allSalesData, ...allHistoryData]);
         // Initialize Summary Supervisor Filter
         if(document.getElementById('goals-summary-supervisor-filter-dropdown')) {
-            selectedGoalsSummarySupervisors = updateSupervisorFilter(document.getElementById('goals-summary-supervisor-filter-dropdown'), document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, allSalesData);
-            selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, document.getElementById('goals-summary-seller-filter-dropdown'), document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData);
+            selectedGoalsSummarySupervisors = updateSupervisorFilter(document.getElementById('goals-summary-supervisor-filter-dropdown'), document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, [...allSalesData, ...allHistoryData]);
+            selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, document.getElementById('goals-summary-seller-filter-dropdown'), document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, [...allSalesData, ...allHistoryData]);
         }
 
         // Initialize Meta Vs Realizado Filters
@@ -15036,56 +14822,11 @@ const supervisorGroups = new Map();
             const sellerCode = optimizedData.rcaCodeByName.get(sellerName);
             if (!sellerCode) return defaults;
 
-            const clients = optimizedData.clientsByRca.get(sellerCode) || [];
-            const activeClients = clients.filter(c => {
-                const cod = String(c["Código"] || c["codigo_cliente"]);
-                const rca1 = String(c.rca1 || "").trim();
-                const isAmericanas = (c.razaoSocial || "").toUpperCase().includes("AMERICANAS");
-                return true; // return (isAmericanas || rca1 !== "53" || clientsWithSalesThisMonth.has(cod));
-            });
-
-            activeClients.forEach(client => {
-                const codCli = String(client["Código"] || client["codigo_cliente"]);
-                const historyIds = optimizedData.indices.history.byClient.get(codCli);
-                
-                if (historyIds) {
-                    let clientElmaFat = 0;
-                    let clientFoodsFat = 0;
-
-                    historyIds.forEach(id => {
-                        const sale = optimizedData.historyById.get(id);
-                        if (String(codCli).trim() === "9569" && (String(sale.CODUSUR).trim() === "53" || String(sale.CODUSUR).trim() === "053")) return;
-
-                        const isRev = (sale.TIPOVENDA === "1" || sale.TIPOVENDA === "9");
-                        if (!isRev) return;
-
-                        const codFor = String(sale.CODFOR);
-                        const desc = (sale.DESCRICAO || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
-
-                        if (codFor === "707" || codFor === "708" || codFor === "752") {
-                            clientElmaFat += sale.VLVENDA;
-                        } else if (codFor === "1119") {
-                            if (desc.includes("TODDYNHO") || desc.includes("TODDY") || desc.includes("QUAKER") || desc.includes("KEROCOCO")) {
-                                clientFoodsFat += sale.VLVENDA;
-                            }
-                        }
-                    });
-
-                    if (clientElmaFat >= 1) defaults.elmaPos++;
-                    if (clientFoodsFat >= 1) defaults.foodsPos++;
-                }
-            });
-
-            const elmaAdj = goalsPosAdjustments["ELMA_ALL"] ? (goalsPosAdjustments["ELMA_ALL"].get(sellerName) || 0) : 0;
-            const elmaBase = defaults.elmaPos + elmaAdj;
-
-            defaults.mixSalty = Math.round(elmaBase * 0.50);
-            defaults.mixFoods = Math.round(elmaBase * 0.30);
-
-            if (sellerCode === "1001") {
-                defaults.mixSalty = 0;
-                defaults.mixFoods = 0;
-            }
+            defaults.elmaPos = getSellerNaturalCount(sellerName, 'total_elma');
+            defaults.foodsPos = getSellerNaturalCount(sellerName, 'total_foods');
+            const elmaBase = sellerMixBase(sellerName);
+            defaults.mixSalty = Math.max(0, Math.round(elmaBase * 0.50) + (goalsMixSaltyAdjustments.PEPSICO_ALL?.get(sellerName) || 0));
+            defaults.mixFoods = Math.max(0, Math.round(elmaBase * 0.30) + (goalsMixFoodsAdjustments.PEPSICO_ALL?.get(sellerName) || 0));
 
             return defaults;
         }
