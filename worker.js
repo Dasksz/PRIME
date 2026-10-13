@@ -1,3 +1,61 @@
+// Read cadastro headers independently of decorative titles and Excel display formats.
+function clientHeaderKey(value) {
+  return String(value ?? '').trim().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+function canonicalClientHeader(value) {
+  const key = clientHeaderKey(value);
+  if (['CODIGO', 'CODCLIENTE', 'CODCLI', 'CODIGOCLIENTE', 'CODIGOCLIENTES'].includes(key)) return 'Código';
+  if (['RCA1', 'RCA', 'VENDEDOR1', 'VENDEDOR'].includes(key)) return 'RCA 1';
+  if (['CLIENTE', 'NOMECLIENTE'].includes(key)) return 'Cliente';
+  return String(value ?? '').trim();
+}
+function normalizeClientIdentifier(value, label, fileName, allowNamed = false) {
+  const text = String(value ?? '').trim();
+  if (!text) return '';
+  if (allowNamed && /^(?:AMERICANAS|INAT_[A-Z0-9_-]+)$/i.test(text)) return text.toUpperCase();
+  if (!/^\d+(?:[.,]0+)?$/.test(text)) {
+    throw new Error(`Arquivo '${fileName}': ${label} inválido (${text}). Confira o cadastro antes de enviar.`);
+  }
+  const number = Number(text.replace(',', '.'));
+  if (!Number.isSafeInteger(number) || number < 0) throw new Error(`Arquivo '${fileName}': ${label} inválido.`);
+  return String(number);
+}
+function normalizeClientRows(rows, fileName) {
+  const result = [], seen = new Set();
+  for (const source of rows) {
+    if (!Object.values(source).some(v => v !== null && v !== undefined && String(v).trim() !== '')) continue;
+    const row = {};
+    for (const [header, value] of Object.entries(source)) row[canonicalClientHeader(header)] = value;
+    const code = normalizeClientIdentifier(row['Código'], 'código do cliente', fileName);
+    if (!code) throw new Error(`Arquivo '${fileName}': há uma linha de cadastro sem código de cliente.`);
+    if (seen.has(code)) throw new Error(`Arquivo '${fileName}': código de cliente duplicado (${code}).`);
+    seen.add(code);
+    row['Código'] = code;
+    if (Object.hasOwn(row, 'RCA 1')) row['RCA 1'] = normalizeClientIdentifier(row['RCA 1'], 'RCA 1', fileName, true);
+    result.push(row);
+  }
+  if (!result.length) throw new Error(`Arquivo '${fileName}': nenhum cliente válido encontrado. O cadastro atual foi preservado.`);
+  return result;
+}
+function readClientWorksheet(worksheet, fileName) {
+  if (!worksheet || !worksheet['!ref']) throw new Error(`Arquivo '${fileName}': planilha de clientes vazia.`);
+  const bounds = XLSX.utils.decode_range(worksheet['!ref']);
+  const scan = XLSX.utils.sheet_to_json(worksheet, {
+    header: 1, raw: true, defval: null, blankrows: true,
+    range: { s: bounds.s, e: { r: Math.min(bounds.e.r, bounds.s.r + 29), c: bounds.e.c } },
+  });
+  const index = scan.findIndex(row => {
+    const keys = row.map(canonicalClientHeader);
+    return keys.includes('Código') && keys.some(k => ['CLIENTE', 'NOMECLIENTE', 'RAZAOSOCIAL', 'FANTASIA', 'NOMEFANTASIA'].includes(clientHeaderKey(k)));
+  });
+  if (index < 0) throw new Error(`Arquivo '${fileName}': cabeçalhos do cadastro não encontrados. São necessários Código e Cliente, Razão Social ou Fantasia.`);
+  const headers = scan[index].map(canonicalClientHeader).filter(Boolean);
+  if (new Set(headers).size !== headers.length) throw new Error(`Arquivo '${fileName}': existem cabeçalhos duplicados no cadastro.`);
+  const rows = XLSX.utils.sheet_to_json(worksheet, { raw: true, defval: null, range: bounds.s.r + index });
+  return normalizeClientRows(rows, fileName);
+}
+
         self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
         self.importScripts('https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js');
 
@@ -238,7 +296,7 @@
                     return;
                 }
 
-                if (file.name.endsWith('.csv')) {
+                if (file.name.toLowerCase().endsWith('.csv')) {
                      // Read file content first to handle encoding robustly (reusing original logic)
                      const textReader = new FileReader();
                      textReader.onload = (e) => {
@@ -256,7 +314,7 @@
                              skipEmptyLines: true,
                              complete: (results) => {
                                  try {
-                                     let jsonData = results.data;
+                                     let jsonData = fileType === 'clients' ? normalizeClientRows(results.data, file.name) : results.data;
                                      if (jsonData.length === 0 && fileType !== 'innovations') {
                                           throw new Error(`O arquivo CSV '${file.name}' está vazio.`);
                                      }
@@ -288,7 +346,7 @@
                         const workbook = XLSX.read(new Uint8Array(data), {type: 'array'});
                         const firstSheetName = workbook.SheetNames[0];
                         const worksheet = workbook.Sheets[firstSheetName];
-                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false, cellDates: true });
+                        const jsonData = fileType === 'clients' ? readClientWorksheet(worksheet, file.name) : XLSX.utils.sheet_to_json(worksheet, { raw: false, cellDates: true });
 
                         if (fileType !== 'innovations') {
                             validateData(jsonData, fileType, file.name);

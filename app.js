@@ -12925,7 +12925,7 @@ const supervisorGroups = new Map();
                     }
 
                     // Initialize Worker
-                    const worker = new Worker('worker.js');
+                    const worker = new Worker('worker.js?v=20261013-client-headers');
 
                     document.getElementById('status-text').textContent = "Processando arquivos...";
 
