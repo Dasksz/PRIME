@@ -886,7 +886,6 @@
         async function saveGoalsToSupabase(authToken) {
             // Collect Goals Data from Global Window Scope (Populated by app.js)
             const globalClientGoals = window.globalClientGoals;
-            const goalsTargets = window.goalsTargets;
 
             if (typeof globalClientGoals === 'undefined' || !globalClientGoals) {
                 throw new Error('Dados de metas não disponíveis (globalClientGoals undefined).');
@@ -894,30 +893,11 @@
 
             const monthKey = new Date().toISOString().slice(0, 7); // YYYY-MM
 
-            // Convert Map to JSON-friendly format
-            const goalsObj = {};
-            globalClientGoals.forEach((val, key) => {
-                goalsObj[key] = Object.fromEntries(val);
-            });
-
-            // Convert goalsSellerTargets to Object
-            let sellerTargetsObj = {};
-            // Try accessing directly or via window
-            const targetsMap = (typeof goalsSellerTargets !== 'undefined') ? goalsSellerTargets : (window.goalsSellerTargets || new Map());
-            
-            targetsMap.forEach((val, key) => {
-                sellerTargetsObj[key] = val;
-            });
-
             const payload = {
                 month_key: monthKey,
                 supplier: 'ALL', // Global snapshot
                 brand: 'GENERAL', // Fix for Unique Constraint
-                goals_data: {
-                    clients: goalsObj,
-                    targets: goalsTargets,
-                    seller_targets: sellerTargetsObj
-                },
+                goals_data: window.getGoalsSnapshot(),
                 updated_at: new Date().toISOString()
             };
 
@@ -965,11 +945,7 @@
                     throw new Error(`Erro ao limpar metas (${response.status}): ${errorText}`);
                 }
 
-                // Limpar estado local
-                if(typeof globalClientGoals !== 'undefined') globalClientGoals.clear();
-                if(typeof goalsTargets !== 'undefined') {
-                    for(let k in goalsTargets) goalsTargets[k] = { fat: 0, vol: 0 };
-                }
+                window.resetGoalsState();
 
                 // Atualizar UI Input fields
                 const elFat = document.getElementById('goal-global-fat');
