@@ -1,10 +1,7 @@
 (function() {
-        const embeddedData = window.embeddedData;
-        let metaRealizadoDataForExport = { sellers: [], clients: [], weeks: [] };
-        let cachedActiveClientsData = null;
+const embeddedData = window.embeddedData;
 
-        // --- OPTIMIZATION: Lazy Columnar Accessor with Write-Back Support ---
-        class ColumnarDataset {
+class ColumnarDataset {
             constructor(columnarData) {
                 this.columns = columnarData.columns;
                 this._data = columnarData.values; // Renamed to avoid shadowing values() method
@@ -186,50 +183,7 @@
             }
         }
 
-        // Custom Map implementation for Index-based storage
-        class IndexMap {
-            constructor(dataSource) {
-                this._indices = new Map();
-                this._source = dataSource;
-            }
-
-            set(key, index) {
-                this._indices.set(key, index);
-            }
-
-            get(key) {
-                const index = this._indices.get(key);
-                if (index === undefined) return undefined;
-                return this._source.get(index);
-            }
-
-            getIndex(key) {
-                return this._indices.get(key);
-            }
-
-            has(key) {
-                return this._indices.has(key);
-            }
-
-            values() {
-                // Warning: Heavy operation
-                const size = this._indices.size;
-                const objects = new Array(size);
-                let i = 0;
-                for (const index of this._indices.values()) {
-                    objects[i++] = this._source.get(index);
-                }
-                return objects;
-            }
-
-            forEach(callback) {
-                this._indices.forEach((index, key) => {
-                    callback(this._source.get(index), key);
-                });
-            }
-        }
-
-        function parseDate(dateString) {
+function parseDate(dateString) {
             if (!dateString) return null;
 
             if (typeof dateString === 'string') {
@@ -305,8 +259,7 @@
             return null;
         }
 
-        // --- OPTIMIZATION: Chunked Processor to prevent UI Freeze ---
-        function runAsyncChunked(items, processItemFn, onComplete, isCancelled) {
+function runAsyncChunked(items, processItemFn, onComplete, isCancelled) {
             let index = 0;
             const total = items.length;
 
@@ -337,13 +290,11 @@
             requestAnimationFrame(nextChunk);
         }
 
-        const FORBIDDEN_KEYS = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR', 'PASTA', 'RAMO', 'ATIVIDADE', 'CIDADE', 'MUNICIPIO', 'BAIRRO'];
-        let allSalesData, allHistoryData, allClientsData;
-        let pepsicoSuppliersSource = [];
+let allSalesData, allHistoryData, allClientsData;
 
-        const SANITIZE_FORBIDDEN_SET = new Set(['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR']);
+const SANITIZE_FORBIDDEN_SET = new Set(['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR']);
 
-        function sanitizeData(data) {
+function sanitizeData(data) {
             if (!data) return [];
 
             // Check if it's a ColumnarDataset proxy or regular array.
@@ -400,7 +351,7 @@
             return data;
         }
 
-        if (embeddedData.isColumnar) {
+if (embeddedData.isColumnar) {
             allSalesData = new ColumnarDataset(embeddedData.detailed);
             allHistoryData = new ColumnarDataset(embeddedData.history);
             allClientsData = new ColumnarDataset(embeddedData.clients);
@@ -410,9 +361,9 @@
             allClientsData = embeddedData.clients;
         }
 
-        // Pre-calculate Pepsico Suppliers for Meta Realizado
-        const pepsicoSuppliersMap = new Map();
-        const extractPepsico = (data) => {
+const pepsicoSuppliersMap = new Map();
+
+const extractPepsico = (data) => {
             if (!data) return;
             const isCol = data instanceof ColumnarDataset;
             const len = data.length;
@@ -433,35 +384,34 @@
                 if (p === 'PEPSICO' && c) pepsicoSuppliersMap.set(String(c), n);
             }
         };
-        extractPepsico(allSalesData);
-        extractPepsico(allHistoryData);
-        pepsicoSuppliersSource = Array.from(pepsicoSuppliersMap).map(([CODFOR, FORNECEDOR]) => ({ CODFOR, FORNECEDOR }));
 
-        let aggregatedOrders = embeddedData.byOrder;
-        const stockData05 = new Map(Object.entries(embeddedData.stockMap05 || {}));
-        const stockData08 = new Map(Object.entries(embeddedData.stockMap08 || {}));
-        const innovationsMonthData = embeddedData.innovationsMonth;
-        const clientMapForKPIs = new Map();
-        // Init Client Map manually since map() might be slower on Columnar
-        for(let i=0; i<allClientsData.length; i++) {
+extractPepsico(allSalesData);
+
+extractPepsico(allHistoryData);
+
+pepsicoSuppliersSource = Array.from(pepsicoSuppliersMap).map(([CODFOR, FORNECEDOR]) => ({ CODFOR, FORNECEDOR }));
+
+let aggregatedOrders = embeddedData.byOrder;
+
+const clientMapForKPIs = new Map();
+
+for(let i=0; i<allClientsData.length; i++) {
             const c = allClientsData instanceof ColumnarDataset ? allClientsData.get(i) : allClientsData[i];
             clientMapForKPIs.set(String(c['Código'] || c['codigo_cliente']), c);
         }
 
-        const activeProductCodesFromCadastro = new Set(embeddedData.activeProductCodes || []);
-        const productDetailsMap = new Map(Object.entries(embeddedData.productDetails || {}));
-        const passedWorkingDaysCurrentMonth = embeddedData.passedWorkingDaysCurrentMonth || 1;
+const productDetailsMap = new Map(Object.entries(embeddedData.productDetails || {}));
 
-        if (embeddedData.lastSaleDate) {
+if (embeddedData.lastSaleDate) {
             const ts = parseInt(embeddedData.lastSaleDate);
             if (!isNaN(ts) && ts > 0) {
                 lastSaleDate = new Date(ts);
             }
         }
 
-        const clientsWithSalesThisMonth = new Set();
-        // Populate set - Optimized for ColumnarDataset to avoid Proxy creation
-        if (allSalesData instanceof ColumnarDataset && allSalesData._data && allSalesData._data['CODCLI']) {
+const clientsWithSalesThisMonth = new Set();
+
+if (allSalesData instanceof ColumnarDataset && allSalesData._data && allSalesData._data['CODCLI']) {
              const codCliCol = allSalesData._data['CODCLI'];
              const overrides = allSalesData._overrides;
 
@@ -489,7 +439,7 @@
             }
         }
 
-        const optimizedData = {
+const optimizedData = {
             salesById: allSalesData, // Use dataset directly to avoid empty IndexMap issues
             historyById: allHistoryData, // Use dataset directly
             indices: {
@@ -525,16 +475,16 @@
                 products: [] // [{ code, descLower }]
             }
         };
-        let clientLastBranch = new Map();
-        let clientRamoMap = new Map();
 
-        const QUARTERLY_DIVISOR = 3;
+let clientLastBranch = new Map();
 
-        // Optimized lastSaleDate calculation to avoid mapping huge array
-        let maxDateTs = 0;
+let clientRamoMap = new Map();
 
-        // --- OPTIMIZATION: Direct Access to Avoid Proxy Overhead ---
-        if (allSalesData instanceof ColumnarDataset && allSalesData._data && allSalesData._data['DTPED']) {
+const QUARTERLY_DIVISOR = 3;
+
+let maxDateTs = 0;
+
+if (allSalesData instanceof ColumnarDataset && allSalesData._data && allSalesData._data['DTPED']) {
             const dtpedCol = allSalesData._data['DTPED'];
             const overrides = allSalesData._overrides;
 
@@ -587,26 +537,18 @@
                 if (ts > maxDateTs) maxDateTs = ts;
             }
         }
-        const lastSaleDate = maxDateTs > 0 ? new Date(maxDateTs) : new Date();
-        lastSaleDate.setUTCHours(0,0,0,0);
-        let maxWorkingDaysStock = 0;
-        let sortedWorkingDays = [];
-        let customWorkingDaysStock = 0;
 
-        // --- Geolocation Logic (Leaflet + Heatmap + Nominatim) ---
-        let leafletMap = null;
-        let heatLayer = null;
-        let clientMarkersLayer = null;
-        let clientCoordinatesMap = new Map(); // Map<ClientCode, {lat, lng, address}>
-        let nominatimQueue = [];
-        let isProcessingQueue = false;
-        let currentFilteredClients = [];
-        let currentFilteredSalesMap = new Map();
-        let currentClientMixStatus = new Map(); // Map<ClientCode, {elma: bool, foods: bool}>
-        let areMarkersGenerated = false;
+const lastSaleDate = maxDateTs > 0 ? new Date(maxDateTs) : new Date();
 
-        // Load cached coordinates from embeddedData
-        if (embeddedData.clientCoordinates) {
+lastSaleDate.setUTCHours(0,0,0,0);
+
+let maxWorkingDaysStock = 0;
+
+let customWorkingDaysStock = 0;
+
+let clientCoordinatesMap = new Map();
+
+if (embeddedData.clientCoordinates) {
             // Robust check: Handle both Array and Object (if keys are used)
             const coords = Array.isArray(embeddedData.clientCoordinates) ? embeddedData.clientCoordinates : Object.values(embeddedData.clientCoordinates);
             coords.forEach(c => {
@@ -618,609 +560,9 @@
             });
         }
 
-        function initLeafletMap() {
-            if (leafletMap) return;
-            const mapContainer = document.getElementById('leaflet-map');
-            if (!mapContainer) return;
+let sellerDetailsMap = new Map();
 
-            // Default center (Bahia/Salvador approx)
-            const defaultCenter = [-12.9714, -38.5014];
-
-            leafletMap = L.map(mapContainer).setView(defaultCenter, 7);
-
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            }).addTo(leafletMap);
-
-            // Initialize empty heat layer with increased transparency
-            heatLayer = L.heatLayer([], {
-                radius: 15,
-                blur: 15,
-                maxZoom: 10,
-                minOpacity: 0.05, // More transparent
-                max: 20.0, // Increased max to prevent saturation and allow transparency
-                gradient: {
-                    0.2: 'rgba(0, 0, 255, 0.35)', 
-                    0.5: 'rgba(0, 255, 0, 0.35)', 
-                    1.0: 'rgba(255, 0, 0, 0.35)'
-                }
-            }).addTo(leafletMap);
-
-            // Initialize Markers Layer (Hidden by default, shown on zoom)
-            clientMarkersLayer = L.layerGroup();
-
-            leafletMap.on('zoomend', () => {
-                const zoom = leafletMap.getZoom();
-
-                // Dynamic Heatmap Settings based on Zoom
-                if (heatLayer) {
-                    if (zoom >= 14) {
-                        // High Zoom: Hide Heatmap completely, show Markers
-                        if (leafletMap.hasLayer(heatLayer)) {
-                            leafletMap.removeLayer(heatLayer);
-                        }
-                    } else {
-                        // Low/Mid Zoom: Show Heatmap, Hide Markers (handled by updateMarkersVisibility)
-                        if (!leafletMap.hasLayer(heatLayer)) {
-                            leafletMap.addLayer(heatLayer);
-                        }
-
-                        let newOptions = {};
-                        if (zoom >= 12) {
-                            // Transition Zoom
-                            newOptions = {
-                                radius: 12,
-                                blur: 12,
-                                max: 5.0,
-                                minOpacity: 0.2
-                            };
-                        } else {
-                            // Low Zoom: Heatmap clouds (Current settings for density)
-                            newOptions = {
-                                radius: 15,
-                                blur: 15,
-                                max: 20.0, // High max to prevent saturation in clusters
-                                minOpacity: 0.05
-                            };
-                        }
-                        heatLayer.setOptions(newOptions);
-                    }
-                }
-
-                updateMarkersVisibility();
-            });
-        }
-
-        let pendingCoordinateWrites = [];
-        const COORD_WRITE_BATCH_SIZE = 20;
-
-        let isFlushingCoordinates = false;
-        async function flushCoordinatesToSupabase() {
-             if (pendingCoordinateWrites.length === 0 || isFlushingCoordinates) return;
-             isFlushingCoordinates = true;
-
-             if (window.userRole !== 'adm') {
-                 pendingCoordinateWrites = [];
-                 isFlushingCoordinates = false;
-                 return;
-             }
-
-             const batch = [...pendingCoordinateWrites];
-             pendingCoordinateWrites = [];
-
-             try {
-                const { error } = await window.supabaseClient
-                    .from('data_client_coordinates')
-                    .upsert(batch);
-
-                if (error) console.error("Error saving coordinate batch:", error);
-                else {
-                    console.log(`[GeoSync] Batch salvo: ${batch.length} itens.`);
-                }
-            } catch (e) {
-                console.error("Error saving coordinate batch:", e);
-            } finally {
-                isFlushingCoordinates = false;
-                // If more items were added during the flush, trigger another flush
-                if (pendingCoordinateWrites.length >= COORD_WRITE_BATCH_SIZE) {
-                    flushCoordinatesToSupabase();
-                }
-            }
-        }
-
-        async function queueCoordinateSave(clientCode, lat, lng, address) {
-            clientCoordinatesMap.set(String(clientCode), { lat, lng, address });
-
-            if (window.userRole !== 'adm') return;
-
-            pendingCoordinateWrites.push({
-                client_code: String(clientCode),
-                lat: lat,
-                lng: lng,
-                address: address
-            });
-
-            if (pendingCoordinateWrites.length >= COORD_WRITE_BATCH_SIZE) {
-                flushCoordinatesToSupabase();
-            }
-        }
-
-        function buildAddress(client, level) {
-            // Priority: Key 'Endereço Comercial' (from init.js map) > lowercase > UPPERCASE
-            const endereco = client['Endereço Comercial'] || client.endereco || client.ENDERECO || '';
-            const numero = client.numero || client.NUMERO || '';
-            const bairro = client.bairro || client.BAIRRO || '';
-            const cidade = client.cidade || client.CIDADE || '';
-            const nome = client.nomeCliente || client.nome || '';
-            
-            const parts = [];
-            const isValid = (s) => s && s !== 'N/A' && s !== '0' && String(s).toUpperCase() !== 'S/N' && String(s).trim() !== '';
-            
-            // Level 0 (POI - Business Name): Name + Bairro + City
-            if (level === 0) { 
-                if(isValid(nome)) parts.push(nome);
-                if(isValid(bairro)) parts.push(bairro);
-                if(isValid(cidade)) parts.push(cidade);
-            } 
-            // Level 1 (Address Full - Street + Number): Street + Number + Bairro + City
-            else if (level === 1) { 
-                if(isValid(endereco)) parts.push(endereco);
-                if(isValid(numero)) parts.push(numero);
-                if(isValid(bairro)) parts.push(bairro);
-                if(isValid(cidade)) parts.push(cidade);
-            } 
-            // Level 2 (Street): Street + Bairro + City
-            else if (level === 2) { 
-                if(isValid(endereco)) parts.push(endereco);
-                if(isValid(bairro)) parts.push(bairro);
-                if(isValid(cidade)) parts.push(cidade);
-            } 
-            // Level 3 (Neighborhood): Bairro + City
-            else if (level === 3) { 
-                if(isValid(bairro)) parts.push(bairro);
-                if(isValid(cidade)) parts.push(cidade);
-            } 
-            // Level 4 (City): City only
-            else if (level === 4) { 
-                if(isValid(cidade)) parts.push(cidade);
-            }
-            
-            if (parts.length === 0) return null;
-            
-            // Append Context if not CEP only - Enforce Bahia
-            parts.push("Bahia");
-            parts.push("Brasil");
-            return parts.join(', ');
-        }
-
-        // Rate-limited Queue Processor for Nominatim (1 req/1.2s)
-        async function processNominatimQueue() {
-            if (isProcessingQueue || nominatimQueue.length === 0) return;
-            isProcessingQueue = true;
-
-            const RATE_LIMIT_MS = 1200;
-            let activeRequests = 0;
-
-            const processNext = async () => {
-                if (nominatimQueue.length === 0) {
-                    // Finalization: Wait for remaining active requests to finish
-                    if (activeRequests === 0) {
-                        isProcessingQueue = false;
-                        await flushCoordinatesToSupabase();
-                        console.log("[GeoSync] Fila de download finalizada.");
-                    } else {
-                        setTimeout(processNext, 200); // Polling for finalization
-                    }
-                    return;
-                }
-
-                const item = nominatimQueue.shift();
-                const client = item.client;
-                let level = item.level !== undefined ? item.level : 0;
-                
-                let address = item.address || buildAddress(client, level);
-
-                if (!address && level < 4) {
-                    nominatimQueue.unshift({ client, level: level + 1 });
-                    setTimeout(processNext, 0);
-                    return;
-                }
-
-                if (!address) {
-                     console.log(`[GeoSync] Endereço inválido para ${client.nomeCliente} (L${level}), falha definitiva.`);
-                     setTimeout(processNext, 100);
-                     return;
-                }
-
-                // Concurrent Request Launch
-                (async () => {
-                    activeRequests++;
-                    try {
-                        console.log(`[GeoSync] Baixando (L${level}): ${client.nomeCliente} [${address}] (${nominatimQueue.length} restantes)...`);
-                        const result = await geocodeAddressNominatim(address);
-
-                        if (result) {
-                            console.log(`[GeoSync] Sucesso: ${client.nomeCliente} -> Salvo.`);
-                            const codCli = String(client['Código'] || client['codigo_cliente']);
-                            await queueCoordinateSave(codCli, result.lat, result.lng, result.formatted_address);
-
-                            const cityMapContainer = document.getElementById('city-map-container');
-                            if (heatLayer && cityMapContainer && !cityMapContainer.classList.contains('hidden')) {
-                                heatLayer.addLatLng([result.lat, result.lng, 1]);
-                            }
-                        } else if (level < 4) {
-                             console.log(`[GeoSync] Falha L${level} para ${client.nomeCliente}. Reenfileirando para nível ${level+1}...`);
-                             nominatimQueue.unshift({ client, level: level + 1 });
-                        } else {
-                             console.log(`[GeoSync] Falha Definitiva (Não encontrado): ${client.nomeCliente}`);
-                        }
-                    } catch (e) {
-                        console.error(`[GeoSync] Erro API: ${client.nomeCliente}`, e);
-                    } finally {
-                        activeRequests--;
-                    }
-                })();
-
-                // Respect global launch rate limit
-                setTimeout(processNext, RATE_LIMIT_MS);
-            };
-
-            processNext();
-        }
-
-        async function syncGlobalCoordinates() {
-            if (window.userRole !== 'adm') {
-                console.log("[GeoSync] Sincronização em segundo plano ignorada (Requer permissão 'adm').");
-                return;
-            }
-
-            console.log("[GeoSync] Iniciando verificação de coordenadas em segundo plano...");
-
-            const activeClientsList = getActiveClientsData();
-            const activeClientCodes = new Set(activeClientsList.map(c => String(c['Código'] || c['codigo_cliente'])));
-
-            // 1. Cleanup Orphans
-            const orphanedCodes = [];
-            for (const [code, coord] of clientCoordinatesMap) {
-                if (!activeClientCodes.has(code)) {
-                    orphanedCodes.push(code);
-                }
-            }
-
-            if (orphanedCodes.length > 0) {
-                console.log(`Cleaning up ${orphanedCodes.length} orphaned coordinates...`);
-                const { error } = await window.supabaseClient
-                    .from('data_client_coordinates')
-                    .delete()
-                    .in('client_code', orphanedCodes);
-
-                if (!error) {
-                    orphanedCodes.forEach(c => clientCoordinatesMap.delete(c));
-                }
-            }
-
-            // 2. Queue All Missing
-            let queuedCount = 0;
-            activeClientsList.forEach(client => {
-                const code = String(client['Código'] || client['codigo_cliente']);
-                if (clientCoordinatesMap.has(code)) return;
-
-                // Validate minimal info (City)
-                const cidade = client.cidade || client.CIDADE || '';
-                const cep = client.cep || client.CEP || '';
-                
-                // CEP Validation: Must be Bahia (40xxx to 48xxx)
-                const cleanCep = cep.replace(/\D/g, '');
-                const cepVal = parseInt(cleanCep);
-                const isBahia = !isNaN(cepVal) && cepVal >= 40000000 && cepVal <= 48999999;
-
-                if (!isBahia) {
-                    // console.log(`[GeoSync] Ignorado: CEP fora da Bahia (${cep}) - ${client.nomeCliente}`);
-                    return;
-                }
-
-                if (cidade && cidade !== 'N/A') {
-                    // Check for duplicates
-                    if (!nominatimQueue.some(item => String(item.client['Código'] || item.client['codigo_cliente']) === code)) {
-                        nominatimQueue.push({ client, level: 0 });
-                        queuedCount++;
-                    }
-                }
-            });
-
-            if (queuedCount > 0) {
-                console.log(`[GeoSync] Identificados ${queuedCount} clientes sem coordenadas. Iniciando download...`);
-                processNominatimQueue();
-            } else {
-                console.log("[GeoSync] Todos os clientes ativos já possuem coordenadas.");
-            }
-        }
-
-        function renderMetaRealizadoPosChart(data) {
-            const container = document.getElementById('metaRealizadoPosChartContainer');
-            if (!container) return;
-
-            let canvas = container.querySelector('canvas');
-            if (!canvas) {
-                canvas = document.createElement('canvas');
-                container.appendChild(canvas);
-            }
-
-            const chartId = 'metaRealizadoPosChartInstance';
-            if (charts[chartId]) {
-                charts[chartId].destroy();
-            }
-
-            // Aggregate Totals for Positivação
-            const totalGoal = data.reduce((sum, d) => sum + (d.posGoal || 0), 0);
-            const totalReal = data.reduce((sum, d) => sum + (d.posRealized || 0), 0);
-
-            charts[chartId] = new Chart(canvas, {
-                type: 'bar',
-                data: {
-                    labels: ['Positivação'],
-                    datasets: [
-                        {
-                            label: 'Meta',
-                            data: [totalGoal],
-                            backgroundColor: '#a855f7', // Purple
-                            barPercentage: 0.6,
-                            categoryPercentage: 0.8
-                        },
-                        {
-                            label: 'Realizado',
-                            data: [totalReal],
-                            backgroundColor: '#22c55e', // Green
-                            barPercentage: 0.6,
-                            categoryPercentage: 0.8
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    layout: {
-                        padding: {
-                            top: 50
-                        }
-                    },
-                    plugins: {
-                        legend: { position: 'top', labels: { color: '#cbd5e1' } },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return `${context.dataset.label}: ${context.parsed.y} Clientes`;
-                                }
-                            }
-                        },
-                        datalabels: {
-                            color: '#fff',
-                            anchor: 'end',
-                            align: 'top',
-                            formatter: (value) => value,
-                            font: { weight: 'bold' }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grace: '10%',
-                            grid: { color: '#334155' },
-                            ticks: { color: '#94a3b8' }
-                        },
-                        x: {
-                            grid: { display: false },
-                            ticks: { color: '#94a3b8' }
-                        }
-                    }
-                }
-            });
-
-        }
-
-        async function geocodeAddressNominatim(address) {
-            if (!address) return null;
-            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`;
-
-            try {
-                const response = await fetch(url, {
-                    headers: { 'User-Agent': 'PrimeDashboardApp/1.0' }
-                });
-                if (!response.ok) return null;
-                const data = await response.json();
-                if (data && data.length > 0) {
-                    return {
-                        lat: parseFloat(data[0].lat),
-                        lng: parseFloat(data[0].lon),
-                        formatted_address: data[0].display_name
-                    };
-                }
-            } catch (e) {
-                console.warn("Nominatim fetch failed:", e);
-            }
-            return null;
-        }
-
-        async function updateCityMap(overrideRenderId) {
-            let currentRenderId;
-            if (overrideRenderId !== undefined) {
-                currentRenderId = overrideRenderId;
-            } else {
-                cityRenderId++;
-                currentRenderId = cityRenderId;
-            }
-
-            const cityMapContainer = document.getElementById('city-map-container');
-            if (!leafletMap || (cityMapContainer && cityMapContainer.classList.contains('hidden'))) return;
-
-            const { clients, sales } = getCityFilteredData();
-            if (!clients || clients.length === 0) return;
-
-            // Cache for Async Marker Generation
-            currentFilteredClients = clients;
-            areMarkersGenerated = false;
-            if (clientMarkersLayer) clientMarkersLayer.clearLayers();
-
-            // Cache Sales & Mix Status
-            currentFilteredSalesMap.clear();
-            currentClientMixStatus.clear();
-            if (sales) {
-                sales.forEach(s => {
-                    const cod = s.CODCLI;
-                    const val = Number(s.VLVENDA) || 0;
-                    currentFilteredSalesMap.set(cod, (currentFilteredSalesMap.get(cod) || 0) + val);
-
-                    // Mix Logic
-                    let mix = currentClientMixStatus.get(cod);
-                    if (!mix) {
-                        mix = { elma: false, foods: false };
-                        currentClientMixStatus.set(cod, mix);
-                    }
-                    
-                    const codFor = String(s.CODFOR);
-                    // Elma: 707, 708, 752
-                    if (codFor === '707' || codFor === '708' || codFor === '752') {
-                        mix.elma = true;
-                    }
-                    // Foods: 1119
-                    else if (codFor === '1119') {
-                        mix.foods = true;
-                    }
-                });
-            }
-
-            const heatData = [];
-            const missingCoordsClients = [];
-            const validBounds = [];
-
-            // Heatmap Loop (Async Chunked)
-            runAsyncChunked(clients, (client) => {
-                const codCli = String(client['Código'] || client['codigo_cliente']);
-                const coords = clientCoordinatesMap.get(codCli);
-
-                if (coords) {
-                    heatData.push([coords.lat, coords.lng, 1.0]);
-                    validBounds.push([coords.lat, coords.lng]);
-                } else {
-                    missingCoordsClients.push(client);
-                }
-            }, () => {
-                if (currentRenderId !== cityRenderId) return;
-
-                // Update Heatmap
-                if (heatLayer) {
-                    heatLayer.setLatLngs(heatData);
-                }
-
-                // Fit Bounds
-                if (validBounds.length > 0) {
-                    leafletMap.fitBounds(validBounds);
-                }
-
-                // Trigger Marker Logic
-                updateMarkersVisibility();
-            }, () => currentRenderId !== cityRenderId);
-        }
-
-        function updateMarkersVisibility() {
-            if (!leafletMap || !clientMarkersLayer) return;
-            const zoom = leafletMap.getZoom();
-
-            if (zoom >= 14) {
-                if (!areMarkersGenerated) {
-                    generateMarkersAsync();
-                } else {
-                    if (!leafletMap.hasLayer(clientMarkersLayer)) leafletMap.addLayer(clientMarkersLayer);
-                }
-            } else {
-                if (leafletMap.hasLayer(clientMarkersLayer)) leafletMap.removeLayer(clientMarkersLayer);
-            }
-        }
-
-        function generateMarkersAsync() {
-            if (areMarkersGenerated) return;
-
-            // Use local reference to avoid race conditions if filter changes mid-process
-            const clientsToProcess = currentFilteredClients;
-
-            runAsyncChunked(clientsToProcess, (client) => {
-                const codCli = String(client['Código'] || client['codigo_cliente']);
-                const coords = clientCoordinatesMap.get(codCli);
-
-                if (coords) {
-                    // Jittering: Add small random offset to separate overlapping markers
-                    // 0.001 degrees is approximately 110 meters (ensures visibility at zoom 15)
-                    const jitterAmount = 0.0010; 
-                    const finalLat = coords.lat + (Math.random() - 0.5) * jitterAmount;
-                    const finalLng = coords.lng + (Math.random() - 0.5) * jitterAmount;
-
-                    const val = currentFilteredSalesMap.get(codCli) || 0;
-                    const formattedVal = val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-                    const rcaCode = client.rca1 || 'N/A';
-                    const rcaName = (optimizedData.rcaNameByCode && optimizedData.rcaNameByCode.get(rcaCode)) || rcaCode;
-
-                    // Color Logic
-                    // Default: Red (No purchase or <= 0)
-                    let markerColor = '#ef4444'; // red-500
-                    let statusText = 'Não comprou';
-
-                    if (val > 0) {
-                        const mix = currentClientMixStatus.get(codCli) || { elma: false, foods: false };
-                        if (mix.elma && mix.foods) {
-                            markerColor = '#3b82f6'; // blue-500 (Elma & Foods)
-                            statusText = 'Comprou Elma e Foods';
-                        } else if (mix.elma) {
-                            markerColor = '#22c55e'; // green-500 (Only Elma)
-                            statusText = 'Apenas Elma';
-                        } else if (mix.foods) {
-                            markerColor = '#eab308'; // yellow-500 (Only Foods)
-                            statusText = 'Apenas Foods';
-                        } else {
-                            markerColor = '#9ca3af'; // gray-400 (Other/Unknown)
-                            statusText = 'Outros';
-                        }
-                    }
-
-                    const tooltipContent = `
-                        <div class="text-xs">
-                            <b>${codCli} - ${client.nomeCliente || 'Cliente'}</b><br>
-                            <span class="text-blue-500 font-semibold">RCA: ${rcaName}</span><br>
-                            <span class="text-green-600 font-bold">Venda: ${formattedVal}</span><br>
-                            <span style="color: ${markerColor}; font-weight: bold;">Status: ${statusText}</span><br>
-                            ${client.bairro || ''}, ${client.cidade || ''}
-                        </div>
-                    `;
-
-                    // SVG Pin Icon
-                    const svgIcon = L.divIcon({
-                        className: 'bg-transparent border-0', // Remove default styles
-                        html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="30" height="40" fill="${markerColor}" stroke="white" stroke-width="1.5" style="filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.3));">
-                                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
-                                <circle cx="12" cy="9" r="2.5" fill="white"/>
-                               </svg>`,
-                        iconSize: [30, 40],
-                        iconAnchor: [15, 40],
-                        tooltipAnchor: [0, -35]
-                    });
-
-                    const marker = L.marker([finalLat, finalLng], {
-                        icon: svgIcon,
-                        opacity: 1
-                    });
-
-                    marker.bindTooltip(tooltipContent, { direction: 'top', offset: [0, 0] });
-                    clientMarkersLayer.addLayer(marker);
-                }
-            }, () => {
-                areMarkersGenerated = true;
-                updateMarkersVisibility();
-            });
-        }
-
-        let sellerDetailsMap = new Map();
-
-        function initializeOptimizedDataStructures() {
+function initializeOptimizedDataStructures() {
             sellerDetailsMap = new Map();
             const sellerLastSaleDateMap = new Map(); // Track latest date per seller
             const clientToCurrentSellerMap = new Map();
@@ -1298,7 +640,7 @@
 
                 // Handle RCAS array (could be 'rcas' or 'RCAS')
                 let rcas = client.rcas || client.RCAS;
-                
+
                 // Sanitize RCAS: Filter out invalid values like "rcas" (header leak)
                 if (Array.isArray(rcas)) {
                     rcas = rcas.filter(r => r && String(r).toLowerCase() !== 'rcas');
@@ -1490,7 +832,7 @@
             }, 0);
         }
 
-        aggregatedOrders.sort((a, b) => {
+aggregatedOrders.sort((a, b) => {
             const dateA = parseDate(a.DTPED);
             const dateB = parseDate(b.DTPED);
             if (!dateA) return 1;
@@ -1498,370 +840,58 @@
             return dateB - dateA;
         });
 
-        Chart.register(ChartDataLabels);
+const goalsView = document.getElementById('goals-view');
 
-        const mainDashboard = document.getElementById('main-dashboard');
-        const cityView = document.getElementById('city-view');
-        const weeklyView = document.getElementById('weekly-view');
-        const comparisonView = document.getElementById('comparison-view');
-        const stockView = document.getElementById('stock-view');
+const goalsGvContent = document.getElementById('goals-gv-content');
 
-        const showWeeklyBtn = document.getElementById('show-weekly-btn');
-        const showCityBtn = document.getElementById('show-city-btn');
-        const backToMainFromCityBtn = document.getElementById('back-to-main-from-city-btn');
-        const backToMainFromWeeklyBtn = document.getElementById('back-to-main-from-weekly-btn');
-        const backToMainFromComparisonBtn = document.getElementById('back-to-main-from-comparison-btn');
-        const backToMainFromStockBtn = document.getElementById('back-to-main-from-stock-btn');
+const goalsSvContent = document.getElementById('goals-sv-content');
 
-        const totalVendasEl = document.getElementById('total-vendas');
-        const totalPesoEl = document.getElementById('total-peso');
-        const kpiSkuPdVEl = document.getElementById('kpi-sku-pdv');
-        const kpiPositivacaoEl = document.getElementById('kpi-positivacao');
-        const kpiPositivacaoPercentEl = document.getElementById('kpi-positivacao-percent');
+const goalsGvTableBody = document.getElementById('goals-gv-table-body');
 
+const goalsGvSupervisorFilterBtn = document.getElementById('goals-gv-supervisor-filter-btn');
 
-        const viewChartBtn = document.getElementById('viewChartBtn');
-        const viewTableBtn = document.getElementById('viewTableBtn');
-        const viewComparisonBtn = document.getElementById('viewComparisonBtn');
-        const viewStockBtn = document.getElementById('viewStockBtn');
-        const chartView = document.getElementById('chartView');
-        const tableView = document.getElementById('tableView');
-        const faturamentoBtn = document.getElementById('faturamentoBtn');
-        const pesoBtn = document.getElementById('pesoBtn');
+const goalsGvSupervisorFilterText = document.getElementById('goals-gv-supervisor-filter-text');
 
-        const supervisorFilter = document.getElementById('supervisor-filter');
-        const fornecedorFilter = document.getElementById('fornecedor-filter');
-        const vendedorFilterBtn = document.getElementById('vendedor-filter-btn');
-        const vendedorFilterText = document.getElementById('vendedor-filter-text');
-        const vendedorFilterDropdown = document.getElementById('vendedor-filter-dropdown');
+const goalsGvSupervisorFilterDropdown = document.getElementById('goals-gv-supervisor-filter-dropdown');
 
-        const tipoVendaFilterBtn = document.getElementById('tipo-venda-filter-btn');
-        const tipoVendaFilterText = document.getElementById('tipo-venda-filter-text');
-        const tipoVendaFilterDropdown = document.getElementById('tipo-venda-filter-dropdown');
+const goalsGvSellerFilterBtn = document.getElementById('goals-gv-seller-filter-btn');
 
-        const mainRedeGroupContainer = document.getElementById('main-rede-group-container');
-        const mainComRedeBtn = document.getElementById('main-com-rede-btn');
-        const mainComRedeBtnText = document.getElementById('main-com-rede-btn-text');
-        const mainRedeFilterDropdown = document.getElementById('main-rede-filter-dropdown');
+const goalsGvSellerFilterText = document.getElementById('goals-gv-seller-filter-text');
 
-        const posicaoFilter = document.getElementById('posicao-filter');
-        const codcliFilter = document.getElementById('codcli-filter');
-        const clearFiltersBtn = document.getElementById('clear-filters-btn');
-        const salesByPersonTitle = document.getElementById('sales-by-person-title');
-        const fornecedorToggleContainerEl = document.getElementById('fornecedor-toggle-container');
+const goalsGvSellerFilterDropdown = document.getElementById('goals-gv-seller-filter-dropdown');
 
-        const citySupervisorFilter = document.getElementById('city-supervisor-filter');
-        const cityFilialFilter = document.getElementById('city-filial-filter');
-        const cityVendedorFilterBtn = document.getElementById('city-vendedor-filter-btn');
-        const cityVendedorFilterText = document.getElementById('city-vendedor-filter-text');
-        const cityVendedorFilterDropdown = document.getElementById('city-vendedor-filter-dropdown');
-        const citySupplierFilterBtn = document.getElementById('city-supplier-filter-btn');
-        const citySupplierFilterText = document.getElementById('city-supplier-filter-text');
-        const citySupplierFilterDropdown = document.getElementById('city-supplier-filter-dropdown');
-        const cityNameFilter = document.getElementById('city-name-filter');
-        function getActiveClientsData() {
-            if (cachedActiveClientsData) return cachedActiveClientsData;
-            cachedActiveClientsData = allClientsData.filter(c => {
-                const codcli = String(c['Código'] || c['codigo_cliente']);
-                const rca1 = String(c.rca1 || '').trim();
-                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                
-                // Logic identical to 'updateCoverageView' active clients KPI
-                return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(codcli));
-            });
-            return cachedActiveClientsData;
-        }
-        const cityCodCliFilter = document.getElementById('city-codcli-filter');
-        const citySuggestions = document.getElementById('city-suggestions');
-        const clearCityFiltersBtn = document.getElementById('clear-city-filters-btn');
-        const totalFaturamentoCidadeEl = document.getElementById('total-faturamento-cidade');
-        const totalClientesCidadeEl = document.getElementById('total-clientes-cidade');
-        const cityActiveDetailTableBody = document.getElementById('city-active-detail-table-body');
-        const cityInactiveDetailTableBody = document.getElementById('city-inactive-detail-table-body');
+const goalsGvCodcliFilter = document.getElementById('goals-gv-codcli-filter');
 
-        const cityRedeGroupContainer = document.getElementById('city-rede-group-container');
-        const cityComRedeBtn = document.getElementById('city-com-rede-btn');
-        const cityComRedeBtnText = document.getElementById('city-com-rede-btn-text');
-        const cityRedeFilterDropdown = document.getElementById('city-rede-filter-dropdown');
+const clearGoalsGvFiltersBtn = document.getElementById('clear-goals-gv-filters-btn');
 
-        const cityTipoVendaFilterBtn = document.getElementById('city-tipo-venda-filter-btn');
-        const cityTipoVendaFilterText = document.getElementById('city-tipo-venda-filter-text');
-        const cityTipoVendaFilterDropdown = document.getElementById('city-tipo-venda-filter-dropdown');
+const goalsSvSupervisorFilterBtn = document.getElementById('goals-sv-supervisor-filter-btn');
 
-        const weeklySupervisorFilterBtn = document.getElementById('weekly-supervisor-filter-btn');
-        const weeklySupervisorFilterText = document.getElementById('weekly-supervisor-filter-text');
-        const weeklySupervisorFilterDropdown = document.getElementById('weekly-supervisor-filter-dropdown');
-        const weeklyVendedorFilterBtn = document.getElementById('weekly-vendedor-filter-btn');
-        const weeklyVendedorFilterText = document.getElementById('weekly-vendedor-filter-text');
-        const weeklyVendedorFilterDropdown = document.getElementById('weekly-vendedor-filter-dropdown');
-        const clearWeeklyFiltersBtn = document.getElementById('clear-weekly-filters-btn');
-        const totalMesSemanalEl = document.getElementById('total-mes-semanal');
-        const weeklyFornecedorToggleContainer = document.getElementById('weekly-fornecedor-toggle-container');
+const goalsSvSupervisorFilterText = document.getElementById('goals-sv-supervisor-filter-text');
 
-        const comparisonSupervisorFilter = document.getElementById('comparison-supervisor-filter');
-        const comparisonVendedorFilterBtn = document.getElementById('comparison-vendedor-filter-btn');
-        const comparisonVendedorFilterText = document.getElementById('comparison-vendedor-filter-text');
-        const comparisonVendedorFilterDropdown = document.getElementById('comparison-vendedor-filter-dropdown');
-        const comparisonFornecedorToggleContainer = document.getElementById('comparison-fornecedor-toggle-container');
-        const comparisonFilialFilter = document.getElementById('comparison-filial-filter');
-        const metaRealizadoFilialFilter = document.getElementById('meta-realizado-filial-filter');
+const goalsSvSupervisorFilterDropdown = document.getElementById('goals-sv-supervisor-filter-dropdown');
 
-        const comparisonSupplierFilterBtn = document.getElementById('comparison-supplier-filter-btn');
-        const comparisonSupplierFilterText = document.getElementById('comparison-supplier-filter-text');
-        const comparisonSupplierFilterDropdown = document.getElementById('comparison-supplier-filter-dropdown');
+const modal = document.getElementById('order-details-modal');
 
-        const comparisonCityFilter = document.getElementById('comparison-city-filter');
-        const comparisonCitySuggestions = document.getElementById('comparison-city-suggestions');
-        const comparisonProductFilterBtn = document.getElementById('comparison-product-filter-btn');
-        const comparisonProductFilterText = document.getElementById('comparison-product-filter-text');
-        const comparisonProductFilterDropdown = document.getElementById('comparison-product-filter-dropdown');
+const viewState = { goals: { dirty: true } };
 
-        const comparisonRedeGroupContainer = document.getElementById('comparison-rede-group-container');
-        const comparisonComRedeBtn = document.getElementById('comparison-com-rede-btn');
-        const comparisonComRedeBtnText = document.getElementById('comparison-com-rede-btn-text');
-        const comparisonRedeFilterDropdown = document.getElementById('comparison-rede-filter-dropdown');
+let goalsRenderId = 0;
 
-        const comparisonTipoVendaFilterBtn = document.getElementById('comparison-tipo-venda-filter-btn');
-        const comparisonTipoVendaFilterText = document.getElementById('comparison-tipo-venda-filter-text');
-        const comparisonTipoVendaFilterDropdown = document.getElementById('comparison-tipo-venda-filter-dropdown');
+let goalsSvRenderId = 0;
 
-        const clearComparisonFiltersBtn = document.getElementById('clear-comparison-filters-btn');
-        const comparisonTendencyToggle = document.getElementById('comparison-tendency-toggle');
+let currentGoalsSupplier = 'PEPSICO_ALL';
 
-        const comparisonChartTitle = document.getElementById('comparison-chart-title');
-        const toggleWeeklyBtn = document.getElementById('toggle-weekly-btn');
-        const toggleMonthlyBtn = document.getElementById('toggle-monthly-btn');
-        const weeklyComparisonChartContainer = document.getElementById('weeklyComparisonChartContainer');
-        const monthlyComparisonChartContainer = document.getElementById('monthlyComparisonChartContainer');
+let currentGoalsBrand = null;
 
-        const stockFilialFilter = document.getElementById('stock-filial-filter');
-        const stockRedeGroupContainer = document.getElementById('stock-rede-group-container');
-        const stockComRedeBtn = document.getElementById('stock-com-rede-btn');
-        const stockComRedeBtnText = document.getElementById('stock-com-rede-btn-text');
-        const stockRedeFilterDropdown = document.getElementById('stock-rede-filter-dropdown');
-        const stockFornecedorToggleContainer = document.getElementById('stock-fornecedor-toggle-container');
-        const stockSupervisorFilter = document.getElementById('stock-supervisor-filter');
-        const stockVendedorFilterBtn = document.getElementById('stock-vendedor-filter-btn');
-        const stockVendedorFilterText = document.getElementById('stock-vendedor-filter-text');
-        const stockVendedorFilterDropdown = document.getElementById('stock-vendedor-filter-dropdown');
-        const stockSupplierFilterBtn = document.getElementById('stock-supplier-filter-btn');
-        const stockSupplierFilterText = document.getElementById('stock-supplier-filter-text');
-        const stockSupplierFilterDropdown = document.getElementById('stock-supplier-filter-dropdown');
-        const stockCityFilter = document.getElementById('stock-city-filter');
-        const stockCitySuggestions = document.getElementById('stock-city-suggestions');
-        const stockProductFilterBtn = document.getElementById('stock-product-filter-btn');
-        const stockProductFilterText = document.getElementById('stock-product-filter-text');
-        const stockProductFilterDropdown = document.getElementById('stock-product-filter-dropdown');
-        const stockTipoVendaFilterBtn = document.getElementById('stock-tipo-venda-filter-btn');
-        const stockTipoVendaFilterText = document.getElementById('stock-tipo-venda-filter-text');
-        const stockTipoVendaFilterDropdown = document.getElementById('stock-tipo-venda-filter-dropdown');
-        const clearStockFiltersBtn = document.getElementById('clear-stock-filters-btn');
-        const stockAnalysisTableBody = document.getElementById('stock-analysis-table-body');
-        const growthTableBody = document.getElementById('growth-table-body');
-        const declineTableBody = document.getElementById('decline-table-body');
-        const newProductsTableBody = document.getElementById('new-products-table-body');
-        const lostProductsTableBody = document.getElementById('lost-products-table-body');
+let currentGoalsSvData = [];
 
-
-        const innovationsMonthView = document.getElementById('innovations-month-view');
-        const innovationsMonthChartContainer = document.getElementById('innovations-month-chartContainer');
-        const innovationsMonthTableBody = document.getElementById('innovations-month-table-body');
-        const innovationsMonthCategoryFilter = document.getElementById('innovations-month-category-filter');
-        const innovationsMonthSupervisorFilter = document.getElementById('innovations-month-supervisor-filter');
-        const innovationsMonthVendedorFilterBtn = document.getElementById('innovations-month-vendedor-filter-btn');
-        const innovationsMonthVendedorFilterText = document.getElementById('innovations-month-vendedor-filter-text');
-        const innovationsMonthVendedorFilterDropdown = document.getElementById('innovations-month-vendedor-filter-dropdown');
-        const innovationsMonthCityFilter = document.getElementById('innovations-month-city-filter');
-        const innovationsMonthCitySuggestions = document.getElementById('innovations-month-city-suggestions');
-        const clearInnovationsMonthFiltersBtn = document.getElementById('clear-innovations-month-filters-btn');
-        const innovationsMonthFilialFilter = document.getElementById('innovations-month-filial-filter');
-        const innovationsMonthActiveClientsKpi = document.getElementById('innovations-month-active-clients-kpi');
-        const innovationsMonthTopCoverageKpi = document.getElementById('innovations-month-top-coverage-kpi');
-        const innovationsMonthTopCoverageValueKpi = document.getElementById('innovations-month-top-coverage-value-kpi');
-        const innovationsMonthTopCoverageCountKpi = document.getElementById('innovations-month-top-coverage-count-kpi');
-        const innovationsMonthSelectionCoverageValueKpi = document.getElementById('innovations-month-selection-coverage-value-kpi');
-        const innovationsMonthSelectionCoverageCountKpi = document.getElementById('innovations-month-selection-coverage-count-kpi');
-        const innovationsMonthSelectionCoverageValueKpiPrevious = document.getElementById('innovations-month-selection-coverage-value-kpi-previous');
-        const innovationsMonthSelectionCoverageCountKpiPrevious = document.getElementById('innovations-month-selection-coverage-count-kpi-previous');
-        const innovationsMonthBonusCoverageValueKpi = document.getElementById('innovations-month-bonus-coverage-value-kpi');
-        const innovationsMonthBonusCoverageCountKpi = document.getElementById('innovations-month-bonus-coverage-count-kpi');
-        const innovationsMonthBonusCoverageValueKpiPrevious = document.getElementById('innovations-month-bonus-coverage-value-kpi-previous');
-        const innovationsMonthBonusCoverageCountKpiPrevious = document.getElementById('innovations-month-bonus-coverage-count-kpi-previous');
-        const exportInnovationsMonthPdfBtn = document.getElementById('export-innovations-month-pdf-btn');
-        const innovationsMonthTipoVendaFilterBtn = document.getElementById('innovations-month-tipo-venda-filter-btn');
-        const innovationsMonthTipoVendaFilterText = document.getElementById('innovations-month-tipo-venda-filter-text');
-        const innovationsMonthTipoVendaFilterDropdown = document.getElementById('innovations-month-tipo-venda-filter-dropdown');
-
-        const coverageView = document.getElementById('coverage-view');
-        const viewCoverageBtn = document.getElementById('viewCoverageBtn');
-        const backToMainFromCoverageBtn = document.getElementById('back-to-main-from-coverage-btn');
-        const coverageSupervisorFilter = document.getElementById('coverage-supervisor-filter');
-        const coverageVendedorFilterBtn = document.getElementById('coverage-vendedor-filter-btn');
-        const coverageVendedorFilterText = document.getElementById('coverage-vendedor-filter-text');
-        const coverageVendedorFilterDropdown = document.getElementById('coverage-vendedor-filter-dropdown');
-        const coverageSupplierFilterBtn = document.getElementById('coverage-supplier-filter-btn');
-        const coverageSupplierFilterText = document.getElementById('coverage-supplier-filter-text');
-        const coverageSupplierFilterDropdown = document.getElementById('coverage-supplier-filter-dropdown');
-        const coverageCityFilter = document.getElementById('coverage-city-filter');
-        const coverageCitySuggestions = document.getElementById('coverage-city-suggestions');
-        const coverageProductFilterBtn = document.getElementById('coverage-product-filter-btn');
-        const coverageProductFilterText = document.getElementById('coverage-product-filter-text');
-        const coverageProductFilterDropdown = document.getElementById('coverage-product-filter-dropdown');
-        const clearCoverageFiltersBtn = document.getElementById('clear-coverage-filters-btn');
-        const coverageFilialFilter = document.getElementById('coverage-filial-filter');
-        const coverageIncludeBonusCheckbox = document.getElementById('coverage-include-bonus');
-
-        const coverageActiveClientsKpi = document.getElementById('coverage-active-clients-kpi');
-        const coverageSelectionCoverageValueKpiPrevious = document.getElementById('coverage-selection-coverage-value-kpi-previous');
-        const coverageSelectionCoverageCountKpiPrevious = document.getElementById('coverage-selection-coverage-count-kpi-previous');
-        const coverageSelectionCoverageValueKpi = document.getElementById('coverage-selection-coverage-value-kpi');
-        const coverageSelectionCoverageCountKpi = document.getElementById('coverage-selection-coverage-count-kpi');
-        const coverageTopCoverageValueKpi = document.getElementById('coverage-top-coverage-value-kpi');
-        const coverageTopCoverageProductKpi = document.getElementById('coverage-top-coverage-product-kpi');
-        const coverageTotalBoxesEl = document.getElementById('coverage-total-boxes');
-
-        const coverageTableBody = document.getElementById('coverage-table-body');
-
-        // --- Goals View Elements ---
-        const goalsView = document.getElementById('goals-view');
-        const goalsGvContent = document.getElementById('goals-gv-content');
-        const goalsSvContent = document.getElementById('goals-sv-content');
-        const goalsGvTableBody = document.getElementById('goals-gv-table-body');
-        const goalsGvTotalValueEl = document.getElementById('goals-gv-total-value');
-
-        const goalsGvSupervisorFilterBtn = document.getElementById('goals-gv-supervisor-filter-btn');
-        const goalsGvSupervisorFilterText = document.getElementById('goals-gv-supervisor-filter-text');
-        const goalsGvSupervisorFilterDropdown = document.getElementById('goals-gv-supervisor-filter-dropdown');
-
-        const goalsGvSellerFilterBtn = document.getElementById('goals-gv-seller-filter-btn');
-        const goalsGvSellerFilterText = document.getElementById('goals-gv-seller-filter-text');
-        const goalsGvSellerFilterDropdown = document.getElementById('goals-gv-seller-filter-dropdown');
-
-        const goalsGvCodcliFilter = document.getElementById('goals-gv-codcli-filter');
-        const clearGoalsGvFiltersBtn = document.getElementById('clear-goals-gv-filters-btn');
-
-        const goalsSvSupervisorFilterBtn = document.getElementById('goals-sv-supervisor-filter-btn');
-        const goalsSvSupervisorFilterText = document.getElementById('goals-sv-supervisor-filter-text');
-        const goalsSvSupervisorFilterDropdown = document.getElementById('goals-sv-supervisor-filter-dropdown');
-
-
-        const modal = document.getElementById('order-details-modal');
-        const modalCloseBtn = document.getElementById('modal-close-btn');
-        const modalPedidoId = document.getElementById('modal-pedido-id');
-        const modalHeaderInfo = document.getElementById('modal-header-info');
-        const modalTableBody = document.getElementById('modal-table-body');
-        const modalFooterTotal = document.getElementById('modal-footer-total');
-
-        const clientModal = document.getElementById('client-details-modal');
-        const clientModalCloseBtn = document.getElementById('client-modal-close-btn');
-        const clientModalContent = document.getElementById('client-modal-content');
-
-        const holidayModal = document.getElementById('holiday-modal');
-        const holidayModalCloseBtn = document.getElementById('holiday-modal-close-btn');
-        const holidayModalDoneBtn = document.getElementById('holiday-modal-done-btn');
-        const mainHolidayPickerBtn = document.getElementById('main-holiday-picker-btn');
-        const comparisonHolidayPickerBtn = document.getElementById('comparison-holiday-picker-btn');
-        const calendarContainer = document.getElementById('calendar-container');
-
-        const tablePaginationControls = document.getElementById('table-pagination-controls');
-        const prevPageBtn = document.getElementById('prev-page-btn');
-        const nextPageBtn = document.getElementById('next-page-btn');
-        const pageInfoText = document.getElementById('page-info-text');
-
-        // --- View State Management ---
-        const viewState = {
-            dashboard: { dirty: true },
-            pedidos: { dirty: true },
-            comparativo: { dirty: true },
-            estoque: { dirty: true },
-            cobertura: { dirty: true },
-            cidades: { dirty: true },
-            semanal: { dirty: true },
-            inovacoes: { dirty: true, cache: null, lastTypesKey: '' },
-            mix: { dirty: true },
-            goals: { dirty: true },
-            metaRealizado: { dirty: true }
-        };
-
-        // Render IDs for Race Condition Guard
-        let mixRenderId = 0;
-        let coverageRenderId = 0;
-        let cityRenderId = 0;
-        let stockRenderId = 0;
-        let comparisonRenderId = 0;
-        let goalsRenderId = 0;
-        let goalsSvRenderId = 0;
-
-        let charts = {};
-        let currentProductMetric = 'faturamento';
-        let currentFornecedor = '';
-        let currentWeeklyFornecedor = '';
-        let currentComparisonFornecedor = '';
-        let currentStockFornecedor = '';
-        let useTendencyComparison = false;
-        let comparisonChartType = 'weekly';
-        let comparisonMonthlyMetric = 'faturamento';
-        let activeClientsForExport = [];
-        let inactiveClientsForExport = [];
-        let selectedSellers = [];
-        let selectedMainSupervisors = [];
-        let selectedMainSuppliers = [];
-        let selectedTiposVenda = [];
-        var selectedCitySellers = [];
-        var selectedCitySuppliers = [];
-        var selectedCitySupervisors = [];
-        let selectedComparisonSellers = [];
-        let selectedComparisonSupervisors = [];
-        let selectedStockSellers = [];
-        let selectedStockSupervisors = [];
-        let selectedComparisonSuppliers = [];
-        let selectedComparisonProducts = [];
-        let selectedStockSuppliers = [];
-        let selectedStockProducts = [];
-        let selectedStockTiposVenda = [];
-        let selectedCoverageTiposVenda = [];
-        let selectedComparisonTiposVenda = [];
-        let selectedCityTiposVenda = [];
-        let historicalBests = {};
-        let selectedHolidays = [];
-        let stockTrendFilter = 'all';
-
-        let selectedMainRedes = [];
-        let selectedCityRedes = [];
-        let selectedWeeklySupervisors = [];
-        let selectedWeeklySellers = [];
-        let selectedComparisonRedes = [];
-        let selectedStockRedes = [];
-
-        let mainRedeGroupFilter = '';
-        let cityRedeGroupFilter = '';
-        let comparisonRedeGroupFilter = '';
-        let stockRedeGroupFilter = '';
-
-        let selectedInnovationsMonthSellers = [];
-        let selectedInnovationsSupervisors = [];
-        let selectedInnovationsMonthTiposVenda = [];
-
-        let selectedMixSupervisors = [];
-        let selectedMixSellers = [];
-        let selectedMixRedes = [];
-        let mixRedeGroupFilter = '';
-        let selectedMixTiposVenda = [];
-        let mixTableDataForExport = [];
-        let mixKpiMode = 'total'; // 'total' ou 'atendidos'
-
-        let currentGoalsSupplier = 'PEPSICO_ALL';
-        let currentGoalsBrand = null;
-        let currentGoalsSvSupplier = '707';
-        let currentGoalsSvBrand = null;
-        let currentGoalsSvData = [];
-        let goalsTableState = {
+let goalsTableState = {
             currentPage: 1,
             itemsPerPage: 100,
             filteredData: [],
             totalPages: 1
         };
-        let goalsTargets = {
+
+let goalsTargets = {
             '707': { fat: 0, vol: 0 },
             '708': { fat: 0, vol: 0 },
             '752': { fat: 0, vol: 0 },
@@ -1869,18 +899,26 @@
             '1119_TODDY': { fat: 0, vol: 0 },
             '1119_QUAKER_KEROCOCO': { fat: 0, vol: 0 }
         };
-        window.goalsTargets = goalsTargets;
 
-        let globalGoalsMetrics = {};
-        let globalGoalsTotalsCache = {};
-        let globalClientGoals = new Map();
-        window.globalClientGoals = globalClientGoals;
-        let goalsPosAdjustments = { 'ELMA_ALL': new Map(), 'FOODS_ALL': new Map(), 'PEPSICO_ALL': new Map(), '707': new Map(), '708': new Map(), '752': new Map(), '1119_TODDYNHO': new Map(), '1119_TODDY': new Map(), '1119_QUAKER_KEROCOCO': new Map() }; // Map<CodCli, Map<Key, {fat: 0, vol: 0}>>
-        let goalsMixSaltyAdjustments = { 'PEPSICO_ALL': new Map(), 'ELMA_ALL': new Map(), 'FOODS_ALL': new Map() }; // Map<SellerName, adjustment>
-        let goalsMixFoodsAdjustments = { 'PEPSICO_ALL': new Map(), 'ELMA_ALL': new Map(), 'FOODS_ALL': new Map() }; // Map<SellerName, adjustment>
-        let quarterMonths = [];
+window.goalsTargets = goalsTargets;
 
-        function identifyQuarterMonths() {
+let globalGoalsMetrics = {};
+
+let globalGoalsTotalsCache = {};
+
+let globalClientGoals = new Map();
+
+window.globalClientGoals = globalClientGoals;
+
+let goalsPosAdjustments = { 'ELMA_ALL': new Map(), 'FOODS_ALL': new Map(), 'PEPSICO_ALL': new Map(), '707': new Map(), '708': new Map(), '752': new Map(), '1119_TODDYNHO': new Map(), '1119_TODDY': new Map(), '1119_QUAKER_KEROCOCO': new Map() };
+
+let goalsMixSaltyAdjustments = { 'PEPSICO_ALL': new Map(), 'ELMA_ALL': new Map(), 'FOODS_ALL': new Map() };
+
+let goalsMixFoodsAdjustments = { 'PEPSICO_ALL': new Map(), 'ELMA_ALL': new Map(), 'FOODS_ALL': new Map() };
+
+let quarterMonths = [];
+
+function identifyQuarterMonths() {
             const months = new Set();
             allHistoryData.forEach(s => {
                 const d = parseDate(s.DTPED);
@@ -1904,7 +942,7 @@
             });
         }
 
-        function calculateGoalsMetrics() {
+function calculateGoalsMetrics() {
             if (quarterMonths.length === 0) identifyQuarterMonths();
 
             // Helper to init metrics structure
@@ -2139,741 +1177,28 @@
                 m.avgClients = sumClients / QUARTERLY_DIVISOR;
             }
         }
-        let selectedGoalsGvSupervisors = [];
-        let selectedGoalsGvSellers = [];
-        let selectedGoalsSvSupervisors = [];
-        let selectedGoalsSummarySupervisors = [];
-        let selectedGoalsSummarySellers = [];
 
-        let selectedMetaRealizadoSupervisors = [];
-        let selectedMetaRealizadoSellers = [];
-        let selectedMetaRealizadoSuppliers = [];
-        let currentMetaRealizadoPasta = 'PEPSICO'; // Default
-        let currentMetaRealizadoMetric = 'valor'; // 'valor' or 'peso'
+let selectedGoalsGvSupervisors = [];
 
-        // let innovationsIncludeBonus = true; // REMOVED
-        // let innovationsMonthIncludeBonus = true; // REMOVED
+let selectedGoalsGvSellers = [];
 
-        let innovationsMonthTableDataForExport = [];
-        let innovationsByClientForExport = [];
-        let categoryLegendForExport = [];
-        let chartLabels = [];
-        let globalInnovationCategories = null;
-        let globalProductToCategoryMap = null;
+let selectedGoalsSvSupervisors = [];
 
-        let calendarState = { year: lastSaleDate.getUTCFullYear(), month: lastSaleDate.getUTCMonth() };
+let selectedGoalsSummarySupervisors = [];
 
-        let selectedCoverageSellers = [];
-        let selectedCoverageSuppliers = [];
-        let selectedCoverageSupervisors = [];
-        let selectedCoverageProducts = [];
-        let selectedCoverageDateRange = null;
-        let coverageDateFilterInstance = null;
-        let coverageUnitPriceFilter = null;
-        let customWorkingDaysCoverage = 0;
-        let coverageTrendFilter = 'all';
-        let coverageTableDataForExport = [];
-        let currentCoverageChartMode = 'city';
+let selectedGoalsSummarySellers = [];
 
-        const coverageTipoVendaFilterBtn = document.getElementById('coverage-tipo-venda-filter-btn');
-        const coverageTipoVendaFilterText = document.getElementById('coverage-tipo-venda-filter-text');
-        const coverageTipoVendaFilterDropdown = document.getElementById('coverage-tipo-venda-filter-dropdown');
+const getFirstName = (fullName) => (fullName || '').split(' ')[0];
 
-        let mainTableState = {
-            currentPage: 1,
-            itemsPerPage: 50,
-            filteredData: [],
-            totalPages: 1
-        };
+const MIX_SALTY_CATEGORIES = ['CHEETOS', 'DORITOS', 'FANDANGOS', 'RUFFLES', 'TORCIDA'];
 
-        let mixTableState = {
-            currentPage: 1,
-            itemsPerPage: 100,
-            filteredData: [],
-            totalPages: 1
-        };
+const MIX_FOODS_CATEGORIES = ['TODDYNHO', 'TODDY ', 'QUAKER', 'KEROCOCO'];
 
-        const getFirstName = (fullName) => (fullName || '').split(' ')[0];
+let goalsSellerTargets = new Map();
 
-        function formatDate(date) {
-            if (!date) return '';
-            const d = parseDate(date);
-            if (!d || isNaN(d.getTime())) return '';
-            const userTimezoneOffset = d.getTimezoneOffset() * 60000;
-            return new Date(d.getTime() + userTimezoneOffset).toLocaleDateString('pt-BR');
-        }
+window.goalsSellerTargets = goalsSellerTargets;
 
-        function buildInnovationSalesMaps(salesData, mainTypes, bonusTypes, dateRange = null) {
-            const mainMap = new Map(); // Map<CODCLI, Map<PRODUTO, Set<CODUSUR>>>
-            const bonusMap = new Map();
-            const mainSet = new Set(mainTypes);
-            const bonusSet = new Set(bonusTypes);
-
-            salesData.forEach(sale => {
-                const isMain = mainSet.has(sale.TIPOVENDA);
-                const isBonus = bonusSet.has(sale.TIPOVENDA);
-
-                if (!isMain && !isBonus) return;
-
-                // Date Filtering (Optional)
-                if (dateRange) {
-                    const d = parseDate(sale.DTPED);
-                    if (!d || d < dateRange.start || d > dateRange.end) return;
-                }
-
-                const codCli = sale.CODCLI;
-                const prod = sale.PRODUTO;
-                const rca = sale.CODUSUR;
-
-                if (isMain) {
-                    // Strict Rule for Main Sales: Value must be >= 1
-                    if ((Number(sale.VLVENDA) || 0) >= 1) {
-                        if (!mainMap.has(codCli)) mainMap.set(codCli, new Map());
-                        const clientMap = mainMap.get(codCli);
-                        if (!clientMap.has(prod)) clientMap.set(prod, new Set());
-                        clientMap.get(prod).add(rca);
-                    }
-                }
-
-                if (isBonus) {
-                    // Bonus Sales: No value threshold (often 0)
-                    if (!bonusMap.has(codCli)) bonusMap.set(codCli, new Map());
-                    const clientMap = bonusMap.get(codCli);
-                    if (!clientMap.has(prod)) clientMap.set(prod, new Set());
-                    clientMap.get(prod).add(rca);
-                }
-            });
-            return { mainMap, bonusMap };
-        }
-
-        // --- MIX VIEW LOGIC ---
-        const MIX_SALTY_CATEGORIES = ['CHEETOS', 'DORITOS', 'FANDANGOS', 'RUFFLES', 'TORCIDA'];
-        const MIX_FOODS_CATEGORIES = ['TODDYNHO', 'TODDY ', 'QUAKER', 'KEROCOCO'];
-
-        function getMixFilteredData(options = {}) {
-            const { excludeFilter = null } = options;
-
-            const sellersSet = new Set(selectedMixSellers);
-            const supervisorsSet = new Set(selectedMixSupervisors);
-            const tiposVendaSet = new Set(selectedMixTiposVenda);
-            const city = document.getElementById('mix-city-filter').value.trim().toLowerCase();
-            const filial = document.getElementById('mix-filial-filter').value;
-
-            // Pre-calculate RCA sets for performance
-            const supervisorRcasSet = new Set();
-            if (excludeFilter !== 'supervisor' && supervisorsSet.size > 0) {
-                supervisorsSet.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => supervisorRcasSet.add(rca));
-                });
-            }
-
-            const sellerRcasSet = new Set();
-            if (excludeFilter !== 'seller' && sellersSet.size > 0) {
-                sellersSet.forEach(name => {
-                    const code = optimizedData.rcaCodeByName.get(name);
-                    if(code) sellerRcasSet.add(code);
-                });
-            }
-
-            const redeSet = (excludeFilter !== 'rede' && mixRedeGroupFilter === 'com_rede' && selectedMixRedes.length > 0) ? new Set(selectedMixRedes) : null;
-
-            // Single pass loop over allClientsData using direct column access (Fast Path)
-            const clients = [];
-            const clientCodes = new Set();
-            const len = allClientsData.length;
-            const isColumnar = allClientsData instanceof ColumnarDataset;
-            const data = isColumnar ? allClientsData._data : null;
-            const overrides = isColumnar ? allClientsData._overrides : null;
-            const hasOverrides = overrides && overrides.size > 0;
-
-            for (let i = 0; i < len; i++) {
-                let codCli, ramo, rcas, cidade, rca1, razaoSocial;
-
-                if (isColumnar) {
-                    if (hasOverrides) {
-                        const ov = overrides.get(i);
-                        codCli = (ov && 'Código' in ov) ? ov['Código'] : data['Código'][i];
-                        ramo = (ov && 'ramo' in ov) ? ov['ramo'] : data['ramo'][i];
-                        rcas = (ov && 'rcas' in ov) ? ov['rcas'] : data['rcas'][i];
-                        cidade = (ov && 'cidade' in ov) ? ov['cidade'] : data['cidade'][i];
-                        rca1 = (ov && 'rca1' in ov) ? ov['rca1'] : data['rca1'][i];
-                        razaoSocial = (ov && 'razaoSocial' in ov) ? ov['razaoSocial'] : data['razaoSocial'][i];
-                    } else {
-                        codCli = data['Código'][i];
-                        ramo = data['ramo'][i];
-                        rcas = data['rcas'][i];
-                        cidade = data['cidade'][i];
-                        rca1 = data['rca1'][i];
-                        razaoSocial = data['razaoSocial'][i];
-                    }
-                } else {
-                    const c = allClientsData[i];
-                    codCli = c['Código'];
-                    ramo = c['ramo'];
-                    rcas = c['rcas'];
-                    cidade = c['cidade'];
-                    rca1 = c['rca1'];
-                    razaoSocial = c['razaoSocial'];
-                }
-
-                // Rede filter
-                if (excludeFilter !== 'rede') {
-                    if (mixRedeGroupFilter === 'com_rede') {
-                        if (!ramo || ramo === 'N/A') continue;
-                        if (redeSet && !redeSet.has(ramo)) continue;
-                    } else if (mixRedeGroupFilter === 'sem_rede') {
-                        if (ramo && ramo !== 'N/A') continue;
-                    }
-                }
-
-                // Filial filter
-                if (filial !== 'ambas') {
-                    if (clientLastBranch.get(codCli) !== filial) continue;
-                }
-
-                // Supervisor filter
-                if (supervisorRcasSet.size > 0) {
-                    const clientRcas = rcas || [];
-                    if (!clientRcas.some(r => supervisorRcasSet.has(r))) continue;
-                }
-
-                // Seller filter
-                if (sellerRcasSet.size > 0) {
-                    const clientRcas = rcas || [];
-                    if (!clientRcas.some(r => sellerRcasSet.has(r))) continue;
-                }
-
-                if (excludeFilter !== 'supplier' && selectedCitySuppliers.length > 0) {
-                    // No filtering of clients list based on supplier for now.
-                }
-
-                // City filter
-                if (excludeFilter !== 'city' && city) {
-                    if (!cidade || cidade.toLowerCase() !== city) continue;
-                }
-
-                // Active / Americanas / RCA 53 filter
-                const rca1Str = String(rca1 || '').trim();
-                const isAmericanas = (razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                const isActive = true; // const isActive = (isAmericanas || rca1Str !== '53' || clientsWithSalesThisMonth.has(codCli));
-                if (!isActive) continue;
-
-                // Match found: populate results
-                clients.push(isColumnar ? allClientsData.get(i) : allClientsData[i]);
-                clientCodes.add(codCli);
-            }
-
-            const filters = {
-                supervisor: supervisorsSet,
-                seller: sellersSet,
-                city: city,
-                filial: filial,
-                tipoVenda: tiposVendaSet,
-                clientCodes: clientCodes
-            };
-
-            const sales = getFilteredDataFromIndices(optimizedData.indices.current, optimizedData.salesById, filters, excludeFilter);
-
-            return { clients, sales };
-        }
-
-        function updateAllMixFilters(options = {}) {
-            const { skipFilter = null } = options;
-
-            if (skipFilter !== 'supervisor') {
-                const { sales } = getMixFilteredData({ excludeFilter: 'supervisor' });
-                selectedMixSupervisors = updateSupervisorFilter(document.getElementById('mix-supervisor-filter-dropdown'), document.getElementById('mix-supervisor-filter-text'), selectedMixSupervisors, sales);
-            }
-
-            const { sales: salesSeller } = getMixFilteredData({ excludeFilter: 'seller' });
-            selectedMixSellers = updateSellerFilter(selectedMixSupervisors, document.getElementById('mix-vendedor-filter-dropdown'), document.getElementById('mix-vendedor-filter-text'), selectedMixSellers, salesSeller, skipFilter === 'seller');
-
-            const { sales: salesTV } = getMixFilteredData({ excludeFilter: 'tipoVenda' });
-            selectedMixTiposVenda = updateTipoVendaFilter(document.getElementById('mix-tipo-venda-filter-dropdown'), document.getElementById('mix-tipo-venda-filter-text'), selectedMixTiposVenda, salesTV, skipFilter === 'tipoVenda');
-
-            if (skipFilter !== 'rede') {
-                 const { clients: clientsRede } = getMixFilteredData({ excludeFilter: 'rede' });
-                 if (mixRedeGroupFilter === 'com_rede') {
-                     selectedMixRedes = updateRedeFilter(document.getElementById('mix-rede-filter-dropdown'), document.getElementById('mix-com-rede-btn-text'), selectedMixRedes, clientsRede);
-                 }
-            }
-        }
-
-        function handleMixFilterChange(options = {}) {
-            if (window.mixUpdateTimeout) clearTimeout(window.mixUpdateTimeout);
-            window.mixUpdateTimeout = setTimeout(() => {
-                updateAllMixFilters(options);
-                updateMixView();
-            }, 10);
-        }
-
-        function resetMixFilters() {
-            selectedMixSupervisors = [];
-            document.getElementById('mix-city-filter').value = '';
-            document.getElementById('mix-filial-filter').value = 'ambas';
-            selectedMixSellers = [];
-            selectedMixTiposVenda = [];
-            selectedMixRedes = [];
-            mixRedeGroupFilter = '';
-
-            const redeGroupContainer = document.getElementById('mix-rede-group-container');
-            redeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-            redeGroupContainer.querySelector('button[data-group=""]').classList.add('active');
-            document.getElementById('mix-rede-filter-dropdown').classList.add('hidden');
-
-            updateAllMixFilters();
-            updateMixView();
-        }
-
-        function escapeHtml(text) {
-            if (text === null || text === undefined) return '';
-            return String(text)
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;")
-                .replace(/'/g, "&#039;");
-        }
-
-        function updateMixView() {
-            mixRenderId++;
-            const currentRenderId = mixRenderId;
-
-            const { clients, sales } = getMixFilteredData();
-            // const activeClientCodes = new Set(clients.map(c => c['Código'])); // Not used if iterating clients array
-
-            // Show Loading
-            document.getElementById('mix-table-body').innerHTML = '<tr><td colspan="13" class="text-center p-8"><svg class="animate-spin h-8 w-8 text-teal-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></td></tr>';
-
-            // 1. Agregar Valor Líquido por Produto por Cliente (Sync - O(Sales))
-            const clientProductNetValues = new Map(); // Map<CODCLI, Map<PRODUTO, NetValue>>
-            const clientProductDesc = new Map(); // Map<PRODUTO, Descricao> (Cache)
-
-            sales.forEach(s => {
-                if (!s.CODCLI || !s.PRODUTO) return;
-
-                if (!clientProductNetValues.has(s.CODCLI)) {
-                    clientProductNetValues.set(s.CODCLI, new Map());
-                }
-                const clientMap = clientProductNetValues.get(s.CODCLI);
-                const currentVal = clientMap.get(s.PRODUTO) || 0;
-                clientMap.set(s.PRODUTO, currentVal + (Number(s.VLVENDA) || 0));
-
-                if (!clientProductDesc.has(s.PRODUTO)) {
-                    clientProductDesc.set(s.PRODUTO, normalize(s.DESCRICAO || ''));
-                }
-            });
-
-            // 2. Determinar Categorias Positivadas por Cliente
-            // Uma categoria é positivada se o cliente comprou Pelo MENOS UM produto dela com valor líquido > 1
-            const clientPositivatedCategories = new Map(); // Map<CODCLI, Set<CategoryName>>
-
-            // Sync Loop for Map aggregation is fast enough
-            clientProductNetValues.forEach((productsMap, codCli) => {
-                const positivatedCats = new Set();
-
-                productsMap.forEach((netValue, prodCode) => {
-                    if (netValue >= 1) {
-                        const desc = clientProductDesc.get(prodCode) || '';
-
-                        // Checar Salty
-                        MIX_SALTY_CATEGORIES.forEach(cat => {
-                            if (desc.includes(cat)) positivatedCats.add(cat);
-                        });
-                        // Checar Foods
-                        MIX_FOODS_CATEGORIES.forEach(cat => {
-                            if (desc.includes(cat)) positivatedCats.add(cat);
-                        });
-                    }
-                });
-                clientPositivatedCategories.set(codCli, positivatedCats);
-            });
-
-            let positivadosSalty = 0;
-            let positivadosFoods = 0;
-            let positivadosBoth = 0;
-
-            const tableData = [];
-
-            // ASYNC CHUNKED PROCESSING for Clients
-            runAsyncChunked(clients, (client) => {
-                const codcli = client['Código'];
-                const positivatedCats = clientPositivatedCategories.get(codcli) || new Set();
-
-                // Determine Status based on "Buying ALL" (Strict Positive)
-                const hasSalty = MIX_SALTY_CATEGORIES.every(b => positivatedCats.has(b));
-                const hasFoods = MIX_FOODS_CATEGORIES.every(b => positivatedCats.has(b));
-
-                if (hasSalty) positivadosSalty++;
-                if (hasFoods) positivadosFoods++;
-                if (hasSalty && hasFoods) positivadosBoth++;
-
-                const missing = [];
-                // Detailed missing analysis for Salty
-                MIX_SALTY_CATEGORIES.forEach(b => { if(!positivatedCats.has(b)) missing.push(b); });
-                // Detailed missing analysis for Foods
-                MIX_FOODS_CATEGORIES.forEach(b => { if(!positivatedCats.has(b)) missing.push(b); });
-
-                const missingText = missing.length > 0 ? missing.join(', ') : '';
-
-                // Resolve Vendor Name
-                const rcaCode = (client.rcas && client.rcas.length > 0) ? client.rcas[0] : null;
-                let vendorName = 'N/A';
-                if (rcaCode) {
-                    vendorName = optimizedData.rcaNameByCode.get(rcaCode) || rcaCode;
-                } else {
-                    vendorName = 'INATIVOS';
-                }
-
-                const rowData = {
-                    codcli: codcli,
-                    name: client.fantasia || client.razaoSocial,
-                    city: client.cidade || client.CIDADE || client['Nome da Cidade'] || 'N/A',
-                    vendedor: vendorName,
-                    codvendedor: rcaCode || 'N/A',
-                    hasSalty: hasSalty,
-                    hasFoods: hasFoods,
-                    brands: positivatedCats,
-                    missingText: missingText,
-                    score: missing.length
-                };
-                tableData.push(rowData);
-            }, () => {
-                // --- ON COMPLETE (Render) ---
-                if (currentRenderId !== mixRenderId) return;
-
-                let baseClientCount;
-                const kpiTitleEl = document.getElementById('mix-kpi-title');
-
-                if (mixKpiMode === 'atendidos') {
-                    baseClientCount = getPositiveClientsWithNewLogic(sales);
-                    if (kpiTitleEl) kpiTitleEl.textContent = 'Clientes Atendidos';
-                } else {
-                    baseClientCount = clients.length;
-                    if (kpiTitleEl) kpiTitleEl.textContent = 'Total Clientes (Filtro)';
-                }
-
-                const saltyPct = baseClientCount > 0 ? (positivadosSalty / baseClientCount) * 100 : 0;
-                const foodsPct = baseClientCount > 0 ? (positivadosFoods / baseClientCount) * 100 : 0;
-                const bothPct = baseClientCount > 0 ? (positivadosBoth / baseClientCount) * 100 : 0;
-
-                // Update KPIs
-                document.getElementById('mix-total-clients-kpi').textContent = baseClientCount.toLocaleString('pt-BR');
-                document.getElementById('mix-salty-kpi').textContent = `${saltyPct.toFixed(1)}%`;
-                document.getElementById('mix-salty-count-kpi').textContent = `${positivadosSalty} clientes`;
-                document.getElementById('mix-foods-kpi').textContent = `${foodsPct.toFixed(1)}%`;
-                document.getElementById('mix-foods-count-kpi').textContent = `${positivadosFoods} clientes`;
-                document.getElementById('mix-both-kpi').textContent = `${bothPct.toFixed(1)}%`;
-                document.getElementById('mix-both-count-kpi').textContent = `${positivadosBoth} clientes`;
-
-                // Charts
-                const distributionData = [
-                    positivadosBoth,
-                    positivadosSalty - positivadosBoth,
-                    positivadosFoods - positivadosBoth,
-                    baseClientCount - (positivadosSalty + positivadosFoods - positivadosBoth)
-                ];
-
-                createChart('mixDistributionChart', 'doughnut', ['Mix Ideal (Ambos)', 'Só Salty', 'Só Foods', 'Nenhum'], distributionData, {
-                    maintainAspectRatio: false, // Fix layout issue
-                    backgroundColor: ['#a855f7', '#14b8a6', '#f59e0b', '#475569'],
-                    plugins: { legend: { position: 'right' } }
-                });
-
-                // Seller Efficiency Chart
-                const sellerStats = {};
-                tableData.forEach(row => {
-                    const seller = row.vendedor;
-                    if (!sellerStats[seller]) sellerStats[seller] = { total: 0, both: 0, salty: 0, foods: 0 };
-                    sellerStats[seller].total++;
-                    if (row.hasSalty && row.hasFoods) sellerStats[seller].both++;
-                    if (row.hasSalty) sellerStats[seller].salty++;
-                    if (row.hasFoods) sellerStats[seller].foods++;
-                });
-
-                const sortedSellers = Object.entries(sellerStats)
-                    .sort(([,a], [,b]) => b.both - a.both)
-                    .slice(0, 10);
-
-                createChart('mixSellerChart', 'bar', sortedSellers.map(([name]) => getFirstName(name)),
-                    [
-                        { label: 'Mix Ideal', data: sortedSellers.map(([,s]) => s.both), backgroundColor: '#a855f7' },
-                        { label: 'Salty Total', data: sortedSellers.map(([,s]) => s.salty), backgroundColor: '#14b8a6', hidden: true },
-                        { label: 'Foods Total', data: sortedSellers.map(([,s]) => s.foods), backgroundColor: '#f59e0b', hidden: true }
-                    ],
-                    { scales: { x: { stacked: false }, y: { stacked: false } } }
-                );
-
-                // Render Table with Detailed Columns
-                tableData.sort((a, b) => {
-                    // Sort by City (Alphabetical), then by Client Name
-                    const cityA = (a.city || '').toLowerCase();
-                    const cityB = (b.city || '').toLowerCase();
-                    if (cityA < cityB) return -1;
-                    if (cityA > cityB) return 1;
-                    return (a.name || '').localeCompare(b.name || '');
-                });
-
-                mixTableDataForExport = tableData;
-
-                mixTableState.filteredData = tableData;
-                mixTableState.totalPages = Math.ceil(tableData.length / mixTableState.itemsPerPage);
-                if (mixTableState.currentPage > mixTableState.totalPages && mixTableState.totalPages > 0) {
-                    mixTableState.currentPage = mixTableState.totalPages;
-                } else if (mixTableState.totalPages === 0) {
-                     mixTableState.currentPage = 1;
-                }
-
-                const startIndex = (mixTableState.currentPage - 1) * mixTableState.itemsPerPage;
-                const endIndex = startIndex + mixTableState.itemsPerPage;
-                const pageData = tableData.slice(startIndex, endIndex);
-
-                const checkIcon = `<svg class="w-4 h-4 text-green-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
-                const dashIcon = `<span class="text-slate-600 text-xs">-</span>`;
-
-                const xIcon = `<svg class="w-3 h-3 text-red-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`;
-
-                let tableHTML = pageData.map(row => {
-                    let saltyCols = MIX_SALTY_CATEGORIES.map(b => `<td class="px-1 py-2 text-center border-l border-slate-500">${row.brands.has(b) ? checkIcon : xIcon}</td>`).join('');
-                    let foodsCols = MIX_FOODS_CATEGORIES.map(b => `<td class="px-1 py-2 text-center border-l border-slate-500">${row.brands.has(b) ? checkIcon : xIcon}</td>`).join('');
-
-                    return `
-                    <tr class="hover:bg-slate-700/50 border-b border-slate-500 last:border-0">
-                        <td class="px-2 py-2 font-medium text-slate-300 text-xs">${escapeHtml(row.codcli)}</td>
-                        <td class="px-2 py-2 text-xs truncate max-w-[150px]" title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</td>
-                        <td class="px-2 py-2 text-xs text-slate-300 truncate max-w-[100px]">${escapeHtml(row.city)}</td>
-                        <td class="px-2 py-2 text-xs text-slate-400 truncate max-w-[100px]">${escapeHtml(getFirstName(row.vendedor))}</td>
-                        ${saltyCols}
-                        ${foodsCols}
-                    </tr>
-                `}).join('');
-
-                // Append Footer with Totals
-                tableHTML += `
-                    <tr class="bg-slate-800 font-bold border-t-2 border-slate-500 text-xs sticky bottom-0 z-20">
-                        <td colspan="4" class="px-2 py-3 text-right text-white">TOTAL POSITIVADOS:</td>
-                        <td colspan="${MIX_SALTY_CATEGORIES.length}" class="px-2 py-3 text-center text-teal-400 text-sm border-l border-slate-500">${positivadosSalty}</td>
-                        <td colspan="${MIX_FOODS_CATEGORIES.length}" class="px-2 py-3 text-center text-yellow-400 text-sm border-l border-slate-500">${positivadosFoods}</td>
-                    </tr>
-                `;
-
-                document.getElementById('mix-table-body').innerHTML = tableHTML;
-
-                const controls = document.getElementById('mix-pagination-controls');
-                const infoText = document.getElementById('mix-page-info-text');
-                const prevBtn = document.getElementById('mix-prev-page-btn');
-                const nextBtn = document.getElementById('mix-next-page-btn');
-
-                if (tableData.length > 0 && mixTableState.totalPages > 1) {
-                    infoText.textContent = `Página ${mixTableState.currentPage} de ${mixTableState.totalPages} (Total: ${tableData.length} clientes)`;
-                    prevBtn.disabled = mixTableState.currentPage === 1;
-                    nextBtn.disabled = mixTableState.currentPage === mixTableState.totalPages;
-                    controls.classList.remove('hidden');
-                } else {
-                    controls.classList.add('hidden');
-                }
-            }, () => currentRenderId !== mixRenderId);
-        }
-
-        async function exportMixExcel() {
-            if (typeof XLSX === 'undefined') {
-                alert("Erro: Biblioteca XLSX não carregada. Verifique sua conexão com a internet.");
-                return;
-            }
-
-            const supervisor = document.getElementById('mix-supervisor-filter-text').textContent;
-            const vendedor = document.getElementById('mix-vendedor-filter-text').textContent;
-            const city = document.getElementById('mix-city-filter').value.trim();
-
-            const saltyCols = MIX_SALTY_CATEGORIES.map(c => c.substring(0, 8));
-            const foodsCols = MIX_FOODS_CATEGORIES.map(c => c.substring(0, 8));
-
-            // Create Excel data structure
-            const excelData = mixTableDataForExport.map(row => {
-                const rowData = {
-                    'Cód': row.codcli,
-                    'Cliente': row.name,
-                    'Cidade': row.city || '',
-                    'Cód Vendedor': row.codvendedor || '',
-                    'Vendedor': row.vendedor || ''
-                };
-
-                // Add Salty Categories
-                MIX_SALTY_CATEGORIES.forEach((b, idx) => {
-                    rowData[saltyCols[idx]] = row.brands.has(b) ? 'OK' : 'X';
-                });
-
-                // Add Foods Categories
-                MIX_FOODS_CATEGORIES.forEach((b, idx) => {
-                    rowData[foodsCols[idx]] = row.brands.has(b) ? 'OK' : 'X';
-                });
-
-                // Add final summary columns
-                rowData['Mix Salty'] = row.hasSalty ? 'VERDADEIRO' : 'FALSO';
-                rowData['Mix Foods'] = row.hasFoods ? 'VERDADEIRO' : 'FALSO';
-
-                return rowData;
-            });
-
-            const ws = XLSX.utils.json_to_sheet(excelData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Mix Salty & Foods");
-
-            // Define safe filename string
-            const safeName = (supervisor !== 'Todos os Supervisores' ? supervisor : (vendedor !== 'Todos os Vendedores' ? vendedor : 'Todos')).replace(/[^a-z0-9]/gi, '_').toLowerCase();
-
-            XLSX.writeFile(wb, `Relatorio_Mix_${safeName}.xlsx`);
-        }
-
-        async function exportMixPDF() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('landscape');
-
-            const supervisor = document.getElementById('mix-supervisor-filter-text').textContent;
-            const vendedor = document.getElementById('mix-vendedor-filter-text').textContent;
-            const city = document.getElementById('mix-city-filter').value.trim();
-            const generationDate = new Date().toLocaleString('pt-BR');
-
-            doc.setFontSize(18);
-            doc.text('Relatório de Detalhado - Mix Salty & Foods', 14, 22);
-            doc.setFontSize(10);
-            doc.setTextColor(10);
-            doc.text(`Data de Emissão: ${generationDate}`, 14, 30);
-            doc.text(`Filtros: Supervisor: ${supervisor} | Vendedor: ${vendedor} | Cidade: ${city || 'Todas'}`, 14, 36);
-
-            // Determine dynamic columns
-            const saltyCols = MIX_SALTY_CATEGORIES.map(c => c.substring(0, 8)); // Truncate headers
-            const foodsCols = MIX_FOODS_CATEGORIES.map(c => c.substring(0, 8));
-
-            const head = [['Cód', 'Cliente', 'Cidade', 'Vendedor', ...saltyCols, ...foodsCols]];
-
-            const body = mixTableDataForExport.map(row => {
-                const saltyCells = MIX_SALTY_CATEGORIES.map(b => row.brands.has(b) ? 'OK' : 'X');
-                const foodsCells = MIX_FOODS_CATEGORIES.map(b => row.brands.has(b) ? 'OK' : 'X');
-                return [
-                    row.codcli,
-                    row.name,
-                    row.city || '',
-                    getFirstName(row.vendedor),
-                    ...saltyCells,
-                    ...foodsCells
-                ];
-            });
-
-            // Calculate Totals for Footer
-            let totalSalty = 0;
-            let totalFoods = 0;
-            mixTableDataForExport.forEach(row => {
-                if(row.hasSalty) totalSalty++;
-                if(row.hasFoods) totalFoods++;
-            });
-
-            const footerRow = [
-                { content: 'TOTAL POSITIVADOS:', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fontSize: 12, textColor: [255, 255, 255], fillColor: [50, 50, 50] } },
-                { content: String(totalSalty), colSpan: MIX_SALTY_CATEGORIES.length, styles: { halign: 'center', fontStyle: 'bold', fontSize: 12, textColor: [45, 212, 191], fillColor: [50, 50, 50] } }, // Teal-400
-                { content: String(totalFoods), colSpan: MIX_FOODS_CATEGORIES.length, styles: { halign: 'center', fontStyle: 'bold', fontSize: 12, textColor: [250, 204, 21], fillColor: [50, 50, 50] } } // Yellow-400
-            ];
-
-            body.push(footerRow);
-
-            doc.autoTable({
-                head: head,
-                body: body,
-                startY: 45,
-                theme: 'grid',
-                styles: { fontSize: 6, cellPadding: 1, textColor: [0, 0, 0], halign: 'center' },
-                headStyles: { fillColor: [20, 184, 166], textColor: 255, fontStyle: 'bold', fontSize: 8 },
-                columnStyles: {
-                    0: { halign: 'left', cellWidth: 15 },
-                    1: { halign: 'left', cellWidth: 40 },
-                    2: { halign: 'left', cellWidth: 25 },
-                    3: { halign: 'left', cellWidth: 20 },
-                },
-                didParseCell: function(data) {
-                    if (data.section === 'body') {
-                        // Colorize OK/X cells
-                        if (data.cell.raw === 'OK') {
-                            data.cell.styles.textColor = [0, 128, 0]; // Stronger Green
-                            data.cell.styles.fontStyle = 'bold';
-                        }
-                        if (data.cell.raw === 'X') {
-                            data.cell.styles.textColor = [220, 0, 0]; // Stronger Red
-                            data.cell.styles.fontStyle = 'bold';
-                        }
-                    }
-                }
-            });
-
-            const pageCount = doc.internal.getNumberOfPages();
-            for(let i = 1; i <= pageCount; i++) {
-                doc.setPage(i);
-                doc.setFontSize(9);
-                doc.setTextColor(10);
-                doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 10, { align: 'center' });
-            }
-
-            let fileNameParam = 'geral';
-            if (selectedMixSellers.length === 1) {
-                fileNameParam = getFirstName(selectedMixSellers[0]);
-            } else if (city) {
-                fileNameParam = city;
-            }
-            const safeFileNameParam = fileNameParam.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            doc.save(`relatorio_mix_detalhado_${safeFileNameParam}_${new Date().toISOString().slice(0,10)}.pdf`);
-        }
-
-        // --- GOALS VIEW LOGIC ---
-
-        // --- GOALS REDISTRIBUTION LOGIC ---
-        let goalsSellerTargets = new Map(); // Stores Seller-Level Targets (Positivation, etc.)
-        window.goalsSellerTargets = goalsSellerTargets; // Export for init.js
-
-        async function saveGoalsToSupabase() {
-            try {
-                const monthKey = new Date().toISOString().slice(0, 7);
-                
-                // Serialize globalClientGoals (Map<CodCli, Map<Key, {fat: 0, vol: 0}>>)
-                const clientsObj = {};
-                for (const [clientId, clientMap] of globalClientGoals) {
-                    clientsObj[clientId] = Object.fromEntries(clientMap);
-                }
-
-                // Serialize goalsSellerTargets (Map<Seller, Targets>)
-                const sellerTargetsObj = {};
-                for (const [seller, targets] of goalsSellerTargets) {
-                    sellerTargetsObj[seller] = targets;
-                }
-
-                const payload = {
-                    clients: clientsObj,
-                    targets: goalsTargets,
-                    seller_targets: sellerTargetsObj
-                };
-
-                const { error } = await window.supabaseClient
-                    .from('goals_distribution')
-                    .upsert({
-                        month_key: monthKey,
-                        supplier: 'ALL',
-                        brand: 'GENERAL',
-                        goals_data: payload
-                    });
-
-                if (error) {
-                    console.error('Erro ao salvar metas:', error);
-                    alert('Erro ao salvar metas no banco de dados. Verifique o console.');
-                    return false;
-                }
-                console.log('Metas salvas com sucesso.');
-                return true;
-            } catch (err) {
-                console.error('Exceção ao salvar metas:', err);
-                alert('Erro inesperado ao salvar metas.');
-                return false;
-            }
-        }
-
-        function distributeSellerGoal(sellerName, categoryId, newTotalValue, metric = 'fat') {
+function distributeSellerGoal(sellerName, categoryId, newTotalValue, metric = 'fat') {
             // metric: 'fat' or 'vol'
             // categoryId: '707', '1119_TODDY', 'tonelada_elma', etc.
 
@@ -2903,7 +1228,7 @@
             activeClients.forEach(client => {
                 const codCli = String(client['Código'] || client['codigo_cliente']);
                 const historyIds = optimizedData.indices.history.byClient.get(codCli);
-                
+
                 if (!clientSubCatHistory.has(codCli)) clientSubCatHistory.set(codCli, new Map());
                 const subCatMap = clientSubCatHistory.get(codCli);
 
@@ -2912,7 +1237,7 @@
                         const sale = optimizedData.historyById.get(id);
                         const codFor = String(sale.CODFOR);
                         const desc = normalize(sale.DESCRICAO || '');
-                        
+
                         // Check against all target categories
                         targetCategories.forEach(subCat => {
                             let isMatch = false;
@@ -2939,7 +1264,7 @@
 
             // 2. Distribute
             // NewGoal(Client, SubCat) = NewTotalValue * (ClientSubCatHistory / TotalSellerHistory)
-            
+
             const clientCount = activeClients.length;
             const subCatCount = targetCategories.length;
 
@@ -2962,7 +1287,7 @@
                     // Update Global
                     if (!globalClientGoals.has(codCli)) globalClientGoals.set(codCli, new Map());
                     const cGoals = globalClientGoals.get(codCli);
-                    
+
                     if (!cGoals.has(subCat)) cGoals.set(subCat, { fat: 0, vol: 0 });
                     const target = cGoals.get(subCat);
 
@@ -2973,7 +1298,7 @@
             console.log(`[Goals] Distributed ${newTotalValue} (${metric}) for ${sellerName} / ${categoryId} (Cascade: ${targetCategories.join(',')})`);
         }
 
-        function exportGoalsSvXLSX() {
+function exportGoalsSvXLSX() {
             if (typeof XLSX === 'undefined') {
                 alert("Erro: Biblioteca XLSX não carregada. Verifique sua conexão com a internet.");
                 return;
@@ -3156,7 +1481,7 @@
 
                                 rowData.push({ t: 'n', v: d.metaFat, f: formulaFat, s: { ...aggCellStyle, numFmt: fmtMoney }, z: fmtMoney });
                                 rowData.push(createCell(d.metaPos, readOnlyStyle, fmtInt));
-                                
+
                                 // Positivation (Aggregate): Use Stored Target
                                 let posVal = d.metaPos;
                                 if (goalsSellerTargets.has(seller.name)) {
@@ -3168,7 +1493,7 @@
                                 // Leaf Cells
                                 rowData.push(createCell(d.metaFat, fatStyle, fmtMoney));
                                 rowData.push(createCell(d.metaPos, readOnlyStyle, fmtInt));
-                                
+
                                 // Positivation (Standard): Use Stored Target
                                 let posVal = d.metaPos;
                                 if (goalsSellerTargets.has(seller.name)) {
@@ -3462,7 +1787,7 @@
             XLSX.writeFile(wb, "Metas_Fechamento_SV.xlsx");
         }
 
-        function isActiveClient(c) {
+function isActiveClient(c) {
             const rca1 = String(c.rca1 || '').trim();
             const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
             if (isAmericanas) return true;
@@ -3473,7 +1798,7 @@
             return true;
         }
 
-        function getGoalsFilteredData() {
+function getGoalsFilteredData() {
             const sellersSet = new Set(selectedGoalsGvSellers);
             const supervisorsSet = new Set(selectedGoalsGvSupervisors);
             const codCli = goalsGvCodcliFilter.value.trim();
@@ -3516,7 +1841,7 @@
             return clients;
         }
 
-        function getHistoricalMix(sellerName, type) {
+function getHistoricalMix(sellerName, type) {
             const sellerCode = optimizedData.rcaCodeByName.get(sellerName);
             if (!sellerCode) return 0;
 
@@ -3536,11 +1861,11 @@
             activeClients.forEach(client => {
                 const codCli = String(client['Código'] || client['codigo_cliente']);
                 const historyIds = optimizedData.indices.history.byClient.get(codCli);
-                
+
                 if (historyIds) {
                     // Bucket by Month
                     const monthlySales = new Map(); // Map<MonthKey, Set<Brand>>
-                    
+
                     historyIds.forEach(id => {
                         const sale = optimizedData.historyById.get(id);
                         // Using same date parsing as elsewhere
@@ -3551,7 +1876,7 @@
                         if (dateObj) {
                             const monthKey = `${dateObj.getUTCFullYear()}-${dateObj.getUTCMonth()}`;
                             if (!monthlySales.has(monthKey)) monthlySales.set(monthKey, new Set());
-                            
+
                             // Check brand/category match
                             const desc = normalize(sale.DESCRICAO || '');
                             targetCategories.forEach(cat => {
@@ -3575,1092 +1900,14 @@
             return totalMixMonths / 3;
         }
 
-        function parseInputMoney(id) {
+function parseInputMoney(id) {
             const el = document.getElementById(id);
             if (!el) return 0;
             let val = el.value.replace(/\./g, '').replace(',', '.');
             return parseFloat(val) || 0;
         }
 
-        function getMonthWeeksDistribution(date) {
-            const year = date.getUTCFullYear();
-            const month = date.getUTCMonth();
-            
-            // Start of Month
-            const startDate = new Date(Date.UTC(year, month, 1));
-            // End of Month
-            const endDate = new Date(Date.UTC(year, month + 1, 0));
-            const totalDays = endDate.getUTCDate();
-
-            let currentWeekStart = new Date(startDate);
-            const weeks = [];
-            let totalWorkingDays = 0;
-
-            // Loop through weeks
-            while (currentWeekStart <= endDate) {
-                // Get end of this week (Sunday or End of Month)
-                // getUTCDay: 0 (Sun) to 6 (Sat).
-                // We want weeks to be Calendar Weeks (Mon-Sun or Sun-Sat).
-                // Standard: ISO weeks start on Monday. But JS getDay 0 is Sunday.
-                // Let's assume standard calendar week view where Sunday breaks the week.
-                // However, user said "reconhecer as semanas pelo calendário... De segunda a sexta".
-                // Let's define week chunks.
-                // Logic: A week ends on Saturday (or Sunday).
-                
-                // Find next Sunday (or End of Month)
-                let dayOfWeek = currentWeekStart.getUTCDay(); // 0=Sun, 1=Mon...
-                let daysToSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-                
-                let currentWeekEnd = new Date(currentWeekStart);
-                currentWeekEnd.setUTCDate(currentWeekStart.getUTCDate() + daysToSunday);
-                
-                if (currentWeekEnd > endDate) currentWeekEnd = new Date(endDate);
-
-                // Count Working Days in this chunk
-                let workingDaysInWeek = 0;
-                let tempDate = new Date(currentWeekStart);
-                while (tempDate <= currentWeekEnd) {
-                    const dow = tempDate.getUTCDay();
-                    if (dow >= 1 && dow <= 5) {
-                        workingDaysInWeek++;
-                        totalWorkingDays++;
-                    }
-                    tempDate.setUTCDate(tempDate.getUTCDate() + 1);
-                }
-
-                if (workingDaysInWeek > 0 || weeks.length === 0 || currentWeekStart <= endDate) {
-                     // Only push if valid week or just start
-                     weeks.push({
-                         start: new Date(currentWeekStart),
-                         end: new Date(currentWeekEnd),
-                         workingDays: workingDaysInWeek
-                     });
-                }
-
-                // Next week starts day after currentWeekEnd
-                currentWeekStart = new Date(currentWeekEnd);
-                currentWeekStart.setUTCDate(currentWeekStart.getUTCDate() + 1);
-            }
-
-            return { weeks, totalWorkingDays };
-        }
-
-        function getMetaRealizadoFilteredData() {
-            const supervisorsSet = new Set(selectedMetaRealizadoSupervisors);
-            const sellersSet = new Set(selectedMetaRealizadoSellers);
-            const suppliersSet = new Set(selectedMetaRealizadoSuppliers);
-            const pasta = currentMetaRealizadoPasta;
-            const filial = metaRealizadoFilialFilter ? metaRealizadoFilialFilter.value : 'ambas';
-
-            // Determine Goal Keys based on Pasta (Moved to top level scope)
-            let goalKeys = [];
-            
-            // If Supplier Filter is Active, restricting goals to selected supplier ONLY
-            if (suppliersSet.size > 0) {
-                // Map selections to goal keys
-                suppliersSet.forEach(sup => {
-                    // Filter validation: Ensure they belong to current Pasta
-                    let valid = false;
-                    if (pasta === 'PEPSICO') valid = true;
-                    else if (pasta === 'ELMA') valid = ['707', '708', '752'].includes(sup);
-                    else if (pasta === 'FOODS') valid = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'].includes(sup) || sup === '1119'; 
-                    
-                    if (valid) {
-                        if (sup === '1119') { 
-                            goalKeys.push('1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO');
-                        } else {
-                            goalKeys.push(sup);
-                        }
-                    }
-                });
-            } else {
-                // Default Pasta Groups
-                if (pasta === 'PEPSICO') {
-                    goalKeys = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
-                } else if (pasta === 'ELMA') {
-                    goalKeys = ['707', '708', '752'];
-                } else if (pasta === 'FOODS') {
-                    goalKeys = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
-                }
-            }
-
-            // 1. Clients Filter
-            let clients = allClientsData.filter(c => {
-                const rca1 = String(c.rca1 || '').trim();
-                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                const codCli = String(c['Código'] || c['codigo_cliente']);
-
-                if (filial !== 'ambas' && clientLastBranch.get(codCli) !== filial) return false;
-
-                // Same active logic as Goals
-                if (isAmericanas) return true;
-                const codCliLocal = String(c['Código'] || c['codigo_cliente']);
-                if (rca1 === '53' && codCliLocal !== '12034') return false;
-                if (rca1 === '') return false;
-                return true;
-            });
-
-            if (supervisorsSet.size > 0) {
-                const rcasSet = new Set();
-                supervisorsSet.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
-                });
-                clients = clients.filter(c => {
-                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
-                    return clientRcas.some(r => rcasSet.has(r));
-                });
-            }
-
-            if (sellersSet.size > 0) {
-                const rcasSet = new Set();
-                sellersSet.forEach(name => {
-                    const code = optimizedData.rcaCodeByName.get(name);
-                    if (code) rcasSet.add(code);
-                });
-                clients = clients.filter(c => {
-                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
-                    return clientRcas.some(r => rcasSet.has(r));
-                });
-            }
-
-            // Implement Supplier Filter Logic (Virtual IDs for Foods) - Step 7
-            // Filter clients if supplier filter is active?
-            // Usually we filter SALES, not clients list, because a client might buy multiple brands.
-            // But 'getMetaRealizadoFilteredData' returns 'goalsBySeller' and 'salesBySeller'.
-            // Filtering 'clients' here only filters the BASE for Goal calculation if Goal is derived from Client List?
-            // Yes, Goals are derived from `globalClientGoals`.
-            // If I filter clients here, I remove their goals from the sum.
-            // Requirement: "filter the Realized, but not the Goals".
-            // "ele filtra o que foi realizado, mas não filtra as metas." (He said "filters realized, BUT NOT goals").
-            // Wait, re-reading: "ele filtra o que foi realizado, mas não filtra as metas. ( fazendo a alteração para consertar o filtro...)"
-            // "consertar o filtro" implies it SHOULD filter goals too?
-            // " quando eu aplico um filtro... ele filtra o que foi realizado, mas não filtra as metas." -> This is the BUG report.
-            // "fazendo a alteração para consertar o filtro" -> This implies fixing the behavior.
-            // Usually, if I filter by "Toddynho", I want to see "Toddynho Goal vs Toddynho Realized".
-            // So YES, I should filter Goals too.
-            // To filter Goals, I need to adjust `goalKeys` loop below based on `suppliersSet`.
-
-            const filteredClientCodes = new Set(clients.map(c => String(c['Código'] || c['codigo_cliente'])));
-
-            // 2. Goals Aggregation (By Seller)
-            // Structure: Map<SellerName, TotalGoal>
-            // 2. Goals Aggregation (By Seller)
-            // Structure: Map<SellerName, { totalFat: 0, totalVol: 0, totalPos: 0 }>
-            const goalsBySeller = new Map();
-
-            clients.forEach(client => {
-                const codCli = String(client['Código'] || client['codigo_cliente']);
-                const rcaCode = String(client.rca1 || '');
-                const rcaName = optimizedData.rcaNameByCode.get(rcaCode) || rcaCode; // Map code to name for grouping
-
-                // Filtering "Garbage" Sellers to fix Total Positivação (1965 vs 1977)
-                if (!rcaName || rcaName === 'INATIVOS') return;
-                const upperName = rcaName.toUpperCase();
-                if (upperName === 'BALCAO' || upperName === 'BALCÃO' || upperName.includes('TOTAL') || upperName.includes('GERAL')) return;
-
-                // Goal Keys are now determined at function scope (hoisted)
-
-                if (globalClientGoals.has(codCli)) {
-                    const clientGoals = globalClientGoals.get(codCli);
-                    let clientTotalFatGoal = 0;
-                    let clientTotalVolGoal = 0;
-                    let hasGoal = false;
-
-                    goalKeys.forEach(k => {
-                        if (clientGoals.has(k)) {
-                            const g = clientGoals.get(k);
-                            clientTotalFatGoal += (g.fat || 0);
-                            clientTotalVolGoal += (g.vol || 0);
-                            if ((g.fat || 0) > 0) hasGoal = true;
-                        }
-                    });
-
-                    if (!goalsBySeller.has(rcaName)) {
-                        goalsBySeller.set(rcaName, { totalFat: 0, totalVol: 0, totalPos: 0 });
-                    }
-                    const sellerGoals = goalsBySeller.get(rcaName);
-                    
-                    if (clientTotalFatGoal > 0) sellerGoals.totalFat += clientTotalFatGoal;
-                    if (clientTotalVolGoal > 0) sellerGoals.totalVol += clientTotalVolGoal;
-                    if (hasGoal) sellerGoals.totalPos += 1; // Count client as 1 target
-                }
-            });
-
-            // Apply Positivation Overrides from goalsSellerTargets (Imported Absolute Values)
-            // Apply Overrides from goalsSellerTargets (Imported Absolute Values for Pos, Fat, Vol)
-
-            // --- FIX: Ensure all sellers with Manual Targets are present in goalsBySeller ---
-            // Build a set of sellers active in the current Filial (if filtered)
-            const sellersInFilial = new Set();
-            if (filial !== 'ambas') {
-                clients.forEach(c => {
-                    const rcaCode = String(c.rca1 || '');
-                    const rcaName = optimizedData.rcaNameByCode.get(rcaCode) || rcaCode;
-                    if (rcaName) sellersInFilial.add(rcaName);
-                });
-            }
-
-            goalsSellerTargets.forEach((targets, sellerName) => {
-                // 1. Basic Filters (Supervisor/Seller)
-                if (supervisorsSet.size > 0) {
-                    const supervisorName = (sellerDetailsMap.get(optimizedData.rcaCodeByName.get(sellerName) || '') || {}).supervisor;
-                    if (!supervisorName || !supervisorsSet.has(supervisorName)) return; 
-                }
-                if (sellersSet.size > 0 && !sellersSet.has(sellerName)) return;
-
-                // 2. Filial Filter: Only include sellers active in the selected filial
-                if (filial !== 'ambas' && !sellersInFilial.has(sellerName)) return;
-
-                // 3. Garbage Filter: Ignore aggregate/special sellers
-                const upperName = sellerName.toUpperCase();
-                if (upperName === 'BALCAO' || upperName === 'BALCÃO' || upperName.includes('TOTAL') || upperName.includes('GERAL')) return;
-
-                // Add to map if missing
-                if (!goalsBySeller.has(sellerName)) {
-                    goalsBySeller.set(sellerName, { totalFat: 0, totalVol: 0, totalPos: 0 });
-                }
-            });
-            // ---------------------------------------------------------------------------------
-
-            goalsBySeller.forEach((goals, sellerName) => {
-                const targets = goalsSellerTargets.get(sellerName);
-                if (targets) {
-                    // 1. Positivação Overrides
-                    let overrideKey = null;
-                    if (pasta === 'PEPSICO') {
-                        if (targets['pepsico_all'] !== undefined) overrideKey = 'pepsico_all';
-                        else overrideKey = 'GERAL';
-                    }
-                    else if (pasta === 'ELMA') overrideKey = 'total_elma';
-                    else if (pasta === 'FOODS') overrideKey = 'total_foods';
-
-                    if (suppliersSet.size === 1) {
-                        const sup = [...suppliersSet][0]; 
-                        if (sup === '1119_TODDYNHO') overrideKey = '1119_TODDYNHO';
-                        else if (sup === '1119_TODDY') overrideKey = '1119_TODDY';
-                        else if (sup === '1119_QUAKER') overrideKey = '1119_QUAKER_KEROCOCO';
-                        else overrideKey = sup;
-                    }
-
-                    if (overrideKey && targets[overrideKey] !== undefined) {
-                        goals.totalPos = targets[overrideKey];
-                    }
-
-                    // 2. Revenue (FAT) and Volume (VOL) Overrides
-                    let overrideFat = 0;
-                    let overrideVol = 0;
-                    let hasOverrideFat = false;
-                    let hasOverrideVol = false;
-
-                    // If Specific Supplier Filter is Active, check specific keys
-                    if (suppliersSet.size > 0) {
-                        goalKeys.forEach(k => {
-                            if (targets[`${k}_FAT`] !== undefined) {
-                                overrideFat += targets[`${k}_FAT`];
-                                hasOverrideFat = true;
-                            }
-                            if (targets[`${k}_VOL`] !== undefined) {
-                                overrideVol += targets[`${k}_VOL`];
-                                hasOverrideVol = true;
-                            }
-                        });
-                    } else {
-                        // Aggregate View (PEPSICO/ELMA/FOODS)
-                        // Check for Aggregate Keys first (Preferred for Total View)
-                        if (pasta === 'PEPSICO') {
-                            // Sum up sub-aggregates or check 'pepsico_all'? (Import doesn't set 'pepsico_all_FAT')
-                            // Import sets totals or individual categories.
-                            // If user imported Total Elma and Total Foods, use those.
-                            // If user imported Individual Categories, sum those.
-                            
-                            // Strategy: Sum all matching components found in goalKeys
-                            goalKeys.forEach(k => {
-                                if (targets[`${k}_FAT`] !== undefined) { overrideFat += targets[`${k}_FAT`]; hasOverrideFat = true; }
-                                if (targets[`${k}_VOL`] !== undefined) { overrideVol += targets[`${k}_VOL`]; hasOverrideVol = true; }
-                            });
-
-                            // Fallback/Augment for FAT (Revenue): Check Aggregates (total_elma_FAT, total_foods_FAT)
-                            if (targets['total_elma_FAT'] !== undefined) {
-                                const elmaKeys = ['707', '708', '752'];
-                                const hasIndividualElmaFat = elmaKeys.some(k => targets[`${k}_FAT`] !== undefined);
-                                if (!hasIndividualElmaFat) {
-                                    overrideFat += targets['total_elma_FAT'];
-                                    hasOverrideFat = true;
-                                }
-                            }
-                            if (targets['total_foods_FAT'] !== undefined) {
-                                const foodsKeys = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
-                                const hasIndividualFoodsFat = foodsKeys.some(k => targets[`${k}_FAT`] !== undefined);
-                                if (!hasIndividualFoodsFat) {
-                                    overrideFat += targets['total_foods_FAT'];
-                                    hasOverrideFat = true;
-                                }
-                            }
-
-                            // Fallback/Augment: If individual keys missing but Aggregates present?
-                            // This is complex. Let's assume Import provided consistent level.
-                            // However, Volume is often imported as 'tonelada_elma'.
-                            if (targets['tonelada_elma_VOL'] !== undefined) {
-                                // If we are viewing PEPSICO, we should include ELMA Volume
-                                // Check if we already summed up individual ELMA components (707, 708, 752)
-                                // If 707_VOL etc are missing, we use tonelada_elma_VOL
-                                const elmaKeys = ['707', '708', '752'];
-                                const hasIndividualElmaVol = elmaKeys.some(k => targets[`${k}_VOL`] !== undefined);
-                                if (!hasIndividualElmaVol) {
-                                    overrideVol += targets['tonelada_elma_VOL'];
-                                    hasOverrideVol = true;
-                                }
-                            }
-                            if (targets['tonelada_foods_VOL'] !== undefined) {
-                                const foodsKeys = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
-                                const hasIndividualFoodsVol = foodsKeys.some(k => targets[`${k}_VOL`] !== undefined);
-                                if (!hasIndividualFoodsVol) {
-                                    overrideVol += targets['tonelada_foods_VOL'];
-                                    hasOverrideVol = true;
-                                }
-                            }
-                        }
-                        else if (pasta === 'ELMA') {
-                            // Check for 'total_elma_FAT' override? Import sets individual categories for FAT usually.
-                            // Check 'tonelada_elma_VOL' for Volume
-                            if (targets['tonelada_elma_VOL'] !== undefined) {
-                                overrideVol = targets['tonelada_elma_VOL'];
-                                hasOverrideVol = true;
-                            } else {
-                                // Sum leaves
-                                goalKeys.forEach(k => {
-                                    if (targets[`${k}_VOL`] !== undefined) { overrideVol += targets[`${k}_VOL`]; hasOverrideVol = true; }
-                                });
-                            }
-                            
-                            // Fat
-                            goalKeys.forEach(k => {
-                                if (targets[`${k}_FAT`] !== undefined) { overrideFat += targets[`${k}_FAT`]; hasOverrideFat = true; }
-                            });
-                        }
-                        else if (pasta === 'FOODS') {
-                            if (targets['tonelada_foods_VOL'] !== undefined) {
-                                overrideVol = targets['tonelada_foods_VOL'];
-                                hasOverrideVol = true;
-                            } else {
-                                goalKeys.forEach(k => {
-                                    if (targets[`${k}_VOL`] !== undefined) { overrideVol += targets[`${k}_VOL`]; hasOverrideVol = true; }
-                                });
-                            }
-                            // Fat
-                            goalKeys.forEach(k => {
-                                if (targets[`${k}_FAT`] !== undefined) { overrideFat += targets[`${k}_FAT`]; hasOverrideFat = true; }
-                            });
-                        }
-                    }
-
-                    if (hasOverrideFat) goals.totalFat = overrideFat;
-                    if (hasOverrideVol) goals.totalVol = overrideVol;
-                }
-            });
-
-            // 3. Sales Aggregation (By Seller & Week)
-            // Structure: Map<SellerName, { totalFat: 0, totalVol: 0, weeksFat: [], weeksVol: [] }>
-            const salesBySeller = new Map();
-            const { weeks } = getMonthWeeksDistribution(lastSaleDate); // Use current global date context
-
-            // Helper to find week index
-            const getWeekIndex = (date) => {
-                const d = typeof date === 'number' ? new Date(date) : parseDate(date);
-                if (!d) return -1;
-                // Check against ranges
-                for(let i=0; i<weeks.length; i++) {
-                    // Week range is inclusive start, inclusive end
-                    if (d >= weeks[i].start && d <= weeks[i].end) return i;
-                }
-                return -1;
-            };
-
-            // Iterate Sales
-            // Optimized: Use indices if needed, or simple iteration.
-            // Filter: Month, Types != 5,11, Pasta, Supervisor/Seller/Supplier
-            const currentMonthIndex = lastSaleDate.getUTCMonth();
-            const currentYear = lastSaleDate.getUTCFullYear();
-
-            // Cache for Positivação Logic (Unique Clients per Seller)
-            const sellerClients = new Map(); // Map<SellerName, Set<CodCli>>
-
-            for(let i=0; i<allSalesData.length; i++) {
-                const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
-                
-                // Date Filter
-                const d = typeof s.DTPED === 'number' ? new Date(s.DTPED) : parseDate(s.DTPED);
-                if (!d || d.getUTCMonth() !== currentMonthIndex || d.getUTCFullYear() !== currentYear) continue;
-
-                // Type Filter (Types 5 and 11 excluded)
-                const tipo = String(s.TIPOVENDA);
-                if (tipo === '5' || tipo === '11') continue;
-
-                // Pasta Filter (OBSERVACAOFOR) logic for Pepsico/Elma/Foods
-                // 1. Determine if row is PEPSICO/MULTIMARCAS
-                let rowPasta = s.OBSERVACAOFOR;
-                if (!rowPasta || rowPasta === '0' || rowPasta === '00' || rowPasta === 'N/A') {
-                     const rawFornecedor = String(s.FORNECEDOR || '').toUpperCase();
-                     rowPasta = rawFornecedor.includes('PEPSICO') ? 'PEPSICO' : 'MULTIMARCAS';
-                }
-
-                // "Meta Vs. Realizado" only cares about PEPSICO data
-                if (rowPasta !== 'PEPSICO') continue;
-
-                // 2. Check Sub-pasta logic (ELMA vs FOODS) based on CODFOR
-                // If filter is PEPSICO, we include everything (since we already filtered for PEPSICO above)
-                // If filter is ELMA, we check CODFOR 707, 708, 752
-                // If filter is FOODS, we check CODFOR 1119 (or specific sub-brands if needed, but usually 1119 is Foods)
-                
-                const codFor = String(s.CODFOR);
-                if (pasta === 'ELMA') {
-                    if (!['707', '708', '752'].includes(codFor)) continue;
-                } else if (pasta === 'FOODS') {
-                    if (codFor !== '1119') continue;
-                }
-                // If pasta === 'PEPSICO', we include all (already filtered for PEPSICO rowPasta)
-
-                // Filial Filter
-                if (filial !== 'ambas' && String(s.FILIAL) !== filial) continue;
-
-                // Client Filter (Must be in the filtered list of clients? Or just match filters?)
-                // If we filtered clients by Supervisor/Seller, we should only count sales for those clients?
-                // Or sales where the sale's Supervisor/Seller matches?
-                // Usually Sales view filters by Sale attributes. Goals view filters by Client attributes.
-                // "Meta Vs Realizado" implies comparing the same entity.
-                // If I filter Supervisor "X", I show Seller Goals for X and Seller Sales for X.
-                // Let's use the standard filter logic:
-                
-                if (supervisorsSet.size > 0 && !supervisorsSet.has(s.SUPERV)) continue;
-                if (sellersSet.size > 0 && !sellersSet.has(s.NOME)) continue;
-                
-                // Enhanced Supplier Logic to handle Virtual Foods Categories
-                if (suppliersSet.size > 0) {
-                    let supplierMatch = false;
-                    const codFor = String(s.CODFOR);
-                    
-                    // 1. Direct Match (Regular Suppliers)
-                    if (suppliersSet.has(codFor)) {
-                        supplierMatch = true;
-                    } 
-                    // 2. Virtual Category Logic for 1119 (Foods)
-                    else if (codFor === '1119') {
-                        const desc = normalize(s.DESCRICAO || '');
-                        if (suppliersSet.has('1119_TODDYNHO') && desc.includes('TODDYNHO')) supplierMatch = true;
-                        else if (suppliersSet.has('1119_TODDY') && desc.includes('TODDY') && !desc.includes('TODDYNHO')) supplierMatch = true;
-                        else if (suppliersSet.has('1119_QUAKER_KEROCOCO') && (desc.includes('QUAKER') || desc.includes('KEROCOCO'))) supplierMatch = true;
-                    }
-
-                    if (!supplierMatch) continue;
-                }
-
-                const sellerName = s.NOME;
-                const valFat = Number(s.VLVENDA) || 0;
-                const valVol = Number(s.TOTPESOLIQ) || 0;
-                const weekIdx = getWeekIndex(d);
-
-                if (!salesBySeller.has(sellerName)) {
-                    salesBySeller.set(sellerName, { totalFat: 0, totalVol: 0, weeksFat: [0, 0, 0, 0, 0], weeksVol: [0, 0, 0, 0, 0], totalPos: 0 });
-                }
-                const entry = salesBySeller.get(sellerName);
-                
-                entry.totalFat += valFat;
-                entry.totalVol += valVol;
-                
-                if (weekIdx !== -1 && weekIdx < 5) {
-                    entry.weeksFat[weekIdx] += valFat;
-                    entry.weeksVol[weekIdx] += valVol;
-                }
-
-                // Positivação Logic (Accumulate Clients)
-                if (!sellerClients.has(sellerName)) sellerClients.set(sellerName, new Set());
-                sellerClients.get(sellerName).add(String(s.CODCLI));
-            }
-
-            // Finalize Positivação Counts
-            sellerClients.forEach((clientSet, sel) => {
-                if (salesBySeller.has(sel)) {
-                    salesBySeller.get(sel).totalPos = clientSet.size;
-                }
-            });
-
-            return { goalsBySeller, salesBySeller, weeks };
-        }
-
-        function renderMetaRealizadoTable(data, weeks, totalWorkingDays) {
-            const tableHead = document.getElementById('meta-realizado-table-head');
-            const tableBody = document.getElementById('meta-realizado-table-body');
-            
-            // Build Headers
-            let headerHTML = `
-                <tr>
-                    <th rowspan="2" class="px-3 py-2 text-left bg-[#161e3d] z-50 sticky left-0 border-r border-b border-slate-700 w-32 shadow-lg">VENDEDOR</th>
-                    <th colspan="2" class="px-2 py-1 text-center bg-blue-900/30 text-blue-400 border-r border-slate-700 border-b-0">GERAL</th>
-            `;
-
-            // Week Headers (Top Row)
-            weeks.forEach((week, i) => {
-                headerHTML += `<th colspan="2" class="px-2 py-1 text-center border-r border-slate-700 border-b-0 text-slate-300">SEMANA ${i + 1} (${week.workingDays}d)</th>`;
-            });
-            headerHTML += `</tr><tr>`;
-
-            // Sub-headers Row
-            // Geral Sub-headers
-            headerHTML += `
-                <th class="px-2 py-2 text-right bg-blue-900/20 text-blue-300 border-r border-b border-slate-700/50 text-[10px]">META</th>
-                <th class="px-2 py-2 text-right bg-blue-900/20 text-blue-100 font-bold border-r border-b border-slate-700 text-[10px]">REALIZADO</th>
-            `;
-
-            // Week Sub-headers
-            weeks.forEach(() => {
-                headerHTML += `
-                    <th class="px-2 py-2 text-right border-r border-b border-slate-700/50 text-slate-400 text-[10px]">META</th>
-                    <th class="px-2 py-2 text-right border-r border-b border-slate-700 text-white font-bold text-[10px]">REAL.</th>
-                `;
-            });
-            headerHTML += `</tr>`;
-            
-            tableHead.innerHTML = headerHTML;
-
-            // Build Body
-            // data is Array of { name, metaTotal, realTotal, weeks: [{meta, real}] }
-            const rowsHTML = data.map(row => {
-                const metaTotalStr = row.metaTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                const realTotalStr = row.realTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                
-                let cells = `
-                    <td class="px-3 py-2 font-medium text-slate-200 border-r border-b border-slate-700 sticky left-0 bg-[#1d2347] z-30 truncate" title="${row.name}">${getFirstName(row.name)}</td>
-                    <td class="px-2 py-2 text-right bg-blue-900/10 text-teal-400 border-r border-b border-slate-700/50 text-xs">${metaTotalStr}</td>
-                    <td class="px-2 py-2 text-right bg-blue-900/10 text-yellow-400 font-bold border-r border-b border-slate-700 text-xs">${realTotalStr}</td>
-                `;
-
-                row.weekData.forEach(w => {
-                    const wMetaStr = w.meta.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                    const wRealStr = w.real.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                    
-                    // Simple logic: Green if Real >= Meta, Red if Real < Meta (only if week has passed? Or always?)
-                    // Let's keep it neutral for now or simple colors.
-                    const realClass = w.real >= w.meta ? 'text-green-400' : 'text-slate-300';
-                    const metaClass = w.isPast ? 'text-red-500' : 'text-slate-400';
-
-                    cells += `
-                        <td class="px-2 py-3 text-right ${metaClass} text-xs border-r border-b border-slate-700">${wMetaStr}</td>
-                        <td class="px-2 py-3 text-right ${realClass} text-xs font-medium border-r border-b border-slate-700">${wRealStr}</td>
-                    `;
-                });
-
-                return `<tr class="hover:bg-slate-700/30 transition-colors">${cells}</tr>`;
-            }).join('');
-
-            tableBody.innerHTML = rowsHTML;
-        }
-
-        function renderMetaRealizadoChart(data) {
-            const ctx = document.getElementById('metaRealizadoChartContainer');
-            if (!ctx) return;
-
-            // Destroy previous chart if exists (assume we store it in charts object)
-            // Wait, createChart helper handles destruction if we pass ID. But here we have container ID.
-            // Let's use a canvas inside the container.
-            
-            let canvas = ctx.querySelector('canvas');
-            if (!canvas) {
-                canvas = document.createElement('canvas');
-                ctx.appendChild(canvas);
-            }
-            
-            const chartId = 'metaRealizadoChartInstance';
-            if (charts[chartId]) {
-                charts[chartId].destroy();
-            }
-
-            // Aggregate totals for the chart (Total Meta vs Total Realizado)
-            const totalMeta = data.reduce((sum, d) => sum + d.metaTotal, 0);
-            const totalReal = data.reduce((sum, d) => sum + d.realTotal, 0);
-
-            // Adjust formatting based on metric
-            const isVolume = currentMetaRealizadoMetric === 'peso';
-            
-            // If Volume, display in Tons (input was Kg)
-            const displayTotalMeta = isVolume ? totalMeta / 1000 : totalMeta;
-            const displayTotalReal = isVolume ? totalReal / 1000 : totalReal;
-
-            const formatValue = (val) => {
-                if (isVolume) {
-                    return val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' Ton';
-                }
-                return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            };
-
-            charts[chartId] = new Chart(canvas, {
-                type: 'bar',
-                data: {
-                    labels: ['Total'],
-                    datasets: [
-                        {
-                            label: 'Meta',
-                            data: [displayTotalMeta],
-                            backgroundColor: '#14b8a6', // Teal
-                            barPercentage: 0.6,
-                            categoryPercentage: 0.8
-                        },
-                        {
-                            label: 'Realizado',
-                            data: [displayTotalReal],
-                            backgroundColor: '#f59e0b', // Amber/Yellow
-                            barPercentage: 0.6,
-                            categoryPercentage: 0.8
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    layout: {
-                        padding: {
-                            top: 50
-                        }
-                    },
-                    plugins: {
-                        legend: { position: 'top', labels: { color: '#cbd5e1' } },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    if (context.parsed.y !== null) {
-                                        label += formatValue(context.parsed.y);
-                                    }
-                                    return label;
-                                }
-                            }
-                        },
-                        datalabels: {
-                            display: true,
-                            color: '#fff',
-                            anchor: 'end',
-                            align: 'top',
-                            formatter: formatValue,
-                            font: { weight: 'bold' }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grace: '10%',
-                            grid: { color: '#334155' },
-                            ticks: { color: '#94a3b8' }
-                        },
-                        x: {
-                            grid: { display: false },
-                            ticks: { color: '#94a3b8' }
-                        }
-                    }
-                }
-            });
-        }
-
-        let metaRealizadoClientsTableState = {
-            currentPage: 1,
-            itemsPerPage: 50,
-            filteredData: [],
-            totalPages: 1
-        };
-
-        function updateMetaRealizadoView() {
-            // 1. Get Data
-            const { goalsBySeller, salesBySeller, weeks } = getMetaRealizadoFilteredData();
-            
-            // Re-calculate Total Working Days
-            let totalWorkingDays = weeks.reduce((sum, w) => sum + w.workingDays, 0);
-            if (totalWorkingDays === 0) totalWorkingDays = 1;
-
-            // 2. Combine Data for Rendering (Sellers)
-            const allSellers = new Set([...goalsBySeller.keys(), ...salesBySeller.keys()]);
-            const rowData = [];
-
-            allSellers.forEach(sellerName => {
-                const goals = goalsBySeller.get(sellerName) || { totalFat: 0, totalVol: 0, totalPos: 0 };
-                const sales = salesBySeller.get(sellerName) || { totalFat: 0, totalVol: 0, weeksFat: [], weeksVol: [], totalPos: 0 };
-                
-                // Determine which metric to use for the main chart/table
-                // Note: The Table logic (renderMetaRealizadoTable) seems built for ONE metric (previously just Revenue).
-                // If we want the Table to also toggle or show both, we need to adjust it.
-                // Given the requirement "toggle button for R$/Ton", let's make the Table adhere to that too.
-                
-                let targetTotalGoal = 0;
-                let targetRealizedTotal = 0;
-                let targetRealizedWeeks = [];
-
-                if (currentMetaRealizadoMetric === 'valor') {
-                    targetTotalGoal = goals.totalFat;
-                    targetRealizedTotal = sales.totalFat;
-                    targetRealizedWeeks = sales.weeksFat || [];
-                } else {
-                    targetTotalGoal = goals.totalVol; // Kg
-                    targetRealizedTotal = sales.totalVol; // Kg
-                    targetRealizedWeeks = sales.weeksVol || [];
-                }
-
-                // Positivação Data
-                const posGoal = goals.totalPos;
-                const posRealized = sales.totalPos;
-
-                // Calculate Dynamic Weekly Goals (For the selected metric)
-                const adjustedGoals = calculateAdjustedWeeklyGoals(targetTotalGoal, targetRealizedWeeks, weeks);
-
-                const weekData = weeks.map((w, i) => {
-                    const wMeta = adjustedGoals[i];
-                    const wReal = targetRealizedWeeks[i] || 0;
-                    const isPast = w.end < lastSaleDate;
-                    return { meta: wMeta, real: wReal, isPast: isPast };
-                });
-
-                rowData.push({
-                    name: sellerName,
-                    metaTotal: targetTotalGoal,
-                    realTotal: targetRealizedTotal,
-                    weekData: weekData,
-                    // Additional Data for Positivação Chart
-                    posGoal: posGoal,
-                    posRealized: posRealized
-                });
-            });
-
-            // Sort by Meta Total Descending
-            rowData.sort((a, b) => b.metaTotal - a.metaTotal);
-
-            // 3. Render Sellers Table & Chart
-            renderMetaRealizadoTable(rowData, weeks, totalWorkingDays);
-            renderMetaRealizadoChart(rowData); // Chart 1 (Selected Metric)
-            renderMetaRealizadoPosChart(rowData); // Chart 2 (Positivação)
-
-            // 4. Clients Table Processing
-            const clientsData = getMetaRealizadoClientsData(weeks);
-
-            // 5. Save Data for Export
-            metaRealizadoDataForExport = {
-                sellers: rowData,
-                clients: clientsData,
-                weeks: weeks
-            };
-
-            metaRealizadoClientsTableState.filteredData = clientsData;
-            metaRealizadoClientsTableState.totalPages = Math.ceil(clientsData.length / metaRealizadoClientsTableState.itemsPerPage);
-
-            // Validate Current Page
-            if (metaRealizadoClientsTableState.currentPage > metaRealizadoClientsTableState.totalPages) {
-                metaRealizadoClientsTableState.currentPage = metaRealizadoClientsTableState.totalPages > 0 ? metaRealizadoClientsTableState.totalPages : 1;
-            }
-            if (metaRealizadoClientsTableState.totalPages === 0) metaRealizadoClientsTableState.currentPage = 1;
-
-            renderMetaRealizadoClientsTable(clientsData, weeks);
-        }
-
-        function getMetaRealizadoClientsData(weeks) {
-            const supervisorsSet = new Set(selectedMetaRealizadoSupervisors);
-            const sellersSet = new Set(selectedMetaRealizadoSellers);
-            // Suppliers already filtered in getMetaRealizadoFilteredData logic for Sellers,
-            // but we need to re-apply logic for Client List generation.
-            // Actually, we can reuse similar filtering logic.
-            const suppliersSet = new Set(selectedMetaRealizadoSuppliers);
-            const pasta = currentMetaRealizadoPasta;
-
-            // 1. Identify Target Clients (Active/Americanas/etc + Filtered)
-            let clients = allClientsData.filter(c => {
-                const rca1 = String(c.rca1 || '').trim();
-                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                if (isAmericanas) return true;
-                const codCliLocal = String(c['Código'] || c['codigo_cliente']);
-                if (rca1 === '53' && codCliLocal !== '12034') return false;
-                if (rca1 === '') return false;
-                return true;
-            });
-
-            // Apply Filters (Supervisor/Seller)
-            if (supervisorsSet.size > 0) {
-                const rcasSet = new Set();
-                supervisorsSet.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
-                });
-                clients = clients.filter(c => {
-                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
-                    return clientRcas.some(r => rcasSet.has(r));
-                });
-            }
-
-            if (sellersSet.size > 0) {
-                const rcasSet = new Set();
-                sellersSet.forEach(name => {
-                    const code = optimizedData.rcaCodeByName.get(name);
-                    if (code) rcasSet.add(code);
-                });
-                clients = clients.filter(c => {
-                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
-                    return clientRcas.some(r => rcasSet.has(r));
-                });
-            }
-
-            // Optimization: Create Set of Client Codes
-            const allowedClientCodes = new Set(clients.map(c => String(c['Código'] || c['codigo_cliente'])));
-
-            // 2. Aggregate Data per Client
-            const clientMap = new Map(); // Map<CodCli, { clientObj, goal: 0, salesTotal: 0, salesWeeks: [] }>
-
-            // Determine Goal Keys based on Pasta (Copy logic)
-            let goalKeys = [];
-
-            // If Supplier Filter is Active, restricting goals to selected supplier ONLY
-            if (suppliersSet.size > 0) {
-                // Map selections to goal keys
-                suppliersSet.forEach(sup => {
-                    // Filter validation: Ensure they belong to current Pasta
-                    let valid = false;
-                    if (pasta === 'PEPSICO') valid = true;
-                    else if (pasta === 'ELMA') valid = ['707', '708', '752'].includes(sup);
-                    else if (pasta === 'FOODS') valid = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'].includes(sup) || sup === '1119';
-
-                    if (valid) {
-                        if (sup === '1119') {
-                            goalKeys.push('1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO');
-                        } else {
-                            goalKeys.push(sup);
-                        }
-                    }
-                });
-            } else {
-                // Default Pasta Groups
-                if (pasta === 'PEPSICO') {
-                    goalKeys = ['707', '708', '752', '1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
-                } else if (pasta === 'ELMA') {
-                    goalKeys = ['707', '708', '752'];
-                } else if (pasta === 'FOODS') {
-                    goalKeys = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
-                }
-            }
-
-            // A. Populate Goals
-            clients.forEach(client => {
-                const codCli = String(client['Código'] || client['codigo_cliente']);
-                if (!clientMap.has(codCli)) {
-                    clientMap.set(codCli, { clientObj: client, goal: 0, salesTotal: 0, salesWeeks: new Array(weeks.length).fill(0) });
-                }
-                const entry = clientMap.get(codCli);
-
-                if (globalClientGoals.has(codCli)) {
-                    const cGoals = globalClientGoals.get(codCli);
-                    goalKeys.forEach(k => {
-                        if (cGoals.has(k)) entry.goal += (cGoals.get(k).fat || 0);
-                    });
-                }
-            });
-
-            // B. Populate Sales (Iterate ALL Sales to catch those without Meta)
-            // Filter Logic matches 'getMetaRealizadoFilteredData'
-            const currentMonthIndex = lastSaleDate.getUTCMonth();
-            const currentYear = lastSaleDate.getUTCFullYear();
-
-            // Helper for week index (Copied from getMetaRealizadoFilteredData scope, need to redefine or reuse)
-            const getWeekIndex = (date) => {
-                const d = typeof date === 'number' ? new Date(date) : parseDate(date);
-                if (!d) return -1;
-                for(let i=0; i<weeks.length; i++) {
-                    if (d >= weeks[i].start && d <= weeks[i].end) return i;
-                }
-                return -1;
-            };
-
-            for(let i=0; i<allSalesData.length; i++) {
-                const s = allSalesData instanceof ColumnarDataset ? allSalesData.get(i) : allSalesData[i];
-                const d = typeof s.DTPED === 'number' ? new Date(s.DTPED) : parseDate(s.DTPED);
-
-                // Basic Filters
-                if (!d || d.getUTCMonth() !== currentMonthIndex || d.getUTCFullYear() !== currentYear) continue;
-                const tipo = String(s.TIPOVENDA);
-                if (tipo === '5' || tipo === '11') continue;
-
-                // Pasta Filter
-                let rowPasta = s.OBSERVACAOFOR;
-                if (!rowPasta || rowPasta === '0' || rowPasta === '00' || rowPasta === 'N/A') {
-                     const rawFornecedor = String(s.FORNECEDOR || '').toUpperCase();
-                     rowPasta = rawFornecedor.includes('PEPSICO') ? 'PEPSICO' : 'MULTIMARCAS';
-                }
-                if (rowPasta !== 'PEPSICO') continue;
-
-                const codFor = String(s.CODFOR);
-                if (pasta === 'ELMA' && !['707', '708', '752'].includes(codFor)) continue;
-                if (pasta === 'FOODS' && codFor !== '1119') continue;
-
-                // Supervisor/Seller/Supplier Filter on SALE row
-                if (supervisorsSet.size > 0 && !supervisorsSet.has(s.SUPERV)) continue;
-                if (sellersSet.size > 0 && !sellersSet.has(s.NOME)) continue;
-                if (suppliersSet.size > 0 && !suppliersSet.has(s.CODFOR)) continue;
-
-                const codCli = String(s.CODCLI);
-                // Check if client is in allowed list (Active/Filtered)
-                // Note: User said "todos os clientes que possuírem metas OU vendas".
-                // If a client has sales but was filtered out by "Active" check (e.g. Inactive RCA), should they appear?
-                // Usually yes, sales override status.
-                // However, we are filtering by Supervisor/Seller above.
-
-                // Logic: If I filtered by Supervisor X, and Sale is by Supervisor X, I include it.
-                // But do I include the Client Object?
-                // If the client wasn't in 'clients' array (e.g. RCA 53?), we might miss metadata.
-                // We should fetch client metadata from allClientsData map if missing.
-
-                if (!clientMap.has(codCli)) {
-                    // Try to find client object
-                    const clientObj = clientMapForKPIs.get(codCli) || { 'Código': codCli, nomeCliente: 'DESCONHECIDO', cidade: 'N/A', rca1: 'N/A' };
-                    // If we apply STRICT Supervisor/Seller filter, we should check if this sale matches.
-                    // We already checked sale attributes above. So this sale is valid for the view.
-                    clientMap.set(codCli, { clientObj: clientObj, goal: 0, salesTotal: 0, salesWeeks: new Array(weeks.length).fill(0) });
-                }
-
-                const entry = clientMap.get(codCli);
-                const val = Number(s.VLVENDA) || 0;
-                const weekIdx = getWeekIndex(d);
-
-                entry.salesTotal += val;
-                if (weekIdx !== -1) entry.salesWeeks[weekIdx] += val;
-            }
-
-            // 3. Transform to Array and Calculate Dynamic Goals
-            const results = [];
-            clientMap.forEach((data, codCli) => {
-                // Filter out if No Goal AND No Sales (Clean up empty active clients)
-                if (data.goal === 0 && data.salesTotal === 0) return;
-
-                const adjustedGoals = calculateAdjustedWeeklyGoals(data.goal, data.salesWeeks, weeks);
-
-                const weekData = weeks.map((w, i) => {
-                    const isPast = w.end < lastSaleDate;
-                    return { meta: adjustedGoals[i], real: data.salesWeeks[i], isPast: isPast };
-                });
-
-                // Resolve Vendor Name
-                let vendorName = 'N/A';
-                const rcaCode = (data.clientObj.rcas && data.clientObj.rcas.length > 0) ? data.clientObj.rcas[0] : (data.clientObj.rca1 || 'N/A');
-                if (rcaCode !== 'N/A') {
-                    vendorName = optimizedData.rcaNameByCode.get(String(rcaCode)) || rcaCode;
-                }
-
-                let nomeExibicao = data.clientObj.nomeCliente || data.clientObj.razaoSocial || 'N/A';
-                if (nomeExibicao.toUpperCase().includes('AMERICANAS')) {
-                    const fantasia = data.clientObj.fantasia || data.clientObj.FANTASIA || data.clientObj['Nome Fantasia'];
-                    if (fantasia) {
-                        nomeExibicao = fantasia;
-                    }
-                }
-
-                results.push({
-                    codcli: codCli,
-                    razaoSocial: nomeExibicao,
-                    cidade: data.clientObj.cidade || 'N/A',
-                    vendedor: vendorName,
-                    metaTotal: data.goal,
-                    realTotal: data.salesTotal,
-                    weekData: weekData
-                });
-            });
-
-            // Sort: High Potential? High Sales?
-            // Default: Meta Descending, then Sales Descending
-            results.sort((a, b) => b.metaTotal - a.metaTotal || b.realTotal - a.realTotal);
-
-            return results;
-        }
-
-        function renderMetaRealizadoClientsTable(data, weeks) {
-            const tableHead = document.getElementById('meta-realizado-clients-table-head');
-            const tableBody = document.getElementById('meta-realizado-clients-table-body');
-            const controls = document.getElementById('meta-realizado-clients-pagination-controls');
-            const infoText = document.getElementById('meta-realizado-clients-page-info-text');
-            const prevBtn = document.getElementById('meta-realizado-clients-prev-page-btn');
-            const nextBtn = document.getElementById('meta-realizado-clients-next-page-btn');
-
-            // 1. Build Headers (Same logic as Seller Table but with Client Info)
-            let headerHTML = `
-                <tr>
-                    <th rowspan="2" class="px-2 py-2 text-center bg-[#161e3d] border-r border-b border-slate-700 w-16">CÓD</th>
-                    <th rowspan="2" class="px-3 py-2 text-left bg-[#161e3d] border-r border-b border-slate-700 min-w-[200px]">CLIENTE</th>
-                    <th rowspan="2" class="px-3 py-2 text-left bg-[#161e3d] border-r border-b border-slate-700 w-32">VENDEDOR</th>
-                    <th rowspan="2" class="px-3 py-2 text-left bg-[#161e3d] border-r border-b border-slate-700 w-32">CIDADE</th>
-                    <th colspan="2" class="px-2 py-1 text-center bg-blue-900/30 text-blue-400 border-r border-slate-700 border-b-0">GERAL</th>
-            `;
-
-            weeks.forEach((week, i) => {
-                headerHTML += `<th colspan="2" class="px-2 py-1 text-center border-r border-slate-700 border-b-0 text-slate-300">SEMANA ${i + 1}</th>`;
-            });
-            headerHTML += `</tr><tr>`;
-
-            headerHTML += `
-                <th class="px-2 py-2 text-right bg-blue-900/20 text-blue-300 border-r border-b border-slate-700/50 text-[10px]">META</th>
-                <th class="px-2 py-2 text-right bg-blue-900/20 text-blue-100 font-bold border-r border-b border-slate-700 text-[10px]">REALIZADO</th>
-            `;
-
-            weeks.forEach(() => {
-                headerHTML += `
-                    <th class="px-2 py-2 text-right border-r border-b border-slate-700/50 text-slate-400 text-[10px]">META</th>
-                    <th class="px-2 py-2 text-right border-r border-b border-slate-700 text-white font-bold text-[10px]">REAL.</th>
-                `;
-            });
-            headerHTML += `</tr>`;
-
-            tableHead.innerHTML = headerHTML;
-
-            // 2. Pagination Logic
-            const startIndex = (metaRealizadoClientsTableState.currentPage - 1) * metaRealizadoClientsTableState.itemsPerPage;
-            const endIndex = startIndex + metaRealizadoClientsTableState.itemsPerPage;
-            const pageData = metaRealizadoClientsTableState.filteredData.slice(startIndex, endIndex);
-
-            // 3. Build Body
-            if (pageData.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="${6 + (weeks.length * 2)}" class="px-4 py-8 text-center text-slate-500">Nenhum cliente encontrado com os filtros atuais.</td></tr>`;
-            } else {
-                const rowsHTML = pageData.map(row => {
-                    const metaTotalStr = row.metaTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                    const realTotalStr = row.realTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-                    let cells = `
-                        <td class="px-2 py-2 text-center text-slate-400 text-xs border-r border-b border-slate-700">${row.codcli}</td>
-                        <td class="px-3 py-2 text-xs font-medium text-slate-200 border-r border-b border-slate-700 truncate" title="${escapeHtml(row.razaoSocial)}">${escapeHtml(row.razaoSocial)}</td>
-                        <td class="px-3 py-2 text-xs text-slate-400 border-r border-b border-slate-700 truncate">${escapeHtml(getFirstName(row.vendedor))}</td>
-                        <td class="px-3 py-2 text-xs text-slate-400 border-r border-b border-slate-700 truncate">${escapeHtml(row.cidade)}</td>
-                        <td class="px-2 py-2 text-right bg-blue-900/10 text-teal-400 border-r border-b border-slate-700/50 text-xs">${metaTotalStr}</td>
-                        <td class="px-2 py-2 text-right bg-blue-900/10 text-yellow-400 font-bold border-r border-b border-slate-700 text-xs">${realTotalStr}</td>
-                    `;
-
-                    row.weekData.forEach(w => {
-                        const wMetaStr = w.meta.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                        const wRealStr = w.real.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                        const realClass = w.real >= w.meta && w.meta > 0 ? 'text-green-400' : 'text-slate-300';
-                        const metaClass = w.isPast ? 'text-red-500' : 'text-slate-400';
-
-                        cells += `
-                            <td class="px-2 py-3 text-right ${metaClass} text-xs border-r border-b border-slate-700">${wMetaStr}</td>
-                            <td class="px-2 py-3 text-right ${realClass} text-xs font-medium border-r border-b border-slate-700">${wRealStr}</td>
-                        `;
-                    });
-
-                    return `<tr class="hover:bg-slate-700/30 transition-colors">${cells}</tr>`;
-                }).join('');
-                tableBody.innerHTML = rowsHTML;
-            }
-
-            // 4. Update Pagination Controls
-            if (metaRealizadoClientsTableState.filteredData.length > 0) {
-                infoText.textContent = `Página ${metaRealizadoClientsTableState.currentPage} de ${metaRealizadoClientsTableState.totalPages} (Total: ${metaRealizadoClientsTableState.filteredData.length} clientes)`;
-                prevBtn.disabled = metaRealizadoClientsTableState.currentPage === 1;
-                nextBtn.disabled = metaRealizadoClientsTableState.currentPage === metaRealizadoClientsTableState.totalPages;
-                controls.classList.remove('hidden');
-            } else {
-                controls.classList.add('hidden');
-            }
-        }
-
-        function calculateMetricsForClients(clientsList) {
+function calculateMetricsForClients(clientsList) {
             // Helper to init metrics structure
             const createMetric = () => ({
                 fat: 0, vol: 0, prevFat: 0, prevVol: 0,
@@ -4690,7 +1937,7 @@
 
             clientCodes.forEach(codCli => {
                 const historyIds = optimizedData.indices.history.byClient.get(codCli);
-                const clientTotals = {}; 
+                const clientTotals = {};
 
                 if (historyIds) {
                     historyIds.forEach(id => {
@@ -4762,7 +2009,7 @@
                 const m = metricsMap[key];
                 let sumClients = 0;
                 m.monthlyClientsSets.forEach(set => sumClients += set.size);
-                
+
                 finalMetrics[key] = {
                     avgFat: m.fat / QUARTERLY_DIVISOR,
                     avgVol: m.vol / QUARTERLY_DIVISOR,
@@ -4775,8 +2022,7 @@
             return finalMetrics;
         }
 
-        // Wrapper for compatibility
-        function getMetricsForSupervisors(supervisorsList) {
+function getMetricsForSupervisors(supervisorsList) {
              let clients = allClientsData;
              if (supervisorsList && supervisorsList.length > 0) {
                  const rcas = new Set();
@@ -4789,7 +2035,7 @@
              return calculateMetricsForClients(clients);
         }
 
-        function getSellerNaturalCount(sellerName, category) {
+function getSellerNaturalCount(sellerName, category) {
             const sellerCode = optimizedData.rcaCodeByName.get(sellerName);
             if (!sellerCode) return 0;
 
@@ -4805,7 +2051,7 @@
 
             activeClients.forEach(client => {
                 const codCli = String(client['Código'] || client['codigo_cliente']);
-                
+
                 // For Mix Salty/Foods, we exclude Americanas from the base count (Seller 1001)
                 const rca1 = String(client.rca1 || '').trim();
                 if ((category === 'mix_salty' || category === 'mix_foods') && rca1 === '1001') return;
@@ -4813,7 +2059,7 @@
                 const historyIds = optimizedData.indices.history.byClient.get(codCli);
                 if (historyIds) {
                     let hasSale = false;
-                    
+
                     for (const id of historyIds) {
                         if (hasSale) break;
                         const sale = optimizedData.historyById.get(id);
@@ -4848,7 +2094,7 @@
             return count;
         }
 
-        function updateGoalsSummaryView() {
+function updateGoalsSummaryView() {
             const container = document.getElementById('goals-summary-grid');
             if (!container) return;
 
@@ -4862,7 +2108,7 @@
                 if (isAmericanas) return true;
                 const codCliLocal = String(c['Código'] || c['codigo_cliente']);
                 if (rca1 === '53' && codCliLocal !== '12034') return false;
-                if (rca1 === '') return false; 
+                if (rca1 === '') return false;
                 return true;
             });
 
@@ -4898,7 +2144,7 @@
             // But let's look at `getMetricsForSupervisors` implementation first. It likely iterates `globalGoalsMetrics`?
             // No, `globalGoalsMetrics` is keyed by Product Category (707, etc.), NOT by Supervisor.
             // So `getMetricsForSupervisors` must be aggregating `globalClientGoals` for the filtered clients.
-            
+
             // Let's assume we need to calculate display metrics from the filtered client list.
             const displayMetrics = calculateMetricsForClients(filteredSummaryClients);
 
@@ -4931,7 +2177,7 @@
                 const rcaCode = String(c.rca1 || '').trim();
                 let sellerName = null;
                 if (rcaCode) sellerName = optimizedData.rcaNameByCode.get(rcaCode);
-                
+
                 if (sellerName && activeSellersInSummary.has(sellerName)) {
                     if (globalClientGoals.has(codCli)) {
                         const cGoals = globalClientGoals.get(codCli);
@@ -4952,7 +2198,7 @@
                 activeSellersInSummary.forEach(sellerName => {
                     // Check for explicit target in `goalsSellerTargets`
                     const targets = goalsSellerTargets.get(sellerName);
-                    
+
                     // If target exists (and is not null/undefined), use it.
                     // Note: Import logic sets targets.
                     if (targets && targets[category] !== undefined && targets[category] !== null) {
@@ -5093,7 +2339,7 @@
             if(mixFoodsEl) mixFoodsEl.textContent = mixFoodsTarget.toLocaleString('pt-BR');
         }
 
-        function getElmaTargetBase(displayMetrics, goalsPosAdjustments, activeSellersSet) {
+function getElmaTargetBase(displayMetrics, goalsPosAdjustments, activeSellersSet) {
             // MATCH LOGIC WITH "RELATÓRIO" (SV): Base is "Total ELMA" (707, 708, 752)
             // Logic derived from `updateGoalsSvView`:
             // - The Grand Total for Mix Salty/Foods EXCLUDES Americanas (Seller 1001) from the base.
@@ -5177,7 +2423,7 @@
             return naturalCount + adjustment;
         }
 
-                function calculateDistributedGoals(filteredClients, currentGoalsSupplier, currentGoalsBrand, goalFat, goalVol) {
+function calculateDistributedGoals(filteredClients, currentGoalsSupplier, currentGoalsBrand, goalFat, goalVol) {
             const cacheKey = currentGoalsSupplier + (currentGoalsBrand ? `_${currentGoalsBrand}` : '');
 
             if (quarterMonths.length === 0) identifyQuarterMonths();
@@ -5386,7 +2632,7 @@
             return { clientMetrics, globalTotalAvgFat, globalTotalAvgVol };
         }
 
-        function recalculateTotalGoals() {
+function recalculateTotalGoals() {
             // Reset goalsTargets sums
             for (const key in goalsTargets) {
                 goalsTargets[key] = { fat: 0, vol: 0 };
@@ -5402,7 +2648,7 @@
             });
         }
 
-        function distributeGoals(type) {
+function distributeGoals(type) {
             const inputId = type === 'fat' ? 'goal-global-fat' : 'goal-global-vol';
             const inputValue = parseInputMoney(inputId);
 
@@ -5500,7 +2746,7 @@
             updateGoalsView();
         }
 
-        function showConfirmationModal(message, onConfirm) {
+function showConfirmationModal(message, onConfirm) {
             const modal = document.getElementById('confirmation-modal');
             const msgEl = document.getElementById('confirmation-message');
             const confirmBtn = document.getElementById('confirmation-confirm-btn');
@@ -5525,7 +2771,7 @@
             });
         }
 
-        function getFilterDescription() {
+function getFilterDescription() {
             if (selectedGoalsGvSupervisors.length > 0) {
                 return selectedGoalsGvSupervisors.length === 1 ? `Supervisor "${selectedGoalsGvSupervisors[0]}"` : "Supervisores selecionados";
             }
@@ -5545,7 +2791,7 @@
             return 'filtro atual';
         }
 
-        function saveMixAdjustment(type, value, sellerName) {
+function saveMixAdjustment(type, value, sellerName) {
             // Find natural base for this seller based on ELMA metrics (excluding Americanas)
             const sellerCode = optimizedData.rcaCodeByName.get(sellerName);
 
@@ -5606,8 +2852,7 @@
             updateGoalsView();
         }
 
-
-        function exportGoalsGvPDF() {
+function exportGoalsGvPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('landscape');
             const data = goalsTableState.filteredData;
@@ -5722,7 +2967,7 @@
             doc.save(`Metas_GV_${safeFileNameParam}${nameParam}.pdf`);
         }
 
-        function exportGoalsCurrentTabXLSX() {
+function exportGoalsCurrentTabXLSX() {
             const data = goalsTableState.filteredData;
             if (!data || data.length === 0) {
                 alert('Sem dados para exportar.');
@@ -5795,7 +3040,7 @@
             // Update Data Rows with Formulas
             for (let r = dataStartRow; r <= dataEndRow; r++) {
                 const rowNum = r + 1; // 1-based row number for Excel formulas
-                
+
                 // Average Fat Formula: =AVERAGE(Start:End)
                 const avgFatRef = `${getColLetter(colIndices.avgFat)}${rowNum}`;
                 const monthsRange = `${getColLetter(colIndices.monthsStart)}${rowNum}:${getColLetter(colIndices.monthsEnd)}${rowNum}`;
@@ -5808,8 +3053,8 @@
                 // NOTE: This depends on the Total Row (which is at lastRowIndex + 1 in Excel, or rowNum = lastRowIndex + 1)
                 // Let's defer Share Formulas until we define the Total Row position.
                 // Assuming Total Row will be at `dataEndRow + 2` (1-based index: LastDataRow + 1)
-                const totalRowExcelNum = dataEndRow + 2; 
-                
+                const totalRowExcelNum = dataEndRow + 2;
+
                 const shareFatRef = `${getColLetter(colIndices.shareFat)}${rowNum}`;
                 const totalAvgFatRef = `${getColLetter(colIndices.avgFat)}${totalRowExcelNum}`;
                 // Only apply if totalAvgFat is not zero (avoid div/0) - hard to know in static generation, but formula handles it
@@ -5821,10 +3066,10 @@
                 }
 
                 const shareVolRef = `${getColLetter(colIndices.shareVol)}${rowNum}`;
-                const avgVolRef = `${getColLetter(colIndices.avgVol)}${rowNum}`; // Assuming Avg Vol is calculated or static? User asked for formula for Avg Fat, implies Avg Vol too? 
+                const avgVolRef = `${getColLetter(colIndices.avgVol)}${rowNum}`; // Assuming Avg Vol is calculated or static? User asked for formula for Avg Fat, implies Avg Vol too?
                 // "ass colunas que devem ter formulas são ( MÉDIA FAT, % SHARE FAT, % SHARE VOL)" - Doesn't explicitly say Avg Vol, but Share Vol depends on it.
                 // If Avg Vol is static, we can still reference it.
-                
+
                 const totalAvgVolRef = `${getColLetter(colIndices.avgVol)}${totalRowExcelNum}`;
                 if (ws_flat[shareVolRef]) {
                     ws_flat[shareVolRef].f = `${avgVolRef}/$${totalAvgVolRef}`;
@@ -5886,7 +3131,7 @@
              // Style Header & Footer
             if (ws_flat['!ref']) {
                 const range = XLSX.utils.decode_range(ws_flat['!ref']);
-                
+
                 // Header
                 for (let C = range.s.c; C <= range.e.c; ++C) {
                     const addr = XLSX.utils.encode_cell({ r: 0, c: C });
@@ -5967,7 +3212,7 @@
             XLSX.writeFile(wb, `Metas_GV_${safeFileNameParam}${nameParam}.xlsx`);
         }
 
-        function getSellerTargetOverride(sellerName, metricType, context) {
+function getSellerTargetOverride(sellerName, metricType, context) {
             if (!goalsSellerTargets || !goalsSellerTargets.has(sellerName)) return null;
             const targets = goalsSellerTargets.get(sellerName);
 
@@ -5989,8 +3234,7 @@
             return null;
         }
 
-        // Helper to get historical positivation count for a seller/category
-        function getHistoricalPositivation(sellerName, category) {
+function getHistoricalPositivation(sellerName, category) {
             const sellerCode = optimizedData.rcaCodeByName.get(sellerName);
             if (!sellerCode) return 0;
 
@@ -6011,7 +3255,7 @@
                 if (category === 'pepsico_all') return ['707', '708', '752', '1119'].includes(codFor);
                 if (category === 'total_elma') return ['707', '708', '752'].includes(codFor);
                 if (category === 'total_foods') return codFor === '1119';
-                
+
                 // Specifics
                 if (category === '707') return codFor === '707';
                 if (category === '708') return codFor === '708';
@@ -6019,7 +3263,7 @@
                 if (category === '1119_TODDYNHO') return codFor === '1119' && desc.includes('TODDYNHO');
                 if (category === '1119_TODDY') return codFor === '1119' && desc.includes('TODDY') && !desc.includes('TODDYNHO');
                 if (category === '1119_QUAKER_KEROCOCO') return codFor === '1119' && (desc.includes('QUAKER') || desc.includes('KEROCOCO'));
-                
+
                 return false;
             };
 
@@ -6032,7 +3276,7 @@
                         const sale = optimizedData.historyById.get(id);
                         const codFor = String(sale.CODFOR);
                         const desc = normalize(sale.DESCRICAO || '');
-                        
+
                         // Check Rev Type only? Usually yes for Positivação.
                         if ((sale.TIPOVENDA === '1' || sale.TIPOVENDA === '9') && checkSale(codFor, desc)) {
                             count++;
@@ -6044,13 +3288,13 @@
             return count;
         }
 
-        function distributeDown(sellerName, parentCategory, parentTargetValue) {
+function distributeDown(sellerName, parentCategory, parentTargetValue) {
             // Recursive Cascade
             let children = [];
             if (parentCategory === 'pepsico_all') children = ['total_elma', 'total_foods'];
             else if (parentCategory === 'total_elma') children = ['707', '708', '752'];
             else if (parentCategory === 'total_foods') children = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
-            
+
             if (children.length === 0) return;
 
             // 1. Get History for Children
@@ -6060,16 +3304,16 @@
             }));
 
             const parentHistory = getHistoricalPositivation(sellerName, parentCategory);
-            
+
             childHistories.forEach(item => {
                 let ratio = 0;
                 if (parentHistory > 0) {
                     ratio = item.hist / parentHistory;
                 }
-                
+
                 // New Target
                 const childTarget = Math.round(parentTargetValue * ratio);
-                
+
                 // Update Seller Targets
                 if (!goalsSellerTargets.has(sellerName)) goalsSellerTargets.set(sellerName, {});
                 const t = goalsSellerTargets.get(sellerName);
@@ -6080,10 +3324,10 @@
             });
         }
 
-        function handleDistributePositivation(totalGoal, contextKey, filteredClientMetrics) {
+function handleDistributePositivation(totalGoal, contextKey, filteredClientMetrics) {
             // filteredClientMetrics contains the list of sellers currently visible/active
             // We should distribute ONLY to them.
-            
+
             // Map Context Key (Tab) to Target Key
             let targetKey = contextKey;
             if (contextKey === 'PEPSICO_ALL') targetKey = 'pepsico_all';
@@ -6097,7 +3341,7 @@
             // Group by Seller to avoid duplicates if clientMetrics has multiple rows per seller?
             // clientMetrics is PER CLIENT. So we need to aggregate unique sellers first.
             const uniqueSellers = new Set(filteredClientMetrics.map(c => c.seller));
-            
+
             uniqueSellers.forEach(seller => {
                 const hist = getHistoricalPositivation(seller, targetKey);
                 sellersHistory.push({ seller, hist });
@@ -6106,18 +3350,18 @@
 
             // 2. Distribute Total Goal
             // We use Largest Remainder Method or simple rounding? Simple rounding for now.
-            
+
             sellersHistory.forEach(item => {
                 let share = 0;
                 if (totalHistoryPos > 0) {
                     share = item.hist / totalHistoryPos;
                 }
-                
-                // If totalHistory is 0 but we have a Goal, distribute evenly? 
+
+                // If totalHistory is 0 but we have a Goal, distribute evenly?
                 // Or leave 0? User said "proporcional". 0 history -> 0 share seems fair.
-                
+
                 const sellerTarget = Math.round(totalGoal * share);
-                
+
                 // Update Primary Target
                 if (!goalsSellerTargets.has(item.seller)) goalsSellerTargets.set(item.seller, {});
                 const t = goalsSellerTargets.get(item.seller);
@@ -6131,7 +3375,7 @@
             if (contextKey === 'PEPSICO_ALL') {
                 const newSalty = Math.round(totalGoal * 0.50);
                 const newFoods = Math.round(totalGoal * 0.30);
-                
+
                 // Update UI Inputs
                 const inputSalty = document.getElementById('goal-global-mix-salty');
                 const inputFoods = document.getElementById('goal-global-mix-foods');
@@ -6148,15 +3392,15 @@
             }
         }
 
-        function handleDistributeMix(totalGoal, type, contextKey, filteredClientMetrics) {
+function handleDistributeMix(totalGoal, type, contextKey, filteredClientMetrics) {
             let targetKey = type === 'salty' ? 'mix_salty' : 'mix_foods';
-            
+
             // 1. Calculate Total History for THESE sellers in THIS context
             let totalHistoryMix = 0;
             const sellersHistory = [];
 
             const uniqueSellers = new Set(filteredClientMetrics.map(c => c.seller));
-            
+
             uniqueSellers.forEach(seller => {
                 const hist = getHistoricalMix(seller, type);
                 sellersHistory.push({ seller, hist });
@@ -6169,9 +3413,9 @@
                 if (totalHistoryMix > 0) {
                     share = item.hist / totalHistoryMix;
                 }
-                
+
                 const sellerTarget = Math.round(totalGoal * share);
-                
+
                 // Update Primary Target
                 if (!goalsSellerTargets.has(item.seller)) goalsSellerTargets.set(item.seller, {});
                 const t = goalsSellerTargets.get(item.seller);
@@ -6182,7 +3426,7 @@
             updateGoalsView();
         }
 
-        function updateGoalsView() {
+function updateGoalsView() {
             goalsRenderId++;
             const currentRenderId = goalsRenderId;
 
@@ -6275,16 +3519,16 @@
                                     const monthKey = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
                                     monthlyActivity.set(monthKey, (monthlyActivity.get(monthKey) || 0) + sale.VLVENDA);
                                     if (monthlyValues.hasOwnProperty(monthKey)) monthlyValues[monthKey] += sale.VLVENDA;
-                                    
+
                                     // Mix Logic: Add Product Code + Month Key
                                     // ELMA Constraint: If ELMA_ALL, only 707 and 708 are counted for Mix. 752 (Torcida) is excluded.
                                     let includeInMix = true;
                                     const codFor = String(sale.CODFOR);
-                                    
+
                                     if (currentGoalsSupplier === 'ELMA_ALL') {
                                         if (codFor !== '707' && codFor !== '708') includeInMix = false;
                                     }
-                                    
+
                                     if (includeInMix) {
                                         mixProducts.add(`${sale.PRODUTO}_${monthKey}`);
                                     }
@@ -6348,7 +3592,7 @@
                 };
                 // Add Mix PDV to Metric Object
                 metric.mixPdv = mixPdvAvg;
-                
+
                 clientMetrics.push(metric);
 
                 // Accumulate totals
@@ -6494,7 +3738,7 @@
                                             }
                                         }
                                     }
-                                    
+
                                     const pepsicoAdj = goalsPosAdjustments['PEPSICO_ALL'].get(sellerName) || 0;
                                     const pepsicoLimit = pepsicoNaturalPos + pepsicoAdj;
                                     if (currentGoalsSupplier !== 'PEPSICO_ALL' && val > pepsicoLimit) {
@@ -6593,11 +3837,11 @@
                                     const newBtn = btn.cloneNode(true);
                                     btn.parentNode.replaceChild(newBtn, btn);
                                     newBtn.style.display = '';
-                                    
+
                                     newBtn.onclick = () => {
                                         const valStr = input.value;
                                         const val = parseFloat(valStr.replace(/\./g, '').replace(',', '.')) || 0;
-                                        
+
                                         if (isAggregatedTab) {
                                             const contextName = currentGoalsSupplier.replace('_ALL', '');
                                             showConfirmationModal(`Confirmar distribuição Proporcional de Mix ${type === 'salty' ? 'Salty' : 'Foods'} (${val}) para ${contextName}? (Base: Histórico)`, () => {
@@ -6696,7 +3940,7 @@
             }, () => currentRenderId !== goalsRenderId);
         }
 
-        function getGoalsSvFilteredData() {
+function getGoalsSvFilteredData() {
             const supervisorsSet = new Set(selectedGoalsSvSupervisors);
 
             let clients = allClientsData;
@@ -6723,129 +3967,7 @@
             return clients;
         }
 
-        function recalculateGoalsSvTotals(input) {
-            const { supId, colId, field, sellerId } = input.dataset;
-
-            // Helper to parse input value
-            const parseVal = (str) => {
-                let val = parseFloat(str.replace(/\./g, '').replace(',', '.'));
-                return isNaN(val) ? 0 : val;
-            };
-
-            // Helper to calculate and update column totals (Supervisor and Grand)
-            const updateColumnTotals = (cId, fld) => {
-                // 1. Supervisor Total
-                // For 'geral', the values are in spans (text), for others inputs.
-                let supSum = 0;
-                if (cId === 'geral') {
-                    const supCells = document.querySelectorAll(`.goals-sv-text[data-sup-id="${supId}"][data-col-id="${cId}"][data-field="${fld}"]`);
-                    supCells.forEach(el => supSum += parseVal(el.textContent));
-                } else {
-                    const supInputs = document.querySelectorAll(`.goals-sv-input[data-sup-id="${supId}"][data-col-id="${cId}"][data-field="${fld}"]`);
-                    supInputs.forEach(inp => supSum += parseVal(inp.value));
-                }
-
-                const supTotalEl = document.getElementById(`total-sup-${supId}-${cId}-${fld}`);
-                if (supTotalEl) {
-                    if (fld === 'fat') supTotalEl.textContent = supSum.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                    else if (fld === 'vol' || fld === 'ton') supTotalEl.textContent = supSum.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3});
-                    else supTotalEl.textContent = supSum;
-                }
-
-                // 2. Grand Total
-                let grandSum = 0;
-                if (cId === 'geral') {
-                    const allCells = document.querySelectorAll(`.goals-sv-text[data-col-id="${cId}"][data-field="${fld}"]`);
-                    allCells.forEach(el => grandSum += parseVal(el.textContent));
-                } else {
-                    const allInputs = document.querySelectorAll(`.goals-sv-input[data-col-id="${cId}"][data-field="${fld}"]`);
-                    allInputs.forEach(inp => grandSum += parseVal(inp.value));
-                }
-
-                const grandTotalEl = document.getElementById(`total-grand-${cId}-${fld}`);
-                if (grandTotalEl) {
-                    if (fld === 'fat') grandTotalEl.textContent = grandSum.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                    else if (fld === 'vol' || fld === 'ton') grandTotalEl.textContent = grandSum.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3});
-                    else grandTotalEl.textContent = grandSum;
-                }
-            };
-
-            // A. Update Current Column Totals
-            updateColumnTotals(colId, field);
-
-            // B. Row Aggregation Logic (Update Total Elma/Foods and Geral)
-            const elmaIds = ['707', '708', '752'];
-            const foodsIds = ['1119_TODDYNHO', '1119_TODDY', '1119_QUAKER_KEROCOCO'];
-
-            let groupTotalId = null;
-            let components = [];
-
-            if (elmaIds.includes(colId)) {
-                groupTotalId = 'total_elma';
-                components = elmaIds;
-            } else if (foodsIds.includes(colId)) {
-                groupTotalId = 'total_foods';
-                components = foodsIds;
-            }
-
-            // Only aggregate if we are editing a base column (not changing mix or tonnage directly if those were editable)
-            if (groupTotalId) {
-                // 1. Recalculate Group Total (Row)
-                let groupSum = 0;
-                components.forEach(cId => {
-                    const el = document.querySelector(`.goals-sv-input[data-seller-id="${sellerId}"][data-col-id="${cId}"][data-field="${field}"]`);
-                    if (el) groupSum += parseVal(el.value);
-                });
-
-                // Update Group Total Input (Read-only)
-                const groupInput = document.querySelector(`.goals-sv-input[data-seller-id="${sellerId}"][data-col-id="${groupTotalId}"][data-field="${field}"]`);
-                if (groupInput) {
-                    if (field === 'fat') groupInput.value = groupSum.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                    else if (field === 'vol') groupInput.value = groupSum.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3});
-                    else groupInput.value = groupSum; // Pos
-
-                    // Update Column Totals for the Group Column
-                    updateColumnTotals(groupTotalId, field);
-
-                    // Special Logic: If updating TOTAL ELMA POS, update PEDEV
-                    if (groupTotalId === 'total_elma' && field === 'pos') {
-                        const pedevVal = Math.round(groupSum * 0.9);
-                        const pedevCell = document.getElementById(`pedev-${sellerId}-pos`);
-                        if (pedevCell) {
-                            pedevCell.textContent = pedevVal;
-                            updateColumnTotals('pedev', 'pos');
-                        }
-                    }
-                }
-            }
-
-            // 2. Recalculate GERAL Total (Row) - Only for Fat and Vol/Ton
-            // Geral Pos is static (Active Clients), so we don't update it on input change
-            if (field === 'fat' || field === 'vol') {
-                const elmaInput = document.querySelector(`.goals-sv-input[data-seller-id="${sellerId}"][data-col-id="total_elma"][data-field="${field}"]`);
-                const foodsInput = document.querySelector(`.goals-sv-input[data-seller-id="${sellerId}"][data-col-id="total_foods"][data-field="${field}"]`);
-
-                let elmaVal = elmaInput ? parseVal(elmaInput.value) : 0;
-                let foodsVal = foodsInput ? parseVal(foodsInput.value) : 0;
-                let geralSum = elmaVal + foodsVal;
-
-                // Map field 'vol' to 'ton' for Geral if needed, or keep consistent
-                // In column definitions: 'tonelada_elma' is type 'tonnage' (field 'vol'). 'geral' is type 'geral'.
-                // Geral uses field 'fat' and 'ton'.
-                const geralField = field === 'vol' ? 'ton' : field;
-
-                const geralCell = document.getElementById(`geral-${sellerId}-${geralField}`);
-                if (geralCell) {
-                    if (geralField === 'fat') geralCell.textContent = geralSum.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                    else geralCell.textContent = geralSum.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3});
-
-                    // Update Column Totals for Geral
-                    updateColumnTotals('geral', geralField);
-                }
-            }
-        }
-
-        function updateGoalsSvView() {
+function updateGoalsSvView() {
             goalsSvRenderId++;
             const currentRenderId = goalsSvRenderId;
 
@@ -7165,11 +4287,11 @@
                                 data.metaMix = explicitTarget;
                             } else {
                                 const targets = goalsSellerTargets.get(sellerName) || {};
-                                // IMPORTANT FIX: Only overwrite MetaPos if the target key exactly matches 
+                                // IMPORTANT FIX: Only overwrite MetaPos if the target key exactly matches
                                 // the column ID (e.g. 'total_elma' which is Positivação).
                                 // If the column is 'tonelada_elma', and we only have 'tonelada_elma_VOL' in targets,
                                 // the 'targets[colId]' (which is targets['tonelada_elma']) will be undefined.
-                                // The legacy explicitTarget check above matched targets[colId.toUpperCase()] by mistake for volume 
+                                // The legacy explicitTarget check above matched targets[colId.toUpperCase()] by mistake for volume
                                 // but we shouldn't apply volume (tonelada_elma_VOL) as Positivation (metaPos).
                                 if (targets[colId] !== undefined || targets[colId.toUpperCase()] !== undefined) {
                                     // Make sure it is actually the Positivation target (no suffix)
@@ -7429,7 +4551,7 @@ const supervisorGroups = new Map();
             }, () => currentRenderId !== goalsSvRenderId);
         }
 
-        function handleGoalsFilterChange() {
+function handleGoalsFilterChange() {
             // Update Dropdown Lists based on available data?
             // Standard pattern: Update filter lists based on selection of others?
             // For now, simpler: Just update the view.
@@ -7446,7 +4568,7 @@ const supervisorGroups = new Map();
             }, 50);
         }
 
-        function resetGoalsGvFilters() {
+function resetGoalsGvFilters() {
             selectedGoalsGvSupervisors = [];
             selectedGoalsGvSellers = [];
             goalsGvCodcliFilter.value = '';
@@ -7457,1215 +4579,7 @@ const supervisorGroups = new Map();
             updateGoalsView();
         }
 
-        // <!-- INÍCIO DO CÓDIGO RESTAURADO -->
-
-        function getCoverageFilteredData(options = {}) {
-            const { excludeFilter = null } = options;
-            const isExcluded = (f) => excludeFilter === f || (Array.isArray(excludeFilter) && excludeFilter.includes(f));
-
-            // Define filter sets from UI state
-            const sellersNameSet = new Set(selectedCoverageSellers);
-            const supervisorsSet = new Set(selectedCoverageSupervisors);
-            const city = coverageCityFilter.value.trim().toLowerCase();
-            const filial = coverageFilialFilter.value;
-            const suppliersSet = new Set(selectedCoverageSuppliers);
-            const productsSet = new Set(selectedCoverageProducts);
-            const tiposVendaSet = new Set(selectedCoverageTiposVenda);
-
-            // --- Client Filtering (Universe for KPIs) ---
-            // Use active clients data defined by coverage logic
-            let clients = getActiveClientsData();
-
-            if (filial !== 'ambas' || supervisorsSet.size > 0 || sellersNameSet.size > 0 || city) {
-                const rcasOfSupervisor = new Set();
-                if (!isExcluded('supervisor') && supervisorsSet.size > 0) {
-                    supervisorsSet.forEach(sup => {
-                        (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasOfSupervisor.add(rca));
-                    });
-                }
-                const rcasOfSellers = new Set();
-                if (!isExcluded('seller') && sellersNameSet.size > 0) {
-                     sellersNameSet.forEach(sellerName => {
-                        const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
-                        if (rcaCode) rcasOfSellers.add(rcaCode);
-                    });
-                }
-                clients = clients.filter(c => {
-                    if (filial !== 'ambas' && clientLastBranch.get(c['Código']) !== filial) return false;
-                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
-                    if (rcasOfSupervisor.size > 0 && !clientRcas.some(rca => rcasOfSupervisor.has(rca))) return false;
-                    if (rcasOfSellers.size > 0 && !clientRcas.some(rca => rcasOfSellers.has(rca))) return false;
-                    if (!isExcluded('city') && city && (!c.cidade || c.cidade.toLowerCase() !== city)) return false;
-                    return true;
-                });
-            }
-            const clientCodes = new Set(clients.map(c => c['Código']));
-
-            // --- Sales Filtering (Optimized via Indices) ---
-            const filters = {
-                supervisor: supervisorsSet,
-                seller: sellersNameSet,
-                supplier: suppliersSet,
-                product: productsSet,
-                tipoVenda: tiposVendaSet,
-                city: city,
-                filial: filial,
-                clientCodes: clientCodes // Pass client universe to correctly scope sales
-            };
-
-            let sales = getFilteredDataFromIndices(optimizedData.indices.current, optimizedData.salesById, filters, excludeFilter);
-            let history = getFilteredDataFromIndices(optimizedData.indices.history, optimizedData.historyById, filters, excludeFilter);
-
-            // --- Date Filtering ---
-            if (selectedCoverageDateRange && selectedCoverageDateRange.length === 2) {
-                const startDate = selectedCoverageDateRange[0];
-                const endDate = selectedCoverageDateRange[1];
-
-                // Boundaries for Current Period
-                const startTs = new Date(startDate).setHours(0,0,0,0);
-                const endTs = new Date(endDate).setHours(23,59,59,999);
-
-                // Boundaries for Previous Period (Shifted -1 Month) to maintain comparative KPIs
-                // We shift the filter window back by 1 month for history
-                const histStart = new Date(startTs);
-                histStart.setUTCMonth(histStart.getUTCMonth() - 1);
-                const histStartTs = histStart.getTime();
-
-                const histEnd = new Date(endTs);
-                histEnd.setUTCMonth(histEnd.getUTCMonth() - 1);
-
-                // Handle end of month edge cases (e.g. March 31 -> Feb 28/29)
-                // JS Date auto-corrects overflow (Mar 31 - 1 mo -> March 3 if Feb is short), but we want end of Feb.
-                // However, standard setMonth behavior is usually acceptable for simple window shifting unless strictly end-of-month.
-                const histEndTs = histEnd.getTime();
-
-                const filterByDateCurrent = (item) => {
-                    const dt = item.DTPED;
-                    if (!dt) return false;
-                    const ts = (typeof dt === 'number') ? dt : (dt instanceof Date ? dt.getTime() : parseDate(dt)?.getTime());
-                    return ts >= startTs && ts <= endTs;
-                };
-
-                const filterByDateHistory = (item) => {
-                    const dt = item.DTPED;
-                    if (!dt) return false;
-                    const ts = (typeof dt === 'number') ? dt : (dt instanceof Date ? dt.getTime() : parseDate(dt)?.getTime());
-                    return ts >= histStartTs && ts <= histEndTs;
-                };
-
-                sales = sales.filter(filterByDateCurrent);
-                history = history.filter(filterByDateHistory);
-            }
-
-            // Post-filtering for logic not supported by indices
-            const unitPriceInput = document.getElementById('coverage-unit-price-filter');
-            // Support comma as decimal separator by replacing ',' with '.'
-            const unitPrice = unitPriceInput && unitPriceInput.value
-                ? parseFloat(unitPriceInput.value.replace(',', '.'))
-                : null;
-
-            if (unitPrice !== null && !isNaN(unitPrice)) {
-                const unitPriceFilter = s => (s.QTVENDA > 0 && Math.abs((s.VLVENDA / s.QTVENDA) - unitPrice) < 0.01);
-                sales = sales.filter(unitPriceFilter);
-                history = history.filter(unitPriceFilter);
-            }
-
-            return { sales, history, clients };
-        }
-
-        function updateAllCoverageFilters(options = {}) {
-            const { skipFilter = null } = options;
-
-            if (skipFilter !== 'supervisor') {
-                const { sales: salesSup, history: historySup } = getCoverageFilteredData({ excludeFilter: 'supervisor' });
-                const combinedDataSup = [...salesSup, ...historySup];
-                selectedCoverageSupervisors = updateSupervisorFilter(document.getElementById('coverage-supervisor-filter-dropdown'), document.getElementById('coverage-supervisor-filter-text'), selectedCoverageSupervisors, combinedDataSup);
-            }
-
-            const { sales: salesSeller, history: historySeller } = getCoverageFilteredData({ excludeFilter: 'seller' });
-            selectedCoverageSellers = updateSellerFilter(selectedCoverageSupervisors, coverageVendedorFilterDropdown, coverageVendedorFilterText, selectedCoverageSellers, [...salesSeller, ...historySeller], skipFilter === 'seller');
-
-            const { sales: salesSupplier, history: historySupplier } = getCoverageFilteredData({ excludeFilter: ['supplier', 'product'] });
-            selectedCoverageSuppliers = updateSupplierFilter(coverageSupplierFilterDropdown, coverageSupplierFilterText, selectedCoverageSuppliers, [...salesSupplier, ...historySupplier], 'coverage', skipFilter === 'supplier');
-
-            const { sales: salesProd, history: historyProd } = getCoverageFilteredData({ excludeFilter: 'product' });
-            selectedCoverageProducts = updateProductFilter(coverageProductFilterDropdown, coverageProductFilterText, selectedCoverageProducts, [...salesProd, ...historyProd], 'coverage', skipFilter === 'product');
-
-            const { sales: salesTV, history: historyTV } = getCoverageFilteredData({ excludeFilter: 'tipoVenda' });
-            selectedCoverageTiposVenda = updateTipoVendaFilter(coverageTipoVendaFilterDropdown, coverageTipoVendaFilterText, selectedCoverageTiposVenda, [...salesTV, ...historyTV], skipFilter === 'tipoVenda');
-        }
-
-        function handleCoverageFilterChange(options = {}) {
-            // Debounce update to prevent UI freezing during rapid selection
-            if (window.coverageUpdateTimeout) clearTimeout(window.coverageUpdateTimeout);
-            window.coverageUpdateTimeout = setTimeout(() => {
-                 updateAllCoverageFilters(options);
-                 updateCoverageView();
-            }, 10);
-        }
-
-        function resetCoverageFilters() {
-            selectedCoverageSupervisors = [];
-            selectedCoverageDateRange = null;
-            if (coverageDateFilterInstance) coverageDateFilterInstance.clear();
-            coverageCityFilter.value = '';
-            coverageFilialFilter.value = 'ambas';
-
-            const unitPriceInput = document.getElementById('coverage-unit-price-filter');
-            if(unitPriceInput) unitPriceInput.value = '';
-
-            const workingDaysInput = document.getElementById('coverage-working-days-input');
-            if(workingDaysInput) workingDaysInput.value = customWorkingDaysCoverage;
-
-            selectedCoverageSellers = [];
-            selectedCoverageSuppliers = [];
-            selectedCoverageProducts = [];
-            selectedCoverageTiposVenda = [];
-
-            updateAllCoverageFilters();
-            updateCoverageView();
-        }
-
-        function updateCoverageView() {
-            coverageRenderId++;
-            const currentRenderId = coverageRenderId;
-
-            const { clients, sales, history } = getCoverageFilteredData();
-            const productsToAnalyze = [...new Set([...sales.map(s => s.PRODUTO), ...history.map(s => s.PRODUTO)])];
-
-            const sellers = selectedCoverageSellers;
-            const sellerRcaCodes = new Set();
-            if (sellers.length > 0) {
-                sellers.forEach(sellerName => {
-                    const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
-                    if (rcaCode) sellerRcaCodes.add(rcaCode);
-                });
-            } else if (selectedCoverageSupervisors.length > 0) {
-                selectedCoverageSupervisors.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => sellerRcaCodes.add(rca));
-                });
-            }
-
-            const activeClientsForCoverage = clients.filter(c => {
-                const codcli = c['Código'];
-                const rca1 = String(c.rca1 || '').trim();
-
-                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(codcli));
-            });
-            const activeClientsCount = activeClientsForCoverage.length;
-            const activeClientCodes = new Set(activeClientsForCoverage.map(c => c['Código']));
-
-            coverageActiveClientsKpi.textContent = activeClientsCount.toLocaleString('pt-BR');
-
-            // Show Loading State in Table
-            coverageTableBody.innerHTML = '<tr><td colspan="8" class="text-center p-8"><div class="flex justify-center items-center"><svg class="animate-spin h-8 w-8 text-teal-500 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span class="text-slate-400">Calculando cobertura...</span></div></td></tr>';
-
-            if (productsToAnalyze.length === 0) {
-                coverageSelectionCoverageValueKpi.textContent = '0%';
-                coverageSelectionCoverageCountKpi.textContent = `0 de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-                coverageSelectionCoverageValueKpiPrevious.textContent = '0%';
-                coverageSelectionCoverageCountKpiPrevious.textContent = `0 de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-                coverageTopCoverageValueKpi.textContent = '0%';
-                coverageTopCoverageProductKpi.textContent = '-';
-                coverageTableBody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-slate-500">Nenhum produto selecionado ou encontrado para os filtros.</td></tr>';
-                showNoDataMessage('coverageCityChart', 'Sem dados para exibir.');
-                return;
-            }
-
-            const tableData = [];
-            const clientSelectionValueCurrent = new Map(); // Map<CODCLI, Value>
-            const clientSelectionValuePrevious = new Map(); // Map<CODCLI, Value>
-            let topCoverageItem = { name: '-', coverage: 0, clients: 0 };
-            const activeStockMap = getActiveStockMap(coverageFilialFilter.value);
-
-            const currentMonth = lastSaleDate.getUTCMonth();
-            const currentYear = lastSaleDate.getUTCFullYear();
-            const prevMonthIdx = (currentMonth === 0) ? 11 : currentMonth - 1;
-            const prevMonthYear = (currentMonth === 0) ? currentYear - 1 : currentYear;
-
-            // --- CRITICAL OPTIMIZATION: Pre-aggregate everything ---
-
-            // Maps for Box Quantities: Map<PRODUTO, Number>
-            const boxesSoldCurrentMap = new Map();
-            const boxesSoldPreviousMap = new Map();
-
-            // Index for Trend Calculation: Map<PRODUTO, Array<Sale>>
-            // We group all sales (current + history) by product to calculate trend efficiently
-            const trendSalesMap = new Map();
-
-            // Process Current Sales (O(N))
-            // --- OTIMIZAÇÃO: Mapa invertido para performance O(1) no cálculo de cobertura ---
-            const productClientsCurrent = new Map(); // Map<PRODUTO, Map<CODCLI, Value>>
-            const productClientsPrevious = new Map(); // Map<PRODUTO, Map<CODCLI, Value>>
-
-            // Use synchronous loops for initial map building as iterating sales (linear) is generally fast enough
-            // (e.g. 50k sales ~ 50ms). Splitting this would require complex state management.
-            // The bottleneck is the nested Product * Client check loop later.
-
-            sales.forEach(s => {
-                // Coverage Map (Inverted for Performance)
-                if (!productClientsCurrent.has(s.PRODUTO)) productClientsCurrent.set(s.PRODUTO, new Map());
-                const clientMap = productClientsCurrent.get(s.PRODUTO);
-                clientMap.set(s.CODCLI, (clientMap.get(s.CODCLI) || 0) + s.VLVENDA);
-
-                // Box Quantity Map
-                boxesSoldCurrentMap.set(s.PRODUTO, (boxesSoldCurrentMap.get(s.PRODUTO) || 0) + s.QTVENDA_EMBALAGEM_MASTER);
-
-                // Trend Map
-                if (!trendSalesMap.has(s.PRODUTO)) trendSalesMap.set(s.PRODUTO, []);
-                trendSalesMap.get(s.PRODUTO).push(s);
-            });
-
-            // Process History Sales (O(N))
-            history.forEach(s => {
-                const d = parseDate(s.DTPED);
-                const isPrevMonth = d && d.getUTCMonth() === prevMonthIdx && d.getUTCFullYear() === prevMonthYear;
-
-                // Coverage Map (only if prev month)
-                if (isPrevMonth) {
-                    // Coverage Map (Inverted for Performance)
-                    if (!productClientsPrevious.has(s.PRODUTO)) productClientsPrevious.set(s.PRODUTO, new Map());
-                    const clientMap = productClientsPrevious.get(s.PRODUTO);
-                    clientMap.set(s.CODCLI, (clientMap.get(s.CODCLI) || 0) + s.VLVENDA);
-
-                    // Box Quantity Map (only if prev month)
-                    boxesSoldPreviousMap.set(s.PRODUTO, (boxesSoldPreviousMap.get(s.PRODUTO) || 0) + s.QTVENDA_EMBALAGEM_MASTER);
-                }
-
-                // Trend Map (All history)
-                if (!trendSalesMap.has(s.PRODUTO)) trendSalesMap.set(s.PRODUTO, []);
-                trendSalesMap.get(s.PRODUTO).push(s);
-            });
-
-            // Pre-calculate global dates for Trend
-            const endDate = parseDate(sortedWorkingDays[sortedWorkingDays.length - 1]);
-
-            // --- ASYNC CHUNKED PROCESSING ---
-            runAsyncChunked(productsToAnalyze, (productCode) => {
-                const productInfo = productDetailsMap.get(productCode) || { descricao: `Produto ${productCode}`};
-
-                let clientsWhoGotProductCurrent = 0;
-                let clientsWhoGotProductPrevious = 0;
-
-                // --- OTIMIZAÇÃO CRÍTICA: Iterar apenas os compradores do produto em vez de todos os clientes ativos ---
-
-                // Check Current
-                const buyersCurrentMap = productClientsCurrent.get(productCode);
-                if (buyersCurrentMap) {
-                    buyersCurrentMap.forEach((val, buyer) => {
-                        if (activeClientCodes.has(buyer)) {
-                            if (val >= 1) clientsWhoGotProductCurrent++;
-                            clientSelectionValueCurrent.set(buyer, (clientSelectionValueCurrent.get(buyer) || 0) + val);
-                        }
-                    });
-                }
-
-                // Check Previous
-                const buyersPreviousMap = productClientsPrevious.get(productCode);
-                if (buyersPreviousMap) {
-                    buyersPreviousMap.forEach((val, buyer) => {
-                        if (activeClientCodes.has(buyer)) {
-                            if (val >= 1) clientsWhoGotProductPrevious++;
-                            clientSelectionValuePrevious.set(buyer, (clientSelectionValuePrevious.get(buyer) || 0) + val);
-                        }
-                    });
-                }
-
-                const coverageCurrent = activeClientsCount > 0 ? (clientsWhoGotProductCurrent / activeClientsCount) * 100 : 0;
-
-                if (coverageCurrent > topCoverageItem.coverage) {
-                    topCoverageItem = {
-                        name: `(${productCode}) ${productInfo.descricao}`,
-                        coverage: coverageCurrent,
-                        clients: clientsWhoGotProductCurrent
-                    };
-                }
-
-                const stockQty = activeStockMap.get(productCode) || 0;
-
-                // Trend Calculation
-                const productAllSales = trendSalesMap.get(productCode) || [];
-
-                const productCadastroDate = parseDate(productInfo.dtCadastro);
-                let productFirstWorkingDayIndex = 0;
-                if (productCadastroDate) {
-                    const cadastroDateString = productCadastroDate.toISOString().split('T')[0];
-                    productFirstWorkingDayIndex = sortedWorkingDays.findIndex(d => d >= cadastroDateString);
-                    if (productFirstWorkingDayIndex === -1) productFirstWorkingDayIndex = sortedWorkingDays.length;
-                }
-                const productMaxLifeInWorkingDays = sortedWorkingDays.length - productFirstWorkingDayIndex;
-
-                const hasHistory = productAllSales.some(s => {
-                    const d = parseDate(s.DTPED);
-                    return d && (d.getUTCFullYear() < currentYear || (d.getUTCFullYear() === currentYear && d.getUTCMonth() < currentMonth));
-                });
-                const soldThisMonth = (boxesSoldCurrentMap.get(productCode) || 0) > 0;
-                const isFactuallyNewOrReactivated = (!hasHistory && soldThisMonth);
-
-                const daysFromBox = customWorkingDaysCoverage;
-                let effectiveDaysToCalculate;
-
-                if (isFactuallyNewOrReactivated) {
-                    const daysToConsider = (daysFromBox > 0) ? daysFromBox : passedWorkingDaysCurrentMonth;
-                    effectiveDaysToCalculate = Math.min(passedWorkingDaysCurrentMonth, daysToConsider);
-                } else {
-                    if (daysFromBox > 0) {
-                        effectiveDaysToCalculate = Math.min(daysFromBox, productMaxLifeInWorkingDays);
-                    } else {
-                        effectiveDaysToCalculate = productMaxLifeInWorkingDays;
-                    }
-                }
-
-                const daysDivisor = effectiveDaysToCalculate > 0 ? effectiveDaysToCalculate : 1;
-                const targetIndex = Math.max(0, sortedWorkingDays.length - daysDivisor);
-                const startDate = parseDate(sortedWorkingDays[targetIndex]);
-
-                let totalQtySoldInRange = 0;
-                // Optimized loop: only iterating relevant sales for this product
-                productAllSales.forEach(sale => {
-                    const saleDate = parseDate(sale.DTPED);
-                    if (saleDate && saleDate >= startDate && saleDate <= endDate) {
-                        totalQtySoldInRange += (sale.QTVENDA_EMBALAGEM_MASTER || 0);
-                    }
-                });
-
-                const dailyAvgSale = totalQtySoldInRange / daysDivisor;
-                const trendDays = dailyAvgSale > 0 ? (stockQty / dailyAvgSale) : (stockQty > 0 ? Infinity : 0);
-
-                // Box Quantities (Pre-calculated)
-                const boxesSoldCurrentMonth = boxesSoldCurrentMap.get(productCode) || 0;
-                const boxesSoldPreviousMonth = boxesSoldPreviousMap.get(productCode) || 0;
-
-                const boxesVariation = boxesSoldPreviousMonth > 0
-                    ? ((boxesSoldCurrentMonth - boxesSoldPreviousMonth) / boxesSoldPreviousMonth) * 100
-                    : (boxesSoldCurrentMonth > 0 ? Infinity : 0);
-
-                const pdvVariation = clientsWhoGotProductPrevious > 0
-                    ? ((clientsWhoGotProductCurrent - clientsWhoGotProductPrevious) / clientsWhoGotProductPrevious) * 100
-                    : (clientsWhoGotProductCurrent > 0 ? Infinity : 0);
-
-                tableData.push({
-                    descricao: `(${productCode}) ${productInfo.descricao}`,
-                    stockQty: stockQty,
-                    boxesSoldCurrentMonth: boxesSoldCurrentMonth,
-                    boxesSoldPreviousMonth: boxesSoldPreviousMonth,
-                    boxesVariation: boxesVariation,
-                    pdvVariation: pdvVariation,
-                    trendDays: trendDays,
-                    clientsPreviousCount: clientsWhoGotProductPrevious,
-                    clientsCurrentCount: clientsWhoGotProductCurrent,
-                    coverageCurrent: coverageCurrent
-                });
-            }, () => {
-                // --- ON COMPLETE CALLBACK (Render UI) ---
-                if (currentRenderId !== coverageRenderId) return;
-
-                coverageTopCoverageValueKpi.textContent = `${topCoverageItem.coverage.toFixed(2)}%`;
-                coverageTopCoverageProductKpi.textContent = topCoverageItem.name;
-                coverageTopCoverageProductKpi.title = topCoverageItem.name;
-
-                let selectionCoveredCountCurrent = 0;
-                clientSelectionValueCurrent.forEach(val => { if (val >= 1) selectionCoveredCountCurrent++; });
-                const selectionCoveragePercentCurrent = activeClientsCount > 0 ? (selectionCoveredCountCurrent / activeClientsCount) * 100 : 0;
-                coverageSelectionCoverageValueKpi.textContent = `${selectionCoveragePercentCurrent.toFixed(2)}%`;
-                coverageSelectionCoverageCountKpi.textContent = `${selectionCoveredCountCurrent.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-
-                let selectionCoveredCountPrevious = 0;
-                clientSelectionValuePrevious.forEach(val => { if (val >= 1) selectionCoveredCountPrevious++; });
-                const selectionCoveragePercentPrevious = activeClientsCount > 0 ? (selectionCoveredCountPrevious / activeClientsCount) * 100 : 0;
-                coverageSelectionCoverageValueKpiPrevious.textContent = `${selectionCoveragePercentPrevious.toFixed(2)}%`;
-                coverageSelectionCoverageCountKpiPrevious.textContent = `${selectionCoveredCountPrevious.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-
-                tableData.sort((a, b) => {
-                    return b.stockQty - a.stockQty;
-                });
-
-                let filteredTableData = tableData.filter(item => item.boxesSoldCurrentMonth > 0);
-
-                if (coverageTrendFilter !== 'all') {
-                    filteredTableData = filteredTableData.filter(item => {
-                        const trend = item.trendDays;
-                        if (coverageTrendFilter === 'low') return isFinite(trend) && trend < 15;
-                        if (coverageTrendFilter === 'medium') return isFinite(trend) && trend >= 15 && trend < 30;
-                        if (coverageTrendFilter === 'good') return isFinite(trend) && trend >= 30;
-                        return false;
-                    });
-                }
-
-                const totalBoxesFiltered = filteredTableData.reduce((sum, item) => sum + item.boxesSoldCurrentMonth, 0);
-                if (coverageTotalBoxesEl) {
-                    coverageTotalBoxesEl.textContent = totalBoxesFiltered.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
-                }
-
-                coverageTableDataForExport = filteredTableData;
-
-                coverageTableBody.innerHTML = filteredTableData.slice(0, 500).map(item => {
-                    let boxesVariationContent;
-                    if (isFinite(item.boxesVariation)) {
-                        const colorClass = item.boxesVariation >= 0 ? 'text-green-400' : 'text-red-400';
-                        boxesVariationContent = `<span class="${colorClass}">${item.boxesVariation.toFixed(1)}%</span>`;
-                    } else if (item.boxesVariation === Infinity) {
-                        boxesVariationContent = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/30 text-purple-300">Novo</span>`;
-                    } else {
-                        boxesVariationContent = `<span>-</span>`;
-                    }
-
-                    let pdvVariationContent;
-                    if (isFinite(item.pdvVariation)) {
-                        const colorClass = item.pdvVariation >= 0 ? 'text-green-400' : 'text-red-400';
-                        pdvVariationContent = `<span class="${colorClass}">${item.pdvVariation.toFixed(1)}%</span>`;
-                    } else if (item.pdvVariation === Infinity) {
-                        pdvVariationContent = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/30 text-purple-300">Novo</span>`;
-                    } else {
-                        pdvVariationContent = `<span>-</span>`;
-                    }
-
-                    return `
-                        <tr class="hover:bg-slate-700/50">
-                            <td class="px-2 py-1.5 text-xs">${item.descricao}</td>
-                            <td class="px-2 py-1.5 text-xs text-right">${item.stockQty.toLocaleString('pt-BR')}</td>
-                            <td class="px-2 py-1.5 text-xs text-right">${item.boxesSoldPreviousMonth.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                            <td class="px-2 py-1.5 text-xs text-right">${item.boxesSoldCurrentMonth.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                            <td class="px-2 py-1.5 text-xs text-right">${boxesVariationContent}</td>
-                            <td class="px-2 py-1.5 text-xs text-right">${item.clientsPreviousCount.toLocaleString('pt-BR')}</td>
-                            <td class="px-2 py-1.5 text-xs text-right">${item.clientsCurrentCount.toLocaleString('pt-BR')}</td>
-                            <td class="px-2 py-1.5 text-xs text-right">${pdvVariationContent}</td>
-                        </tr>
-                    `;
-                }).join('');
-
-                // Render Top 10 Cities Chart
-                const salesByCity = {};
-                const salesBySeller = {};
-
-                sales.forEach(s => {
-                    const client = clientMapForKPIs.get(String(s.CODCLI));
-                    const city = client ? (client.cidade || client['Nome da Cidade'] || 'N/A') : 'N/A';
-                    salesByCity[city] = (salesByCity[city] || 0) + s.QTVENDA_EMBALAGEM_MASTER;
-
-                    const seller = s.NOME || 'N/A';
-                    salesBySeller[seller] = (salesBySeller[seller] || 0) + s.QTVENDA_EMBALAGEM_MASTER;
-                });
-
-                // 1. Chart Data for Cities
-                const sortedCities = Object.entries(salesByCity)
-                    .sort(([,a], [,b]) => b - a)
-                    .slice(0, 10);
-
-                // 2. Chart Data for Sellers
-                const sortedSellers = Object.entries(salesBySeller)
-                    .sort(([,a], [,b]) => b - a)
-                    .slice(0, 10);
-
-                const commonChartOptions = {
-                    indexAxis: 'x',
-                    plugins: {
-                        datalabels: {
-                            align: 'end',
-                            anchor: 'end',
-                            color: '#cbd5e1',
-                            font: { weight: 'bold', size: 14 },
-                            formatter: (value) => value.toLocaleString('pt-BR', { maximumFractionDigits: 1 })
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    if (context.parsed.y !== null) {
-                                        label += context.parsed.y.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' caixas';
-                                    }
-                                    return label;
-                                }
-                            }
-                        }
-                    }
-                };
-
-                if (sortedCities.length > 0) {
-                    createChart('coverageCityChart', 'bar', sortedCities.map(([city]) => city), sortedCities.map(([, qty]) => qty), commonChartOptions);
-                } else {
-                    showNoDataMessage('coverageCityChart', 'Sem dados para exibir.');
-                }
-
-                if (sortedSellers.length > 0) {
-                    createChart('coverageSellerChart', 'bar', sortedSellers.map(([seller]) => getFirstName(seller)), sortedSellers.map(([, qty]) => qty), commonChartOptions);
-                } else {
-                    showNoDataMessage('coverageSellerChart', 'Sem dados para exibir.');
-                }
-
-                // Visibility Toggle Logic
-                const cityContainer = document.getElementById('coverageCityChartContainer');
-                const sellerContainer = document.getElementById('coverageSellerChartContainer');
-                const toggleBtn = document.getElementById('coverage-chart-toggle-btn');
-                const chartTitle = document.getElementById('coverage-chart-title');
-
-                if (currentCoverageChartMode === 'city') {
-                    if (cityContainer) cityContainer.classList.remove('hidden');
-                    if (sellerContainer) sellerContainer.classList.add('hidden');
-                    if (toggleBtn) toggleBtn.textContent = 'Ver Vendedores';
-                    if (chartTitle) chartTitle.textContent = 'Top 10 Cidades (Quantidade de Caixas)';
-                } else {
-                    if (cityContainer) cityContainer.classList.add('hidden');
-                    if (sellerContainer) sellerContainer.classList.remove('hidden');
-                    if (toggleBtn) toggleBtn.textContent = 'Ver Cidades';
-                    if (chartTitle) chartTitle.textContent = 'Top 10 Vendedores (Quantidade de Caixas)';
-                }
-            }, () => currentRenderId !== coverageRenderId);
-        }
-
-        // <!-- FIM DO CÓDIGO RESTAURADO -->
-
-        function getUniqueMonthCount(data) {
-            const months = new Set();
-            data.forEach(sale => {
-                const saleDate = parseDate(sale.DTPED);
-                if (saleDate) {
-                    const monthKey = `${saleDate.getUTCFullYear()}-${saleDate.getUTCMonth()}`;
-                    months.add(monthKey);
-                }
-            });
-            return months.size > 0 ? months.size : 1;
-        }
-
-        function calculateSummaryFromData(data, isFiltered, clientBaseForPositivacao) {
-            const summary = {
-                totalFaturamento: 0, totalPeso: 0, vendasPorVendedor: {}, vendasPorSupervisor: {},
-                top10ProdutosFaturamento: [], top10ProdutosPeso: [], faturamentoPorFornecedor: {},
-                skuPdv: 0, positivacaoCount: 0, positivacaoPercent: 0
-            };
-            const salesByProduct = {};
-            const faturamentoMap = new Map();
-
-            // --- INÍCIO DA MODIFICAÇÃO: KPIs de Cobertura e SKU ---
-
-            // 1. Lógica de Positivação (Cobertura)
-            // Registar clientes que tiveram *qualquer* operação (Venda OU Bonificação)
-            const positiveClients = new Set();
-            const clientUniqueSkus = new Map(); // Map<CodCli, Set<Produto>>
-
-            // 1. Lógica de Positivação (Cobertura) - Alinhada com Comparativo
-            // Agrega valor total por cliente para verificar threshold >= 1
-            const clientTotalSales = new Map();
-
-            data.forEach(sale => {
-                if (sale.CODCLI) {
-                    const currentVal = clientTotalSales.get(sale.CODCLI) || 0;
-                    // Considera apenas VLVENDA para consistência com o KPI "Clientes Atendidos" do Comparativo
-                    // Se a regra de bonificação mudar lá, deve mudar aqui também.
-                    // Atualmente Comparativo usa: (s.TIPOVENDA === '1' || s.TIPOVENDA === '9') -> VLVENDA
-                    // Note que 'data' aqui já vem filtrado, mas precisamos checar se o valor agregado passa do threshold
-                    clientTotalSales.set(sale.CODCLI, currentVal + (Number(sale.VLVENDA) || 0));
-
-                    // Rastrear SKUs únicos (mantendo lógica existente para SKU/PDV)
-                    // Mas apenas se o cliente for considerado "positivo" no final?
-                    // Não, SKU/PDV geralmente considera tudo que foi movimentado.
-                    // Porém, para consistência, se o cliente não conta como "Atendido", seus SKUs deveriam contar?
-                    // Normalmente SKU/PDV é (Total SKUs Movimentados) / (Total Clientes Atendidos).
-                    // Vamos manter o rastreamento aqui, mas usar o denominador corrigido.
-                    if (!clientUniqueSkus.has(sale.CODCLI)) {
-                        clientUniqueSkus.set(sale.CODCLI, new Set());
-                    }
-                    clientUniqueSkus.get(sale.CODCLI).add(sale.PRODUTO);
-                }
-            });
-
-            clientTotalSales.forEach((total, codCli) => {
-                if (total >= 1) {
-                    positiveClients.add(codCli);
-                }
-            });
-            summary.positivacaoCount = positiveClients.size;
-
-            let totalSkus = 0;
-            // Somar a quantidade de SKUs ÚNICOS por cliente
-            clientUniqueSkus.forEach(skus => {
-                totalSkus += skus.size;
-            });
-
-            data.forEach(item => {
-                const vlVenda = Number(item.VLVENDA) || 0;
-                const totPesoLiq = Number(item.TOTPESOLIQ) || 0;
-
-                summary.totalFaturamento += vlVenda;
-                summary.totalPeso += totPesoLiq;
-
-                const isForbidden = (str) => !str || FORBIDDEN_KEYS.includes(str.trim().toUpperCase());
-
-                const vendedor = item.NOME || 'N/A';
-                if (!isForbidden(vendedor)) {
-                    summary.vendasPorVendedor[vendedor] = (summary.vendasPorVendedor[vendedor] || 0) + vlVenda;
-                }
-
-                const supervisor = item.SUPERV || 'N/A';
-                if (!isForbidden(supervisor)) {
-                    summary.vendasPorSupervisor[supervisor] = (summary.vendasPorSupervisor[supervisor] || 0) + vlVenda;
-                }
-
-                const produto = item.DESCRICAO || 'N/A';
-                const codigo = item.PRODUTO || 'N/A';
-                if (!salesByProduct[produto]) salesByProduct[produto] = { faturamento: 0, peso: 0, codigo: codigo };
-                salesByProduct[produto].faturamento += vlVenda;
-                salesByProduct[produto].peso += totPesoLiq;
-
-                let fornecedorLabel;
-                if(isFiltered){
-                    const fornecedorNome = item.FORNECEDOR || 'N/A';
-                    const codFor = item.CODFOR;
-                    fornecedorLabel = `${fornecedorNome} - ${codFor}`;
-                } else {
-                     fornecedorLabel = item.OBSERVACAOFOR || 'N/A';
-                }
-
-                if (!isForbidden(fornecedorLabel)) {
-                    const currentTotal = faturamentoMap.get(fornecedorLabel) || 0;
-                    faturamentoMap.set(fornecedorLabel, currentTotal + vlVenda);
-                }
-            });
-
-            const totalRelevantClients = clientBaseForPositivacao.length;
-            summary.positivacaoPercent = totalRelevantClients > 0 ? (summary.positivacaoCount / totalRelevantClients) * 100 : 0;
-            // O cálculo do SKU/PDV agora usa a nova contagem de SKUs e a nova contagem de positivação
-            summary.skuPdv = summary.positivacaoCount > 0 ? totalSkus / summary.positivacaoCount : 0;
-            // --- FIM DA MODIFICAÇÃO ---
-
-            summary.faturamentoPorFornecedor = Object.fromEntries(faturamentoMap);
-            summary.top10ProdutosFaturamento = Object.entries(salesByProduct).sort(([,a],[,b]) => b.faturamento - a.faturamento).slice(0, 10).map(([p, d]) => ({ produto: p, ...d }));
-            summary.top10ProdutosPeso = Object.entries(salesByProduct).sort(([,a],[,b]) => b.peso - a.peso).slice(0, 10).map(([p, d]) => ({ produto: p, ...d }));
-            return summary;
-        }
-
-        const isObject = obj => obj && typeof obj === 'object' && !Array.isArray(obj);
-        const mergeDeep = (...objects) => {
-            return objects.reduce((prev, obj) => {
-                Object.keys(obj).forEach(key => {
-                    const pVal = prev[key];
-                    const oVal = obj[key];
-                    if (isObject(pVal) && isObject(oVal)) prev[key] = mergeDeep(pVal, oVal);
-                    else prev[key] = oVal;
-                });
-                return prev;
-            }, {});
-        };
-
-        function createChart(canvasId, type, labels, chartData, optionsOverrides = {}, pluginsToRegister = []) {
-            const container = document.getElementById(canvasId + 'Container');
-            if (!container) {
-                console.error(`Chart container not found for id: ${canvasId}Container`);
-                return;
-            }
-
-            if (pluginsToRegister.length > 0) {
-                try { Chart.register(...pluginsToRegister); } catch (e) {}
-            }
-
-            const isLightMode = document.documentElement.classList.contains('light');
-            const textColor = isLightMode ? '#1e293b' : '#cbd5e1'; // slate-800 vs slate-300
-            const tickColor = isLightMode ? '#475569' : '#94a3b8'; // slate-600 vs slate-400
-            const gridColor = isLightMode ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.05)';
-
-            const professionalPalette = ['#14b8a6', '#6366f1', '#ec4899', '#f97316', '#8b5cf6', '#06b6d4', '#f59e0b', '#ef4444', '#22c55e'];
-
-            let finalDatasets;
-            if (Array.isArray(chartData) && chartData.length > 0 && typeof chartData[0] === 'object' && chartData[0].hasOwnProperty('label')) {
-                finalDatasets = chartData.map((dataset, index) => ({ ...dataset, backgroundColor: dataset.backgroundColor || professionalPalette[index % professionalPalette.length], borderColor: dataset.borderColor || professionalPalette[index % professionalPalette.length] }));
-            } else {
-                 finalDatasets = [{ data: chartData || [], backgroundColor: canvasId === 'customerStatusChart' ? ['#2dd4bf', '#f59e0b'] : professionalPalette }];
-            }
-
-            let baseOptions = {
-                responsive: true,
-                maintainAspectRatio: false,
-                layout: { padding: { top: 25 } },
-                plugins: {
-                    legend: { display: false, labels: {color: textColor} },
-                    datalabels: { display: false },
-                    tooltip: {
-                        backgroundColor: isLightMode ? '#ffffff' : '#1e293b',
-                        titleColor: isLightMode ? '#0f172a' : '#f1f5f9',
-                        bodyColor: isLightMode ? '#334155' : '#cbd5e1',
-                        borderColor: isLightMode ? '#e2e8f0' : '#334155',
-                        borderWidth: 1,
-                    }
-                },
-                scales: {
-                    y: { beginAtZero: true, grace: '5%', ticks: { color: tickColor }, grid: { color: gridColor} },
-                    x: { ticks: { color: tickColor }, grid: { color: gridColor} }
-                }
-            };
-
-            let typeDefaults = {};
-            if (type === 'bar') typeDefaults = { layout: { padding: { right: 30, top: 30 } }, plugins: { datalabels: { display: true, anchor: 'end', align: 'end', offset: -4, color: textColor, font: { size: 10 }, formatter: (v) => (v > 1000 ? (v/1000).toFixed(1) + 'k' : v.toFixed(0)) } } };
-            if (type === 'doughnut') typeDefaults = { maintainAspectRatio: true, scales: { y: { display: false }, x: { display: false } }, plugins: { legend: { position: 'top', labels: { color: textColor } }, datalabels: { display: true, color: '#fff', font: { size: 11, weight: 'bold' }, formatter: (v, ctx) => { const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0); if(total === 0 || v === 0) return ''; const p = (v / total) * 100; return p > 5 ? p.toFixed(0) + '%' : ''; } } } };
-
-            // 1. Sempre construir um objeto de opções novo e limpo
-            const options = mergeDeep({}, baseOptions, typeDefaults, optionsOverrides);
-
-            if (charts[canvasId]) {
-                charts[canvasId].data.labels = labels;
-                charts[canvasId].data.datasets = finalDatasets;
-                // 2. Substituir as opções antigas pelas novas, em vez de tentar um merge
-                charts[canvasId].options = options;
-                charts[canvasId].update();
-                return;
-            }
-
-            container.innerHTML = '';
-            const newCanvas = document.createElement('canvas');
-            newCanvas.id = canvasId;
-            container.appendChild(newCanvas);
-            container.style.display = ''; container.style.alignItems = ''; container.style.justifyContent = '';
-            const ctx = newCanvas.getContext('2d');
-
-            charts[canvasId] = new Chart(ctx, { type, data: { labels, datasets: finalDatasets }, options });
-        }
-
-        function showNoDataMessage(canvasId, message) {
-            if (charts[canvasId]) {
-                charts[canvasId].destroy();
-                delete charts[canvasId];
-            }
-            const container = document.getElementById(canvasId + 'Container');
-            if(container) {
-                container.style.display = 'flex'; container.style.alignItems = 'center'; container.style.justifyContent = 'center';
-                container.innerHTML = `<p class="text-slate-500">${message}</p>`;
-            }
-        }
-
-        function updateProductBarChart(summary) {
-            const metric = currentProductMetric;
-            const data = metric === 'faturamento' ? summary.top10ProdutosFaturamento : summary.top10ProdutosPeso;
-            const labels = data.map(p => String(p.codigo));
-            const tooltips = data.map(p => `(${p.codigo}) ${p.produto}`);
-            const values = data.map(p => p[metric]);
-
-            const optionsOverrides = {
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            title: (tooltipItems) => {
-                                if (tooltipItems.length > 0) {
-                                    const index = tooltipItems[0].dataIndex;
-                                    return tooltips[index];
-                                }
-                                return '';
-                            }
-                        }
-                    }
-                }
-            };
-
-            createChart('salesByProductBarChart', 'bar', labels, values, optionsOverrides);
-        }
-
-        function renderTable(data) {
-            const tableBody = document.getElementById('report-table-body');
-            if (!tableBody) return;
-
-            mainTableState.filteredData = data;
-            mainTableState.totalPages = Math.ceil(data.length / mainTableState.itemsPerPage);
-            if (mainTableState.currentPage > mainTableState.totalPages && mainTableState.totalPages > 0) {
-                mainTableState.currentPage = mainTableState.totalPages;
-            } else if (mainTableState.totalPages === 0) {
-                 mainTableState.currentPage = 1;
-            }
-
-            const startIndex = (mainTableState.currentPage - 1) * mainTableState.itemsPerPage;
-            const endIndex = startIndex + mainTableState.itemsPerPage;
-            const pageData = data.slice(startIndex, endIndex);
-
-            const getPosicaoBadge = (posicao) => {
-                if (!posicao) return document.createTextNode('-');
-                let classes = '';
-                switch (posicao) {
-                    case 'L': classes = 'bg-green-500/20 text-green-300'; break;
-                    case 'M': classes = 'bg-blue-500/20 text-blue-300'; break;
-                    case 'F': classes = 'bg-yellow-500/20 text-yellow-300'; break;
-                    default: classes = 'bg-slate-500/20 text-slate-300';
-                }
-
-                const span = document.createElement('span');
-                span.className = `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${classes}`;
-                span.textContent = posicao;
-                return span;
-            };
-
-            // Otimização: Usar DocumentFragment para renderização eficiente
-            const fragment = document.createDocumentFragment();
-
-            pageData.forEach(row => {
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-700 transition-colors";
-
-                const createLink = (text, dataAttr, dataVal) => {
-                    const a = document.createElement('a');
-                    a.href = "#";
-                    a.className = "text-teal-400 hover:underline";
-                    a.dataset[dataAttr] = escapeHtml(dataVal);
-                    a.textContent = text; // textContent automatically escapes
-                    return a;
-                };
-
-                const tdPedido = document.createElement('td');
-                tdPedido.className = "px-4 py-2";
-                tdPedido.appendChild(createLink(row.PEDIDO, 'pedidoId', row.PEDIDO));
-                tr.appendChild(tdPedido);
-
-                const tdCodCli = document.createElement('td');
-                tdCodCli.className = "px-4 py-2";
-                tdCodCli.appendChild(createLink(row.CODCLI, 'codcli', row.CODCLI));
-                tr.appendChild(tdCodCli);
-
-                const tdVendedor = document.createElement('td');
-                tdVendedor.className = "px-4 py-2";
-                tdVendedor.textContent = getFirstName(row.NOME); // textContent escapes
-                tr.appendChild(tdVendedor);
-
-                const tdForn = document.createElement('td');
-                tdForn.className = "px-4 py-2";
-                tdForn.textContent = row.FORNECEDORES_STR || ''; // textContent escapes
-                tr.appendChild(tdForn);
-
-                const tdDtPed = document.createElement('td');
-                tdDtPed.className = "px-4 py-2";
-                tdDtPed.textContent = formatDate(row.DTPED);
-                tr.appendChild(tdDtPed);
-
-                const tdDtSaida = document.createElement('td');
-                tdDtSaida.className = "px-4 py-2";
-                tdDtSaida.textContent = formatDate(row.DTSAIDA);
-                tr.appendChild(tdDtSaida);
-
-                const tdPeso = document.createElement('td');
-                tdPeso.className = "px-4 py-2 text-right";
-                tdPeso.textContent = (Number(row.TOTPESOLIQ) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + ' Kg';
-                tr.appendChild(tdPeso);
-
-                const tdValor = document.createElement('td');
-                tdValor.className = "px-4 py-2 text-right";
-                tdValor.textContent = (Number(row.VLVENDA) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                tr.appendChild(tdValor);
-
-                const tdPosicao = document.createElement('td');
-                tdPosicao.className = "px-4 py-2 text-center";
-                const badge = getPosicaoBadge(row.POSICAO);
-                if (typeof badge === 'string') tdPosicao.textContent = badge; // Change innerHTML to textContent if string
-                else tdPosicao.appendChild(badge);
-                tr.appendChild(tdPosicao);
-
-                fragment.appendChild(tr);
-            });
-
-            tableBody.innerHTML = '';
-            tableBody.appendChild(fragment);
-
-            if (data.length > 0) {
-                pageInfoText.textContent = `Página ${mainTableState.currentPage} de ${mainTableState.totalPages} (Total: ${data.length} pedidos)`;
-                prevPageBtn.disabled = mainTableState.currentPage === 1;
-                nextPageBtn.disabled = mainTableState.currentPage === mainTableState.totalPages;
-                tablePaginationControls.classList.remove('hidden');
-            } else {
-                pageInfoText.textContent = 'Nenhum pedido encontrado.';
-                prevPageBtn.disabled = true;
-                nextPageBtn.disabled = true;
-                tablePaginationControls.classList.add('hidden');
-            }
-        }
-
-        function isHoliday(date, holidays) {
-            if (!date || !holidays) return false;
-            const dateString = date.toISOString().split('T')[0];
-            return holidays.includes(dateString);
-        }
-
-        function getWorkingDaysInMonth(year, month, holidays) {
-            let count = 0;
-            const date = new Date(Date.UTC(year, month, 1));
-            while (date.getUTCMonth() === month) {
-                const dayOfWeek = date.getUTCDay();
-                if (dayOfWeek >= 1 && dayOfWeek <= 5 && !isHoliday(date, holidays)) {
-                    count++;
-                }
-                date.setUTCDate(date.getUTCDate() + 1);
-            }
-            return count;
-        }
-
-        function getPassedWorkingDaysInMonth(year, month, holidays, today) {
-            let count = 0;
-            const date = new Date(Date.UTC(year, month, 1));
-            // Ensure today is treated as UTC for comparison
-            const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
-
-            while (date <= todayUTC && date.getUTCMonth() === month) {
-                const dayOfWeek = date.getUTCDay();
-                if (dayOfWeek >= 1 && dayOfWeek <= 5 && !isHoliday(date, holidays)) {
-                    count++;
-                }
-                date.setUTCDate(date.getUTCDate() + 1);
-            }
-            return count > 0 ? count : 1;
-        }
-
-
-        function updateTrendChart(currentSales, historicalSales) {
-            const currentYear = lastSaleDate.getUTCFullYear();
-            const currentMonth = lastSaleDate.getUTCMonth();
-            const totalWorkingDays = getWorkingDaysInMonth(currentYear, currentMonth, selectedHolidays);
-            const passedWorkingDays = getPassedWorkingDaysInMonth(currentYear, currentMonth, selectedHolidays, lastSaleDate);
-
-            const monthCount = getUniqueMonthCount(historicalSales);
-
-            // Robust calculation: handle potential undefined/NaN in full dataset
-            const pastQuarterRevenue = historicalSales.reduce((sum, sale) => sum + (Number(sale.VLVENDA) || 0), 0);
-            let averageMonthlyRevenue = pastQuarterRevenue / QUARTERLY_DIVISOR;
-            if (isNaN(averageMonthlyRevenue)) averageMonthlyRevenue = 0;
-
-            const currentMonthRevenue = currentSales.reduce((sum, sale) => sum + (Number(sale.VLVENDA) || 0), 0);
-            let trend = passedWorkingDays > 0 && totalWorkingDays > 0 ? (currentMonthRevenue / passedWorkingDays) * totalWorkingDays : 0;
-            if (isNaN(trend)) trend = 0;
-
-            const lineChartDataset = [{ label: 'Valor', data: [averageMonthlyRevenue, trend], fill: true, borderColor: '#14b8a6', backgroundColor: 'rgba(20, 184, 166, 0.1)', tension: 0.2, pointRadius: 6, pointBackgroundColor: '#14b8a6', pointBorderColor: '#FFF', pointBorderWidth: 2, pointHoverRadius: 8 }];
-
-            const formatLabelValue = (v) => {
-                if (typeof v !== 'number' || isNaN(v)) return ''; // Proteção contra valores não numéricos
-                return (v >= 1000000 ? (v / 1000000).toFixed(2) + ' M' : (v / 1000).toFixed(0) + 'k');
-            };
-
-            createChart('trendChart', 'line', ['Média Faturamento Trimestre', 'Tendência Mês Atual'], lineChartDataset, {
-                layout: { padding: { top: 30 } },
-                plugins: {
-                    legend: { display: false },
-                    datalabels: { display: true, anchor: 'end', align: 'top', offset: 8, color: '#cbd5e1', font: { size: 12, weight: 'bold' }, formatter: formatLabelValue }
-                },
-                scales: {
-                    y: { ticks: { callback: function(value) { if (value >= 1000000) return 'R$ ' + (value / 1000000).toFixed(1) + 'M'; return 'R$ ' + (value / 1000) + 'k'; } } },
-                    x: { grid: { display: false } }
-                }
-            });
-        }
-
-        function updateAllVisuals() {
-            const posicao = posicaoFilter.value;
-            const codcli = codcliFilter.value.trim();
-
-            let clientBaseForCoverage = allClientsData.filter(c => {
-                const rca1 = String(c.rca1 || '').trim();
-
-                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-
-                // Regra de inclusão (Americanas ou RCA 1 diferente de 53)
-                return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(c['Código']));
-            });
-
-            if (mainRedeGroupFilter === 'com_rede') {
-                clientBaseForCoverage = clientBaseForCoverage.filter(c => c.ramo && c.ramo !== 'N/A');
-                if (selectedMainRedes.length > 0) {
-                    clientBaseForCoverage = clientBaseForCoverage.filter(c => selectedMainRedes.includes(c.ramo));
-                }
-            } else if (mainRedeGroupFilter === 'sem_rede') {
-                clientBaseForCoverage = clientBaseForCoverage.filter(c => !c.ramo || c.ramo === 'N/A');
-            }
-            const clientCodesInRede = new Set(clientBaseForCoverage.map(c => c['Código']));
-
-            const intersectSets = (sets) => {
-                if (sets.length === 0) return new Set();
-
-                // --- OPTIMIZATION START ---
-                // Sort sets by size to intersect the smallest sets first.
-                sets.sort((a, b) => a.size - b.size);
-
-                let result = new Set(sets[0]);
-                for (let i = 1; i < sets.length; i++) {
-                    if (result.size === 0) break; // Stop early if the result is already empty
-
-                    const currentSet = sets[i];
-                    for (const id of result) {
-                        if (!currentSet.has(id)) {
-                            result.delete(id);
-                        }
-                    }
-                }
-                // --- OPTIMIZATION END ---
-                return result;
-            };
-
-            const getFilteredIds = (indices, dataset) => {
-                let setsToIntersect = [];
-                let hasFilter = false;
-
-                if (codcli) {
-                    hasFilter = true;
-                    if (indices.byClient.has(codcli)) {
-                        setsToIntersect.push(indices.byClient.get(codcli));
-                    } else {
-                        return [];
-                    }
-                }
-                    if (selectedMainSupervisors.length > 0) {
-                        hasFilter = true;
-                        const supIds = new Set();
-                        selectedMainSupervisors.forEach(sup => {
-                            if (indices.bySupervisor.has(sup)) {
-                                (indices.bySupervisor.get(sup) || []).forEach(id => supIds.add(id));
-                            }
-                        });
-                        setsToIntersect.push(supIds);
-                    }
-                    if (selectedSellers.length > 0) {
-                        hasFilter = true;
-                        const sellerIds = new Set();
-                        selectedSellers.forEach(seller => {
-                            (indices.byRca.get(seller) || []).forEach(id => sellerIds.add(id));
-                        });
-                        setsToIntersect.push(sellerIds);
-                    }
-
-                if (selectedTiposVenda.length > 0) {
-                    hasFilter = true;
-                    const tipoVendaIds = new Set();
-                    selectedTiposVenda.forEach(tipo => {
-                        (indices.byTipoVenda.get(tipo) || []).forEach(id => tipoVendaIds.add(id));
-                    });
-                    setsToIntersect.push(tipoVendaIds);
-                }
-
-                if (currentFornecedor) {
-                    hasFilter = true;
-                    if (indices.byPasta.has(currentFornecedor)) {
-                        setsToIntersect.push(indices.byPasta.get(currentFornecedor));
-                    } else {
-                        return [];
-                    }
-                }
-                if (selectedMainSuppliers.length > 0) {
-                    hasFilter = true;
-                    const supplierIds = new Set();
-                    selectedMainSuppliers.forEach(sup => {
-                        if (indices.bySupplier.has(sup)) {
-                            (indices.bySupplier.get(sup) || []).forEach(id => supplierIds.add(id));
-                        }
-                    });
-                    setsToIntersect.push(supplierIds);
-                }
-
-                if (indices.byPosition && posicao) {
-                    hasFilter = true;
-                    if (indices.byPosition.has(posicao)) {
-                        setsToIntersect.push(indices.byPosition.get(posicao));
-                    } else {
-                        return [];
-                    }
-                }
-
-                if (mainRedeGroupFilter) {
-                    hasFilter = true;
-                    const redeIds = new Set();
-                    clientCodesInRede.forEach(clientCode => {
-                         (indices.byClient.get(clientCode) || []).forEach(id => redeIds.add(id));
-                    });
-                    setsToIntersect.push(redeIds);
-                }
-
-                if (setsToIntersect.length === 0 && hasFilter) {
-                    return [];
-                }
-
-                // Helper to retrieve item from dataset (ColumnarDataset or Array)
-                const getItem = (idx) => (dataset.get ? dataset.get(idx) : dataset[idx]);
-
-                if (setsToIntersect.length === 0 && !hasFilter) {
-                    // No filters: return all items
-                    // Check if it is a ColumnarDataset specifically to avoid calling .values() on native Array (which returns iterator)
-                    if (dataset instanceof ColumnarDataset) {
-                        return dataset.values();
-                    }
-                    if (Array.isArray(dataset)) return dataset;
-
-                    // Fallback iteration (safe for array-like objects)
-                    const all = [];
-                    for(let i=0; i<dataset.length; i++) all.push(getItem(i));
-                    return all;
-                }
-
-                const finalIds = intersectSets(setsToIntersect);
-                // finalIds are indices (integers). Use getItem to retrieve the object/proxy.
-                return Array.from(finalIds).map(id => getItem(id));
-            };
-
-            const filteredSalesData = getFilteredIds(optimizedData.indices.current, optimizedData.salesById);
-            const filteredHistoryData = getFilteredIds(optimizedData.indices.history, optimizedData.historyById);
-
-            const filteredTableData = aggregatedOrders.filter(order => {
-                let matches = true;
-                if (mainRedeGroupFilter) {
-                    matches = matches && clientCodesInRede.has(order.CODCLI);
-                }
-                if (codcli) matches = matches && order.CODCLI === codcli;
-                else {
-                    if (selectedMainSupervisors.length > 0) matches = matches && selectedMainSupervisors.includes(order.SUPERV);
-                    if (selectedSellers.length > 0) matches = matches && selectedSellers.includes(order.NOME);
-                }
-                // Robust filtering with existence checks
-                if (selectedTiposVenda.length > 0) matches = matches && order.TIPOVENDA && selectedTiposVenda.includes(order.TIPOVENDA);
-                if (currentFornecedor) matches = matches && order.FORNECEDORES_LIST && order.FORNECEDORES_LIST.includes(currentFornecedor);
-                if (selectedMainSuppliers.length > 0) matches = matches && order.CODFORS_LIST && order.CODFORS_LIST.some(c => selectedMainSuppliers.includes(c));
-                if (posicao) matches = matches && order.POSICAO === posicao;
-                return matches;
-            });
-
-            const isFiltered = selectedMainSupervisors.length > 0 || selectedSellers.length > 0 || !!codcli || !!currentFornecedor || !!mainRedeGroupFilter || selectedMainSuppliers.length > 0 || !!posicao || selectedTiposVenda.length > 0;
-
-            const summary = calculateSummaryFromData(filteredSalesData, isFiltered, clientBaseForCoverage);
-
-            totalVendasEl.textContent = summary.totalFaturamento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            totalPesoEl.textContent = `${(summary.totalPeso / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`;
-            kpiSkuPdVEl.textContent = summary.skuPdv.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            kpiPositivacaoEl.textContent = `${summary.positivacaoPercent.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
-            kpiPositivacaoPercentEl.textContent = `${summary.positivacaoCount.toLocaleString('pt-BR')} PDVs`;
-
-
-            if (!tableView.classList.contains('hidden')) {
-                renderTable(filteredTableData);
-            }
-
-            if (!chartView.classList.contains('hidden')) {
-                updateTrendChart(filteredSalesData, filteredHistoryData);
-                const totalForPercentage = selectedMainSupervisors.length > 0 ? Object.values(summary.vendasPorVendedor).reduce((a, b) => a + b, 0) : Object.values(summary.vendasPorSupervisor).reduce((a, b) => a + b, 0);
-                const personChartTooltipOptions = { plugins: { tooltip: { callbacks: { label: function(context) { let label = context.dataset.label || ''; if (label) label += ': '; const value = context.parsed.y; if (value !== null) { label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); if (totalForPercentage > 0) { const percentage = ((value / totalForPercentage) * 100).toFixed(2); label += ` (${percentage}%)`; } } return label; } } } } };
-                if (selectedMainSupervisors.length > 0) {
-                    salesByPersonTitle.textContent = 'Vendas por Vendedor';
-                    createChart('salesByPersonChart', 'bar', Object.keys(summary.vendasPorVendedor).map(getFirstName), Object.values(summary.vendasPorVendedor), personChartTooltipOptions);
-                } else {
-                    salesByPersonTitle.textContent = 'Vendas por Supervisor';
-                    createChart('salesByPersonChart', 'bar', Object.keys(summary.vendasPorSupervisor), Object.values(summary.vendasPorSupervisor), personChartTooltipOptions);
-                }
-
-                document.getElementById('faturamentoPorFornecedorTitle').textContent = isFiltered ? 'Faturamento por Fornecedor' : 'Faturamento por Categoria';
-                const faturamentoPorFornecedorData = summary.faturamentoPorFornecedor;
-                const totalFaturamentoFornecedor = Object.values(faturamentoPorFornecedorData).reduce((a, b) => a + b, 0);
-                const fornecedorTooltipOptions = { indexAxis: 'y', plugins: { tooltip: { callbacks: { label: function(context) { let label = context.label || ''; if (label) label += ': '; const value = context.parsed.x; if (value !== null) { label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); if (totalFaturamentoFornecedor > 0) { const percentage = ((value / totalFaturamentoFornecedor) * 100).toFixed(2); label += ` (${percentage}%)`; } } return label; } } } } };
-                const sortedFornecedores = Object.entries(faturamentoPorFornecedorData).sort(([, a], [, b]) => a - b);
-                const len = sortedFornecedores.length;
-                if (len > 0) {
-                    const labels = new Array(len);
-                    const values = new Array(len);
-                    for (let i = 0; i < len; i++) {
-                        labels[i] = sortedFornecedores[i][0];
-                        values[i] = sortedFornecedores[i][1];
-                    }
-                    createChart('faturamentoPorFornecedorChart', 'bar', labels, values, fornecedorTooltipOptions);
-                } else {
-                    showNoDataMessage('faturamentoPorFornecedorChart', 'Sem dados de faturamento.');
-                }
-                updateProductBarChart(summary);
-            }
-        }
-
-        function updateSupervisorFilter(dropdown, filterText, selectedArray, dataSource, skipRender = false) {
+function updateSupervisorFilter(dropdown, filterText, selectedArray, dataSource, skipRender = false) {
             if (!dropdown || !filterText) return selectedArray;
             const forbidden = ['SUPERV', 'CODUSUR', 'CODSUPERVISOR', 'NOME', 'CODCLI', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX', 'SUPERVISOR'];
             const supervisors = [...new Set(dataSource.map(item => item.SUPERV).filter(s => s && !forbidden.includes(s.toUpperCase())))].sort();
@@ -8688,7 +4602,7 @@ const supervisorGroups = new Map();
             return selectedArray;
         }
 
-        function updateSellerFilter(supervisors, dropdown, filterText, selectedArray, dataSource, skipRender = false) {
+function updateSellerFilter(supervisors, dropdown, filterText, selectedArray, dataSource, skipRender = false) {
             const forbidden = ['NOME', 'VENDEDOR', 'SUPERV', 'CODUSUR', 'CODCLI', 'SUPERVISOR', 'INATIVOS'];
             let sellersToShow;
             if (supervisors && supervisors.length > 0) {
@@ -8716,3636 +4630,20 @@ const supervisorGroups = new Map();
             return selectedArray;
         }
 
-        function updateTipoVendaFilter(dropdown, filterText, selectedArray, dataSource, skipRender = false) {
-            // Collect unique types from data source
-            const forbidden = ['TIPOVENDA', 'TIPO VENDA', 'TIPO', 'CODUSUR', 'CODCLI', 'SUPERV', 'NOME'];
-            const uniqueTypes = new Set(dataSource.map(item => item.TIPOVENDA).filter(t => t && !forbidden.includes(t.toUpperCase())));
-
-            // Ensure currently selected items are kept in the list (Safety Net)
-            selectedArray.forEach(type => uniqueTypes.add(type));
-
-            const tiposVendaToShow = [...uniqueTypes].sort((a, b) => parseInt(a) - parseInt(b));
-
-            // Re-filter selectedArray ensures we don't have stale data if we wanted strictness,
-            // but here we just ensured they are IN the list, so this line effectively does nothing
-            // except ordering or removing truly invalid ones if we didn't add them above.
-            // Since we added them above, this is redundant but harmless.
-            selectedArray = selectedArray.filter(tipo => tiposVendaToShow.includes(tipo));
-
-            if (!skipRender) {
-                const htmlParts = [];
-                for (let i = 0; i < tiposVendaToShow.length; i++) {
-                    const s = tiposVendaToShow[i];
-                    const isChecked = selectedArray.includes(s);
-                    htmlParts.push(`<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${s}" ${isChecked ? 'checked' : ''}><span class="ml-2">${s}</span></label>`);
-                }
-                dropdown.innerHTML = htmlParts.join('');
-            }
-
-            if (selectedArray.length === 0 || selectedArray.length === tiposVendaToShow.length) filterText.textContent = 'Todos os Tipos';
-            else if (selectedArray.length === 1) filterText.textContent = selectedArray[0];
-            else filterText.textContent = `${selectedArray.length} tipos selecionados`;
-            return selectedArray;
-        }
-
-        function updateRedeFilter(dropdown, buttonTextElement, selectedArray, dataSource, baseText = 'C/Rede') {
-            const forbidden = ['RAMO', 'RAMO DE ATIVIDADE', 'RAMO_ATIVIDADE', 'DESCRICAO', 'ATIVIDADE'];
-            const redesToShow = [...new Set(dataSource.map(item => item.ramo).filter(r => r && r !== 'N/A' && !forbidden.includes(r.toUpperCase())))].sort();
-            const validSelected = selectedArray.filter(rede => redesToShow.includes(rede));
-
-            const htmlParts = [];
-            for (let i = 0; i < redesToShow.length; i++) {
-                const r = redesToShow[i];
-                const isChecked = validSelected.includes(r);
-                htmlParts.push(`<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${r}" ${isChecked ? 'checked' : ''}><span class="ml-2 text-sm">${r}</span></label>`);
-            }
-            dropdown.innerHTML = htmlParts.join('');
-
-            if (validSelected.length === 0) {
-                buttonTextElement.textContent = baseText;
-            } else {
-                buttonTextElement.textContent = `${baseText} (${validSelected.length})`;
-            }
-            return validSelected;
-        }
-
-        function resetMainFilters() {
-            selectedMainSupervisors = [];
-            selectedMainSuppliers = [];
-            posicaoFilter.value = '';
-            codcliFilter.value = '';
-            currentFornecedor = '';
-            selectedSellers = [];
-            selectedTiposVenda = [];
-            mainRedeGroupFilter = '';
-            selectedMainRedes = [];
-            mainTableState.currentPage = 1;
-
-            mainRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-            mainRedeGroupContainer.querySelector('button[data-group=""]').classList.add('active');
-            updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
-
-            document.querySelectorAll('#fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
-            selectedMainSupervisors = updateSupervisorFilter(document.getElementById('supervisor-filter-dropdown'), document.getElementById('supervisor-filter-text'), selectedMainSupervisors, allSalesData);
-            selectedMainSuppliers = updateSupplierFilter(document.getElementById('fornecedor-filter-dropdown'), document.getElementById('fornecedor-filter-text'), selectedMainSuppliers, [...allSalesData, ...allHistoryData], 'main');
-            selectedSellers = updateSellerFilter(selectedMainSupervisors, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
-            selectedTiposVenda = updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
-            updateAllVisuals();
-        }
-
-        function resetCityFilters() {
-            selectedCitySupervisors = [];
-            cityNameFilter.value = '';
-            cityCodCliFilter.value = '';
-            if (cityFilialFilter) cityFilialFilter.value = 'ambas';
-            selectedCitySellers = [];
-            selectedCityRedes = [];
-            cityRedeGroupFilter = '';
-            selectedCityTiposVenda = [];
-            selectedCitySuppliers = [];
-
-            selectedCitySupervisors = updateSupervisorFilter(document.getElementById('city-supervisor-filter-dropdown'), document.getElementById('city-supervisor-filter-text'), selectedCitySupervisors, allSalesData);
-            selectedCitySellers = updateSellerFilter(selectedCitySupervisors, cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData);
-            selectedCityTiposVenda = updateTipoVendaFilter(cityTipoVendaFilterDropdown, cityTipoVendaFilterText, selectedCityTiposVenda, allSalesData);
-            selectedCitySuppliers = updateSupplierFilter(document.getElementById('city-supplier-filter-dropdown'), document.getElementById('city-supplier-filter-text'), selectedCitySuppliers, [...allSalesData, ...allHistoryData], 'city');
-
-            cityRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-            cityRedeGroupContainer.querySelector('button[data-group=""]').classList.add('active');
-            updateRedeFilter(cityRedeFilterDropdown, cityComRedeBtnText, selectedCityRedes, allClientsData);
-
-            updateCityView();
-        }
-
-        function resetWeeklyFilters() {
-            selectedWeeklySupervisors = [];
-            selectedWeeklySellers = [];
-            currentWeeklyFornecedor = '';
-            const weeklyFilialFilter = document.getElementById('weekly-filial-filter');
-            if (weeklyFilialFilter) weeklyFilialFilter.value = 'ambas';
-            document.querySelectorAll('#weekly-fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
-
-            // Re-populate will handle resetting the dropdown UI text and checkboxes based on empty selected arrays
-            populateWeeklyFilters();
-            updateWeeklyView();
-        }
-
-        function resetComparisonFilters() {
-            selectedComparisonSupervisors = [];
-            comparisonFilialFilter.value = 'ambas';
-            currentComparisonFornecedor = '';
-            comparisonCityFilter.value = '';
-            selectedComparisonSellers = [];
-            selectedComparisonSuppliers = [];
-            selectedComparisonProducts = [];
-            selectedComparisonTiposVenda = [];
-            comparisonRedeGroupFilter = '';
-            selectedComparisonRedes = [];
-
-            comparisonRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-            comparisonRedeGroupContainer.querySelector('button[data-group=""]').classList.add('active');
-            updateRedeFilter(comparisonRedeFilterDropdown, comparisonComRedeBtnText, selectedComparisonRedes, allClientsData);
-
-            document.querySelectorAll('#comparison-fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
-
-            updateAllComparisonFilters();
-            updateComparisonView();
-        }
-
-        function resetStockFilters() {
-            stockFilialFilter.value = 'ambas';
-            currentStockFornecedor = '';
-            selectedStockSupervisors = [];
-            stockCityFilter.value = '';
-            selectedStockSellers = [];
-            selectedStockSuppliers = [];
-            selectedStockProducts = [];
-            selectedStockTiposVenda = [];
-            stockRedeGroupFilter = '';
-            selectedStockRedes = [];
-            stockTrendFilter = 'all';
-
-            document.querySelectorAll('.stock-trend-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelector('.stock-trend-btn[data-trend="all"]').classList.add('active');
-
-            stockRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-            stockRedeGroupContainer.querySelector('button[data-group=""]').classList.add('active');
-            updateRedeFilter(stockRedeFilterDropdown, stockComRedeBtnText, selectedStockRedes, allClientsData, 'Com Rede');
-
-            document.querySelectorAll('#stock-fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
-
-            customWorkingDaysStock = maxWorkingDaysStock;
-            const daysInput = document.getElementById('stock-working-days-input');
-            if(daysInput) daysInput.value = customWorkingDaysStock;
-
-            handleStockFilterChange();
-        }
-
-
-        function getCityFilteredData(options = {}) {
-            const { excludeFilter = null } = options;
-
-            const sellersSet = new Set(selectedCitySellers);
-            const cityInput = cityNameFilter.value.trim().toLowerCase();
-            const codCli = cityCodCliFilter.value.trim();
-            const tiposVendaSet = new Set(selectedCityTiposVenda);
-            const filial = cityFilialFilter ? cityFilialFilter.value : 'ambas';
-
-            let clients = allClientsData;
-
-            if (filial !== 'ambas') {
-                clients = clients.filter(c => clientLastBranch.get(String(c['Código'] || c['codigo_cliente'])) === filial);
-            }
-
-            if (excludeFilter !== 'rede') {
-                 if (cityRedeGroupFilter === 'com_rede') {
-                    clients = clients.filter(c => c.ramo && c.ramo !== 'N/A');
-                    if (selectedCityRedes.length > 0) {
-                        const redeSet = new Set(selectedCityRedes);
-                        clients = clients.filter(c => redeSet.has(c.ramo));
-                    }
-                } else if (cityRedeGroupFilter === 'sem_rede') {
-                    clients = clients.filter(c => !c.ramo || c.ramo === 'N/A');
-                }
-            }
-
-            if (excludeFilter !== 'supervisor' && selectedCitySupervisors.length > 0) {
-                const rcasSet = new Set();
-                selectedCitySupervisors.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
-                });
-                clients = clients.filter(c => c.rcas.some(r => rcasSet.has(r)));
-            }
-
-            if (excludeFilter !== 'seller' && sellersSet.size > 0) {
-                const rcasSet = new Set();
-                sellersSet.forEach(name => {
-                    const code = optimizedData.rcaCodeByName.get(name);
-                    if(code) rcasSet.add(code);
-                });
-                clients = clients.filter(c => c.rcas.some(r => rcasSet.has(r)));
-            }
-
-            if (excludeFilter !== 'supplier' && selectedCitySuppliers.length > 0) {
-                 // No filtering of clients list based on supplier for now.
-            }
-
-            if (excludeFilter !== 'city' && cityInput) {
-                clients = clients.filter(c => (c.cidade || c.CIDADE) && (c.cidade || c.CIDADE).toLowerCase() === cityInput);
-            }
-
-            if (excludeFilter !== 'codcli' && codCli) {
-                 clients = clients.filter(c => String(c['Código']) === codCli);
-            }
-
-            const clientCodes = new Set(clients.map(c => c['Código']));
-
-            const supervisorSet = new Set(selectedCitySupervisors);
-
-            const filters = {
-                supervisor: supervisorSet,
-                seller: sellersSet,
-                city: cityInput,
-                filial: filial,
-                tipoVenda: tiposVendaSet,
-                clientCodes: clientCodes,
-                supplier: new Set(selectedCitySuppliers)
-            };
-
-            const sales = getFilteredDataFromIndices(optimizedData.indices.current, optimizedData.salesById, filters, excludeFilter);
-
-            return { clients, sales };
-        }
-
-        function updateAllCityFilters(options = {}) {
-            const { skipFilter = null } = options;
-
-            if (skipFilter !== 'supervisor') {
-                const { sales } = getCityFilteredData({ excludeFilter: 'supervisor' });
-                selectedCitySupervisors = updateSupervisorFilter(document.getElementById('city-supervisor-filter-dropdown'), document.getElementById('city-supervisor-filter-text'), selectedCitySupervisors, sales);
-            }
-
-            const { sales: salesSeller } = getCityFilteredData({ excludeFilter: 'seller' });
-            selectedCitySellers = updateSellerFilter(selectedCitySupervisors, cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, salesSeller, skipFilter === 'seller');
-
-            const { sales: salesTV } = getCityFilteredData({ excludeFilter: 'tipoVenda' });
-            selectedCityTiposVenda = updateTipoVendaFilter(cityTipoVendaFilterDropdown, cityTipoVendaFilterText, selectedCityTiposVenda, salesTV, skipFilter === 'tipoVenda');
-
-            const { sales: salesSupplier } = getCityFilteredData({ excludeFilter: 'supplier' });
-            selectedCitySuppliers = updateSupplierFilter(document.getElementById('city-supplier-filter-dropdown'), document.getElementById('city-supplier-filter-text'), selectedCitySuppliers, salesSupplier, 'city');
-
-            if (skipFilter !== 'rede') {
-                 const { clients: clientsRede } = getCityFilteredData({ excludeFilter: 'rede' });
-                 if (cityRedeGroupFilter === 'com_rede') {
-                     selectedCityRedes = updateRedeFilter(cityRedeFilterDropdown, cityComRedeBtnText, selectedCityRedes, clientsRede);
-                 }
-            }
-        }
-
-        function handleCityFilterChange(options = {}) {
-            if (window.cityUpdateTimeout) clearTimeout(window.cityUpdateTimeout);
-            window.cityUpdateTimeout = setTimeout(() => {
-                updateAllCityFilters(options);
-                updateCityView();
-            }, 10);
-        }
-
-        function updateCitySuggestions(filterInput, suggestionsContainer, dataSource) {
-            const forbidden = ['CIDADE', 'MUNICIPIO', 'CIDADE_CLIENTE', 'NOME DA CIDADE', 'CITY'];
-            const inputValue = filterInput.value.toLowerCase();
-            
-            if (!inputValue) {
-                suggestionsContainer.classList.add('hidden');
-                return;
-            }
-
-            const uniqueCities = new Set();
-            const suggestionsFragment = document.createDocumentFragment();
-            let count = 0;
-            const LIMIT = 50;
-
-            for (let i = 0; i < dataSource.length; i++) {
-                if (count >= LIMIT) break;
-
-                const item = dataSource instanceof ColumnarDataset ? dataSource.get(i) : dataSource[i];
-                let city = 'N/A';
-
-                if (item.CIDADE) city = item.CIDADE;
-                else if (item.cidade || item.CIDADE) city = item.cidade || item.CIDADE;
-                else if (item.CODCLI) {
-                    const c = clientMapForKPIs.get(String(item.CODCLI));
-                    if (c) city = c.cidade || c.CIDADE || c['Nome da Cidade'];
-                }
-
-                if (city && city !== 'N/A' && !forbidden.includes(city.toUpperCase()) && city.toLowerCase().includes(inputValue)) {
-                    if (!uniqueCities.has(city)) {
-                        uniqueCities.add(city);
-                        const div = document.createElement('div');
-                        div.className = 'p-2 hover:bg-slate-600 cursor-pointer';
-                        div.textContent = city;
-                        suggestionsFragment.appendChild(div);
-                        count++;
-                    }
-                }
-            }
-
-            if (uniqueCities.size > 0 && (document.activeElement === filterInput || !suggestionsContainer.classList.contains('manual-hide'))) {
-                suggestionsContainer.innerHTML = '';
-                suggestionsContainer.appendChild(suggestionsFragment);
-                suggestionsContainer.classList.remove('hidden');
-            } else {
-                suggestionsContainer.classList.add('hidden');
-            }
-        }
-
-        function validateCityFilter() {
-            const selectedCity = cityNameFilter.value;
-            if (!selectedCity) return;
-            const { clients } = getCityFilteredData({ excludeFilter: 'city' });
-            const availableCities = [...new Set(clients.map(c => c.cidade).filter(Boolean))];
-            if (!availableCities.includes(selectedCity)) cityNameFilter.value = '';
-        }
-
-        function updateCityView() {
-            cityRenderId++;
-            const currentRenderId = cityRenderId;
-
-            updateCityMap(currentRenderId);
-
-            let { clients: clientsForAnalysis, sales: salesForAnalysis } = getCityFilteredData();
-            const cidadeFiltro = cityNameFilter.value.trim();
-
-            const referenceDate = lastSaleDate;
-            const currentMonth = referenceDate.getUTCMonth();
-            const currentYear = referenceDate.getUTCFullYear();
-
-            const selectedTiposVendaSet = new Set(selectedCityTiposVenda);
-
-            // Removed: clientTotalsThisMonth logic was using global sales data, ignoring current filters.
-            // We now rely on detailedDataByClient (derived from salesForAnalysis) to determine active status in context.
-
-            const detailedDataByClient = new Map(); // Map<CODCLI, { total, pepsico, multimarcas, maxDate }>
-
-            // Pre-aggregate Sales Data for Analysis (Sync)
-            salesForAnalysis.forEach(s => {
-                const d = parseDate(s.DTPED);
-                if (d) {
-                    if (!detailedDataByClient.has(s.CODCLI)) {
-                        detailedDataByClient.set(s.CODCLI, { total: 0, pepsico: 0, multimarcas: 0, maxDate: 0 });
-                    }
-                    const entry = detailedDataByClient.get(s.CODCLI);
-                    const ts = d.getTime();
-
-                    if (ts > entry.maxDate) entry.maxDate = ts;
-
-                    if (d.getUTCFullYear() === currentYear && d.getUTCMonth() === currentMonth) {
-                        entry.total += s.VLVENDA;
-                        if (s.OBSERVACAOFOR === 'PEPSICO') entry.pepsico += s.VLVENDA;
-                        else if (s.OBSERVACAOFOR === 'MULTIMARCAS') entry.multimarcas += s.VLVENDA;
-                    }
-                }
-            });
-
-            // Filter clients universe
-            clientsForAnalysis = clientsForAnalysis.filter(c => {
-                const rca1 = String(c.rca1 || '').trim();
-                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(c['Código']));
-            });
-
-            // Show Loading
-            cityActiveDetailTableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8"><svg class="animate-spin h-8 w-8 text-teal-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></td></tr>';
-            cityInactiveDetailTableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8"><svg class="animate-spin h-8 w-8 text-teal-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></td></tr>';
-
-            const activeClientsList = [];
-            const inactiveClientsList = [];
-            const salesByActiveClient = {}; // Map for export/rendering
-
-            // ASYNC CHUNKED PROCESSING
-            runAsyncChunked(clientsForAnalysis, (client) => {
-                const codcli = String(client['Código']);
-
-                const registrationDate = parseDate(client.dataCadastro);
-                client.isNew = registrationDate && registrationDate.getUTCMonth() === currentMonth && registrationDate.getUTCFullYear() === currentYear;
-
-                // Use detailedDataByClient (filtered sales) instead of global clientTotalsThisMonth
-                const details = detailedDataByClient.get(codcli);
-                const totalFaturamentoMes = details ? details.total : 0;
-
-                if (totalFaturamentoMes >= 1) {
-                    activeClientsList.push(client);
-
-                    if (details && details.total >= 1) {
-                        const outrosTotal = details.total - details.pepsico - details.multimarcas;
-                        salesByActiveClient[codcli] = {
-                            // Explicit copy to avoid Spread issues with Proxy
-                            'Código': client['Código'],
-                            fantasia: client.fantasia || client.FANTASIA || client['Nome Fantasia'],
-                            razaoSocial: client.razaoSocial || client.RAZAOSOCIAL || client.Cliente,
-                            cidade: client.cidade || client.CIDADE || client['Nome da Cidade'],
-                            bairro: client.bairro || client.BAIRRO || client['Bairro'],
-                            ultimaCompra: details.maxDate || client.ultimaCompra || client['Data da Última Compra'] || client.ULTIMACOMPRA,
-                            rcas: client.rcas,
-                            isNew: client.isNew,
-                            // Metrics
-                            total: details.total,
-                            pepsico: details.pepsico,
-                            multimarcas: details.multimarcas,
-                            outros: outrosTotal
-                        };
-                    }
-                } else {
-                    if (totalFaturamentoMes < 0) {
-                        client.isReturn = true;
-                    }
-                    client.isNewForInactiveLabel = client.isNew && !parseDate(client.ultimaCompra);
-                    inactiveClientsList.push(client);
-                }
-            }, () => {
-                // --- ON COMPLETE (Render) ---
-                if (currentRenderId !== cityRenderId) return;
-
-                inactiveClientsForExport = inactiveClientsList;
-
-                if (clientsForAnalysis.length > 0) {
-                     const statusChartOptions = { maintainAspectRatio: false, animation: { duration: 800, easing: 'easeOutQuart' }, plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1' } }, tooltip: { callbacks: { label: function(context) { return context.label; } } }, datalabels: { formatter: (value, ctx) => { const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0); if (total === 0 || value === 0) return ''; const percentage = (value * 100 / total).toFixed(1) + "%"; return `${value}\n(${percentage})`; }, color: '#fff', backgroundColor: 'rgba(0, 0, 0, 0.6)', borderRadius: 4, padding: 4, font: { weight: 'bold', size: 12 }, textAlign: 'center' } } };
-                    createChart('customerStatusChart', 'doughnut', ['Ativos no Mês', 'S/ Vendas no Mês'], [activeClientsList.length, inactiveClientsList.length], statusChartOptions);
-                } else showNoDataMessage('customerStatusChart', 'Sem clientes no filtro para exibir o status.');
-
-                const sortedActiveClients = Object.values(salesByActiveClient).sort((a, b) => b.total - a.total);
-                activeClientsForExport = sortedActiveClients;
-
-                cityActiveDetailTableBody.innerHTML = sortedActiveClients.slice(0, 500).map(data => {
-                    const novoLabel = data.isNew ? `<span class="ml-2 text-xs font-semibold text-purple-400 bg-purple-900/50 px-2 py-0.5 rounded-full">NOVO</span>` : '';
-                    let tooltipParts = [];
-                    if (data.pepsico > 0) tooltipParts.push(`PEPSICO: ${data.pepsico.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
-                    if (data.multimarcas > 0) tooltipParts.push(`MULTIMARCAS: ${data.multimarcas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
-                    if (data.outros > 0.001) tooltipParts.push(`OUTROS: ${data.outros.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
-                    const tooltipText = tooltipParts.length > 0 ? tooltipParts.join('<br>') : 'Sem detalhamento de categoria';
-                    const rcaVal = (data.rcas && data.rcas.length > 0) ? data.rcas[0] : '-';
-
-                    const fantasia = data.fantasia || data.FANTASIA || data.Fantasia || '';
-                    const razao = data.razaoSocial || data.Cliente || data.RAZAOSOCIAL || '';
-                    const nome = fantasia || razao || 'N/A';
-                    const cidade = data.cidade || data.CIDADE || data['Nome da Cidade'] || 'N/A';
-                    const bairro = data.bairro || data.BAIRRO || 'N/A';
-
-                    return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${data['Código']}">${data['Código']}</a></td><td class="px-4 py-2 flex items-center">${nome}${novoLabel}</td><td class="px-4 py-2 text-right"><div class="tooltip">${data.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">${tooltipText}</span></div></td><td class="px-4 py-2">${cidade}</td><td class="px-4 py-2">${bairro}</td><td class="px-4 py-2 text-center">${formatDate(data.ultimaCompra)}</td><td class="px-4 py-2">${rcaVal}</td></tr>`
-                }).join('');
-
-                inactiveClientsList.sort((a, b) => {
-                    if (a.isReturn && !b.isReturn) return -1;
-                    if (!a.isReturn && b.isReturn) return 1;
-                    if (a.isNewForInactiveLabel && !b.isNewForInactiveLabel) return -1;
-                    if (!a.isNewForInactiveLabel && b.isNewForInactiveLabel) return 1;
-                    return (parseDate(b.ultimaCompra) || 0) - (parseDate(a.ultimaCompra) || 0);
-                });
-
-                cityInactiveDetailTableBody.innerHTML = inactiveClientsList.slice(0, 500).map(client => {
-                    const novoLabel = client.isNewForInactiveLabel ? `<span class="ml-2 text-xs font-semibold text-purple-400 bg-purple-900/50 px-2 py-0.5 rounded-full">NOVO</span>` : '';
-                    const devolucaoLabel = client.isReturn ? `<span class="ml-2 text-xs font-semibold text-red-400 bg-red-900/50 px-2 py-0.5 rounded-full">DEVOLUÇÃO</span>` : '';
-                    const rcaVal = (client.rcas && client.rcas.length > 0) ? client.rcas[0] : '-';
-
-                    const fantasia = client.fantasia || client.FANTASIA || client.Fantasia || '';
-                    const razao = client.razaoSocial || client.Cliente || client.RAZAOSOCIAL || '';
-                    const nome = fantasia || razao || 'N/A';
-                    const cidade = client.cidade || client.CIDADE || client['Nome da Cidade'] || 'N/A';
-                    const bairro = client.bairro || client.BAIRRO || 'N/A';
-                    const ultCompra = client.ultimaCompra || client['Data da Última Compra'] || client.ULTIMACOMPRA;
-
-                    return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${client['Código']}">${client['Código']}</a></td><td class="px-4 py-2 flex items-center">${nome}${novoLabel}${devolucaoLabel}</td><td class="px-4 py-2">${cidade}</td><td class="px-4 py-2">${bairro}</td><td class="px-4 py-2 text-center">${formatDate(ultCompra)}</td><td class="px-4 py-2">${rcaVal}</td></tr>`
-                }).join('');
-
-                const cityChartTitleEl = document.getElementById('city-chart-title');
-                const cityChartOptions = { indexAxis: 'y', scales: { x: { grace: '15%' } }, plugins: { datalabels: { align: 'end', anchor: 'end', color: '#cbd5e1', font: { size: 14, weight: 'bold' }, formatter: (value) => (value / 1000).toFixed(1) + 'k', offset: 8 } } };
-                const totalFaturamentoCidade = salesForAnalysis.reduce((sum, item) => sum + item.VLVENDA, 0);
-                totalFaturamentoCidadeEl.textContent = totalFaturamentoCidade.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-                if (totalClientesCidadeEl) {
-                    totalClientesCidadeEl.textContent = clientsForAnalysis.length.toLocaleString('pt-BR');
-                }
-
-                if (cidadeFiltro) {
-                    cityChartTitleEl.textContent = 'Top 10 Bairros';
-                    const salesByBairro = {};
-                    salesForAnalysis.forEach(sale => {
-                        let bairro = sale.BAIRRO;
-                        if (!bairro && sale.CODCLI) {
-                            const c = clientMapForKPIs.get(String(sale.CODCLI));
-                            if (c) bairro = c.bairro || c.BAIRRO || c['Bairro'];
-                        }
-                        bairro = bairro || 'N/A';
-                        salesByBairro[bairro] = (salesByBairro[bairro] || 0) + sale.VLVENDA;
-                    });
-                    const sortedBairros = Object.entries(salesByBairro).sort(([, a], [, b]) => b - a).slice(0, 10);
-                    createChart('salesByClientInCityChart', 'bar', sortedBairros.map(([name]) => name), sortedBairros.map(([, total]) => total), cityChartOptions);
-                } else {
-                    cityChartTitleEl.textContent = 'Top 10 Cidades';
-                    const salesByCity = {};
-                    salesForAnalysis.forEach(sale => {
-                        let cidade = sale.CIDADE;
-                        if (!cidade && sale.CODCLI) {
-                            const c = clientMapForKPIs.get(String(sale.CODCLI));
-                            if (c) cidade = c.cidade || c.CIDADE || c['Nome da Cidade'];
-                        }
-                        cidade = cidade || 'N/A';
-                        salesByCity[cidade] = (salesByCity[cidade] || 0) + sale.VLVENDA;
-                    });
-                    const sortedCidades = Object.entries(salesByCity).sort(([, a], [, b]) => b - a).slice(0, 10);
-                    createChart('salesByClientInCityChart', 'bar', sortedCidades.map(([name]) => name), sortedCidades.map(([, total]) => total), cityChartOptions);
-                }
-            }, () => currentRenderId !== cityRenderId);
-        }
-
-        function getWeekOfMonth(date) {
-            const d = new Date(date);
-            const day = d.getUTCDate();
-            return Math.ceil(day / 7);
-        }
-
-        function getWorkingMonthWeeks(year, month) {
-            const weeks = [];
-            const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0));
-            lastDayOfMonth.setUTCHours(23, 59, 59, 999);
-
-            // Start looking from Day 1
-            let currentDate = new Date(Date.UTC(year, month, 1));
-
-            // Advance to first working day (Mon-Fri)
-            // 0=Sun, 6=Sat
-            while (currentDate.getUTCDay() === 0 || currentDate.getUTCDay() === 6) {
-                currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-                // Safety: if month has no working days (impossible usually)
-                if (currentDate > lastDayOfMonth) return [];
-            }
-
-            // Now currentDate is the start of Week 1
-            let weekCount = 1;
-
-            while (currentDate <= lastDayOfMonth) {
-                // Determine End of this week bucket
-                // Standard: Ends on Sunday.
-
-                let weekEnd = new Date(currentDate);
-                const day = weekEnd.getUTCDay(); // 1=Mon ... 5=Fri
-
-                // Distance to next Sunday (0)
-                // If Mon(1), need +6. If Sun(0), need +0.
-                // (7 - 1) % 7 = 6. (7 - 0) % 7 = 0.
-                const distToSunday = (7 - day) % 7;
-
-                weekEnd.setUTCDate(weekEnd.getUTCDate() + distToSunday);
-                weekEnd.setUTCHours(23, 59, 59, 999);
-
-                // Cap at end of month
-                if (weekEnd > lastDayOfMonth) weekEnd = new Date(lastDayOfMonth);
-
-                weeks.push({
-                    start: new Date(currentDate),
-                    end: weekEnd,
-                    id: weekCount++
-                });
-
-                // Next week starts day after weekEnd
-                currentDate = new Date(weekEnd);
-                currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-                currentDate.setUTCHours(0, 0, 0, 0);
-            }
-
-            return weeks;
-        }
-
-        function calculateHistoricalBests() {
-            const salesBySupervisorByDay = {};
-            const mostRecentSaleDate = allSalesData.map(s => parseDate(s.DTPED)).filter(Boolean).reduce((a, b) => a > b ? a : b, new Date(0));
-            const previousMonthDate = new Date(Date.UTC(mostRecentSaleDate.getUTCFullYear(), mostRecentSaleDate.getUTCMonth() - 1, 1));
-            const previousMonth = previousMonthDate.getUTCMonth();
-            const previousMonthYear = previousMonthDate.getUTCFullYear();
-            const historyLastMonthData = allHistoryData.filter(sale => { const saleDate = parseDate(sale.DTPED); return saleDate && saleDate.getUTCMonth() === previousMonth && saleDate.getUTCFullYear() === previousMonthYear; });
-            historyLastMonthData.forEach(sale => {
-                if (!sale.SUPERV || sale.SUPERV === 'BALCAO' || !sale.DTPED) return;
-                const saleDate = parseDate(sale.DTPED); if (!saleDate) return;
-                const supervisor = sale.SUPERV.toUpperCase(); const dateString = saleDate.toISOString().split('T')[0];
-                if (!salesBySupervisorByDay[supervisor]) salesBySupervisorByDay[supervisor] = {};
-                if (!salesBySupervisorByDay[supervisor][dateString]) salesBySupervisorByDay[supervisor][dateString] = 0;
-                salesBySupervisorByDay[supervisor][dateString] += sale.VLVENDA;
-            });
-            const bestDayByWeekdayBySupervisor = {};
-            for (const supervisor in salesBySupervisorByDay) {
-                const salesByDay = salesBySupervisorByDay[supervisor];
-                const bests = {};
-                for (const dateString in salesByDay) {
-                    const date = new Date(dateString + 'T00:00:00Z');
-                    const dayOfWeek = date.getUTCDay();
-                    const total = salesByDay[dateString];
-                    if (dayOfWeek >= 1 && dayOfWeek <= 5) { if (!bests[dayOfWeek] || total > bests[dayOfWeek]) bests[dayOfWeek] = total; }
-                }
-                bestDayByWeekdayBySupervisor[supervisor] = bests;
-            }
-            historicalBests = bestDayByWeekdayBySupervisor;
-        }
-
-        function populateWeeklyFilters() {
-            selectedWeeklySupervisors = updateSupervisorFilter(weeklySupervisorFilterDropdown, weeklySupervisorFilterText, selectedWeeklySupervisors, allSalesData);
-            selectedWeeklySellers = updateSellerFilter(selectedWeeklySupervisors, weeklyVendedorFilterDropdown, weeklyVendedorFilterText, selectedWeeklySellers, allSalesData);
-        }
-
-        function updateWeeklyView() {
-            let dataForGeneralCharts;
-
-            const weeklyFilialFilter = document.getElementById('weekly-filial-filter');
-            const filial = weeklyFilialFilter ? weeklyFilialFilter.value : 'ambas';
-
-            // Use the generic filtering helper which supports multiple selections
-            const filters = {
-                supervisor: selectedWeeklySupervisors.length > 0 ? new Set(selectedWeeklySupervisors) : null,
-                seller: selectedWeeklySellers.length > 0 ? new Set(selectedWeeklySellers) : null,
-                pasta: currentWeeklyFornecedor || null,
-                filial: filial !== 'ambas' ? filial : null
-            };
-
-            // If we have filters, use optimized lookup
-            if (filters.supervisor || filters.seller || filters.pasta || filters.filial) {
-                dataForGeneralCharts = getFilteredDataFromIndices(optimizedData.indices.current, optimizedData.salesById, filters);
-            } else {
-                dataForGeneralCharts = allSalesData;
-            }
-
-            const currentMonth = lastSaleDate.getUTCMonth(); const currentYear = lastSaleDate.getUTCFullYear();
-            const monthSales = dataForGeneralCharts.filter(d => { if (!d.DTPED) return false; const saleDate = parseDate(d.DTPED); return saleDate && saleDate.getUTCMonth() === currentMonth && saleDate.getUTCFullYear() === currentYear; });
-            const totalMes = monthSales.reduce((sum, item) => sum + item.VLVENDA, 0);
-            totalMesSemanalEl.textContent = totalMes.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-            // --- NEW WORKING WEEK BUCKET LOGIC ---
-            const currentMonthWeeks = getWorkingMonthWeeks(currentYear, currentMonth);
-            const salesByWeekAndDay = {};
-            const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-
-            // Initialize buckets for all determined working weeks
-            currentMonthWeeks.forEach((w, i) => {
-                salesByWeekAndDay[w.id] = {};
-                // Only care about Mon-Fri for the chart bars
-                // Mon=1, Fri=5
-                for(let d=1; d<=5; d++) {
-                    salesByWeekAndDay[w.id][dayNames[d]] = 0;
-                }
-            });
-
-            monthSales.forEach(sale => {
-                const saleDate = parseDate(sale.DTPED);
-                if (!saleDate) return;
-
-                // Determine bucket
-                const wIdx = currentMonthWeeks.findIndex(w => saleDate >= w.start && saleDate <= w.end);
-
-                if (wIdx !== -1) {
-                    const weekId = currentMonthWeeks[wIdx].id;
-                    const dayName = dayNames[saleDate.getUTCDay()];
-
-                    // Only accumulate to daily breakdown if it's a Weekday (Mon-Fri)
-                    // If Saturday/Sunday, it contributes to TOTAL (already calculated) but doesn't appear in chart bars.
-                    // However, user said "somado no total". totalMes already has it.
-                    // Chart is "Faturamento Mensal por Dia da Semana". Bars are Mon-Fri.
-                    // Sat/Sun sales are effectively hidden from the bars.
-
-                    if (salesByWeekAndDay[weekId] && salesByWeekAndDay[weekId][dayName] !== undefined) {
-                        salesByWeekAndDay[weekId][dayName] += sale.VLVENDA;
-                    }
-                }
-            });
-
-            const weekLabels = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
-            const weekNumbers = Object.keys(salesByWeekAndDay).sort((a,b) => parseInt(a) - parseInt(b));
-            const professionalPalette = ['#14b8a6', '#6366f1', '#ec4899', '#f97316', '#8b5cf6'];
-            const currentMonthDatasets = weekNumbers.map((weekNum, index) => ({ label: `Semana ${weekNum}`, data: weekLabels.map(day => salesByWeekAndDay[weekNum][day] || 0), backgroundColor: professionalPalette[index % professionalPalette.length] }));
-            // Note: Calculate "Melhor Dia Mês Anterior" dynamically based on current filters
-            const historicalDataForChart = [0, 0, 0, 0, 0];
-            
-            // 1. Get Filtered History Data
-            let historyDataForCalculation;
-            if (filters.supervisor || filters.seller || filters.pasta) {
-                historyDataForCalculation = getFilteredDataFromIndices(optimizedData.indices.history, optimizedData.historyById, filters);
-            } else {
-                historyDataForCalculation = allHistoryData;
-            }
-
-            // 2. Determine Previous Month Range
-            let prevMonth = currentMonth - 1;
-            let prevYear = currentYear;
-            if (prevMonth < 0) { prevMonth = 11; prevYear--; }
-
-            // 3. Aggregate Sales by Date for the Previous Month
-            const prevMonthSalesByDate = {}; // 'YYYY-MM-DD' -> Total
-            
-            // Optimize iteration if it's a columnar dataset proxy (although array methods work)
-            for (let i = 0; i < historyDataForCalculation.length; i++) {
-                const sale = historyDataForCalculation instanceof ColumnarDataset ? historyDataForCalculation.get(i) : historyDataForCalculation[i];
-                const d = parseDate(sale.DTPED);
-                if (d && d.getUTCMonth() === prevMonth && d.getUTCFullYear() === prevYear) {
-                    const dateStr = d.toISOString().split('T')[0];
-                    if (!prevMonthSalesByDate[dateStr]) prevMonthSalesByDate[dateStr] = 0;
-                    prevMonthSalesByDate[dateStr] += (sale.VLVENDA || 0);
-                }
-            }
-
-            // 4. Find Best Total for Each Weekday
-            const bestsByWeekday = {}; // 1..5 -> maxTotal
-            for (const dateStr in prevMonthSalesByDate) {
-                const d = new Date(dateStr + 'T00:00:00Z'); // Ensure UTC parsing
-                const dayOfWeek = d.getUTCDay();
-                if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-                    const total = prevMonthSalesByDate[dateStr];
-                    if (!bestsByWeekday[dayOfWeek] || total > bestsByWeekday[dayOfWeek]) {
-                        bestsByWeekday[dayOfWeek] = total;
-                    }
-                }
-            }
-
-            // 5. Populate Chart Data
-            historicalDataForChart[0] = bestsByWeekday[1] || 0; // Mon
-            historicalDataForChart[1] = bestsByWeekday[2] || 0; // Tue
-            historicalDataForChart[2] = bestsByWeekday[3] || 0; // Wed
-            historicalDataForChart[3] = bestsByWeekday[4] || 0; // Thu
-            historicalDataForChart[4] = bestsByWeekday[5] || 0; // Fri
-            const historicalDataset = { type: 'line', label: 'Melhor Dia Mês Anterior', data: historicalDataForChart, borderColor: '#f59e0b', backgroundColor: 'transparent', pointBackgroundColor: '#f59e0b', pointRadius: 4, tension: 0.1, borderWidth: 2, yAxisID: 'y', datalabels: { display: false } };
-            const finalDatasets = [...currentMonthDatasets, historicalDataset];
-            const weeklyChartOptions = { plugins: { legend: { display: true, onClick: (e, legendItem, legend) => { const index = legendItem.datasetIndex; const ci = legend.chart; if (ci.isDatasetVisible(index)) { ci.hide(index); legendItem.hidden = true; } else { ci.show(index); legendItem.hidden = false; } let newTotal = 0; ci.data.datasets.forEach((dataset, i) => { if (ci.isDatasetVisible(i) && dataset.type !== 'line') newTotal += dataset.data.reduce((acc, val) => acc + val, 0); }); totalMesSemanalEl.textContent = newTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); } } } };
-            createChart('weeklySalesChart', 'bar', weekLabels, finalDatasets, weeklyChartOptions);
-            const weeklySummaryTableBody = document.getElementById('weekly-summary-table-body');
-            if (weeklySummaryTableBody) {
-                weeklySummaryTableBody.innerHTML = ''; let grandTotal = 0;
-                Object.keys(salesByWeekAndDay).sort((a,b) => parseInt(a) - parseInt(b)).forEach(weekNum => { const weekTotal = Object.values(salesByWeekAndDay[weekNum]).reduce((a, b) => a + b, 0); grandTotal += weekTotal; weeklySummaryTableBody.innerHTML += `<tr class="hover:bg-slate-700"><td class="px-4 py-2">Semana ${weekNum}</td><td class="px-4 py-2 text-right">${weekTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td></tr>`; });
-                weeklySummaryTableBody.innerHTML += `<tr class="font-bold bg-slate-700/50"><td class="px-4 py-2">Total do Mês</td><td class="px-4 py-2 text-right">${grandTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td></tr>`;
-            }
-            let dataForRankings = dataForGeneralCharts.filter(d => d.SUPERV !== 'BALCAO');
-
-            // --- "AMERICANAS" Exclusion Logic ---
-            // If "AMERICANAS" is NOT explicitly selected in the vendor filter, exclude it from ranking charts.
-            // Assuming "AMERICANAS" appears as a Vendor name in sales data (d.NOME) or Client name?
-            // Usually AMERICANAS is a client, but sometimes mapped as a dummy vendor or huge account.
-            // The prompt says "o vendedor 'AMERICANAS'". So we check d.NOME.
-            const americanasSelected = selectedWeeklySellers.some(s => s.toUpperCase().includes('AMERICANAS'));
-            if (!americanasSelected) {
-                dataForRankings = dataForRankings.filter(d => !d.NOME.toUpperCase().includes('AMERICANAS'));
-            }
-            // ------------------------------------
-
-            const positivacaoMap = new Map(); // Map<Seller, Map<Client, Value>>
-            dataForRankings.forEach(d => {
-                if (!d.NOME || !d.CODCLI) return;
-                if (!positivacaoMap.has(d.NOME)) positivacaoMap.set(d.NOME, new Map());
-                const clientMap = positivacaoMap.get(d.NOME);
-                clientMap.set(d.CODCLI, (clientMap.get(d.CODCLI) || 0) + d.VLVENDA);
-            });
-
-            const positivacaoRank = [];
-            positivacaoMap.forEach((clientMap, seller) => {
-                let activeCount = 0;
-                clientMap.forEach(val => { if (val >= 1) activeCount++; });
-                positivacaoRank.push({ vendedor: seller, total: activeCount });
-            });
-            positivacaoRank.sort((a, b) => b.total - a.total).splice(10); // Keep top 10
-
-            if (positivacaoRank.length > 0) createChart('positivacaoChart', 'bar', positivacaoRank.map(r => getFirstName(r.vendedor)), positivacaoRank.map(r => r.total));
-            else showNoDataMessage('positivacaoChart', 'Sem dados para o ranking.');
-            const salesBySeller = {}; dataForRankings.forEach(d => { if (!d.NOME) return; salesBySeller[d.NOME] = (salesBySeller[d.NOME] || 0) + d.VLVENDA; });
-            const topSellersRank = Object.entries(salesBySeller).sort(([, a], [, b]) => b - a).slice(0, 10);
-            if (topSellersRank.length > 0) createChart('topSellersChart', 'bar', topSellersRank.map(r => getFirstName(r[0])), topSellersRank.map(r => r[1]));
-            else showNoDataMessage('topSellersChart', 'Sem dados para o ranking.');
-            // --- OPTIMIZATION: Mix Rank Calculation ---
-            // Calculate mix map: Map<Seller, Map<Client, Map<Description, Value>>>
-            const sellerClientMixMap = new Map();
-            const targetSuppliers = new Set(['707', '708']); // Aligned with Comparison Page
-
-            dataForRankings.forEach(d => {
-                const vendedor = d.NOME;
-                if (!vendedor || vendedor === 'VD HIAGO') return;
-
-                // Rule: Aligned with Comparison Page (Strict Pepsico)
-                if (!targetSuppliers.has(String(d.CODFOR))) return;
-
-                if (!d.CODCLI || !d.DESCRICAO) return;
-
-                if (!sellerClientMixMap.has(vendedor)) sellerClientMixMap.set(vendedor, new Map());
-                const clientMap = sellerClientMixMap.get(vendedor);
-
-                if (!clientMap.has(d.CODCLI)) clientMap.set(d.CODCLI, new Map());
-                const prodMap = clientMap.get(d.CODCLI);
-                prodMap.set(d.DESCRICAO, (prodMap.get(d.DESCRICAO) || 0) + d.VLVENDA);
-            });
-
-            const mixRank = [];
-            for (const [vendedor, clientMap] of sellerClientMixMap.entries()) {
-                const mixValues = [];
-                for (const prodMap of clientMap.values()) {
-                    let positiveProducts = 0;
-                    prodMap.forEach(val => { if (val >= 1) positiveProducts++; });
-                    if (positiveProducts > 0) mixValues.push(positiveProducts);
-                }
-
-                if (mixValues.length > 0) {
-                    const avgMix = mixValues.reduce((a, b) => a + b, 0) / mixValues.length;
-                    mixRank.push({ vendedor, avgMix });
-                } else {
-                     mixRank.push({ vendedor, avgMix: 0 });
-                }
-            }
-
-            mixRank.sort((a, b) => b.avgMix - a.avgMix);
-            const top10Mix = mixRank.slice(0, 10);
-
-            if(top10Mix.length > 0 && top10Mix.some(r => r.avgMix > 0)) createChart('mixChart', 'bar', top10Mix.map(r => getFirstName(r.vendedor)), top10Mix.map(r => r.avgMix));
-            else showNoDataMessage('mixChart', 'Sem dados para o ranking.');
-        }
-
-        function updateSupplierFilter(dropdown, filterText, selectedArray, dataSource, filterType = 'comparison', skipRender = false) {
-            const forbidden = ['CODFOR', 'FORNECEDOR', 'COD FOR', 'NOME DO FORNECEDOR', 'FORNECEDOR_NOME'];
-            const suppliers = new Map();
-            dataSource.forEach(s => {
-                if(s.CODFOR && s.FORNECEDOR && !forbidden.includes(s.CODFOR.toUpperCase()) && !forbidden.includes(s.FORNECEDOR.toUpperCase())) {
-                    suppliers.set(s.CODFOR, s.FORNECEDOR);
-                }
-            });
-
-            // Special Handling for Meta Realizado: Inject Virtual Categories
-            if (filterType === 'metaRealizado') {
-                if (suppliers.has('707')) suppliers.set('707', 'EXTRUSADOS');
-                if (suppliers.has('708')) suppliers.set('708', 'NÃO EXTRUSADOS');
-                if (suppliers.has('752')) suppliers.set('752', 'TORCIDA');
-
-                if (suppliers.has('1119')) {
-                    suppliers.delete('1119');
-                    suppliers.set('1119_TODDYNHO', 'TODDYNHO');
-                    suppliers.set('1119_TODDY', 'TODDY');
-                    suppliers.set('1119_QUAKER_KEROCOCO', 'QUAKER/KEROCOCO');
-                }
-            }
-
-            const sortedSuppliers = [...suppliers.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-
-            selectedArray = selectedArray.filter(cod => suppliers.has(cod));
-
-            if (!skipRender) {
-                const htmlParts = [];
-                for (let i = 0; i < sortedSuppliers.length; i++) {
-                    let [cod, name] = sortedSuppliers[i];
-                    const isChecked = selectedArray.includes(cod);
-                    
-                    let displayName = name;
-                    // For all pages except 'Meta Vs. Realizado', prefix Code to Name
-                    if (filterType !== 'metaRealizado') {
-                        // Ensure we don't double prefix if name already starts with code (rare but possible in data)
-                        if (!name.startsWith(cod)) {
-                            displayName = `${cod} ${name}`;
-                        }
-                    }
-
-                    htmlParts.push(`<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" data-filter-type="${filterType}" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${cod}" ${isChecked ? 'checked' : ''}><span class="ml-2 text-xs">${displayName}</span></label>`);
-                }
-                dropdown.innerHTML = htmlParts.join('');
-            }
-
-            if (selectedArray.length === 0 || selectedArray.length === sortedSuppliers.length) {
-                filterText.textContent = 'Todos Fornecedores';
-            } else if (selectedArray.length === 1) {
-                filterText.textContent = suppliers.get(selectedArray[0]) || '1 selecionado';
-            } else {
-                filterText.textContent = `${selectedArray.length} fornecedores selecionados`;
-            }
-            return selectedArray;
-        }
-
-        function updateComparisonCitySuggestions(dataSource) {
-            const forbidden = ['CIDADE', 'MUNICIPIO', 'CIDADE_CLIENTE', 'NOME DA CIDADE', 'CITY'];
-            const inputValue = comparisonCityFilter.value.toLowerCase();
-            // Optimized Lookup
-            const allAvailableCities = [...new Set(dataSource.map(item => {
-                if (item.CIDADE) return item.CIDADE;
-                if (item.CODCLI) {
-                    const c = clientMapForKPIs.get(String(item.CODCLI));
-                    if (c) return c.cidade || c['Nome da Cidade'];
-                }
-                return 'N/A';
-            }).filter(c => c && c !== 'N/A' && !forbidden.includes(c.toUpperCase())))].sort();
-            const filteredCities = inputValue ? allAvailableCities.filter(c => c.toLowerCase().includes(inputValue)) : allAvailableCities;
-            if (filteredCities.length > 0 && document.activeElement === comparisonCityFilter) {
-                comparisonCitySuggestions.innerHTML = filteredCities.map(c => `<div class="p-2 hover:bg-slate-600 cursor-pointer">${c}</div>`).join('');
-                comparisonCitySuggestions.classList.remove('hidden');
-            } else {
-                comparisonCitySuggestions.classList.add('hidden');
-            }
-        }
-
-        function getMonthWeeks(year, month) {
-            const weeks = [];
-            // Find the first day of the month
-            const firstOfMonth = new Date(Date.UTC(year, month, 1));
-
-            // Find the Sunday on or before the 1st
-            const dayOfWeek = firstOfMonth.getUTCDay(); // 0 (Sun) to 6 (Sat)
-            let currentStart = new Date(firstOfMonth);
-            currentStart.setUTCDate(firstOfMonth.getUTCDate() - dayOfWeek);
-
-            // Find the last day of the month
-            const lastOfMonth = new Date(Date.UTC(year, month + 1, 0));
-
-            // Iterate weeks until we cover the last day of the month
-            while (currentStart <= lastOfMonth) {
-                const currentEnd = new Date(currentStart);
-                currentEnd.setUTCDate(currentStart.getUTCDate() + 6);
-                currentEnd.setUTCHours(23, 59, 59, 999);
-
-                weeks.push({ start: new Date(currentStart), end: currentEnd });
-
-                // Move to next Sunday
-                currentStart.setUTCDate(currentStart.getUTCDate() + 7);
-            }
-            return weeks;
-        }
-
-        function normalize(str) {
+function normalize(str) {
             return str
                 ? str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase()
                 : '';
         }
 
-        function getPositiveClientsWithNewLogic(salesData) {
-            const salesByClient = new Map();
-            salesData.forEach(sale => {
-                if (!sale.CODCLI) return;
-                const clientTotal = salesByClient.get(sale.CODCLI) || 0;
-                salesByClient.set(sale.CODCLI, clientTotal + sale.VLVENDA);
-            });
-
-            let positiveClients = 0;
-            const threshold = 1;
-
-            for (const total of salesByClient.values()) {
-                if (total > threshold) {
-                    positiveClients++;
-                }
-            }
-            return positiveClients;
-        }
-
-        const formatValue = (val, format) => {
+const formatValue = (val, format) => {
             if (format === 'currency') return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             if (format === 'decimal') return val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
             if (format === 'mix') return val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             return val.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
         };
 
-        const formatAbbreviated = (val, format) => {
-            let prefix = format === 'currency' ? 'R$ ' : '';
-            if (val >= 1000000) {
-                return prefix + (val / 1000000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Mi';
-            } else if (val >= 1000) {
-                 return prefix + (val / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' K';
-            }
-            return null;
-        };
-
-        function renderKpiCards(kpis) {
-            const container = document.getElementById('comparison-kpi-container');
-
-            container.innerHTML = kpis.map(kpi => {
-                const variation = kpi.history > 0 ? ((kpi.current - kpi.history) / kpi.history) * 100 : (kpi.current > 0 ? 100 : 0);
-                const colorClass = variation > 0 ? 'text-green-400' : variation < 0 ? 'text-red-400' : 'text-slate-400';
-
-                let displayValue;
-                if (kpi.title === 'Faturamento Total') {
-                    displayValue = formatAbbreviated(kpi.current, kpi.format) || formatValue(kpi.current, kpi.format);
-                } else {
-                    displayValue = formatValue(kpi.current, kpi.format);
-                }
-
-                let glowClass = 'kpi-glow-blue';
-                if (kpi.title.includes('Faturamento')) glowClass = 'kpi-glow-green';
-                else if (kpi.title.includes('Volume')) glowClass = 'kpi-glow-blue';
-                else if (kpi.title.includes('Positivação') || kpi.title.includes('Cobertura')) glowClass = 'kpi-glow-purple';
-                else if (kpi.title.includes('SKU') || kpi.title.includes('Mix')) glowClass = 'kpi-glow-yellow';
-
-                return `<div class="kpi-card p-4 rounded-lg text-center kpi-glow-base ${glowClass} transition transform hover:-translate-y-1 duration-200">
-                            <p class="text-slate-300 text-sm">${kpi.title}</p>
-                            <p class="text-2xl font-bold text-white my-2">${displayValue}</p>
-                            <p class="text-sm ${colorClass}">${variation.toFixed(2)}% vs Média do Trimestre</p>
-                            <p class="text-xs text-slate-300">Média Trim.: ${formatValue(kpi.history, kpi.format)}</p>
-                        </div>`;
-            }).join('');
-        }
-
-        function calculateAverageMixComDevolucao(salesData, targetCodfors) {
-             if (!salesData || salesData.length === 0 || !targetCodfors || targetCodfors.length === 0) return 0;
-
-            const clientProductNetValue = new Map();
-
-            for (const sale of salesData) {
-                if (!targetCodfors.includes(String(sale.CODFOR))) continue;
-                if (!sale.CODCLI || !sale.PRODUTO) continue;
-
-                if (!clientProductNetValue.has(sale.CODCLI)) {
-                    clientProductNetValue.set(sale.CODCLI, new Map());
-                }
-                const clientProducts = clientProductNetValue.get(sale.CODCLI);
-
-                const currentValue = clientProducts.get(sale.PRODUTO) || 0;
-                clientProducts.set(sale.PRODUTO, currentValue + (Number(sale.VLVENDA) || 0));
-            }
-
-            const mixValues = [];
-            for (const products of clientProductNetValue.values()) {
-                let positiveProductCount = 0;
-                for (const netValue of products.values()) {
-                    if (netValue >= 1) {
-                        positiveProductCount++;
-                    }
-                }
-                if (positiveProductCount > 0) {
-                    mixValues.push(positiveProductCount);
-                }
-            }
-
-            if (mixValues.length === 0) return 0;
-
-            return mixValues.reduce((a, b) => a + b, 0) / mixValues.length;
-        }
-
-        function calculatePositivacaoPorCestaComDevolucao(salesData, requiredCategories) {
-            if (!salesData || salesData.length === 0 || !requiredCategories || requiredCategories.length === 0) return 0;
-
-            const normalizedCategories = requiredCategories.map(normalize);
-            const clientProductNetSales = new Map();
-
-            for (const sale of salesData) {
-                if (!sale.CODCLI || !sale.PRODUTO) continue;
-
-                if (!clientProductNetSales.has(sale.CODCLI)) {
-                    clientProductNetSales.set(sale.CODCLI, new Map());
-                }
-                const clientProducts = clientProductNetSales.get(sale.CODCLI);
-
-                if (!clientProducts.has(sale.PRODUTO)) {
-                    clientProducts.set(sale.PRODUTO, { netValue: 0, description: sale.DESCRICAO });
-                }
-                const productData = clientProducts.get(sale.PRODUTO);
-                productData.netValue += (Number(sale.VLVENDA) || 0);
-            }
-
-            const clientPurchasedCategories = new Map();
-
-            for (const [codcli, products] of clientProductNetSales.entries()) {
-                for (const data of products.values()) {
-                    if (data.netValue >= 1) {
-                        const normalizedDescription = normalize(data.description);
-                        for (const category of normalizedCategories) {
-                            if (normalizedDescription.includes(category)) {
-                                if (!clientPurchasedCategories.has(codcli)) {
-                                    clientPurchasedCategories.set(codcli, new Set());
-                                }
-                                clientPurchasedCategories.get(codcli).add(category);
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            let positivadosCount = 0;
-            const requiredCategoryCount = normalizedCategories.length;
-            for (const categoriesPurchased of clientPurchasedCategories.values()) {
-                if (categoriesPurchased.size >= requiredCategoryCount) {
-                    positivadosCount++;
-                }
-            }
-
-            return positivadosCount;
-        }
-
-
-        function groupSalesByMonth(salesData) {
-            const salesByMonth = {};
-            salesData.forEach(sale => {
-                const date = parseDate(sale.DTPED);
-                if (!date || isNaN(date.getTime())) return;
-                const monthKey = date.getUTCFullYear() + '-' + String(date.getUTCMonth() + 1).padStart(2, '0');
-                if (!salesByMonth[monthKey]) salesByMonth[monthKey] = [];
-                salesByMonth[monthKey].push(sale);
-            });
-            return salesByMonth;
-        }
-
-                        function calculateUnifiedMetrics(currentSales, historySales) {
-            // 1. Setup Data Structures
-            const currentYear = lastSaleDate.getUTCFullYear();
-            const currentMonth = lastSaleDate.getUTCMonth();
-            const currentMonthWeeks = getMonthWeeks(currentYear, currentMonth);
-
-            const metrics = {
-                current: {
-                    fat: 0, peso: 0, clients: 0,
-                    mixPepsico: 0, positivacaoSalty: 0, positivacaoFoods: 0
-                },
-                history: {
-                    fat: 0, peso: 0,
-                    avgFat: 0, avgPeso: 0, avgClients: 0,
-                    avgMixPepsico: 0, avgPositivacaoSalty: 0, avgPositivacaoFoods: 0
-                },
-                charts: {
-                    weeklyCurrent: new Array(currentMonthWeeks.length).fill(0),
-                    weeklyHistory: new Array(currentMonthWeeks.length).fill(0),
-                    monthlyData: [], // { label, value (fat/clients) }
-                    supervisorData: {} // { sup: { current, history } }
-                },
-                overlapSales: []
-            };
-
-            const firstWeekStart = currentMonthWeeks[0].start;
-            const firstOfMonth = new Date(Date.UTC(currentYear, currentMonth, 1));
-            const hasOverlap = firstWeekStart < firstOfMonth;
-
-            const pepsicoCodfors = new Set(['707', '708', '752']);
-            const saltyCategories = ['CHEETOS', 'DORITOS', 'FANDANGOS', 'RUFFLES', 'TORCIDA'];
-            const foodsCategories = ['TODDYNHO', 'TODDY ', 'QUAKER', 'KEROCOCO'];
-
-            // Helper to normalize strings
-            const norm = (s) => s ? s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase() : '';
-
-            // --- FILTER: Foods Description Logic (Same as Metas) ---
-            const isValidFoodsProduct = (codFor, desc) => {
-                // Apply strict description check ONLY for Supplier 1119 (Foods)
-                if (codFor !== '1119') return true;
-
-                const d = norm(desc || '');
-                // Check if it matches ANY of the Foods sub-brands (Toddynho, Toddy, Quaker/Kerococo)
-                // Note: Metas logic separates them. Here we just want to know if it belongs to "Foods Group".
-                // If it contains NONE of the keywords, it is excluded from "Foods" metrics.
-                if (d.includes('TODDYNHO')) return true;
-                if (d.includes('TODDY ')) return true; // Note the space
-                if (d.includes('QUAKER')) return true;
-                if (d.includes('KEROCOCO')) return true;
-
-                return false;
-            };
-
-            // --- 2. Process Current Sales (Single Pass) ---
-            const currentClientProductMap = new Map(); // Client -> Product -> { val, desc, codfor }
-            const currentClientsSet = new Map(); // Client -> Total Value (for Positive check)
-
-            currentSales.forEach(s => {
-                // Filter: Only Type 1 and 9 count for Metrics (Fat/Peso/Charts)
-                const isValidType = (s.TIPOVENDA === '1' || s.TIPOVENDA === '9');
-
-                // Filter: Strict Foods Definition
-                if (!isValidFoodsProduct(String(s.CODFOR), s.DESCRICAO)) return;
-
-                if (isValidType) {
-                    metrics.current.fat += s.VLVENDA;
-                    metrics.current.peso += s.TOTPESOLIQ;
-                }
-
-                if (s.CODCLI) {
-                    // Accumulate for Positive Check (using VLVENDA which is 0 for non-1/9 anyway, but keeping consistent)
-                    currentClientsSet.set(s.CODCLI, (currentClientsSet.get(s.CODCLI) || 0) + s.VLVENDA);
-
-                    if (!currentClientProductMap.has(s.CODCLI)) currentClientProductMap.set(s.CODCLI, new Map());
-                    const cMap = currentClientProductMap.get(s.CODCLI);
-                    if (!cMap.has(s.PRODUTO)) cMap.set(s.PRODUTO, { val: 0, desc: s.DESCRICAO, codfor: String(s.CODFOR) });
-                    cMap.get(s.PRODUTO).val += s.VLVENDA;
-                }
-
-                // Supervisor Data
-                if (s.SUPERV && isValidType) {
-                    if (!metrics.charts.supervisorData[s.SUPERV]) metrics.charts.supervisorData[s.SUPERV] = { current: 0, history: 0 };
-                    metrics.charts.supervisorData[s.SUPERV].current += s.VLVENDA;
-                }
-
-                // Weekly Chart (Current)
-                const d = parseDate(s.DTPED);
-                if (d && isValidType) {
-                    const wIdx = currentMonthWeeks.findIndex(w => d >= w.start && d <= w.end);
-                    if (wIdx !== -1) metrics.charts.weeklyCurrent[wIdx] += s.VLVENDA;
-                }
-            });
-
-            // Calculate Current KPIs from Maps
-            let currentPositiveClients = 0;
-            currentClientsSet.forEach(val => { if (val >= 1) currentPositiveClients++; });
-            metrics.current.clients = currentPositiveClients;
-
-            // Mix/Positivacao Current
-            let sumMix = 0;
-            let countMixClients = 0;
-            let countSalty = 0;
-            let countFoods = 0;
-
-            currentClientProductMap.forEach((prods, codcli) => {
-                // Mix Pepsico
-                let pepsicoCount = 0;
-                const boughtCatsSalty = new Set();
-                const boughtCatsFoods = new Set();
-
-                prods.forEach(pData => {
-                    if (pData.val >= 1) {
-                        if (pepsicoCodfors.has(pData.codfor)) pepsicoCount++;
-
-                        const desc = norm(pData.desc);
-                        saltyCategories.forEach(cat => { if (desc.includes(cat)) boughtCatsSalty.add(cat); });
-                        foodsCategories.forEach(cat => { if (desc.includes(cat)) boughtCatsFoods.add(cat); });
-                    }
-                });
-
-                if (pepsicoCount > 0) {
-                    sumMix += pepsicoCount;
-                    countMixClients++;
-                }
-                if (boughtCatsSalty.size >= saltyCategories.length) countSalty++;
-                if (boughtCatsFoods.size >= foodsCategories.length) countFoods++;
-            });
-
-            metrics.current.mixPepsico = countMixClients > 0 ? sumMix / countMixClients : 0;
-            metrics.current.positivacaoSalty = countSalty;
-            metrics.current.positivacaoFoods = countFoods;
-
-
-            // --- 3. Process History Sales (Single Pass) ---
-            const historyMonths = new Map(); // MonthKey -> { fat, clientMap, weekSales: [] }
-
-            // Cache week ranges for history months to avoid recalculating
-            const monthWeeksCache = new Map();
-
-            historySales.forEach(s => {
-                const d = parseDate(s.DTPED);
-                if (!d) return;
-
-                const monthKey = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
-
-                // Filter: Strict Foods Definition (Apply here too)
-                if (!isValidFoodsProduct(String(s.CODFOR), s.DESCRICAO)) return;
-
-                // Filter: Only Type 1 and 9 count for Metrics (Fat/Peso/Charts)
-                const isValidType = (s.TIPOVENDA === '1' || s.TIPOVENDA === '9');
-
-                if (isValidType) {
-                    metrics.history.fat += s.VLVENDA;
-                    metrics.history.peso += s.TOTPESOLIQ;
-                }
-
-                if (!historyMonths.has(monthKey)) {
-                    historyMonths.set(monthKey, {
-                        fat: 0,
-                        clients: new Map(), // Client -> Total
-                        productMap: new Map() // Client -> Product -> Data
-                    });
-                }
-                const mData = historyMonths.get(monthKey);
-
-                if (isValidType) {
-                    mData.fat += s.VLVENDA;
-                }
-
-                if (s.CODCLI) {
-                    mData.clients.set(s.CODCLI, (mData.clients.get(s.CODCLI) || 0) + s.VLVENDA);
-
-                    if (!mData.productMap.has(s.CODCLI)) mData.productMap.set(s.CODCLI, new Map());
-                    const cMap = mData.productMap.get(s.CODCLI);
-                    if (!cMap.has(s.PRODUTO)) cMap.set(s.PRODUTO, { val: 0, desc: s.DESCRICAO, codfor: String(s.CODFOR) });
-                    cMap.get(s.PRODUTO).val += s.VLVENDA;
-                }
-
-                // Supervisor History
-                if (s.SUPERV && isValidType) {
-                    if (!metrics.charts.supervisorData[s.SUPERV]) metrics.charts.supervisorData[s.SUPERV] = { current: 0, history: 0 };
-                    metrics.charts.supervisorData[s.SUPERV].history += s.VLVENDA;
-                }
-
-                // Weekly History (Average logic)
-                if (!monthWeeksCache.has(monthKey)) {
-                    monthWeeksCache.set(monthKey, getMonthWeeks(d.getUTCFullYear(), d.getUTCMonth()));
-                }
-                const weeks = monthWeeksCache.get(monthKey);
-                const wIdx = weeks.findIndex(w => d >= w.start && d <= w.end);
-
-                // Map to Current Month's structure (0..4)
-                if (wIdx !== -1 && wIdx < metrics.charts.weeklyHistory.length && isValidType) {
-                    metrics.charts.weeklyHistory[wIdx] += s.VLVENDA;
-                }
-
-                // Handle Overlap for Current Chart (Single Pass)
-                if (hasOverlap && d >= firstWeekStart && d < firstOfMonth && isValidType) {
-                    metrics.charts.weeklyCurrent[0] += s.VLVENDA;
-                    metrics.overlapSales.push(s);
-                }
-            });
-
-            // Calculate History Averages
-            metrics.history.avgFat = metrics.history.fat / QUARTERLY_DIVISOR;
-            metrics.history.avgPeso = metrics.history.peso / QUARTERLY_DIVISOR;
-            metrics.charts.weeklyHistory = metrics.charts.weeklyHistory.map(v => v / QUARTERLY_DIVISOR);
-
-            // Normalize Supervisor History
-            Object.values(metrics.charts.supervisorData).forEach(d => d.history /= QUARTERLY_DIVISOR);
-
-            // Process Monthly KPIs (Clients, Mix)
-            // Sort months to ensure we take the last 3 if there are more
-            const sortedMonths = Array.from(historyMonths.keys()).sort();
-
-            // Take last 3 months
-            const monthsToProcess = sortedMonths.slice(-3);
-
-            let sumClients = 0;
-            let sumMixPep = 0;
-            let sumPosSalty = 0;
-            let sumPosFoods = 0;
-
-            monthsToProcess.forEach(mKey => {
-                const mData = historyMonths.get(mKey);
-
-                // Clients
-                let posClients = 0;
-                mData.clients.forEach(v => { if(v >= 1) posClients++; });
-                sumClients += posClients;
-
-                // Mix
-                let mSumMix = 0;
-                let mCountMixClients = 0;
-                let mCountSalty = 0;
-                let mCountFoods = 0;
-
-                mData.productMap.forEach((prods, codcli) => {
-                    let pepsicoCount = 0;
-                    const boughtCatsSalty = new Set();
-                    const boughtCatsFoods = new Set();
-
-                    prods.forEach(pData => {
-                        if (pData.val >= 1) {
-                            if (pepsicoCodfors.has(pData.codfor)) pepsicoCount++;
-                            const desc = norm(pData.desc);
-                            saltyCategories.forEach(cat => { if (desc.includes(cat)) boughtCatsSalty.add(cat); });
-                            foodsCategories.forEach(cat => { if (desc.includes(cat)) boughtCatsFoods.add(cat); });
-                        }
-                    });
-
-                    if (pepsicoCount > 0) {
-                        mSumMix += pepsicoCount;
-                        mCountMixClients++;
-                    }
-                    if (boughtCatsSalty.size >= saltyCategories.length) mCountSalty++;
-                    if (boughtCatsFoods.size >= foodsCategories.length) mCountFoods++;
-                });
-
-                sumMixPep += (mCountMixClients > 0 ? mSumMix / mCountMixClients : 0);
-                sumPosSalty += mCountSalty;
-                sumPosFoods += mCountFoods;
-
-                // For Monthly Chart (Labels and Values)
-                const [y, m] = mKey.split('-');
-                const monthName = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"][parseInt(m)];
-
-                metrics.charts.monthlyData.push({
-                    label: monthName,
-                    fat: mData.fat,
-                    clients: posClients,
-                    key: mKey
-                });
-            });
-
-            // Finish History Averages
-            metrics.history.avgClients = sumClients / QUARTERLY_DIVISOR;
-            metrics.history.avgMixPepsico = sumMixPep / QUARTERLY_DIVISOR;
-            metrics.history.avgPositivacaoSalty = sumPosSalty / QUARTERLY_DIVISOR;
-            metrics.history.avgPositivacaoFoods = sumPosFoods / QUARTERLY_DIVISOR;
-
-            return metrics;
-        }
-
-
-        function monthlyKpiAverage(dataInput, kpiFn, isGrouped = false, ...kpiArgs) {
-            let salesByMonth;
-            if (isGrouped) {
-                salesByMonth = dataInput;
-            } else {
-                salesByMonth = groupSalesByMonth(dataInput);
-            }
-
-            let sortedMonths = Object.keys(salesByMonth).sort();
-
-            if (sortedMonths.length > 0) {
-                const firstMonthKey = sortedMonths[0];
-                const firstSaleInFirstMonth = salesByMonth[firstMonthKey].reduce((earliest, sale) => {
-                    const saleDate = parseDate(sale.DTPED);
-                    return (!earliest || (saleDate && saleDate < earliest)) ? saleDate : earliest;
-                }, null);
-
-                if (firstSaleInFirstMonth && firstSaleInFirstMonth.getUTCDate() > 20) {
-                    sortedMonths.shift();
-                }
-            }
-
-            const monthsToAverage = sortedMonths.slice(-3);
-
-            const kpiValues = monthsToAverage.map(monthKey => {
-                const salesForMonth = salesByMonth[monthKey];
-                return kpiFn(salesForMonth, ...kpiArgs);
-            });
-
-            if (kpiValues.length === 0) return 0;
-            return kpiValues.reduce((a, b) => a + b, 0) / QUARTERLY_DIVISOR;
-        }
-
-        function calculateStockMonthlyAverage(historySales) {
-            // Function groupSalesByMonth is defined above in the scope
-            const salesByMonth = groupSalesByMonth(historySales);
-            let sortedMonths = Object.keys(salesByMonth).sort();
-
-            if (sortedMonths.length > 0) {
-                const firstMonthKey = sortedMonths[0];
-                const firstSaleInFirstMonth = salesByMonth[firstMonthKey].reduce((earliest, sale) => {
-                    const saleDate = parseDate(sale.DTPED);
-                    return (!earliest || (saleDate && saleDate < earliest)) ? saleDate : earliest;
-                }, null);
-
-                if (firstSaleInFirstMonth && firstSaleInFirstMonth.getUTCDate() > 20) {
-                    sortedMonths.shift();
-                }
-            }
-
-            const monthsToAverage = sortedMonths.slice(-3);
-
-            const kpiValues = monthsToAverage.map(monthKey => {
-                const salesForMonth = salesByMonth[monthKey];
-                return salesForMonth.reduce((sum, s) => sum + (s.QTVENDA_EMBALAGEM_MASTER || 0), 0);
-            });
-
-            if (kpiValues.length === 0) return 0;
-            return kpiValues.reduce((a, b) => a + b, 0) / kpiValues.length;
-        }
-
-        const getFilteredDataFromIndices = (indices, dataset, filters, excludeFilter = null) => {
-            const isExcluded = (f) => excludeFilter === f || (Array.isArray(excludeFilter) && excludeFilter.includes(f));
-            const setsToIntersect = [];
-            let hasFilter = false;
-
-            // Helper to get item
-            const getItem = (idx) => (dataset.get ? dataset.get(idx) : dataset[idx]);
-
-            if (filters.filial && filters.filial !== 'ambas') {
-                hasFilter = true;
-                if (indices.byFilial && indices.byFilial.has(filters.filial)) {
-                    setsToIntersect.push(indices.byFilial.get(filters.filial));
-                } else {
-                    return [];
-                }
-            }
-
-            if (!isExcluded('supervisor') && filters.supervisor) {
-                if (typeof filters.supervisor === 'string') {
-                    hasFilter = true;
-                    if (indices.bySupervisor && indices.bySupervisor.has(filters.supervisor)) {
-                        setsToIntersect.push(indices.bySupervisor.get(filters.supervisor));
-                    } else {
-                        return [];
-                    }
-                } else if (filters.supervisor.size > 0) {
-                    hasFilter = true;
-                    const unionIds = new Set();
-                    let foundAny = false;
-                    filters.supervisor.forEach(sup => {
-                        if (indices.bySupervisor && indices.bySupervisor.has(sup)) {
-                            indices.bySupervisor.get(sup).forEach(id => unionIds.add(id));
-                            foundAny = true;
-                        }
-                    });
-                    if (foundAny) setsToIntersect.push(unionIds);
-                    else return [];
-                }
-            }
-
-            if (!isExcluded('pasta') && filters.pasta) {
-                hasFilter = true;
-                if (indices.byPasta && indices.byPasta.has(filters.pasta)) {
-                    setsToIntersect.push(indices.byPasta.get(filters.pasta));
-                } else {
-                    return [];
-                }
-            }
-
-            if (!isExcluded('tipoVenda') && filters.tipoVenda && filters.tipoVenda.size > 0) {
-                hasFilter = true;
-                const ids = new Set();
-                let foundAny = false;
-                filters.tipoVenda.forEach(t => {
-                    if (indices.byTipoVenda && indices.byTipoVenda.has(t)) {
-                        indices.byTipoVenda.get(t).forEach(id => ids.add(id));
-                        foundAny = true;
-                    }
-                });
-                if (foundAny) setsToIntersect.push(ids);
-                else return [];
-            }
-
-            if (!isExcluded('seller') && filters.seller && filters.seller.size > 0) {
-                hasFilter = true;
-                const ids = new Set();
-                let foundAny = false;
-                filters.seller.forEach(s => {
-                    if (indices.byRca && indices.byRca.has(s)) {
-                        indices.byRca.get(s).forEach(id => ids.add(id));
-                        foundAny = true;
-                    }
-                });
-                if (foundAny) setsToIntersect.push(ids);
-                else return [];
-            }
-
-            if (!isExcluded('supplier') && filters.supplier && filters.supplier.size > 0) {
-                hasFilter = true;
-                const ids = new Set();
-                let foundAny = false;
-                filters.supplier.forEach(s => {
-                    if (indices.bySupplier && indices.bySupplier.has(s)) {
-                        indices.bySupplier.get(s).forEach(id => ids.add(id));
-                        foundAny = true;
-                    }
-                });
-                if (foundAny) setsToIntersect.push(ids);
-                else return [];
-            }
-
-            if (!isExcluded('product') && filters.product && filters.product.size > 0) {
-                hasFilter = true;
-                const ids = new Set();
-                let foundAny = false;
-                filters.product.forEach(p => {
-                    if (indices.byProduct && indices.byProduct.has(p)) {
-                        indices.byProduct.get(p).forEach(id => ids.add(id));
-                        foundAny = true;
-                    }
-                });
-                if (foundAny) setsToIntersect.push(ids);
-                else return [];
-            }
-
-            if (!isExcluded('city') && filters.city) {
-                hasFilter = true;
-                if (indices.byCity && indices.byCity.has(filters.city)) {
-                    setsToIntersect.push(indices.byCity.get(filters.city));
-                } else {
-                    return [];
-                }
-            }
-
-            if (setsToIntersect.length === 0 && !hasFilter && !filters.clientCodes) {
-                if (dataset.values && typeof dataset.values === 'function') {
-                    return dataset.values();
-                }
-                if (Array.isArray(dataset)) return dataset;
-
-                const all = [];
-                for(let i=0; i<dataset.length; i++) all.push(getItem(i));
-                return all;
-            }
-
-            let resultIds;
-            if (setsToIntersect.length > 0) {
-                // --- OPTIMIZATION START ---
-                // Sort sets by size to intersect the smallest sets first.
-                setsToIntersect.sort((a, b) => a.size - b.size);
-
-                // Start with the smallest set.
-                resultIds = new Set(setsToIntersect[0]);
-
-                // Intersect with the rest of the sets.
-                for (let i = 1; i < setsToIntersect.length; i++) {
-                    // Stop early if the result is already empty.
-                    if (resultIds.size === 0) break;
-
-                    const currentSet = setsToIntersect[i];
-                    for (const id of resultIds) {
-                        if (!currentSet.has(id)) {
-                            resultIds.delete(id);
-                        }
-                    }
-                }
-                // --- OPTIMIZATION END ---
-            } else if (filters.clientCodes) {
-                 const allData = [];
-                 // Use iteration if values() unavailable
-                 if (Array.isArray(dataset)) {
-                     for(let i=0; i<dataset.length; i++) {
-                         if(filters.clientCodes.has(dataset[i].CODCLI)) allData.push(dataset[i]);
-                     }
-                 } else if (dataset.values && typeof dataset.values === 'function') {
-                     const vals = dataset.values();
-                     for(let i=0; i<vals.length; i++) if(filters.clientCodes.has(vals[i].CODCLI)) allData.push(vals[i]);
-                 } else {
-                     for(let i=0; i<dataset.length; i++) {
-                         const item = getItem(i);
-                         if(filters.clientCodes.has(item.CODCLI)) allData.push(item);
-                     }
-                 }
-                 return allData;
-            } else {
-                // Should be unreachable due to first check, but safe fallback
-                if (dataset.values && typeof dataset.values === 'function') return dataset.values();
-                if (Array.isArray(dataset)) return dataset;
-                const all = [];
-                for(let i=0; i<dataset.length; i++) all.push(getItem(i));
-                return all;
-            }
-
-            const result = [];
-            for (const id of resultIds) {
-                const item = getItem(id);
-                if (!filters.clientCodes || filters.clientCodes.has(item.CODCLI)) {
-                    result.push(item);
-                }
-            }
-            return result;
-        };
-
-        function getComparisonFilteredData(options = {}) {
-            const { excludeFilter = null } = options;
-
-            const sellersSet = new Set(selectedComparisonSellers);
-            const suppliersSet = new Set(selectedComparisonSuppliers);
-            const productsSet = new Set(selectedComparisonProducts);
-            const tiposVendaSet = new Set(selectedComparisonTiposVenda);
-            const redeSet = new Set(selectedComparisonRedes);
-            const supervisorSet = new Set(selectedComparisonSupervisors);
-
-            const pasta = currentComparisonFornecedor;
-            const city = comparisonCityFilter.value.trim().toLowerCase();
-            const filial = comparisonFilialFilter.value;
-
-            let clientCodes = null;
-            if (comparisonRedeGroupFilter) {
-                let clients = allClientsData;
-                if (comparisonRedeGroupFilter === 'com_rede') {
-                    clients = clients.filter(c => c.ramo && c.ramo !== 'N/A');
-                     if (redeSet.size > 0) {
-                        clients = clients.filter(c => redeSet.has(c.ramo));
-                    }
-                } else if (comparisonRedeGroupFilter === 'sem_rede') {
-                    clients = clients.filter(c => !c.ramo || c.ramo === 'N/A');
-                }
-                clientCodes = new Set(clients.map(c => c['Código']));
-            }
-
-            const filters = {
-                filial,
-                supervisor: supervisorSet,
-                pasta,
-                tipoVenda: tiposVendaSet,
-                seller: sellersSet,
-                supplier: suppliersSet,
-                product: productsSet,
-                city,
-                clientCodes
-            };
-
-            return {
-                currentSales: getFilteredDataFromIndices(optimizedData.indices.current, optimizedData.salesById, filters, excludeFilter),
-                historySales: getFilteredDataFromIndices(optimizedData.indices.history, optimizedData.historyById, filters, excludeFilter)
-            };
-        }
-
-
-        function updateAllComparisonFilters() {
-            const { currentSales: supervisorCurrent, historySales: supervisorHistory } = getComparisonFilteredData({ excludeFilter: 'supervisor' });
-            const supervisorOptionsData = [...supervisorCurrent, ...supervisorHistory];
-            selectedComparisonSupervisors = updateSupervisorFilter(document.getElementById('comparison-supervisor-filter-dropdown'), document.getElementById('comparison-supervisor-filter-text'), selectedComparisonSupervisors, supervisorOptionsData);
-
-            const { currentSales: sellerCurrent, historySales: sellerHistory } = getComparisonFilteredData({ excludeFilter: 'seller' });
-            const sellerOptionsData = [...sellerCurrent, ...sellerHistory];
-            selectedComparisonSellers = updateSellerFilter(selectedComparisonSupervisors, comparisonVendedorFilterDropdown, comparisonVendedorFilterText, selectedComparisonSellers, sellerOptionsData);
-
-            const { currentSales: supplierCurrent, historySales: supplierHistory } = getComparisonFilteredData({ excludeFilter: 'supplier' });
-            const supplierOptionsData = [...supplierCurrent, ...supplierHistory];
-            selectedComparisonSuppliers = updateSupplierFilter(comparisonSupplierFilterDropdown, comparisonSupplierFilterText, selectedComparisonSuppliers, supplierOptionsData, 'comparison');
-
-            const { currentSales: tvCurrent, historySales: tvHistory } = getComparisonFilteredData({ excludeFilter: 'tipoVenda' });
-            selectedComparisonTiposVenda = updateTipoVendaFilter(comparisonTipoVendaFilterDropdown, comparisonTipoVendaFilterText, selectedComparisonTiposVenda, [...tvCurrent, ...tvHistory]);
-
-            updateComparisonProductFilter();
-
-            const { currentSales: cityCurrent, historySales: cityHistory } = getComparisonFilteredData({ excludeFilter: 'city' });
-            const cityOptionsData = [...cityCurrent, ...cityHistory];
-            updateComparisonCitySuggestions(cityOptionsData);
-
-            const { currentSales: pastaCurrent, historySales: pastaHistory } = getComparisonFilteredData({ excludeFilter: 'pasta' });
-            const pastaOptionsData = [...pastaCurrent, ...pastaHistory];
-            const pepsicoBtn = document.querySelector('#comparison-fornecedor-toggle-container button[data-fornecedor="PEPSICO"]');
-            const multimarcasBtn = document.querySelector('#comparison-fornecedor-toggle-container button[data-fornecedor="MULTIMARCAS"]');
-            const hasPepsico = pastaOptionsData.some(s => s.OBSERVACAOFOR === 'PEPSICO');
-            const hasMultimarcas = pastaOptionsData.some(s => s.OBSERVACAOFOR === 'MULTIMARCAS');
-            pepsicoBtn.disabled = !hasPepsico;
-            multimarcasBtn.disabled = !hasMultimarcas;
-            pepsicoBtn.classList.toggle('opacity-50', !hasPepsico);
-            multimarcasBtn.classList.toggle('opacity-50', !hasMultimarcas);
-        }
-
-        function updateProductFilter(dropdown, filterText, selectedArray, dataSource, filterType = 'comparison', skipRender = false) {
-            const forbidden = ['PRODUTO', 'DESCRICAO', 'CODIGO', 'CÓDIGO', 'DESCRIÇÃO'];
-            const searchInput = dropdown.querySelector('input[type="text"]');
-            const listContainer = dropdown.querySelector('div[id$="-list"]');
-            const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
-
-            const products = [...new Map(dataSource.map(s => [s.PRODUTO, s.DESCRICAO]))
-                .entries()]
-                .filter(([code, desc]) => code && desc && !forbidden.includes(code.toUpperCase()) && !forbidden.includes(desc.toUpperCase()))
-                .sort((a,b) => a[1].localeCompare(b[1]));
-
-            // Filter selectedArray to keep only items present in the current dataSource
-            const availableProductCodes = new Set(products.map(p => p[0]));
-            selectedArray = selectedArray.filter(code => availableProductCodes.has(code));
-
-            const filteredProducts = searchTerm.length > 0
-                ? products.filter(([code, name]) =>
-                    name.toLowerCase().includes(searchTerm) || code.toLowerCase().includes(searchTerm)
-                  )
-                : products;
-
-            if (!skipRender) {
-                const htmlParts = [];
-                for (let i = 0; i < filteredProducts.length; i++) {
-                    const [code, name] = filteredProducts[i];
-                    const isChecked = selectedArray.includes(code);
-                    htmlParts.push(`
-                        <label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer">
-                            <input type="checkbox" data-filter-type="${filterType}" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${code}" ${isChecked ? 'checked' : ''}>
-                            <span class="ml-2 text-xs">(${code}) ${name}</span>
-                        </label>`);
-                }
-                listContainer.innerHTML = htmlParts.join('');
-            }
-
-            if (selectedArray.length === 0) {
-                filterText.textContent = 'Todos os Produtos';
-            } else if (selectedArray.length === 1) {
-                const productsInfo = new Map(products);
-                filterText.textContent = productsInfo.get(selectedArray[0]) || '1 selecionado';
-            } else {
-                filterText.textContent = `${selectedArray.length} produtos selecionados`;
-            }
-            return selectedArray;
-        }
-
-        function updateComparisonProductFilter() {
-            const { currentSales, historySales } = getComparisonFilteredData({ excludeFilter: 'product' });
-            selectedComparisonProducts = updateProductFilter(comparisonProductFilterDropdown, comparisonProductFilterText, selectedComparisonProducts, [...currentSales, ...historySales], 'comparison');
-        }
-
-        function updateStockProductFilter(skipRender = false) {
-            const data = getStockFilteredData({excludeFilter: 'product'});
-            selectedStockProducts = updateProductFilter(stockProductFilterDropdown, stockProductFilterText, selectedStockProducts, [...data.sales, ...data.history], 'stock', skipRender);
-        }
-
-        function updateStockSupplierFilter(skipRender = false) {
-            const data = getStockFilteredData({excludeFilter: 'supplier'});
-            selectedStockSuppliers = updateSupplierFilter(stockSupplierFilterDropdown, stockSupplierFilterText, selectedStockSuppliers, [...data.sales, ...data.history], 'stock', skipRender);
-        }
-
-        function updateStockSellerFilter(skipRender = false) {
-            const data = getStockFilteredData({excludeFilter: 'seller'});
-            selectedStockSellers = updateSellerFilter(selectedStockSupervisors, stockVendedorFilterDropdown, stockVendedorFilterText, selectedStockSellers, [...data.sales, ...data.history], skipRender);
-        }
-
-        function updateStockCitySuggestions(dataSource) {
-            const forbidden = ['CIDADE', 'MUNICIPIO', 'CIDADE_CLIENTE', 'NOME DA CIDADE', 'CITY'];
-            const inputValue = stockCityFilter.value.toLowerCase();
-            // Optimized Lookup
-            const allAvailableCities = [...new Set(dataSource.map(item => {
-                if (item.CIDADE) return item.CIDADE;
-                if (item.CODCLI) {
-                    const c = clientMapForKPIs.get(String(item.CODCLI));
-                    if (c) return c.cidade || c['Nome da Cidade'];
-                }
-                return 'N/A';
-            }).filter(c => c && c !== 'N/A' && !forbidden.includes(c.toUpperCase())))].sort();
-            const filteredCities = inputValue ? allAvailableCities.filter(c => c.toLowerCase().includes(inputValue)) : allAvailableCities;
-            if (filteredCities.length > 0 && document.activeElement === stockCityFilter) {
-                stockCitySuggestions.innerHTML = filteredCities.map(c => `<div class="p-2 hover:bg-slate-600 cursor-pointer">${c}</div>`).join('');
-                stockCitySuggestions.classList.remove('hidden');
-            } else {
-                stockCitySuggestions.classList.add('hidden');
-            }
-        }
-
-        function getActiveStockMap(filial) {
-            const filterValue = filial || stockFilialFilter.value;
-            if (filterValue === '05') {
-                return stockData05;
-            }
-            if (filterValue === '08') {
-                return stockData08;
-            }
-            const combinedStock = new Map(stockData05);
-            stockData08.forEach((qty, code) => {
-                combinedStock.set(code, (combinedStock.get(code) || 0) + qty);
-            });
-            return combinedStock;
-        }
-
-        function getStockFilteredData(options = {}) {
-            const { excludeFilter = null } = options;
-
-            const sellersSet = new Set(selectedStockSellers);
-            const suppliersSet = new Set(selectedStockSuppliers);
-            const productsSet = new Set(selectedStockProducts);
-            const tiposVendaSet = new Set(selectedStockTiposVenda);
-            const redeSet = new Set(selectedStockRedes);
-            const supervisorSet = new Set(selectedStockSupervisors);
-
-            const pasta = currentStockFornecedor;
-            const city = stockCityFilter.value.trim().toLowerCase();
-            const filial = stockFilialFilter.value;
-
-            let clientCodes = null;
-            if (excludeFilter !== 'rede') {
-                if (stockRedeGroupFilter === 'com_rede' || stockRedeGroupFilter === 'sem_rede') {
-                    let clients = allClientsData;
-                    if (stockRedeGroupFilter === 'com_rede') {
-                        clients = clients.filter(c => c.ramo && c.ramo !== 'N/A');
-                        if (redeSet.size > 0) {
-                            clients = clients.filter(c => redeSet.has(c.ramo));
-                        }
-                    } else if (stockRedeGroupFilter === 'sem_rede') {
-                        clients = clients.filter(c => !c.ramo || c.ramo === 'N/A');
-                    }
-                    clientCodes = new Set(clients.map(c => c['Código']));
-                }
-            }
-
-            const filters = {
-                filial,
-                supervisor: supervisorSet,
-                pasta,
-                tipoVenda: tiposVendaSet,
-                seller: sellersSet,
-                supplier: suppliersSet,
-                product: productsSet,
-                city,
-                clientCodes
-            };
-
-            return {
-                sales: getFilteredDataFromIndices(optimizedData.indices.current, optimizedData.salesById, filters, excludeFilter),
-                history: getFilteredDataFromIndices(optimizedData.indices.history, optimizedData.historyById, filters, excludeFilter)
-            };
-        }
-
-        function handleStockFilterChange(options = {}) {
-            const { skipFilter = null } = options;
-
-            // Debounce stock view update
-            if (window.stockUpdateTimeout) clearTimeout(window.stockUpdateTimeout);
-            window.stockUpdateTimeout = setTimeout(() => {
-                if (skipFilter !== 'supervisor') {
-                    const supervisorData = getStockFilteredData({ excludeFilter: 'supervisor' });
-                    const supervisorOptionsData = [...supervisorData.sales, ...supervisorData.history];
-                    selectedStockSupervisors = updateSupervisorFilter(document.getElementById('stock-supervisor-filter-dropdown'), document.getElementById('stock-supervisor-filter-text'), selectedStockSupervisors, supervisorOptionsData);
-                }
-
-                updateStockSellerFilter(skipFilter === 'seller');
-                updateStockSupplierFilter(skipFilter === 'supplier');
-                updateStockProductFilter(skipFilter === 'product');
-
-                const tvData = getStockFilteredData({ excludeFilter: 'tipoVenda' });
-                selectedStockTiposVenda = updateTipoVendaFilter(stockTipoVendaFilterDropdown, stockTipoVendaFilterText, selectedStockTiposVenda, [...tvData.sales, ...tvData.history], skipFilter === 'tipoVenda');
-
-                if (skipFilter !== 'city') {
-                    const cityData = getStockFilteredData({ excludeFilter: 'city' });
-                    updateStockCitySuggestions([...cityData.sales, ...cityData.history]);
-                }
-
-                if (skipFilter !== 'pasta') {
-                    const pastaData = getStockFilteredData({ excludeFilter: 'pasta' });
-                    const pastaOptionsData = [...pastaData.sales, ...pastaData.history];
-                    const pepsicoBtn = document.querySelector('#stock-fornecedor-toggle-container button[data-fornecedor="PEPSICO"]');
-                    const multimarcasBtn = document.querySelector('#stock-fornecedor-toggle-container button[data-fornecedor="MULTIMARCAS"]');
-                    const hasPepsico = pastaOptionsData.some(s => s.OBSERVACAOFOR === 'PEPSICO');
-                    const hasMultimarcas = pastaOptionsData.some(s => s.OBSERVACAOFOR === 'MULTIMARCAS');
-                    pepsicoBtn.disabled = !hasPepsico;
-                    multimarcasBtn.disabled = !hasMultimarcas;
-                    pepsicoBtn.classList.toggle('opacity-50', !hasPepsico);
-                    multimarcasBtn.classList.toggle('opacity-50', !hasMultimarcas);
-                }
-
-                updateStockView();
-            }, 10);
-        }
-
-        function updateComparisonView() {
-            comparisonRenderId++;
-            const currentRenderId = comparisonRenderId;
-            const { currentSales, historySales } = getComparisonFilteredData();
-
-            // Show Loading State on Charts
-            const chartContainers = ['weeklyComparisonChart', 'monthlyComparisonChart', 'dailyWeeklyComparisonChart'];
-            chartContainers.forEach(id => {
-                if (charts[id]) {
-                    charts[id].destroy();
-                    delete charts[id];
-                }
-                const el = document.getElementById(id + 'Container');
-                if(el) el.innerHTML = '<div class="flex h-full items-center justify-center"><svg class="animate-spin h-8 w-8 text-teal-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></div>';
-            });
-
-            const currentYear = lastSaleDate.getUTCFullYear();
-            const currentMonth = lastSaleDate.getUTCMonth();
-            const currentMonthWeeks = getMonthWeeks(currentYear, currentMonth);
-
-            const metrics = {
-                current: { fat: 0, peso: 0, clients: 0, mixPepsico: 0, positivacaoSalty: 0, positivacaoFoods: 0 },
-                history: { fat: 0, peso: 0, avgFat: 0, avgPeso: 0, avgClients: 0, avgMixPepsico: 0, avgPositivacaoSalty: 0, avgPositivacaoFoods: 0 },
-                charts: {
-                    weeklyCurrent: new Array(currentMonthWeeks.length).fill(0),
-                    weeklyHistory: new Array(currentMonthWeeks.length).fill(0),
-                    monthlyData: [],
-                    supervisorData: {}
-                },
-                historicalDayTotals: new Array(7).fill(0), // 0=Sun, 6=Sat
-                overlapSales: []
-            };
-
-            const firstWeekStart = currentMonthWeeks[0].start;
-            const firstOfMonth = new Date(Date.UTC(currentYear, currentMonth, 1));
-            const hasOverlap = firstWeekStart < firstOfMonth;
-            const pepsicoCodfors = new Set(['707', '708', '752']);
-            const saltyCategories = ['CHEETOS', 'DORITOS', 'FANDANGOS', 'RUFFLES', 'TORCIDA'];
-            const foodsCategories = ['TODDYNHO', 'TODDY ', 'QUAKER', 'KEROCOCO'];
-            const norm = (s) => s ? s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase() : '';
-
-            // Temp structures for Current processing
-            const currentClientProductMap = new Map();
-            const currentClientsSet = new Map();
-
-            // Temp structures for History processing
-            const historyMonths = new Map();
-            const monthWeeksCache = new Map();
-
-            // --- Async Pipeline ---
-
-            // 1. Process Current Sales
-            runAsyncChunked(currentSales, (s) => {
-                const isValidType = (s.TIPOVENDA === '1' || s.TIPOVENDA === '9');
-                if (isValidType) {
-                    metrics.current.fat += s.VLVENDA;
-                    metrics.current.peso += s.TOTPESOLIQ;
-                }
-                if (s.CODCLI) {
-                    currentClientsSet.set(s.CODCLI, (currentClientsSet.get(s.CODCLI) || 0) + s.VLVENDA);
-                    if (!currentClientProductMap.has(s.CODCLI)) currentClientProductMap.set(s.CODCLI, new Map());
-                    const cMap = currentClientProductMap.get(s.CODCLI);
-                    if (!cMap.has(s.PRODUTO)) cMap.set(s.PRODUTO, { val: 0, desc: s.DESCRICAO, codfor: String(s.CODFOR) });
-                    cMap.get(s.PRODUTO).val += s.VLVENDA;
-                }
-                if (s.SUPERV && isValidType) {
-                    if (!metrics.charts.supervisorData[s.SUPERV]) metrics.charts.supervisorData[s.SUPERV] = { current: 0, history: 0 };
-                    metrics.charts.supervisorData[s.SUPERV].current += s.VLVENDA;
-                }
-                const d = parseDate(s.DTPED);
-                if (d && isValidType) {
-                    const wIdx = currentMonthWeeks.findIndex(w => d >= w.start && d <= w.end);
-                    if (wIdx !== -1) metrics.charts.weeklyCurrent[wIdx] += s.VLVENDA;
-                }
-            }, () => {
-                // 1.1 Finalize Current KPIs
-                let currentPositiveClients = 0;
-                currentClientsSet.forEach(val => { if (val >= 1) currentPositiveClients++; });
-                metrics.current.clients = currentPositiveClients;
-
-                let sumMix = 0; let countMixClients = 0; let countSalty = 0; let countFoods = 0;
-                currentClientProductMap.forEach((prods) => {
-                    let pepsicoCount = 0;
-                    const boughtCatsSalty = new Set();
-                    const boughtCatsFoods = new Set();
-                    prods.forEach(pData => {
-                        if (pData.val >= 1) {
-                            if (pepsicoCodfors.has(pData.codfor)) pepsicoCount++;
-                            const desc = norm(pData.desc);
-                            saltyCategories.forEach(cat => { if (desc.includes(cat)) boughtCatsSalty.add(cat); });
-                            foodsCategories.forEach(cat => { if (desc.includes(cat)) boughtCatsFoods.add(cat); });
-                        }
-                    });
-                    if (pepsicoCount > 0) { sumMix += pepsicoCount; countMixClients++; }
-                    if (boughtCatsSalty.size >= saltyCategories.length) countSalty++;
-                    if (boughtCatsFoods.size >= foodsCategories.length) countFoods++;
-                });
-                metrics.current.mixPepsico = countMixClients > 0 ? sumMix / countMixClients : 0;
-                metrics.current.positivacaoSalty = countSalty;
-                metrics.current.positivacaoFoods = countFoods;
-
-                if (currentRenderId !== comparisonRenderId) return;
-
-                // 2. Process History Sales
-                runAsyncChunked(historySales, (s) => {
-                    const isValidType = (s.TIPOVENDA === '1' || s.TIPOVENDA === '9');
-                    if (isValidType) {
-                        metrics.history.fat += s.VLVENDA;
-                        metrics.history.peso += s.TOTPESOLIQ;
-                    }
-                    const d = parseDate(s.DTPED);
-                    if (!d) return;
-
-                    const monthKey = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
-                    if (!historyMonths.has(monthKey)) historyMonths.set(monthKey, { fat: 0, clients: new Map(), productMap: new Map() });
-                    const mData = historyMonths.get(monthKey);
-
-                    if (isValidType) mData.fat += s.VLVENDA;
-
-                    if (s.CODCLI) {
-                        mData.clients.set(s.CODCLI, (mData.clients.get(s.CODCLI) || 0) + s.VLVENDA);
-                        if (!mData.productMap.has(s.CODCLI)) mData.productMap.set(s.CODCLI, new Map());
-                        const cMap = mData.productMap.get(s.CODCLI);
-                        if (!cMap.has(s.PRODUTO)) cMap.set(s.PRODUTO, { val: 0, desc: s.DESCRICAO, codfor: String(s.CODFOR) });
-                        cMap.get(s.PRODUTO).val += s.VLVENDA;
-                    }
-
-                    if (s.SUPERV && isValidType) {
-                        if (!metrics.charts.supervisorData[s.SUPERV]) metrics.charts.supervisorData[s.SUPERV] = { current: 0, history: 0 };
-                        metrics.charts.supervisorData[s.SUPERV].history += s.VLVENDA;
-                    }
-
-                    // Accumulate Day Totals for Day Weight Calculation
-                    if (isValidType) {
-                        metrics.historicalDayTotals[d.getUTCDay()] += s.VLVENDA;
-                    }
-
-                    if (!monthWeeksCache.has(monthKey)) monthWeeksCache.set(monthKey, getMonthWeeks(d.getUTCFullYear(), d.getUTCMonth()));
-                    const weeks = monthWeeksCache.get(monthKey);
-                    const wIdx = weeks.findIndex(w => d >= w.start && d <= w.end);
-                    if (wIdx !== -1 && wIdx < metrics.charts.weeklyHistory.length && isValidType) {
-                        metrics.charts.weeklyHistory[wIdx] += s.VLVENDA;
-                    }
-                    if (hasOverlap && d >= firstWeekStart && d < firstOfMonth && isValidType) {
-                        metrics.charts.weeklyCurrent[0] += s.VLVENDA;
-                        metrics.overlapSales.push(s);
-                    }
-                }, () => {
-                    if (currentRenderId !== comparisonRenderId) return;
-
-                    // 2.1 Finalize History Metrics
-                    metrics.history.avgFat = metrics.history.fat / QUARTERLY_DIVISOR;
-                    metrics.history.avgPeso = metrics.history.peso / QUARTERLY_DIVISOR;
-                    metrics.charts.weeklyHistory = metrics.charts.weeklyHistory.map(v => v / QUARTERLY_DIVISOR);
-                    Object.values(metrics.charts.supervisorData).forEach(d => d.history /= QUARTERLY_DIVISOR);
-
-                    // Calculate Day Weights
-                    const totalHistoryDays = metrics.historicalDayTotals.reduce((a, b) => a + b, 0);
-                    metrics.dayWeights = metrics.historicalDayTotals.map(v => totalHistoryDays > 0 ? v / totalHistoryDays : 0);
-
-                    const sortedMonths = Array.from(historyMonths.keys()).sort((a, b) => {
-                        const [y1, m1] = a.split('-').map(Number);
-                        const [y2, m2] = b.split('-').map(Number);
-                        return (y1 * 12 + m1) - (y2 * 12 + m2);
-                    }).slice(-3);
-                    let sumClients = 0; let sumMixPep = 0; let sumPosSalty = 0; let sumPosFoods = 0;
-
-                    sortedMonths.forEach(mKey => {
-                        const mData = historyMonths.get(mKey);
-                        let posClients = 0;
-                        mData.clients.forEach(v => { if(v >= 1) posClients++; });
-                        sumClients += posClients;
-
-                        let mSumMix = 0; let mCountMixClients = 0; let mCountSalty = 0; let mCountFoods = 0;
-                        mData.productMap.forEach((prods) => {
-                            let pepsicoCount = 0;
-                            const boughtCatsSalty = new Set();
-                            const boughtCatsFoods = new Set();
-                            prods.forEach(pData => {
-                                if (pData.val >= 1) {
-                                    if (pepsicoCodfors.has(pData.codfor)) pepsicoCount++;
-                                    const desc = norm(pData.desc);
-                                    saltyCategories.forEach(cat => { if (desc.includes(cat)) boughtCatsSalty.add(cat); });
-                                    foodsCategories.forEach(cat => { if (desc.includes(cat)) boughtCatsFoods.add(cat); });
-                                }
-                            });
-                            if (pepsicoCount > 0) { mSumMix += pepsicoCount; mCountMixClients++; }
-                            if (boughtCatsSalty.size >= saltyCategories.length) mCountSalty++;
-                            if (boughtCatsFoods.size >= foodsCategories.length) mCountFoods++;
-                        });
-                        sumMixPep += (mCountMixClients > 0 ? mSumMix / mCountMixClients : 0);
-                        sumPosSalty += mCountSalty;
-                        sumPosFoods += mCountFoods;
-
-                        const [y, m] = mKey.split('-');
-                        const label = new Date(Date.UTC(parseInt(y), parseInt(m), 1)).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' });
-                        metrics.charts.monthlyData.push({ label, fat: mData.fat, clients: posClients });
-                    });
-
-                    metrics.history.avgClients = sumClients / QUARTERLY_DIVISOR;
-                    metrics.history.avgMixPepsico = sumMixPep / QUARTERLY_DIVISOR;
-                    metrics.history.avgPositivacaoSalty = sumPosSalty / QUARTERLY_DIVISOR;
-                    metrics.history.avgPositivacaoFoods = sumPosFoods / QUARTERLY_DIVISOR;
-
-                    // 3. Render Views
-                    const m = metrics;
-                    renderKpiCards([
-                        { title: 'Faturamento Total', current: m.current.fat, history: m.history.avgFat, format: 'currency' },
-                        { title: 'Peso Total (Ton)', current: m.current.peso / 1000, history: m.history.avgPeso / 1000, format: 'decimal' },
-                        { title: 'Clientes Atendidos', current: m.current.clients, history: m.history.avgClients, format: 'integer' },
-                        { title: 'Ticket Médio', current: m.current.clients > 0 ? m.current.fat / m.current.clients : 0, history: m.history.avgClients > 0 ? m.history.avgFat / m.history.avgClients : 0, format: 'currency' },
-                        { title: 'Mix por PDV (Pepsico)', current: m.current.mixPepsico, history: m.history.avgMixPepsico, format: 'mix' },
-                        { title: 'Mix Salty', current: m.current.positivacaoSalty, history: m.history.avgPositivacaoSalty, format: 'integer' },
-                        { title: 'Mix Foods', current: m.current.positivacaoFoods, history: m.history.avgPositivacaoFoods, format: 'integer' }
-                    ]);
-
-                    // Weekly Chart Logic with Tendency
-                    let weeklyCurrentData = [...m.charts.weeklyCurrent];
-                    if (useTendencyComparison) {
-                        const today = lastSaleDate;
-                        const currentWeekIndex = currentMonthWeeks.findIndex(w => today >= w.start && today <= w.end);
-                        const totalWeeks = currentMonthWeeks.length;
-                        for (let i = 0; i < totalWeeks; i++) {
-                            if (i === currentWeekIndex) {
-                                const currentWeek = currentMonthWeeks[i];
-                                let workingDaysPassed = 0; let totalWorkingDays = 0;
-                                for (let d = new Date(currentWeek.start); d <= currentWeek.end; d.setUTCDate(d.getUTCDate() + 1)) {
-                                    const dayOfWeek = d.getUTCDay();
-                                    if (dayOfWeek >= 1 && dayOfWeek <= 5 && !isHoliday(d, selectedHolidays)) {
-                                        totalWorkingDays++;
-                                        if (d <= today) workingDaysPassed++;
-                                    }
-                                }
-                                const salesSoFar = weeklyCurrentData[i];
-                                if (workingDaysPassed > 0 && totalWorkingDays > 0) {
-                                    weeklyCurrentData[i] = (salesSoFar / workingDaysPassed) * totalWorkingDays;
-                                } else {
-                                    weeklyCurrentData[i] = m.charts.weeklyHistory[i] || 0;
-                                }
-                            } else if (i > currentWeekIndex) {
-                                weeklyCurrentData[i] = m.charts.weeklyHistory[i] || 0;
-                            }
-                        }
-                    }
-
-                    // Render Charts logic (Reusing existing drawing code)
-                    if (comparisonChartType === 'weekly') {
-                        monthlyComparisonChartContainer.classList.add('hidden');
-                        weeklyComparisonChartContainer.classList.remove('hidden');
-                        comparisonChartTitle.textContent = 'Comparativo de Faturamento Semanal';
-                        const weekLabels = currentMonthWeeks.map((w, i) => `Semana ${i + 1}`);
-                        createChart('weeklyComparisonChart', 'line', weekLabels, [
-                            { label: useTendencyComparison ? 'Tendência Semanal' : 'Mês Atual', data: weeklyCurrentData, borderColor: '#14b8a6', tension: 0.2, pointRadius: 5, pointBackgroundColor: '#14b8a6', borderWidth: 2.5 },
-                            { label: 'Média Trimestre', data: m.charts.weeklyHistory, borderColor: '#f97316', tension: 0.2, pointRadius: 5, pointBackgroundColor: '#f97316', borderWidth: 2.5 }
-                        ], { plugins: { legend: { display: true, position: 'top', align: 'end' } }, layout: { padding: { bottom: 0 } } });
-                    } else if (comparisonChartType === 'monthly') {
-                        weeklyComparisonChartContainer.classList.add('hidden');
-                        monthlyComparisonChartContainer.classList.remove('hidden');
-                        const metricToggle = document.getElementById('comparison-monthly-metric-container');
-                        if (metricToggle) metricToggle.classList.remove('hidden');
-                        const isFat = comparisonMonthlyMetric === 'faturamento';
-                        comparisonChartTitle.textContent = isFat ? 'Comparativo de Faturamento Mensal' : 'Comparativo de Clientes Atendidos Mensal';
-                        const monthLabels = m.charts.monthlyData.map(d => d.label);
-                        const monthValues = m.charts.monthlyData.map(d => isFat ? d.fat : d.clients);
-                        let currentMonthLabel = 'Mês Atual';
-                        if (currentSales.length > 0) {
-                            const firstSaleDate = parseDate(currentSales[0].DTPED) || new Date();
-                            currentMonthLabel = firstSaleDate.toLocaleString('pt-BR', { month: 'short', year: '2-digit' });
-                        }
-                        let currentVal = isFat ? m.current.fat : m.current.clients;
-                        if (isFat && useTendencyComparison) {
-                            const totalDays = getWorkingDaysInMonth(currentYear, currentMonth, selectedHolidays);
-                            const passedDays = getPassedWorkingDaysInMonth(currentYear, currentMonth, selectedHolidays, lastSaleDate);
-                            if (totalDays > 0 && passedDays > 0) { currentVal = (currentVal / passedDays) * totalDays; }
-                        }
-                        monthLabels.push(currentMonthLabel);
-                        monthValues.push(currentVal);
-                        createChart('monthlyComparisonChart', 'bar', monthLabels, [{ label: isFat ? 'Faturamento' : 'Clientes Atendidos', data: monthValues, backgroundColor: (context) => { const ctx = context.chart.ctx; const gradient = ctx.createLinearGradient(0, 0, 0, 400); gradient.addColorStop(0, 'rgba(20, 184, 166, 0.8)'); gradient.addColorStop(1, 'rgba(126, 34, 206, 0.8)'); return gradient; }, borderColor: (context) => { const ctx = context.chart.ctx; const gradient = ctx.createLinearGradient(0, 0, 0, 400); gradient.addColorStop(0, '#14b8a6'); gradient.addColorStop(1, '#7e22ce'); return gradient; }, borderWidth: 2 }], { layout: { padding: { top: 20 } }, plugins: { legend: { display: false }, datalabels: { color: '#ffffff', anchor: 'end', align: 'top', offset: 4, font: { weight: 'bold' }, formatter: (value) => { if (isFat) { if (value >= 1000000) return 'R$ ' + (value / 1000000).toFixed(2) + ' M'; return 'R$ ' + (value / 1000).toFixed(0) + 'k'; } else { return value.toLocaleString('pt-BR'); } } }, tooltip: { callbacks: { label: function(context) { let label = context.dataset.label || ''; if (label) label += ': '; if (context.parsed.y !== null) { if (isFat) label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.parsed.y); else label += context.parsed.y.toLocaleString('pt-BR') + ' clientes'; } return label; } } } } });
-                    }
-
-                    // Daily Chart (Simplified re-calc for now, or could optimize further)
-                    const salesByWeekAndDay = {};
-                    currentMonthWeeks.forEach((w, i) => { salesByWeekAndDay[i + 1] = new Array(7).fill(0); });
-                    currentSales.forEach(s => { const d = parseDate(s.DTPED); if(d) { const wIdx = currentMonthWeeks.findIndex(w => d >= w.start && d <= w.end); if(wIdx !== -1) salesByWeekAndDay[wIdx+1][d.getUTCDay()] += s.VLVENDA; } });
-                    if (m.overlapSales && m.overlapSales.length > 0) { m.overlapSales.forEach(s => { const d = parseDate(s.DTPED); if (d) salesByWeekAndDay[1][d.getUTCDay()] += s.VLVENDA; }); }
-
-                    // --- INICIO DA MODIFICAÇÃO: Tendência no Gráfico Diário ---
-                    if (useTendencyComparison) {
-                        const today = lastSaleDate;
-                        const currentWeekIndex = currentMonthWeeks.findIndex(w => today >= w.start && today <= w.end);
-
-                        // 1. Project Current Week
-                        if (currentWeekIndex !== -1) {
-                            const currentWeek = currentMonthWeeks[currentWeekIndex];
-                            let workingDaysPassed = 0; let totalWorkingDays = 0;
-                            const remainingDaysIndices = [];
-
-                            for (let d = new Date(currentWeek.start); d <= currentWeek.end; d.setUTCDate(d.getUTCDate() + 1)) {
-                                const dayOfWeek = d.getUTCDay();
-                                if (dayOfWeek >= 1 && dayOfWeek <= 5 && !isHoliday(d, selectedHolidays)) {
-                                    totalWorkingDays++;
-                                    if (d <= today) workingDaysPassed++;
-                                    else remainingDaysIndices.push(dayOfWeek);
-                                }
-                            }
-
-                            if (workingDaysPassed > 0 && totalWorkingDays > 0) {
-                                const weekData = salesByWeekAndDay[currentWeekIndex + 1];
-                                const salesSoFar = weekData.reduce((a, b) => a + b, 0);
-                                const projectedWeekTotal = (salesSoFar / workingDaysPassed) * totalWorkingDays;
-                                const remainder = projectedWeekTotal - salesSoFar;
-
-                                if (remainder > 0 && remainingDaysIndices.length > 0) {
-                                    const weightsForRemaining = remainingDaysIndices.map(d => m.dayWeights[d] || 0);
-                                    const totalWeightRemaining = weightsForRemaining.reduce((a, b) => a + b, 0);
-
-                                    remainingDaysIndices.forEach(dayIndex => {
-                                        const weight = m.dayWeights[dayIndex] || 0;
-                                        // If weights are available, use them. Otherwise distribute evenly.
-                                        const share = totalWeightRemaining > 0 ? (weight / totalWeightRemaining) : (1 / remainingDaysIndices.length);
-                                        weekData[dayIndex] = remainder * share;
-                                    });
-                                }
-                            }
-                        }
-
-                        // 2. Fill Future Weeks with Historical Average (Distributed by Day Weights)
-                        const weightsMonFri = [1, 2, 3, 4, 5].map(d => m.dayWeights[d] || 0);
-                        const totalWeightMonFri = weightsMonFri.reduce((a, b) => a + b, 0);
-
-                        for (let i = currentWeekIndex + 1; i < currentMonthWeeks.length; i++) {
-                            const historicalTotal = m.charts.weeklyHistory[i] || 0;
-                            if (historicalTotal > 0) {
-                                const weekData = salesByWeekAndDay[i + 1];
-                                // Fill Mon(1) to Fri(5)
-                                for (let d = 1; d <= 5; d++) {
-                                    const weight = m.dayWeights[d] || 0;
-                                    const share = totalWeightMonFri > 0 ? (weight / totalWeightMonFri) : (1 / 5);
-                                    weekData[d] = historicalTotal * share;
-                                }
-                            }
-                        }
-                    }
-                    // --- FIM DA MODIFICAÇÃO ---
-
-                    const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-                    const professionalPalette = ['#a855f7', '#6366f1', '#ec4899', '#f97316', '#8b5cf6', '#06b6d4', '#f59e0b'];
-                    const dailyBreakdownDatasets = dayNames.map((dayName, dayIndex) => ({ label: dayName, data: currentMonthWeeks.map((week, weekIndex) => salesByWeekAndDay[weekIndex + 1][dayIndex]), backgroundColor: professionalPalette[dayIndex % professionalPalette.length] }));
-                    const weekLabelsForDailyChart = currentMonthWeeks.map((week, index) => { const startDateStr = week.start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' }); const endDateStr = week.end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' }); return `S${index + 1} (${startDateStr} à ${endDateStr})`; });
-
-                    if (dailyBreakdownDatasets.some(ds => ds.data.some(d => d > 0))) {
-                        createChart('dailyWeeklyComparisonChart', 'bar', weekLabelsForDailyChart, dailyBreakdownDatasets, {
-                            plugins: {
-                                legend: { display: true, position: 'top' },
-                                tooltip: {
-                                    mode: 'point',
-                                    intersect: true,
-                                    callbacks: {
-                                        label: function(context) {
-                                            let label = context.dataset.label || '';
-                                            if (label) label += ': ';
-                                            if (context.parsed.y !== null) {
-                                                label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.parsed.y);
-                                            }
-                                            return label;
-                                        },
-                                        afterBody: function(context) {
-                                            // Calculate Week Total
-                                            const weekIndex = context[0].dataIndex; // All items in tooltip share same index (if grouped) or point
-                                            // Ensure we are accessing the modified salesByWeekAndDay
-                                            const weekData = salesByWeekAndDay[weekIndex + 1];
-                                            const total = weekData.reduce((a, b) => a + b, 0);
-                                            return '\nSemana: ' + new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total);
-                                        }
-                                    }
-                                },
-                                datalabels: { display: false }
-                            },
-                            scales: { x: { stacked: false }, y: { stacked: false, ticks: { callback: (v) => (v / 1000).toFixed(0) + 'k' } } }
-                        });
-                    } else {
-                        showNoDataMessage('dailyWeeklyComparisonChart', 'Sem dados para exibir.');
-                    }
-
-                    // Supervisor Table
-                    const supervisorTableBody = document.getElementById('supervisorComparisonTableBody');
-                    const supRows = Object.entries(m.charts.supervisorData).map(([sup, data]) => { const variation = data.history > 0 ? ((data.current - data.history) / data.history) * 100 : (data.current > 0 ? 100 : 0); const colorClass = variation > 0 ? 'text-green-400' : variation < 0 ? 'text-red-400' : 'text-slate-400'; return `<tr class="hover:bg-slate-700"><td class="px-4 py-2">${sup}</td><td class="px-4 py-2 text-right">${data.history.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right">${data.current.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right ${colorClass}">${variation.toFixed(2)}%</td></tr>`; }).join('');
-                    supervisorTableBody.innerHTML = supRows;
-                }, () => currentRenderId !== comparisonRenderId); // Cancel check
-            }, () => currentRenderId !== comparisonRenderId); // Cancel check
-        }
-
-        function updateStockView() {
-            stockRenderId++;
-            const currentRenderId = stockRenderId;
-
-            const { sales: filteredSales, history: filteredHistory } = getStockFilteredData();
-
-            const filial = stockFilialFilter.value;
-            const activeStockMap = getActiveStockMap(filial);
-
-            // Sets for fast lookup
-            const selectedSuppliersSet = new Set(selectedStockSuppliers);
-            const selectedProductsSet = new Set(selectedStockProducts);
-            const currentPasta = currentStockFornecedor;
-
-            const productAnalysis = new Map();
-            const productsWithFilteredActivity = new Set(); // Changed from Set to array logic below for chunking, but Set used for uniqueness
-
-            // --- OPTIMIZATION: Pre-aggregate Sales Data by Product ---
-            // Map<ProductCode, Array<Sale>>
-            const salesByProduct = new Map();
-            const historyByProduct = new Map();
-            const historySalesListByProduct = new Map();
-            const totalQtyByProduct = new Map();
-            const currentMonthQtyByProduct = new Map();
-            const uniqueMonthsByProduct = new Map();
-
-            // Sync Pre-aggregation (O(N) is fast)
-            const processSaleForAggregation = (s, isHistory) => {
-                const p = s.PRODUTO;
-                // Don't add to productsWithFilteredActivity yet, do it in the filtering loop below to respect stock filters
-
-                if (!salesByProduct.has(p)) salesByProduct.set(p, []);
-                salesByProduct.get(p).push(s);
-
-                if (!uniqueMonthsByProduct.has(p)) uniqueMonthsByProduct.set(p, new Set());
-                const d = parseDate(s.DTPED);
-                if (d) uniqueMonthsByProduct.get(p).add(`${d.getUTCFullYear()}-${d.getUTCMonth()}`);
-
-                const qty = s.QTVENDA_EMBALAGEM_MASTER;
-                totalQtyByProduct.set(p, (totalQtyByProduct.get(p) || 0) + qty);
-
-                if (isHistory) {
-                    if (!historySalesListByProduct.has(p)) historySalesListByProduct.set(p, []);
-                    historySalesListByProduct.get(p).push(s);
-
-                    if (!historyByProduct.has(p)) historyByProduct.set(p, 0);
-                    historyByProduct.set(p, historyByProduct.get(p) + 1);
-                } else {
-                    currentMonthQtyByProduct.set(p, (currentMonthQtyByProduct.get(p) || 0) + qty);
-                }
-            };
-
-            filteredSales.forEach(s => processSaleForAggregation(s, false));
-            filteredHistory.forEach(s => processSaleForAggregation(s, true));
-
-            // Build the list of products to analyze based on STOCK or SALES activity + Filters
-            activeStockMap.forEach((qty, productCode) => {
-                if (qty > 0) {
-                    const details = productDetailsMap.get(productCode);
-                    if (!details) return;
-
-                    if (selectedSuppliersSet.size > 0 && !selectedSuppliersSet.has(String(details.codfor))) return;
-                    if (selectedProductsSet.size > 0 && !selectedProductsSet.has(String(productCode))) return;
-
-                    if (currentPasta) {
-                        const pastaDoProduto = optimizedData.productPastaMap.get(productCode) || '';
-                        if (pastaDoProduto !== currentPasta) return;
-                    }
-
-                    productsWithFilteredActivity.add(productCode);
-                }
-            });
-
-            // Also include products with sales even if 0 stock (logic from original)
-            // Iterate salesByProduct keys (which implies sales existed)
-            for (const productCode of totalQtyByProduct.keys()) {
-                 if (productsWithFilteredActivity.has(productCode)) continue; // Already added
-
-                 const details = productDetailsMap.get(productCode);
-                 if (!details) continue; // Should be in details map if processed correctly
-
-                 if (selectedSuppliersSet.size > 0 && !selectedSuppliersSet.has(String(details.codfor))) continue;
-                 if (selectedProductsSet.size > 0 && !selectedProductsSet.has(String(productCode))) continue;
-                 if (currentPasta) {
-                    const pastaDoProduto = optimizedData.productPastaMap.get(productCode) || '';
-                    if (pastaDoProduto !== currentPasta) continue;
-                 }
-                 productsWithFilteredActivity.add(productCode);
-            }
-
-            // Show Loading
-            stockAnalysisTableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8"><div class="flex justify-center items-center"><svg class="animate-spin h-8 w-8 text-teal-500 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span class="text-slate-400">Calculando estoque e tendências...</span></div></td></tr>';
-
-            // Convert to array for chunking
-            const productsArray = Array.from(productsWithFilteredActivity);
-
-            // Pre-calculate global dates for trend
-            const endDate = parseDate(sortedWorkingDays[sortedWorkingDays.length - 1]);
-
-            // ASYNC PROCESS
-            runAsyncChunked(productsArray, (productCode) => {
-                if (!activeProductCodesFromCadastro.has(productCode)) return;
-
-                const details = productDetailsMap.get(productCode) || {
-                    descricao: `Produto ${productCode}`,
-                    fornecedor: 'N/A',
-                    codfor: 'N/A'
-                };
-
-                const stock = activeStockMap.get(productCode) || 0;
-                const totalQtySold = totalQtyByProduct.get(productCode) || 0;
-
-                if (stock <= 0 && totalQtySold <= 0) return;
-
-                const hasHistory = historyByProduct.has(productCode);
-                const currentMonthSalesQty = currentMonthQtyByProduct.get(productCode) || 0;
-                const soldThisMonth = currentMonthSalesQty > 0;
-
-                const productAllSales = salesByProduct.get(productCode) || [];
-
-                const productCadastroDate = parseDate(details.dtCadastro);
-                let productFirstWorkingDayIndex = 0;
-
-                if (productCadastroDate) {
-                    const cadastroDateString = productCadastroDate.toISOString().split('T')[0];
-                    productFirstWorkingDayIndex = sortedWorkingDays.findIndex(d => d >= cadastroDateString);
-                    if (productFirstWorkingDayIndex === -1) {
-                        productFirstWorkingDayIndex = sortedWorkingDays.length;
-                    }
-                }
-
-                const productMaxLifeInWorkingDays = sortedWorkingDays.length - productFirstWorkingDayIndex;
-                const daysFromBox = customWorkingDaysStock;
-                let effectiveDaysToCalculate;
-
-                const isFactuallyNewOrReactivated = (!hasHistory && soldThisMonth);
-
-                if (isFactuallyNewOrReactivated) {
-                    const daysToConsider = (daysFromBox > 0) ? daysFromBox : passedWorkingDaysCurrentMonth;
-                    effectiveDaysToCalculate = Math.min(passedWorkingDaysCurrentMonth, daysToConsider);
-                } else {
-                    if (daysFromBox > 0) {
-                        effectiveDaysToCalculate = Math.min(daysFromBox, productMaxLifeInWorkingDays);
-                    } else {
-                        effectiveDaysToCalculate = productMaxLifeInWorkingDays;
-                    }
-                }
-
-                const daysDivisor = effectiveDaysToCalculate > 0 ? effectiveDaysToCalculate : 1;
-                const targetIndex = Math.max(0, sortedWorkingDays.length - daysDivisor);
-                const startDate = parseDate(sortedWorkingDays[targetIndex]);
-
-                let totalQtySoldInRange = 0;
-                // Optimized loop
-                productAllSales.forEach(sale => {
-                    const saleDate = parseDate(sale.DTPED);
-                    if (saleDate && saleDate >= startDate && saleDate <= endDate) {
-                        totalQtySoldInRange += sale.QTVENDA_EMBALAGEM_MASTER;
-                    }
-                });
-
-                let dailyAvgSale = totalQtySoldInRange / daysDivisor;
-                const isNew = productMaxLifeInWorkingDays <= passedWorkingDaysCurrentMonth;
-                const trendDays = dailyAvgSale > 0 ? (stock / dailyAvgSale) : (stock > 0 ? Infinity : 0);
-
-                const productHistorySales = historySalesListByProduct.get(productCode) || [];
-                const monthlyAvgSale = calculateStockMonthlyAverage(productHistorySales);
-
-                productAnalysis.set(productCode, {
-                    code: productCode,
-                    ...details,
-                    stock,
-                    monthlyAvgSale,
-                    dailyAvgSale,
-                    trendDays,
-                    currentMonthSalesQty,
-                    isNew,
-                    hasHistory,
-                    soldThisMonth
-                });
-            }, () => {
-                // --- ON COMPLETE (Render) ---
-                if (currentRenderId !== stockRenderId) return;
-
-                let sortedAnalysis = [...productAnalysis.values()].sort((a, b) => {
-                     const trendA = isFinite(a.trendDays) ? a.trendDays : -1;
-                     const trendB = isFinite(b.trendDays) ? b.trendDays : -1;
-                    return trendB - trendA;
-                });
-
-                if (stockTrendFilter !== 'all') {
-                    sortedAnalysis = sortedAnalysis.filter(item => {
-                        const trend = item.trendDays;
-                        if (stockTrendFilter === 'low') return isFinite(trend) && trend < 15;
-                        if (stockTrendFilter === 'medium') return isFinite(trend) && trend >= 15 && trend < 30;
-                        if (stockTrendFilter === 'good') return isFinite(trend) && trend >= 30;
-                        return false;
-                    });
-                }
-
-                stockAnalysisTableBody.innerHTML = sortedAnalysis.slice(0, 500).map(item => {
-                    let trendText;
-                    let newTag = item.isNew ? ` <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-500/30 text-blue-300 ml-1">NOVO</span>` : '';
-
-                    if (!isFinite(item.trendDays) && item.stock > 0) {
-                        trendText = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-500/30 text-gray-300">S/ VENDA</span>`;
-                    } else if (isFinite(item.trendDays)) {
-                        const trendDays = Math.floor(item.trendDays);
-                        let trendColor = 'text-slate-400';
-                        if (trendDays < 15) trendColor = 'text-red-400';
-                        else if (trendDays < 30) trendColor = 'text-yellow-400';
-                        else trendColor = 'text-green-400';
-                        trendText = `<span class="font-bold ${trendColor}">${trendDays} dias</span>`;
-                    } else {
-                        trendText = '-';
-                    }
-
-                    return `
-                        <tr class="hover:bg-slate-700/50">
-                            <td class="px-4 py-2 text-xs">(${item.code}) ${item.descricao}</td>
-                            <td class="px-4 py-2 text-xs">(${item.codfor}) ${item.fornecedor.split(' ').slice(0, 4).join(' ')}</td>
-                            <td class="px-4 py-2 text-right text-xs">${item.stock.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                            <td class="px-4 py-2 text-right text-xs">${item.monthlyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                            <td class="px-4 py-2 text-right text-xs">${item.dailyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                            <td class="px-4 py-2 text-right text-xs flex items-center justify-end">${trendText}${newTag}</td>
-                        </tr>
-                    `;
-                }).join('');
-
-                const growth = [];
-                const decline = [];
-                const newProducts = [];
-                const lostProducts = [];
-
-                productAnalysis.forEach(p => {
-                     if (p.soldThisMonth && p.hasHistory) {
-                            const variation = p.monthlyAvgSale > 0 ? ((p.currentMonthSalesQty - p.monthlyAvgSale) / p.monthlyAvgSale) * 100 : (p.currentMonthSalesQty > 0 ? Infinity : 0);
-                            const productWithVariation = { ...p, variation };
-
-                        if (p.currentMonthSalesQty >= p.monthlyAvgSale) {
-                            growth.push(productWithVariation);
-                        } else if (p.currentMonthSalesQty < p.monthlyAvgSale && p.monthlyAvgSale > 0) {
-                            decline.push(productWithVariation);
-                        }
-                     } else if (p.soldThisMonth && !p.hasHistory) {
-                        newProducts.push(p);
-                     } else if (!p.soldThisMonth && p.stock > 0) {
-                        lostProducts.push(p);
-                     }
-                });
-
-                const renderProductTable = (bodyElement, data, showVariation = true) => {
-                    bodyElement.innerHTML = data.map(p => {
-                        const variation = p.monthlyAvgSale > 0 ? ((p.currentMonthSalesQty - p.monthlyAvgSale) / p.monthlyAvgSale) * 100 : (p.currentMonthSalesQty > 0 ? Infinity : 0);
-                        const colorClass = variation > 0 ? 'text-green-400' : (variation < 0 ? 'text-red-400' : 'text-slate-400');
-                        let variationText = '0%';
-                        if (isFinite(variation)) {
-                            variationText = `${variation.toFixed(0)}%`;
-                        } else if (variation === Infinity) {
-                             variationText = 'Novo';
-                        }
-
-                        return `
-                            <tr class="hover:bg-slate-700/50">
-                                <td class="px-2 py-1.5 text-xs">(${p.code}) ${p.descricao}</td>
-                                <td class="px-2 py-1.5 text-xs text-right">${p.currentMonthSalesQty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                                <td class="px-2 py-1.5 text-xs text-right">${p.monthlyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                                ${showVariation ? `<td class="px-2 py-1.5 text-xs text-right font-bold ${colorClass}">${variationText}</td>` : ''}
-                                <td class="px-2 py-1.5 text-xs text-right">${p.stock.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                            </tr>
-                        `;
-                    }).join('');
-                };
-
-                growth.sort((a, b) => b.variation - a.variation);
-                decline.sort((a, b) => a.variation - b.variation);
-                newProducts.sort((a,b) => b.currentMonthSalesQty - a.currentMonthSalesQty);
-                lostProducts.sort((a,b) => b.monthlyAvgSale - a.monthlyAvgSale);
-
-                renderProductTable(growthTableBody, growth);
-                renderProductTable(declineTableBody, decline);
-                renderProductTable(newProductsTableBody, newProducts, false);
-                renderProductTable(lostProductsTableBody, lostProducts, false);
-            }, () => currentRenderId !== stockRenderId);
-        }
-
-
-        function getInnovationsMonthFilteredData(options = {}) {
-            const { excludeFilter = null } = options;
-
-            const sellers = selectedInnovationsMonthSellers;
-            const city = innovationsMonthCityFilter.value.trim().toLowerCase();
-            const filial = innovationsMonthFilialFilter.value;
-
-            let clients = allClientsData;
-
-            if (filial !== 'ambas') {
-                clients = clients.filter(c => clientLastBranch.get(c['Código']) === filial);
-            }
-
-            if (excludeFilter !== 'supervisor' && selectedInnovationsSupervisors.length > 0) {
-                const rcasSet = new Set();
-                selectedInnovationsSupervisors.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => rcasSet.add(rca));
-                });
-                clients = clients.filter(c => {
-                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
-                    return clientRcas.some(rca => rcasSet.has(rca));
-                });
-            }
-            if (excludeFilter !== 'seller' && sellers.length > 0) {
-                const rcasOfSellers = new Set();
-                 sellers.forEach(sellerName => {
-                    const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
-                    if (rcaCode) rcasOfSellers.add(rcaCode);
-                });
-                clients = clients.filter(c => {
-                    const clientRcas = (c.rcas && Array.isArray(c.rcas)) ? c.rcas : [];
-                    return clientRcas.some(rca => rcasOfSellers.has(rca));
-                });
-            }
-            if (excludeFilter !== 'city' && city) {
-                clients = clients.filter(c => c.cidade && c.cidade.toLowerCase() === city);
-            }
-
-            return { clients };
-        }
-
-        function resetInnovationsMonthFilters() {
-            selectedInnovationsSupervisors = [];
-            innovationsMonthCityFilter.value = '';
-            innovationsMonthFilialFilter.value = 'ambas';
-            innovationsMonthCategoryFilter.value = '';
-            selectedInnovationsMonthSellers = [];
-            selectedInnovationsMonthTiposVenda = [];
-
-            selectedInnovationsSupervisors = updateSupervisorFilter(document.getElementById('innovations-month-supervisor-filter-dropdown'), document.getElementById('innovations-month-supervisor-filter-text'), selectedInnovationsSupervisors, allSalesData);
-            updateSellerFilter(selectedInnovationsSupervisors, innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, [], allSalesData);
-            selectedInnovationsMonthTiposVenda = updateTipoVendaFilter(innovationsMonthTipoVendaFilterDropdown, innovationsMonthTipoVendaFilterText, selectedInnovationsMonthTiposVenda, [...allSalesData, ...allHistoryData]);
-            updateInnovationsMonthView();
-        }
-
-        function updateInnovationsMonthView() {
-            const selectedCategory = innovationsMonthCategoryFilter.value;
-
-            // Initialize Global Categories if not already done (Optimization)
-            if (!globalInnovationCategories && innovationsMonthData && innovationsMonthData.length > 0) {
-                globalInnovationCategories = {};
-                globalProductToCategoryMap = new Map();
-                innovationsMonthData.forEach(item => {
-                    const categoryName = item.Inovacoes || item.inovacoes || item.INOVACOES;
-                    if (!categoryName) return;
-                    if (!globalInnovationCategories[categoryName]) {
-                        globalInnovationCategories[categoryName] = { productCodes: new Set(), products: [] };
-                    }
-                    const productCode = String(item.Codigo || item.codigo || item.CODIGO).trim();
-                    globalInnovationCategories[categoryName].productCodes.add(productCode);
-                    globalInnovationCategories[categoryName].products.push({ ...item, Codigo: productCode, Inovacoes: categoryName });
-                    globalProductToCategoryMap.set(productCode, categoryName);
-                });
-            }
-
-            const categories = globalInnovationCategories || {};
-            const currentFilterValue = innovationsMonthCategoryFilter.value;
-            const allCategories = Object.keys(categories).sort();
-
-            // Only update dropdown if empty or number of items changed significantly (simplistic check)
-            if (innovationsMonthCategoryFilter.options.length <= 1 && allCategories.length > 0) {
-                innovationsMonthCategoryFilter.innerHTML = '<option value="">Todas as Categorias</option>';
-                allCategories.forEach(cat => {
-                    innovationsMonthCategoryFilter.innerHTML += `<option value="${cat}">${cat}</option>`;
-                });
-                if (allCategories.includes(currentFilterValue)) {
-                    innovationsMonthCategoryFilter.value = currentFilterValue;
-                }
-            }
-
-            const { clients: filteredClients } = getInnovationsMonthFilteredData();
-
-            const sellers = selectedInnovationsMonthSellers;
-            const sellerRcaCodes = new Set();
-            if (sellers.length > 0) {
-                sellers.forEach(sellerName => {
-                    const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
-                    if (rcaCode) sellerRcaCodes.add(rcaCode);
-                });
-            } else if (selectedInnovationsSupervisors.length > 0) {
-                selectedInnovationsSupervisors.forEach(sup => {
-                    (optimizedData.rcasBySupervisor.get(sup) || []).forEach(rca => sellerRcaCodes.add(rca));
-                });
-            }
-
-            const activeClients = filteredClients.filter(c => {
-                const codcli = c['Código'];
-                const rca1 = String(c.rca1 || '').trim();
-                if (rca1 === '306' || rca1 === '300') return false;
-                const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                return true; // return (isAmericanas || rca1 !== '53' || clientsWithSalesThisMonth.has(codcli));
-            });
-            const activeClientsCount = activeClients.length;
-            const activeClientCodes = new Set(activeClients.map(c => c['Código']));
-
-            // --- OPTIMIZED AGGREGATION LOGIC ---
-
-            // Determine types to use
-            const availableTypes = new Set([...allSalesData.map(s => s.TIPOVENDA), ...allHistoryData.map(s => s.TIPOVENDA)]);
-            let currentSelection = selectedInnovationsMonthTiposVenda.length > 0 ? selectedInnovationsMonthTiposVenda : Array.from(availableTypes);
-            const currentSelectionKey = currentSelection.slice().sort().join(',');
-
-            // Caching Strategy: Reuse maps if Tipo Venda selection hasn't changed
-            let mapsCurrent, mapsPrevious;
-            if (viewState.inovacoes.lastTypesKey === currentSelectionKey && viewState.inovacoes.cache) {
-                mapsCurrent = viewState.inovacoes.cache.mapsCurrent;
-                mapsPrevious = viewState.inovacoes.cache.mapsPrevious;
-            } else {
-                const mainTypes = currentSelection.filter(t => t !== '5' && t !== '11');
-                const bonusTypes = currentSelection.filter(t => t === '5' || t === '11');
-
-                // Calculate Previous Month Date Range (Strict M-1 from lastSaleDate)
-                const refDate = lastSaleDate || new Date();
-                // Start of M-1
-                const prevStart = new Date(Date.UTC(refDate.getUTCFullYear(), refDate.getUTCMonth() - 1, 1));
-                // End of M-1 (Start of M - 1ms)
-                const prevEnd = new Date(Date.UTC(refDate.getUTCFullYear(), refDate.getUTCMonth(), 0, 23, 59, 59, 999));
-
-                // Optimized Map Building (2 passes instead of 4)
-                mapsCurrent = buildInnovationSalesMaps(allSalesData, mainTypes, bonusTypes);
-                // Apply strict date range for History to match Comparison View logic (Single Month)
-                mapsPrevious = buildInnovationSalesMaps(allHistoryData, mainTypes, bonusTypes, { start: prevStart, end: prevEnd });
-
-                viewState.inovacoes.lastTypesKey = currentSelectionKey;
-                viewState.inovacoes.cache = { mapsCurrent, mapsPrevious };
-            }
-
-            // Structures to hold results
-            // categoryResults[catName] = { current: Set<CodCli>, previous: Set<CodCli>, bonusCurrent: Set<CodCli>, bonusPrevious: Set<CodCli> }
-            // productResults[prodCode] = { current: Set<CodCli> } -> For Top Item Logic
-            const categoryResults = {};
-            const productResults = {};
-
-            for (const cat in categories) {
-                categoryResults[cat] = {
-                    current: new Set(),
-                    previous: new Set(),
-                    bonusCurrent: new Set(),
-                    bonusPrevious: new Set()
-                };
-                categories[cat].productCodes.forEach(p => {
-                    productResults[p] = { current: new Set(), previous: new Set() };
-                });
-            }
-
-            // Helper to process maps and populate sets
-            const processMap = (salesMap, isCurrent, isBonus) => {
-                salesMap.forEach((productsMap, codCli) => {
-                    // Only count if client is in the filtered active list
-                    if (!activeClientCodes.has(codCli)) return;
-
-                    productsMap.forEach((rcas, prodCode) => {
-                        const category = globalProductToCategoryMap ? globalProductToCategoryMap.get(prodCode) : null;
-                        if (!category) return; // Should not happen if innovation data is consistent
-
-                        // Check RCA Filter
-                        let soldBySelected = false;
-                        if (sellerRcaCodes.size === 0) {
-                            soldBySelected = true;
-                        } else {
-                            // Check intersection of rcas and sellerRcaCodes
-                            for (const rca of rcas) {
-                                if (sellerRcaCodes.has(rca)) {
-                                    soldBySelected = true;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (!soldBySelected) return;
-
-                        const targetSetField = isCurrent ? 'current' : 'previous';
-
-                        // Add to Category Set (Normal or Bonus)
-                        if (categoryResults[category]) {
-                            if (isBonus) {
-                                categoryResults[category][isCurrent ? 'bonusCurrent' : 'bonusPrevious'].add(codCli);
-                            } else {
-                                categoryResults[category][targetSetField].add(codCli);
-                            }
-                        }
-
-                        // Add to Product Set (For Top Item Logic)
-                        if (productResults[prodCode]) {
-                            productResults[prodCode][targetSetField].add(codCli);
-                        }
-                    });
-                });
-            };
-
-            // Process all 4 maps efficiently (Looping over Sales, not all Clients)
-            processMap(mapsCurrent.mainMap, true, false);
-            processMap(mapsCurrent.bonusMap, true, true);
-            processMap(mapsPrevious.mainMap, false, false);
-            processMap(mapsPrevious.bonusMap, false, true);
-
-            // Consolidate Results
-            const categoryAnalysis = {};
-            let topCoverageItem = { name: '-', coverage: 0, clients: 0 };
-
-            // Consolidate Product Results for Top Item
-            // We need to merge Main and Bonus for product coverage if needed,
-            // but `processMap` populated `productResults` separately for main/bonus?
-            // Wait, `processMap` handles Main and Bonus calls sequentially.
-            // `productResults[prodCode].current` is a Set.
-            // If we call processMap for Main, it adds clients.
-            // If we call processMap for Bonus, it adds clients to SAME Set.
-            // So `productResults` automatically handles the UNION of Main and Bonus coverage per product.
-
-            if (selectedCategory && categories[selectedCategory]) {
-                categories[selectedCategory].products.forEach(product => {
-                    const pCode = String(product.Codigo).trim();
-                    if (productResults[pCode]) {
-                        const count = productResults[pCode].current.size;
-                        const coverage = activeClientsCount > 0 ? (count / activeClientsCount) * 100 : 0;
-                        if (coverage > topCoverageItem.coverage) {
-                            topCoverageItem = { name: `(${pCode}) ${product.produto || product.Produto}`, coverage, clients: count };
-                        }
-                    }
-                });
-            } else {
-                // Top Category Logic
-                for (const cat in categoryResults) {
-                    const set = categoryResults[cat].current; // Main coverage
-                    // Wait, original logic: "gotItCurrent" if sales OR bonus.
-                    // My categoryResults structure separates them. I need to union them for the metric?
-                    // Original logic:
-                    // clientsWhoGotAnyVisibleProductCurrent.add(codcli) if (Sales OR Bonus) of ANY product in category.
-
-                    // Let's create a Union Set for the category coverage metric
-                    const unionSet = new Set([...categoryResults[cat].current, ...categoryResults[cat].bonusCurrent]);
-                    const count = unionSet.size;
-                    const coverage = activeClientsCount > 0 ? (count / activeClientsCount) * 100 : 0;
-
-                    if (coverage > topCoverageItem.coverage) {
-                        topCoverageItem = { name: cat, coverage, clients: count };
-                    }
-                }
-            }
-
-            // Calculate Global KPIs (Union of all categories selected)
-            const clientsWhoGotAnyVisibleProductCurrent = new Set();
-            const clientsWhoGotAnyVisibleProductPrevious = new Set();
-            const clientsWhoGotBonusAnyVisibleProductCurrent = new Set();
-            const clientsWhoGotBonusAnyVisibleProductPrevious = new Set();
-
-            for (const cat in categoryResults) {
-                if (selectedCategory && cat !== selectedCategory) continue;
-
-                // Merge sets into global KPI sets
-                categoryResults[cat].current.forEach(c => clientsWhoGotAnyVisibleProductCurrent.add(c));
-                categoryResults[cat].previous.forEach(c => clientsWhoGotAnyVisibleProductPrevious.add(c));
-                categoryResults[cat].bonusCurrent.forEach(c => clientsWhoGotBonusAnyVisibleProductCurrent.add(c));
-                categoryResults[cat].bonusPrevious.forEach(c => clientsWhoGotBonusAnyVisibleProductPrevious.add(c));
-
-                // Prepare Analysis Object for Chart/Table
-                const currentUnion = new Set([...categoryResults[cat].current, ...categoryResults[cat].bonusCurrent]);
-                const previousUnion = new Set([...categoryResults[cat].previous, ...categoryResults[cat].bonusPrevious]);
-
-                // NOTE: The chart/table in original code used "coverageCurrent" derived from
-                // (clientsCurrentCount / activeClientsCount).
-                // clientsCurrentCount was incremented if (Sales OR Bonus).
-
-                const countCurr = currentUnion.size;
-                const countPrev = previousUnion.size;
-
-                const covCurr = activeClientsCount > 0 ? (countCurr / activeClientsCount) * 100 : 0;
-                const covPrev = activeClientsCount > 0 ? (countPrev / activeClientsCount) * 100 : 0;
-                const varPct = covPrev > 0 ? ((covCurr - covPrev) / covPrev) * 100 : (covCurr > 0 ? Infinity : 0);
-
-                categoryAnalysis[cat] = {
-                    coverageCurrent: covCurr,
-                    coveragePrevious: covPrev,
-                    variation: varPct,
-                    clientsCount: countCurr,
-                    clientsPreviousCount: countPrev
-                };
-            }
-
-            // Total KPI calculations (Union of Sets)
-            // Note: Original code did:
-            // clientsWhoGotAnyVisibleProductCurrent -> Sales
-            // clientsWhoGotBonusAnyVisibleProductCurrent -> Bonus
-            // It kept them separate for the KPI cards at the top.
-            // "Innovations Month Selection Coverage" -> Sales
-            // "Innovations Month Bonus Coverage" -> Bonus
-
-            const selectionCoveredCountCurrent = clientsWhoGotAnyVisibleProductCurrent.size;
-            const selectionCoveragePercentCurrent = activeClientsCount > 0 ? (selectionCoveredCountCurrent / activeClientsCount) * 100 : 0;
-            const selectionCoveredCountPrevious = clientsWhoGotAnyVisibleProductPrevious.size;
-            const selectionCoveragePercentPrevious = activeClientsCount > 0 ? (selectionCoveredCountPrevious / activeClientsCount) * 100 : 0;
-
-            const bonusCoveredCountCurrent = clientsWhoGotBonusAnyVisibleProductCurrent.size;
-            const bonusCoveragePercentCurrent = activeClientsCount > 0 ? (bonusCoveredCountCurrent / activeClientsCount) * 100 : 0;
-            const bonusCoveredCountPrevious = clientsWhoGotBonusAnyVisibleProductPrevious.size;
-            const bonusCoveragePercentPrevious = activeClientsCount > 0 ? (bonusCoveredCountPrevious / activeClientsCount) * 100 : 0;
-
-            // Update DOM
-            innovationsMonthActiveClientsKpi.textContent = activeClientsCount.toLocaleString('pt-BR');
-            innovationsMonthTopCoverageValueKpi.textContent = `${topCoverageItem.coverage.toFixed(2)}%`;
-            innovationsMonthTopCoverageKpi.textContent = topCoverageItem.name;
-            innovationsMonthTopCoverageKpi.title = topCoverageItem.name;
-            innovationsMonthTopCoverageCountKpi.textContent = `${topCoverageItem.clients.toLocaleString('pt-BR')} PDVs`;
-            document.getElementById('innovations-month-top-coverage-title').textContent = selectedCategory ? 'Produto com Maior Cobertura' : 'Categoria com Maior Cobertura';
-
-            innovationsMonthSelectionCoverageValueKpi.textContent = `${selectionCoveragePercentCurrent.toFixed(2)}%`;
-            innovationsMonthSelectionCoverageCountKpi.textContent = `${selectionCoveredCountCurrent.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-            innovationsMonthSelectionCoverageValueKpiPrevious.textContent = `${selectionCoveragePercentPrevious.toFixed(2)}%`;
-            innovationsMonthSelectionCoverageCountKpiPrevious.textContent = `${selectionCoveredCountPrevious.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-
-            innovationsMonthBonusCoverageValueKpi.textContent = `${bonusCoveragePercentCurrent.toFixed(2)}%`;
-            innovationsMonthBonusCoverageCountKpi.textContent = `${bonusCoveredCountCurrent.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-            innovationsMonthBonusCoverageValueKpiPrevious.textContent = `${bonusCoveragePercentPrevious.toFixed(2)}%`;
-            innovationsMonthBonusCoverageCountKpiPrevious.textContent = `${bonusCoveredCountPrevious.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-
-            // Chart Update
-            chartLabels = Object.keys(categoryAnalysis).sort((a,b) => categoryAnalysis[b].coverageCurrent - categoryAnalysis[a].coverageCurrent);
-            const chartDataCurrent = chartLabels.map(cat => categoryAnalysis[cat].coverageCurrent);
-            const chartDataPrevious = chartLabels.map(cat => categoryAnalysis[cat].coveragePrevious);
-
-            if (chartLabels.length > 0) {
-                createChart('innovations-month-chart', 'bar', chartLabels, [
-                    { label: 'Mês Anterior', data: chartDataPrevious, backgroundColor: '#f97316' },
-                    { label: 'Mês Atual', data: chartDataCurrent, backgroundColor: '#06b6d4' }
-                ], {
-                    plugins: {
-                        legend: { display: true, position: 'top' },
-                        datalabels: {
-                            anchor: 'end',
-                            align: 'top',
-                            offset: 8,
-                            formatter: (value) => value > 0 ? value.toFixed(1) + '%' : '',
-                            color: '#cbd5e1',
-                            font: { size: 10 }
-                        },
-                         tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) label += ': ';
-                                    if (context.parsed.y !== null) label += context.parsed.y.toFixed(2) + '%';
-                                    return label;
-                                }
-                            }
-                        }
-                    },
-                    scales: { y: { ticks: { callback: (v) => `${v}%` } } },
-                    layout: { padding: { top: 20 } }
-                });
-            } else {
-                showNoDataMessage('innovations-month-chart', 'Sem dados de inovações para exibir com os filtros atuais.');
-            }
-
-            // Table Update
-            const tableData = [];
-            const activeStockMap = getActiveStockMap(innovationsMonthFilialFilter.value);
-
-            chartLabels.forEach(categoryName => {
-                const categoryData = categories[categoryName];
-
-                categoryData.products.forEach((product) => {
-                    const productCode = product.Codigo;
-                    const productName = product.produto || product.Produto;
-                    const stock = activeStockMap.get(productCode) || 0;
-
-                    // Re-calculate per product using the Product Results Sets
-                    // Optimization: productResults[productCode] already contains sets of clients who bought
-                    const pRes = productResults[productCode];
-
-                    // IMPORTANT: productResults contains ALL clients who bought.
-                    // We must filter by 'activeClientCodes' if not already done?
-                    // 'processMap' already checked: `if (!activeClientCodes.has(codCli)) return;`
-                    // So the sets in productResults are already filtered by active clients.
-
-                    const clientsCurrentCount = pRes ? pRes.current.size : 0;
-                    const clientsPreviousCount = pRes ? pRes.previous.size : 0;
-
-                    const coverageCurrent = activeClientsCount > 0 ? (clientsCurrentCount / activeClientsCount) * 100 : 0;
-                    const coveragePrevious = activeClientsCount > 0 ? (clientsPreviousCount / activeClientsCount) * 100 : 0;
-                    const variation = coveragePrevious > 0 ? ((coverageCurrent - coveragePrevious) / coveragePrevious) * 100 : (coverageCurrent > 0 ? Infinity : 0);
-
-                    tableData.push({
-                        categoryName,
-                        productCode,
-                        productName,
-                        stock,
-                        coveragePrevious,
-                        clientsPreviousCount,
-                        coverageCurrent,
-                        clientsCurrentCount,
-                        variation
-                    });
-                });
-            });
-
-            tableData.sort((a,b) => b.coverageCurrent - a.coverageCurrent);
-            innovationsMonthTableDataForExport = tableData;
-
-            innovationsMonthTableBody.innerHTML = tableData.map(item => {
-                let variationContent;
-                if (isFinite(item.variation)) {
-                    const colorClass = item.variation >= 0 ? 'text-green-400' : 'text-red-400';
-                    variationContent = `<span class="${colorClass}">${item.variation.toFixed(1)}%</span>`;
-                } else if (item.coverageCurrent > 0) {
-                    variationContent = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/30 text-purple-300">Novo</span>`;
-                } else {
-                    variationContent = `<span>-</span>`;
-                }
-
-                return `
-                    <tr class="hover:bg-slate-700/50">
-                        <td class="px-2 py-1.5 text-xs">${item.categoryName}</td>
-                        <td class="px-2 py-1.5 text-xs">${item.productCode} - ${item.productName}</td>
-                        <td class="px-2 py-1.5 text-xs text-right">${item.stock.toLocaleString('pt-BR')}</td>
-                        <td class="px-2 py-1.5 text-xs text-right">
-                            <div class="tooltip">${item.coveragePrevious.toFixed(2)}%<span class="tooltip-text">${item.clientsPreviousCount} PDVs</span></div>
-                        </td>
-                        <td class="px-2 py-1.5 text-xs text-right">
-                            <div class="tooltip">${item.coverageCurrent.toFixed(2)}%<span class="tooltip-text">${item.clientsCurrentCount} PDVs</span></div>
-                        </td>
-                        <td class="px-2 py-1.5 text-xs text-right">${variationContent}</td>
-                    </tr>
-                `;
-            }).join('');
-
-            // Innovations by Client Table
-            const innovationsByClientTableHead = document.getElementById('innovations-by-client-table-head');
-            const innovationsByClientTableBody = document.getElementById('innovations-by-client-table-body');
-            const innovationsByClientLegend = document.getElementById('innovations-by-client-legend');
-
-            categoryLegendForExport = chartLabels.map((name, index) => `${index + 1} - ${name}`);
-            innovationsByClientLegend.innerHTML = `<strong>Legenda:</strong> ${categoryLegendForExport.join('; ')}`;
-
-            let tableHeadHTML = `
-                <tr>
-                    <th class="px-2 py-2 text-left">Código</th>
-                    <th class="px-2 py-2 text-left">Cliente</th>
-                    <th class="px-2 py-2 text-left">Cidade</th>
-                    <th class="px-2 py-2 text-left">Bairro</th>
-                    <th class="px-2 py-2 text-center">Últ. Compra</th>
-            `;
-            chartLabels.forEach((name, index) => {
-                tableHeadHTML += `<th class="px-2 py-2 text-center">${index + 1}</th>`;
-            });
-            tableHeadHTML += `</tr>`;
-            innovationsByClientTableHead.innerHTML = tableHeadHTML;
-
-            // Build Client Status List
-            // Optimized: Iterate Active Clients and check sets in categoryResults
-            const clientInnovationStatus = activeClients.map(client => {
-                const codcli = client['Código'];
-                const status = {};
-
-                chartLabels.forEach(catName => {
-                    // Check if client exists in Main OR Bonus sets for this category
-                    const inMain = categoryResults[catName].current.has(codcli);
-                    const inBonus = categoryResults[catName].bonusCurrent.has(codcli);
-                    status[catName] = inMain || inBonus;
-                });
-
-                // Explicit copy for robustness against Proxies
-                return {
-                    'Código': client['Código'],
-                    fantasia: client.fantasia,
-                    razaoSocial: client.razaoSocial,
-                    cidade: client.cidade,
-                    bairro: client.bairro,
-                    ultimaCompra: client.ultimaCompra,
-                    innovationStatus: status
-                };
-            });
-
-            clientInnovationStatus.sort((a, b) => {
-                const cidadeA = a.cidade || '';
-                const cidadeB = b.cidade || '';
-                const bairroA = a.bairro || '';
-                const bairroB = b.bairro || '';
-                if (cidadeA.localeCompare(cidadeB) !== 0) return cidadeA.localeCompare(cidadeB);
-                return bairroA.localeCompare(bairroB);
-            });
-
-            innovationsByClientForExport = clientInnovationStatus;
-
-            // Pagination for Innovations Client Table
-            const itemsPerPage = 100;
-            const totalPages = Math.ceil(clientInnovationStatus.length / itemsPerPage);
-            let currentPage = 1;
-
-            const renderInnovationsPage = (page) => {
-                const startIndex = (page - 1) * itemsPerPage;
-                const endIndex = startIndex + itemsPerPage;
-                const pageData = clientInnovationStatus.slice(startIndex, endIndex);
-
-                const checkIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-400 mx-auto" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
-                const xIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-400 mx-auto" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>`;
-
-                let tableBodyHTML = '';
-                pageData.forEach(client => {
-                    tableBodyHTML += `
-                        <tr class="hover:bg-slate-700/50">
-                            <td class="px-2 py-1.5 text-xs">${client['Código']}</td>
-                            <td class="px-2 py-1.5 text-xs">${client.fantasia || client.razaoSocial}</td>
-                            <td class="px-2 py-1.5 text-xs">${client.cidade}</td>
-                            <td class="px-2 py-1.5 text-xs">${client.bairro}</td>
-                            <td class="px-2 py-1.5 text-xs text-center">${formatDate(client.ultimaCompra)}</td>
-                    `;
-                    chartLabels.forEach(catName => {
-                        tableBodyHTML += `<td class="px-2 py-1.5 text-center">${client.innovationStatus[catName] ? checkIcon : xIcon}</td>`;
-                    });
-                    tableBodyHTML += `</tr>`;
-                });
-                innovationsByClientTableBody.innerHTML = tableBodyHTML;
-
-                // Update Pagination Controls
-                const prevBtn = document.getElementById('innovations-prev-page-btn');
-                const nextBtn = document.getElementById('innovations-next-page-btn');
-                const infoText = document.getElementById('innovations-page-info-text');
-                const controls = document.getElementById('innovations-pagination-controls');
-
-                if (controls) {
-                    if (totalPages > 1) {
-                        controls.classList.remove('hidden');
-                        infoText.textContent = `Página ${page} de ${totalPages} (${clientInnovationStatus.length} clientes)`;
-                        prevBtn.disabled = page === 1;
-                        nextBtn.disabled = page === totalPages;
-
-                        // Clone and replace buttons to remove old event listeners
-                        const newPrevBtn = prevBtn.cloneNode(true);
-                        const newNextBtn = nextBtn.cloneNode(true);
-                        prevBtn.parentNode.replaceChild(newPrevBtn, prevBtn);
-                        nextBtn.parentNode.replaceChild(newNextBtn, nextBtn);
-
-                        newPrevBtn.addEventListener('click', () => {
-                            if (currentPage > 1) {
-                                currentPage--;
-                                renderInnovationsPage(currentPage);
-                            }
-                        });
-                        newNextBtn.addEventListener('click', () => {
-                            if (currentPage < totalPages) {
-                                currentPage++;
-                                renderInnovationsPage(currentPage);
-                            }
-                        });
-
-                    } else {
-                        controls.classList.add('hidden');
-                    }
-                }
-            };
-
-            renderInnovationsPage(1);
-        }
-
-        async function exportInnovationsMonthPDF() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('landscape');
-
-            const supervisor = document.getElementById('innovations-month-supervisor-filter-text').textContent;
-            const vendedor = document.getElementById('innovations-month-vendedor-filter-text').textContent;
-            const filial = innovationsMonthFilialFilter.options[innovationsMonthFilialFilter.selectedIndex].text;
-            const cidade = innovationsMonthCityFilter.value.trim();
-            const categoria = innovationsMonthCategoryFilter.value || 'Todas';
-            const generationDate = new Date().toLocaleString('pt-BR');
-
-            doc.setFontSize(18);
-            doc.text('Relatório de Inovações do Mês', 14, 22);
-            doc.setFontSize(10);
-            doc.setTextColor(10);
-            doc.text(`Data de Emissão: ${generationDate}`, 14, 30);
-
-            let filterText = `Filtros Aplicados: Supervisor: ${supervisor} | Vendedor: ${vendedor} | Filial: ${filial} | Cidade: ${cidade || 'Todas'} | Categoria: ${categoria}`;
-            const splitFilters = doc.splitTextToSize(filterText, 270);
-            doc.text(splitFilters, 14, 36);
-
-            const chartCanvas = document.getElementById('innovations-month-chart');
-            if (chartCanvas && charts['innovations-month-chart'] && chartLabels.length > 0) {
-                try {
-                    const chartInstance = charts['innovations-month-chart'];
-                    const originalDatalabelsColor = chartInstance.options.plugins.datalabels.color;
-                    const originalXColor = chartInstance.options.scales.x.ticks.color;
-                    const originalYColor = chartInstance.options.scales.y.ticks.color;
-                    const originalLegendColor = chartInstance.options.plugins.legend?.labels?.color;
-
-                    chartInstance.options.plugins.datalabels.color = '#000000';
-                    chartInstance.options.scales.x.ticks.color = '#000000';
-                    chartInstance.options.scales.y.ticks.color = '#000000';
-                    if (chartInstance.options.plugins.legend && chartInstance.options.plugins.legend.labels) {
-                        chartInstance.options.plugins.legend.labels.color = '#000000';
-                    }
-
-                    chartInstance.update('none');
-
-                    const chartImage = chartCanvas.toDataURL('image/png', 1.0);
-                    doc.addImage(chartImage, 'PNG', 14, 50, 270, 100);
-
-                    chartInstance.options.plugins.datalabels.color = originalDatalabelsColor;
-                    chartInstance.options.scales.x.ticks.color = originalXColor;
-                    chartInstance.options.scales.y.ticks.color = originalYColor;
-                    if (chartInstance.options.plugins.legend && chartInstance.options.plugins.legend.labels) {
-                        chartInstance.options.plugins.legend.labels.color = originalLegendColor;
-                    }
-                    chartInstance.update('none');
-                } catch (e) {
-                    console.error("Erro ao converter o gráfico para imagem:", e);
-                    doc.text("Erro ao gerar a imagem do gráfico.", 14, 50);
-                }
-            } else {
-                 doc.text("Gráfico não disponível para os filtros selecionados.", 14, 50);
-            }
-
-            const head = [['Categoria', 'Produto', 'Estoque', 'Cob. Mês Ant.', 'Cob. Mês Atual', 'Variação']];
-            const body = [];
-
-            innovationsMonthTableDataForExport.forEach(item => {
-                let variationContent;
-                if (isFinite(item.variation)) {
-                    variationContent = `${item.variation.toFixed(1)}%`;
-                } else if (item.coverageCurrent > 0) {
-                    variationContent = 'Novo';
-                } else {
-                    variationContent = '-';
-                }
-
-                const row = [
-                    item.categoryName,
-                    `${item.productCode} - ${item.productName}`,
-                    item.stock.toLocaleString('pt-BR'),
-                    `${item.coveragePrevious.toFixed(2)}% (${item.clientsPreviousCount} PDVs)`,
-                    `${item.coverageCurrent.toFixed(2)}% (${item.clientsCurrentCount} PDVs)`,
-                    variationContent
-                ];
-                body.push(row);
-            });
-
-            doc.autoTable({
-                head: head,
-                body: body,
-                startY: 155,
-                theme: 'grid',
-                styles: { fontSize: 7, cellPadding: 1.5, textColor: [0, 0, 0] },
-                headStyles: { fillColor: [41, 128, 185], textColor: 255, fontSize: 7, fontStyle: 'bold' },
-                alternateRowStyles: { fillColor: [240, 248, 255] },
-                didDrawPage: function (data) {
-                    doc.setFontSize(12);
-                    doc.setTextColor(10);
-                    doc.text("Dados do Gráfico", data.settings.margin.left, 152);
-                }
-            });
-
-            if (innovationsByClientForExport.length > 0) {
-                doc.addPage();
-                doc.setFontSize(18);
-                doc.text('Relatório de Inovações por Cliente', 14, 22);
-                doc.setFontSize(10);
-                doc.setTextColor(10);
-                doc.text(`Data de Emissão: ${generationDate}`, 14, 30);
-                doc.text(splitFilters, 14, 36);
-
-                const legendText = `Legenda: ${categoryLegendForExport.join('; ')}`;
-                const splitLegend = doc.splitTextToSize(legendText, 270);
-                doc.text(splitLegend, 14, 42);
-
-                const clientInnovationsHead = [['Código', 'Cliente', 'Cidade', 'Bairro', 'Últ. Compra', ...categoryLegendForExport.map((_, i) => `${i + 1}`)]];
-                const clientInnovationsBody = innovationsByClientForExport.map(client => {
-                    const row = [
-                        client['Código'],
-                        client.fantasia || client.razaoSocial,
-                        client.cidade,
-                        client.bairro,
-                        formatDate(client.ultimaCompra)
-                    ];
-                    categoryLegendForExport.forEach((cat, index) => {
-                        const catName = cat.split(' - ')[1];
-                        const status = client.innovationStatus[catName];
-
-                        const cell = {
-                            content: status ? 'S' : 'N',
-                            styles: {
-                                textColor: status ? [34, 139, 34] : [220, 20, 60],
-                                fontStyle: 'bold'
-                            }
-                        };
-                        row.push(cell);
-                    });
-                    return row;
-                });
-
-                doc.autoTable({
-                    head: clientInnovationsHead,
-                    body: clientInnovationsBody,
-                    startY: 55,
-                    theme: 'grid',
-                    styles: { fontSize: 7, cellPadding: 1.5, halign: 'center', textColor: [0, 0, 0] },
-                    headStyles: { fillColor: [41, 128, 185], textColor: 255, fontSize: 7, fontStyle: 'bold' },
-                    columnStyles: {
-                        0: { halign: 'left' },
-                        1: { halign: 'left' },
-                        2: { halign: 'left' },
-                        3: { halign: 'left' },
-                        4: { halign: 'center' }
-                    },
-                    alternateRowStyles: { fillColor: [240, 248, 255] },
-                });
-            }
-
-            const pageCount = doc.internal.getNumberOfPages();
-            for(let i = 1; i <= pageCount; i++) {
-                doc.setPage(i);
-                doc.setFontSize(9);
-                doc.setTextColor(10);
-                doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 10, { align: 'center' });
-            }
-
-            let fileNameParam = 'geral';
-            if (selectedInnovationsMonthSellers.length === 1) {
-                fileNameParam = getFirstName(selectedInnovationsMonthSellers[0]);
-            } else if (cidade) {
-                fileNameParam = cidade;
-            }
-            const safeFileNameParam = fileNameParam.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            doc.save(`relatorio_inovacoes_mes_${safeFileNameParam}_${new Date().toISOString().slice(0,10)}.pdf`);
-        }
-
-
-        async function exportCoveragePDF() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('landscape');
-
-            const supervisor = document.getElementById('coverage-supervisor-filter-text').textContent;
-            const vendedor = document.getElementById('coverage-vendedor-filter-text').textContent;
-            const filial = coverageFilialFilter.options[coverageFilialFilter.selectedIndex].text;
-            const cidade = coverageCityFilter.value.trim();
-            const supplierText = document.getElementById('coverage-supplier-filter-text').textContent;
-            const generationDate = new Date().toLocaleString('pt-BR');
-
-            let dateRangeText = '';
-            if (selectedCoverageDateRange && selectedCoverageDateRange.length === 2) {
-                const formatDate = (date) => date.toLocaleDateString('pt-BR');
-                dateRangeText = ` | Data: ${formatDate(selectedCoverageDateRange[0])} a ${formatDate(selectedCoverageDateRange[1])}`;
-            }
-
-            doc.setFontSize(18);
-            doc.text('Relatório de Cobertura (Estoque x PDVs)', 14, 22);
-            doc.setFontSize(10);
-            doc.setTextColor(10);
-            doc.text(`Data de Emissão: ${generationDate}`, 14, 30);
-
-            let filterText = `Filtros Aplicados: Supervisor: ${supervisor} | Vendedor: ${vendedor} | Filial: ${filial} | Cidade: ${cidade || 'Todas'} | Fornecedor: ${supplierText}${dateRangeText}`;
-            const splitFilters = doc.splitTextToSize(filterText, 270);
-            doc.text(splitFilters, 14, 36);
-
-            // Add Chart if available
-            const chartId = currentCoverageChartMode === 'city' ? 'coverageCityChart' : 'coverageSellerChart';
-            const chartCanvas = document.getElementById(chartId);
-            if (chartCanvas && charts[chartId]) {
-                try {
-                    const chartInstance = charts[chartId];
-                    const originalDatalabelsColor = chartInstance.options.plugins.datalabels.color;
-                    const originalXColor = chartInstance.options.scales.x.ticks.color;
-                    const originalYColor = chartInstance.options.scales.y.ticks.color;
-                    const originalLegendColor = chartInstance.options.plugins.legend?.labels?.color;
-
-                    chartInstance.options.plugins.datalabels.color = '#000000';
-                    chartInstance.options.scales.x.ticks.color = '#000000';
-                    chartInstance.options.scales.y.ticks.color = '#000000';
-                    if (chartInstance.options.plugins.legend && chartInstance.options.plugins.legend.labels) {
-                        chartInstance.options.plugins.legend.labels.color = '#000000';
-                    }
-
-                    chartInstance.update('none');
-
-                    const chartImage = chartCanvas.toDataURL('image/png', 1.0);
-                    doc.addImage(chartImage, 'PNG', 14, 50, 270, 80);
-
-                    chartInstance.options.plugins.datalabels.color = originalDatalabelsColor;
-                    chartInstance.options.scales.x.ticks.color = originalXColor;
-                    chartInstance.options.scales.y.ticks.color = originalYColor;
-                    if (chartInstance.options.plugins.legend && chartInstance.options.plugins.legend.labels) {
-                        chartInstance.options.plugins.legend.labels.color = originalLegendColor;
-                    }
-                    chartInstance.update('none');
-                } catch (e) {
-                    console.error("Erro ao converter o gráfico para imagem:", e);
-                }
-            }
-
-            const head = [['Produto', 'Estoque (Cx)', 'Cx. Mês Ant.', 'Cx. Mês Atual', 'Caixas (%)', 'PDVs Ant.', 'PDVs Atual', 'Cobertura (%)']];
-            const body = [];
-
-            coverageTableDataForExport.forEach(item => {
-                let boxesVariationContent;
-                if (isFinite(item.boxesVariation)) {
-                    boxesVariationContent = `${item.boxesVariation.toFixed(1)}%`;
-                } else if (item.boxesVariation === Infinity) {
-                    boxesVariationContent = 'Novo';
-                } else {
-                    boxesVariationContent = '-';
-                }
-
-                let pdvVariationContent;
-                if (isFinite(item.pdvVariation)) {
-                    pdvVariationContent = `${item.pdvVariation.toFixed(1)}%`;
-                } else if (item.pdvVariation === Infinity) {
-                    pdvVariationContent = 'Novo';
-                } else {
-                    pdvVariationContent = '-';
-                }
-
-                const row = [
-                    item.descricao,
-                    item.stockQty.toLocaleString('pt-BR'),
-                    item.boxesSoldPreviousMonth.toLocaleString('pt-BR', {maximumFractionDigits: 2}),
-                    item.boxesSoldCurrentMonth.toLocaleString('pt-BR', {maximumFractionDigits: 2}),
-                    boxesVariationContent,
-                    item.clientsPreviousCount.toLocaleString('pt-BR'),
-                    item.clientsCurrentCount.toLocaleString('pt-BR'),
-                    pdvVariationContent
-                ];
-                body.push(row);
-            });
-
-            doc.autoTable({
-                head: head,
-                body: body,
-                startY: 140,
-                theme: 'grid',
-                styles: { fontSize: 8, cellPadding: 1.5, textColor: [0, 0, 0] },
-                headStyles: { fillColor: [41, 128, 185], textColor: 255, fontSize: 8, fontStyle: 'bold' },
-                alternateRowStyles: { fillColor: [240, 248, 255] },
-                 didDrawPage: function (data) {
-                    // Footer or Header on new pages
-                }
-            });
-
-            const pageCount = doc.internal.getNumberOfPages();
-            for(let i = 1; i <= pageCount; i++) {
-                doc.setPage(i);
-                doc.setFontSize(9);
-                doc.setTextColor(10);
-                doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 10, { align: 'center' });
-            }
-
-            let fileNameParam = 'geral';
-            if (selectedCoverageSellers.length === 1) {
-                fileNameParam = getFirstName(selectedCoverageSellers[0]);
-            } else if (cidade) {
-                fileNameParam = cidade;
-            }
-            const safeFileNameParam = fileNameParam.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            doc.save(`relatorio_cobertura_${safeFileNameParam}_${new Date().toISOString().slice(0,10)}.pdf`);
-        }
-
-
-        function openModal(pedidoId) {
-            const orderInfo = aggregatedOrders.find(order => order.PEDIDO == pedidoId);
-            const itemsDoPedido = allSalesData.filter(item => item.PEDIDO == pedidoId);
-            if (!orderInfo) return;
-            modalPedidoId.textContent = pedidoId;
-            modalHeaderInfo.innerHTML = `<div><p class="font-bold">Cód. Cliente:</p><p>${orderInfo.CODCLI || 'N/A'}</p></div><div><p class="font-bold">Cliente:</p><p>${orderInfo.CLIENTE_NOME || 'N/A'}</p></div><div><p class="font-bold">Vendedor:</p><p>${orderInfo.NOME || 'N/A'}</p></div><div><p class="font-bold">Data Pedido:</p><p>${formatDate(orderInfo.DTPED)}</p></div><div><p class="font-bold">Data Faturamento:</p><p>${formatDate(orderInfo.DTSAIDA)}</p></div><div><p class="font-bold">Cidade:</p><p>${orderInfo.CIDADE || 'N/A'}</p></div>`;
-            modalTableBody.innerHTML = itemsDoPedido.map(item => { const unitPrice = (item.QTVENDA > 0) ? (item.VLVENDA / item.QTVENDA) : 0; return `<tr class="hover:bg-slate-700"><td class="px-4 py-2">(${item.PRODUTO}) ${item.DESCRICAO}</td><td class="px-4 py-2 text-right">${item.QTVENDA}</td><td class="px-4 py-2 text-right">${item.TOTPESOLIQ.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} Kg</td><td class="px-4 py-2 text-right"><div class="tooltip">${unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; left: auto; right: 0; transform: none; margin-left: 0;">Subtotal: ${item.VLVENDA.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div></td></tr>`; }).join('');
-            modalFooterTotal.innerHTML = `<p class="text-lg font-bold text-teal-400">Mix de Produtos: ${itemsDoPedido.length}</p><p class="text-lg font-bold text-emerald-400">Total do Pedido: ${orderInfo.VLVENDA.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>`;
-            modal.classList.remove('hidden');
-        }
-
-        function openClientModal(codcli) {
-            const clientData = allClientsData.find(c => String(c['Código']) === String(codcli));
-            if (!clientData) return;
-
-            const getVal = (obj, keys) => {
-                for (const k of keys) {
-                    if (obj[k] !== undefined && obj[k] !== null && obj[k] !== 'N/A' && obj[k] !== '') return obj[k];
-                }
-                return undefined;
-            };
-
-            const endereco = getVal(clientData, ['Endereço Comercial', 'endereco', 'ENDERECO']) || 'N/A';
-            const numero = getVal(clientData, ['NUMERO', 'numero', 'Número']) || 'SN';
-            let finalAddress = endereco;
-            if (numero !== 'SN' && finalAddress !== 'N/A' && !finalAddress.includes(numero)) finalAddress += `, ${numero}`;
-
-            const cnpj = getVal(clientData, ['CNPJ/CPF', 'cnpj_cpf']) || 'N/A';
-            const insc = getVal(clientData, ['Insc. Est. / Produtor', 'inscricaoEstadual', 'INSCRICAOESTADUAL']) || 'N/A';
-            const razao = getVal(clientData, ['Cliente', 'razaoSocial', 'nomeCliente', 'RAZAOSOCIAL', 'NOMECLIENTE']) || 'N/A';
-            const fantasia = getVal(clientData, ['FANTASIA', 'Fantasia', 'fantasia']) || 'N/A';
-            const bairro = getVal(clientData, ['BAIRRO', 'Bairro', 'bairro']) || 'N/A';
-            const cidade = getVal(clientData, ['CIDADE', 'Cidade', 'cidade', 'Nome da Cidade']) || 'N/A';
-            const cep = getVal(clientData, ['CEP', 'cep']) || 'N/A';
-            const telefone = getVal(clientData, ['Telefone Comercial', 'telefone', 'TELEFONE']) || 'N/A';
-            const email = getVal(clientData, ['EMAIL', 'email', 'E-mail']) || 'N/A';
-            const ramo = getVal(clientData, ['Descricao', 'ramo', 'DESCRICAO', 'Descricao']) || 'N/A';
-            const ultimaCompra = getVal(clientData, ['Data da Última Compra', 'ultimaCompra', 'ULTIMACOMPRA']);
-
-            clientModalContent.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"><div><p class="font-bold text-slate-400">Código:</p><p>${clientData['Código'] || 'N/A'}</p></div><div><p class="font-bold text-slate-400">CNPJ/CPF:</p><p>${cnpj}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Insc. Est. / Produtor:</p><p>${insc}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Razão Social:</p><p>${razao}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Nome Fantasia:</p><p>${fantasia}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Endereço:</p><p>${finalAddress}</p></div><div><p class="font-bold text-slate-400">Bairro:</p><p>${bairro}</p></div><div><p class="font-bold text-slate-400">Cidade:</p><p>${cidade}</p></div><div><p class="font-bold text-slate-400">CEP:</p><p>${cep}</p></div><div><p class="font-bold text-slate-400">Telefone:</p><p>${telefone}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">E-mail:</p><p>${email}</p></div><div><p class="font-bold text-slate-400">Ramo de Atividade:</p><p>${ramo}</p></div><div><p class="font-bold text-slate-400">Última Compra:</p><p>${formatDate(ultimaCompra)}</p></div></div>`;
-            clientModal.classList.remove('hidden');
-        }
-
-        function exportClientsPDF(clientList, title, filename, includeFaturamento) {
-             if (clientList.length === 0) return;
-            const { jsPDF } = window.jspdf; const doc = new jsPDF();
-            const supervisor = document.getElementById('city-supervisor-filter-text').textContent;
-            const vendedor = document.getElementById('city-vendedor-filter-text').textContent;
-            const city = cityNameFilter.value.trim();
-            const generationDate = new Date().toLocaleString('pt-BR'); const today = new Date();
-            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toLocaleDateString('pt-BR');
-            const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).toLocaleDateString('pt-BR');
-            doc.setFontSize(18); doc.text(title, 14, 22); doc.setFontSize(11); doc.setTextColor(10);
-            doc.text(`Período de Análise: ${firstDay} a ${lastDay}`, 14, 32);
-            doc.text(`Supervisor: ${supervisor}`, 14, 38); doc.text(`Vendedor: ${vendedor}`, 14, 44);
-            doc.text(`Cidade: ${city || 'Todas'}`, 14, 50);
-            doc.text(`Data de Emissão: ${generationDate}`, 14, 56);
-            const tableColumn = ["Código", "Cliente", "Bairro", "Cidade", "Últ. Compra"];
-            if (includeFaturamento) tableColumn.splice(2, 0, "Faturamento");
-
-            clientList.sort((a, b) => {
-                if (includeFaturamento) {
-                    const valA = a.total || 0;
-                    const valB = b.total || 0;
-                    if (valB !== valA) return valB - valA;
-                }
-
-                const cidadeA = a.cidade || a.CIDADE || a['Nome da Cidade'] || '';
-                const cidadeB = b.cidade || b.CIDADE || b['Nome da Cidade'] || '';
-                const bairroA = a.bairro || a.BAIRRO || '';
-                const bairroB = b.bairro || b.BAIRRO || '';
-                if (cidadeA < cidadeB) return -1;
-                if (cidadeA > cidadeB) return 1;
-                if (bairroA < bairroB) return -1;
-                if (bairroA > bairroB) return 1;
-                return 0;
-            });
-
-            const tableRows = [];
-            let totalFaturamento = 0;
-
-            clientList.forEach(client => {
-                const fantasia = client.fantasia || client.FANTASIA || client.Fantasia || '';
-                const razao = client.razaoSocial || client.Cliente || client.RAZAOSOCIAL || '';
-                const nome = fantasia || razao;
-                const bairro = client.bairro || client.BAIRRO || client.Bairro || '';
-                const cidade = client.cidade || client.CIDADE || client.Cidade || client['Nome da Cidade'] || '';
-                const ultCompra = client.ultimaCompra || client['Data da Última Compra'] || client.ULTIMACOMPRA;
-
-                const clientData = [ client['Código'] || '', nome, bairro, cidade, formatDate(ultCompra) || 'N/A' ];
-                if (includeFaturamento) {
-                    const val = client.total || 0;
-                    totalFaturamento += val;
-                    clientData.splice(2, 0, val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
-                }
-                tableRows.push(clientData);
-            });
-
-            if (includeFaturamento) {
-                const footerRow = [
-                    { content: 'TOTAL:', colSpan: 2, styles: { halign: 'right', fontStyle: 'bold', fontSize: 10, fillColor: [50, 50, 50], textColor: [255, 255, 255] } },
-                    { content: totalFaturamento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), styles: { fontStyle: 'bold', fontSize: 10, fillColor: [50, 50, 50], textColor: [50, 255, 100] } },
-                    { content: '', colSpan: 3, styles: { fillColor: [50, 50, 50] } }
-                ];
-                tableRows.push(footerRow);
-            } else {
-                const footerRow = [
-                    { content: 'TOTAL CLIENTES:', colSpan: 2, styles: { halign: 'right', fontStyle: 'bold', fontSize: 10, fillColor: [50, 50, 50], textColor: [255, 255, 255] } },
-                    { content: String(clientList.length), colSpan: 3, styles: { fontStyle: 'bold', fontSize: 10, fillColor: [50, 50, 50], textColor: [255, 255, 255] } }
-                ];
-                tableRows.push(footerRow);
-            }
-
-            doc.autoTable({ head: [tableColumn], body: tableRows, startY: 60, theme: 'grid', styles: { fontSize: 8, cellPadding: 1.5, textColor: [0, 0, 0] }, headStyles: { fillColor: [41, 128, 185], textColor: 255, fontSize: 8, fontStyle: 'bold' }, alternateRowStyles: { fillColor: [240, 248, 255] }, margin: { top: 10 } });
-            const pageCount = doc.internal.getNumberOfPages();
-            for(let i = 1; i <= pageCount; i++) { doc.setPage(i); doc.setFontSize(9); doc.setTextColor(10); doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 10, { align: 'center' }); }
-
-            let fileNameParam = 'geral';
-            if (selectedCitySellers.length === 1) {
-                fileNameParam = getFirstName(selectedCitySellers[0]);
-            } else if (city) {
-                fileNameParam = city;
-            }
-            const safeFileNameParam = fileNameParam.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            doc.save(`${filename}_${safeFileNameParam}_${new Date().toISOString().slice(0,10)}.pdf`);
-        }
-
-        function renderCalendar(year, month) {
-            const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-
-            let calendarHTML = `
-                <div class="flex justify-between items-center mb-4">
-                    <button id="prev-month-btn" class="p-2 rounded-full hover:bg-slate-600">&lt;</button>
-                    <h3 class="font-bold text-lg">${monthNames[month]} ${year}</h3>
-                    <button id="next-month-btn" class="p-2 rounded-full hover:bg-slate-600">&gt;</button>
-                </div>
-                <div class="grid grid-cols-7 gap-1 text-center text-xs text-slate-400 mb-2">
-                    <div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
-                </div>
-                <div id="calendar-grid" class="grid grid-cols-7 gap-1">
-            `;
-            const firstDay = new Date(Date.UTC(year, month, 1)).getUTCDay();
-            const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-
-            for (let i = 0; i < firstDay; i++) {
-                calendarHTML += `<div></div>`;
-            }
-
-            for (let day = 1; day <= daysInMonth; day++) {
-                const date = new Date(Date.UTC(year, month, day));
-                const dateString = date.toISOString().split('T')[0];
-                const isSelected = selectedHolidays.includes(dateString);
-                const isToday = date.getTime() === lastSaleDate.getTime();
-                let dayClasses = 'p-2 rounded-full cursor-pointer hover:bg-slate-600 flex items-center justify-center';
-                if (isSelected) dayClasses += ' bg-red-500 text-white font-bold';
-                if (isToday) dayClasses += ' border-2 border-teal-400';
-
-                calendarHTML += `<div class="${dayClasses}" data-date="${dateString}">${day}</div>`;
-            }
-
-            calendarHTML += `</div>`;
-            calendarContainer.innerHTML = calendarHTML;
-        }
-
-        function initializeRedeFilters() {
-            const hasRedeData = allClientsData.some(client => client.ramo && client.ramo !== 'N/A');
-
-            const mainRedeFilterWrapper = document.getElementById('main-rede-filter-wrapper');
-            const cityRedeFilterWrapper = document.getElementById('city-rede-filter-wrapper');
-            const comparisonRedeFilterWrapper = document.getElementById('comparison-rede-filter-wrapper');
-            const stockRedeFilterWrapper = document.getElementById('stock-rede-filter-wrapper');
-
-            if (mainRedeFilterWrapper) mainRedeFilterWrapper.style.display = hasRedeData ? '' : 'none';
-            if (cityRedeFilterWrapper) cityRedeFilterWrapper.style.display = hasRedeData ? '' : 'none';
-            if (comparisonRedeFilterWrapper) comparisonRedeFilterWrapper.style.display = hasRedeData ? '' : 'none';
-            if (stockRedeFilterWrapper) stockRedeFilterWrapper.style.display = hasRedeData ? '' : 'none';
-        }
-
-        function debounce(func, delay = 300) {
+function debounce(func, delay = 300) {
             let timeout;
             return function(...args) {
                 clearTimeout(timeout);
@@ -12355,35 +4653,7 @@ const supervisorGroups = new Map();
             };
         }
 
-        function showLoader(text = 'Carregando...') {
-            return new Promise(resolve => {
-                const loader = document.getElementById('page-transition-loader');
-                const loaderText = document.getElementById('loader-text');
-                if (loader && loaderText) {
-                    document.body.setAttribute('data-loading', 'true');
-                    loaderText.textContent = text;
-                    loader.classList.remove('opacity-0', 'pointer-events-none');
-                    setTimeout(resolve, 50);
-                } else {
-                    resolve();
-                }
-            });
-        }
-
-        function hideLoader() {
-             return new Promise(resolve => {
-                const loader = document.getElementById('page-transition-loader');
-                if (loader) {
-                    document.body.removeAttribute('data-loading');
-                    loader.classList.add('opacity-0', 'pointer-events-none');
-                    setTimeout(resolve, 300);
-                } else {
-                    resolve();
-                }
-            });
-        }
-
-        function toggleSidebar() {
+function toggleSidebar() {
             const sideMenu = document.getElementById('side-menu');
             const sidebarOverlay = document.getElementById('sidebar-overlay');
 
@@ -12399,157 +4669,17 @@ const supervisorGroups = new Map();
             }
         }
 
-        async function navigateTo(view) {
-            const sideMenu = document.getElementById('side-menu');
-            const sidebarOverlay = document.getElementById('sidebar-overlay');
+async function navigateTo() {
+ document.body.removeAttribute('data-loading');
+ document.getElementById('page-transition-loader')?.classList.add('opacity-0', 'pointer-events-none');
+ document.getElementById('side-menu')?.classList.add('-translate-x-full');
+ document.getElementById('sidebar-overlay')?.classList.add('hidden');
+ goalsView.classList.remove('hidden');
+ document.querySelector('.nav-link[data-target="goals"]')?.classList.add('bg-slate-700','text-white');
+ if (viewState.goals.dirty) { updateGoalsView(); viewState.goals.dirty = false; }
+}
 
-            if (sideMenu) sideMenu.classList.add('-translate-x-full');
-            if (sidebarOverlay) sidebarOverlay.classList.add('hidden');
-
-            const viewNameMap = {
-                dashboard: 'Dashboard',
-                pedidos: 'Pedidos',
-                comparativo: 'Comparativo',
-                estoque: 'Estoque',
-                cobertura: 'Cobertura',
-                cidades: 'Cidades',
-                semanal: 'Semanal',
-                'inovacoes-mes': 'Inovações',
-                mix: 'Mix',
-                'meta-realizado': 'Meta Vs. Realizado',
-                goals: 'Metas'
-            };
-            const friendlyName = viewNameMap[view] || 'a página';
-
-            await showLoader(`Carregando ${friendlyName}...`);
-
-            // This function now runs after the loader is visible
-            const updateContent = () => {
-                [mainDashboard, cityView, weeklyView, comparisonView, stockView, innovationsMonthView, coverageView, document.getElementById('mix-view'), goalsView, document.getElementById('meta-realizado-view')].forEach(el => {
-                    if(el) el.classList.add('hidden');
-                });
-
-                document.querySelectorAll('.nav-link').forEach(link => {
-                    link.classList.remove('bg-slate-700', 'text-white');
-                    const icon = link.querySelector('svg');
-                    if(icon) icon.classList.remove('text-white');
-                });
-
-                const activeLink = document.querySelector(`.nav-link[data-target="${view}"]`);
-                if (activeLink) {
-                    activeLink.classList.add('bg-slate-700', 'text-white');
-                    const icon = activeLink.querySelector('svg');
-                    if(icon) icon.classList.add('text-white');
-                }
-
-                switch(view) {
-                    case 'dashboard':
-                        mainDashboard.classList.remove('hidden');
-                        chartView.classList.remove('hidden');
-                        tableView.classList.add('hidden');
-                        tablePaginationControls.classList.add('hidden');
-                        if (viewState.dashboard.dirty) {
-                            updateAllVisuals();
-                            viewState.dashboard.dirty = false;
-                        }
-                        break;
-                    case 'pedidos':
-                        mainDashboard.classList.remove('hidden');
-                        chartView.classList.add('hidden');
-                        tableView.classList.remove('hidden');
-                        tablePaginationControls.classList.remove('hidden');
-                        if (viewState.pedidos.dirty) {
-                            updateAllVisuals();
-                            viewState.pedidos.dirty = false;
-                        }
-                        break;
-                    case 'comparativo':
-                        comparisonView.classList.remove('hidden');
-                        if (viewState.comparativo.dirty) {
-                            updateAllComparisonFilters();
-                            updateComparisonView();
-                            viewState.comparativo.dirty = false;
-                        }
-                        break;
-                    case 'estoque':
-                        stockView.classList.remove('hidden');
-                        if (viewState.estoque.dirty) {
-                            handleStockFilterChange();
-                            viewState.estoque.dirty = false;
-                        }
-                        break;
-                    case 'cobertura':
-                        coverageView.classList.remove('hidden');
-                        if (viewState.cobertura.dirty) {
-                            updateAllCoverageFilters();
-                            updateCoverageView();
-                            viewState.cobertura.dirty = false;
-                        }
-                        break;
-                    case 'cidades':
-                        cityView.classList.remove('hidden');
-                        // Always trigger background sync if admin
-                        syncGlobalCoordinates();
-                        if (viewState.cidades.dirty) {
-                            updateAllCityFilters();
-                            updateCityView();
-                            viewState.cidades.dirty = false;
-                        }
-                        break;
-                    case 'semanal':
-                        weeklyView.classList.remove('hidden');
-                        if (viewState.semanal.dirty) {
-                            populateWeeklyFilters();
-                            updateWeeklyView();
-                            viewState.semanal.dirty = false;
-                        }
-                        break;
-                    case 'inovacoes-mes':
-                        innovationsMonthView.classList.remove('hidden');
-                        if (viewState.inovacoes.dirty) {
-                            selectedInnovationsSupervisors = updateSupervisorFilter(document.getElementById('innovations-month-supervisor-filter-dropdown'), document.getElementById('innovations-month-supervisor-filter-text'), selectedInnovationsSupervisors, allSalesData);
-                            updateSellerFilter(selectedInnovationsSupervisors, innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, [], allSalesData);
-                            selectedInnovationsMonthTiposVenda = updateTipoVendaFilter(innovationsMonthTipoVendaFilterDropdown, innovationsMonthTipoVendaFilterText, selectedInnovationsMonthTiposVenda, [...allSalesData, ...allHistoryData]);
-                            updateInnovationsMonthView();
-                            viewState.inovacoes.dirty = false;
-                        }
-                        break;
-                    case 'mix':
-                        document.getElementById('mix-view').classList.remove('hidden');
-                        if (viewState.mix.dirty) {
-                            updateAllMixFilters();
-                            updateMixView();
-                            viewState.mix.dirty = false;
-                        }
-                        break;
-                    case 'goals':
-                        goalsView.classList.remove('hidden');
-                        if (viewState.goals.dirty) {
-                            updateGoalsView();
-                            viewState.goals.dirty = false;
-                        }
-                        break;
-                    case 'meta-realizado':
-                        document.getElementById('meta-realizado-view').classList.remove('hidden');
-                        if (viewState.metaRealizado.dirty) {
-                            // Initial filter logic if needed, similar to other views
-                            selectedMetaRealizadoSupervisors = updateSupervisorFilter(document.getElementById('meta-realizado-supervisor-filter-dropdown'), document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
-                            selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData]);
-                            
-                            updateMetaRealizadoView();
-                            viewState.metaRealizado.dirty = false;
-                        }
-                        break;
-                }
-            };
-
-            updateContent();
-
-            await hideLoader();
-        }
-
-
-        async function enviarDadosParaSupabase(data) {
+async function enviarDadosParaSupabase(data) {
             const supabaseUrl = document.getElementById('supabase-url').value;
 
             // Tentamos obter a sessão atual do usuário
@@ -12641,11 +4771,11 @@ const supervisorGroups = new Map();
                     // Fallback: Batched Delete para evitar Statement Timeout (57014)
                     console.info(`Iniciando exclusão em lote para a tabela ${table}...`);
                     let hasMore = true;
-                    // Utiliza lote de 50 para garantir que a URL gerada com in.(id1,id2...) 
+                    // Utiliza lote de 50 para garantir que a URL gerada com in.(id1,id2...)
                     // não exceda o limite de ~8KB de requisições HTTP do Supabase/NGINX
                     // (50 UUIDs * 37 chars = ~1850 bytes).
                     const batchSize = 50;
-                    
+
                     while (hasMore) {
                         // Busca um lote de IDs
                         const fetchResponse = await fetch(`${supabaseUrl}/rest/v1/${table}?select=${pkColumn}&limit=${batchSize}`, {
@@ -12663,17 +4793,17 @@ const supervisorGroups = new Map();
                         }
 
                         const rows = await fetchResponse.json();
-                        
+
                         if (rows.length === 0) {
                             hasMore = false;
                             break;
                         }
 
                         const ids = rows.map(r => r[pkColumn]);
-                        
+
                         // Deleta o lote
                         const deleteUrl = new URL(`${supabaseUrl}/rest/v1/${table}`);
-                        
+
                         // Para evitar URL too long, não passamos todos os ids na URL se forem muitos (limitamos a 50 que é seguro)
                         deleteUrl.searchParams.append(pkColumn, `in.(${ids.join(',')})`);
 
@@ -12696,7 +4826,7 @@ const supervisorGroups = new Map();
                         }
 
                         const deletedRows = await deleteResponse.json();
-                        
+
                         // Prevent infinite loop if RLS blocks deletion (i.e. we fetch rows but cannot delete them)
                         if (deletedRows.length === 0) {
                             throw new Error(`Permissão Negada: Nenhuma linha foi deletada na tabela ${table}. Suas políticas de segurança (RLS) permitem leitura mas bloqueiam exclusão.`);
@@ -12865,13 +4995,12 @@ const supervisorGroups = new Map();
                 alert('Erro durante o upload: ' + msg);
             }
         }
-        function setupEventListeners() {
-            // Uploader Logic
-            const openAdminBtn = document.getElementById('open-admin-btn');
-            const adminModal = document.getElementById('admin-uploader-modal');
-            const adminCloseBtn = document.getElementById('admin-modal-close-btn');
 
-            if (openAdminBtn) {
+function setupEventListeners() {
+const openAdminBtn = document.getElementById('open-admin-btn');
+const adminModal = document.getElementById('admin-uploader-modal');
+const adminCloseBtn = document.getElementById('admin-modal-close-btn');
+if (openAdminBtn) {
                 openAdminBtn.addEventListener('click', () => {
                     if (window.userRole !== 'adm') {
                         alert('Apenas usuários com permissão "adm" podem acessar o Uploader.');
@@ -12882,20 +5011,19 @@ const supervisorGroups = new Map();
                     const sideMenu = document.getElementById('side-menu');
                     const sidebarOverlay = document.getElementById('sidebar-overlay');
                     if (sideMenu) {
-                        sideMenu.classList.remove('translate-x-0'); 
+                        sideMenu.classList.remove('translate-x-0');
                         sideMenu.classList.add('-translate-x-full');
                     }
                     if (sidebarOverlay) sidebarOverlay.classList.add('hidden');
                 });
             }
-            if (adminCloseBtn) {
+if (adminCloseBtn) {
                 adminCloseBtn.addEventListener('click', () => {
                     adminModal.classList.add('hidden');
                 });
             }
-
-            const generateBtn = document.getElementById('generate-btn');
-            if (generateBtn) {
+const generateBtn = document.getElementById('generate-btn');
+if (generateBtn) {
                 generateBtn.addEventListener('click', async () => {
                     const salesFile = document.getElementById('sales-file-input').files[0];
                     const clientsFile = document.getElementById('clients-file-input').files[0];
@@ -12949,21 +5077,16 @@ const supervisorGroups = new Map();
                     };
                 });
             }
-
-            // Helper to mark dirty states
-            const markDirty = (view) => {
+const markDirty = (view) => {
                 if (viewState[view]) viewState[view].dirty = true;
             };
-
-            // Enhanced Sidebar Toggle using Event Delegation (Fixes potential race conditions/dynamic elements)
-            document.addEventListener('click', (e) => {
+document.addEventListener('click', (e) => {
                 const target = e.target;
                 if (target.closest('.sidebar-toggle') || target.closest('#close-sidebar-btn') || target.id === 'sidebar-overlay') {
                     toggleSidebar();
                 }
             });
-
-            document.querySelectorAll('.nav-link').forEach(link => {
+document.querySelectorAll('.nav-link').forEach(link => {
                 link.addEventListener('click', (e) => {
                     const target = e.currentTarget.dataset.target;
 
@@ -12977,837 +5100,15 @@ const supervisorGroups = new Map();
                     }
                 });
             });
-
-            // --- Dashboard/Pedidos Filters ---
-            const updateDashboard = () => {
-                markDirty('dashboard'); markDirty('pedidos');
-                updateAllVisuals();
-            };
-
-            const supervisorFilterBtn = document.getElementById('supervisor-filter-btn');
-            const supervisorFilterDropdown = document.getElementById('supervisor-filter-dropdown');
-            supervisorFilterBtn.addEventListener('click', () => supervisorFilterDropdown.classList.toggle('hidden'));
-            supervisorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedMainSupervisors.push(value);
-                    else selectedMainSupervisors = selectedMainSupervisors.filter(s => s !== value);
-
-                    selectedSellers = []; // Reset sellers when supervisor changes to avoid inconsistent state? Or keep valid intersection?
-                    // Better: Re-run updateSellerFilter which filters 'selectedSellers' to only keep valid ones.
-                    selectedMainSupervisors = updateSupervisorFilter(supervisorFilterDropdown, document.getElementById('supervisor-filter-text'), selectedMainSupervisors, allSalesData);
-                    selectedSellers = updateSellerFilter(selectedMainSupervisors, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
-                    mainTableState.currentPage = 1;
-                    updateDashboard();
-                }
-            });
-
-            const fornecedorFilterBtn = document.getElementById('fornecedor-filter-btn');
-            const fornecedorFilterDropdown = document.getElementById('fornecedor-filter-dropdown');
-            fornecedorFilterBtn.addEventListener('click', () => fornecedorFilterDropdown.classList.toggle('hidden'));
-            fornecedorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedMainSuppliers.push(value);
-                    else selectedMainSuppliers = selectedMainSuppliers.filter(s => s !== value);
-
-                    let supplierDataSource = [...allSalesData, ...allHistoryData];
-                    if (currentFornecedor) {
-                        supplierDataSource = supplierDataSource.filter(s => s.OBSERVACAOFOR === currentFornecedor);
-                    }
-                    selectedMainSuppliers = updateSupplierFilter(fornecedorFilterDropdown, document.getElementById('fornecedor-filter-text'), selectedMainSuppliers, supplierDataSource, 'main');
-                    mainTableState.currentPage = 1;
-                    updateDashboard();
-                }
-            });
-
-            vendedorFilterBtn.addEventListener('click', () => vendedorFilterDropdown.classList.toggle('hidden'));
-            vendedorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedSellers.push(value); else selectedSellers = selectedSellers.filter(s => s !== value);
-                    selectedSellers = updateSellerFilter(selectedMainSupervisors, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
-                    mainTableState.currentPage = 1;
-                    updateDashboard();
-                }
-            });
-
-            tipoVendaFilterBtn.addEventListener('click', () => tipoVendaFilterDropdown.classList.toggle('hidden'));
-            tipoVendaFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedTiposVenda.push(value);
-                    else selectedTiposVenda = selectedTiposVenda.filter(s => s !== value);
-                    selectedTiposVenda = updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
-                    mainTableState.currentPage = 1;
-                    updateDashboard();
-                }
-            });
-
-            posicaoFilter.addEventListener('change', () => { mainTableState.currentPage = 1; updateDashboard(); });
-            const debouncedUpdateDashboard = debounce(updateDashboard, 400);
-            codcliFilter.addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/[^0-9]/g, '');
-                mainTableState.currentPage = 1;
-                debouncedUpdateDashboard();
-            });
-            clearFiltersBtn.addEventListener('click', () => { resetMainFilters(); markDirty('dashboard'); markDirty('pedidos'); });
-
-            prevPageBtn.addEventListener('click', () => {
-                if (mainTableState.currentPage > 1) {
-                    mainTableState.currentPage--;
-                    renderTable(mainTableState.filteredData);
-                }
-            });
-            nextPageBtn.addEventListener('click', () => {
-                if (mainTableState.currentPage < mainTableState.totalPages) {
-                    mainTableState.currentPage++;
-                    renderTable(mainTableState.filteredData);
-                }
-            });
-
-            mainComRedeBtn.addEventListener('click', () => mainRedeFilterDropdown.classList.toggle('hidden'));
-            mainRedeGroupContainer.addEventListener('click', (e) => {
-                if(e.target.closest('button')) {
-                    const button = e.target.closest('button');
-                    mainRedeGroupFilter = button.dataset.group;
-                    mainRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    button.classList.add('active');
-                    if (mainRedeGroupFilter !== 'com_rede') {
-                        mainRedeFilterDropdown.classList.add('hidden');
-                        selectedMainRedes = [];
-                    }
-                    updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
-                    mainTableState.currentPage = 1;
-                    updateDashboard();
-                }
-            });
-            mainRedeFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedMainRedes.push(value);
-                    else selectedMainRedes = selectedMainRedes.filter(r => r !== value);
-                    selectedMainRedes = updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
-                    mainTableState.currentPage = 1;
-                    updateDashboard();
-                }
-            });
-
-            // --- City View Filters ---
-            const updateCity = () => {
-                markDirty('cidades');
-                handleCityFilterChange();
-            };
-
-            const citySupervisorFilterBtn = document.getElementById('city-supervisor-filter-btn');
-            const citySupervisorFilterDropdown = document.getElementById('city-supervisor-filter-dropdown');
-            citySupervisorFilterBtn.addEventListener('click', () => citySupervisorFilterDropdown.classList.toggle('hidden'));
-            citySupervisorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedCitySupervisors.push(value);
-                    else selectedCitySupervisors = selectedCitySupervisors.filter(s => s !== value);
-
-                    selectedCitySellers = [];
-                    handleCityFilterChange();
-                }
-            });
-
-            cityVendedorFilterBtn.addEventListener('click', () => cityVendedorFilterDropdown.classList.toggle('hidden'));
-            cityVendedorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedCitySellers.includes(value)) selectedCitySellers.push(value);
-                    } else {
-                        selectedCitySellers = selectedCitySellers.filter(s => s !== value);
-                    }
-                    handleCityFilterChange({ skipFilter: 'seller' });
-                }
-            });
-
-            citySupplierFilterBtn.addEventListener('click', () => citySupplierFilterDropdown.classList.toggle('hidden'));
-            citySupplierFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox' && e.target.dataset.filterType === 'city') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedCitySuppliers.includes(value)) selectedCitySuppliers.push(value);
-                    } else {
-                        selectedCitySuppliers = selectedCitySuppliers.filter(s => s !== value);
-                    }
-                    handleCityFilterChange({ skipFilter: 'supplier' });
-                }
-            });
-
-            cityTipoVendaFilterBtn.addEventListener('click', () => cityTipoVendaFilterDropdown.classList.toggle('hidden'));
-            cityTipoVendaFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedCityTiposVenda.includes(value)) selectedCityTiposVenda.push(value);
-                    } else {
-                        selectedCityTiposVenda = selectedCityTiposVenda.filter(s => s !== value);
-                    }
-                    handleCityFilterChange({ skipFilter: 'tipoVenda' });
-                }
-            });
-
-            cityFilialFilter.addEventListener('change', handleCityFilterChange);
-
-            cityComRedeBtn.addEventListener('click', () => cityRedeFilterDropdown.classList.toggle('hidden'));
-            cityRedeGroupContainer.addEventListener('click', (e) => {
-                if(e.target.closest('button')) {
-                    const button = e.target.closest('button');
-                    cityRedeGroupFilter = button.dataset.group;
-                    cityRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    button.classList.add('active');
-
-                    if (cityRedeGroupFilter !== 'com_rede') {
-                        cityRedeFilterDropdown.classList.add('hidden');
-                        selectedCityRedes = [];
-                    }
-                    handleCityFilterChange();
-                }
-            });
-            cityRedeFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedCityRedes.push(value);
-                    else selectedCityRedes = selectedCityRedes.filter(r => r !== value);
-
-                    cityRedeGroupFilter = 'com_rede';
-                    cityRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    cityComRedeBtn.classList.add('active');
-
-                    handleCityFilterChange({ skipFilter: 'rede' });
-                }
-            });
-
-            const toggleCityMapBtn = document.getElementById('toggle-city-map-btn');
-            if (toggleCityMapBtn) {
-                toggleCityMapBtn.addEventListener('click', () => {
-                    const cityMapContainer = document.getElementById('city-map-container');
-                    if (!cityMapContainer) return;
-
-                    const isHidden = cityMapContainer.classList.contains('hidden');
-
-                    if (isHidden) {
-                        // Show Map
-                        cityMapContainer.classList.remove('hidden');
-                        toggleCityMapBtn.innerHTML = `
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>
-                            Ocultar Mapa
-                        `;
-
-                        // Initialize or Refresh Leaflet
-                        if (!leafletMap) {
-                            initLeafletMap();
-                        }
-
-                        // Important: Invalidate size after removing 'hidden' so Leaflet calculates dimensions correctly
-                        setTimeout(() => {
-                            if (leafletMap) leafletMap.invalidateSize();
-                            updateCityMap();
-                        }, 100);
-
-                    } else {
-                        // Hide Map
-                        cityMapContainer.classList.add('hidden');
-                        toggleCityMapBtn.innerHTML = `
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
-                            Ver Mapa
-                        `;
-                    }
-                });
-            }
-
-            clearCityFiltersBtn.addEventListener('click', () => { resetCityFilters(); markDirty('cidades'); });
-            const debouncedUpdateCity = debounce(updateCity, 400);
-            cityCodCliFilter.addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/[^0-9]/g, '');
-                debouncedUpdateCity();
-            });
-
-            const debouncedCitySearch = debounce(() => {
-                const { clients } = getCityFilteredData({ excludeFilter: 'city' });
-                updateCitySuggestions(cityNameFilter, citySuggestions, clients);
-            }, 300);
-
-            cityNameFilter.addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/[0-9]/g, '');
-                debouncedCitySearch();
-            });
-            cityNameFilter.addEventListener('focus', () => {
-                const { clients } = getCityFilteredData({ excludeFilter: 'city' });
-                citySuggestions.classList.remove('manual-hide');
-                updateCitySuggestions(cityNameFilter, citySuggestions, clients);
-            });
-            cityNameFilter.addEventListener('blur', () => setTimeout(() => citySuggestions.classList.add('hidden'), 150));
-            cityNameFilter.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    citySuggestions.classList.add('hidden', 'manual-hide');
-                    handleCityFilterChange();
-                    e.target.blur();
-                }
-            });
-
-            document.addEventListener('click', (e) => {
-                if (!supervisorFilterBtn.contains(e.target) && !supervisorFilterDropdown.contains(e.target)) supervisorFilterDropdown.classList.add('hidden');
-                if (!fornecedorFilterBtn.contains(e.target) && !fornecedorFilterDropdown.contains(e.target)) fornecedorFilterDropdown.classList.add('hidden');
-                if (!vendedorFilterBtn.contains(e.target) && !vendedorFilterDropdown.contains(e.target)) vendedorFilterDropdown.classList.add('hidden');
-                if (!tipoVendaFilterBtn.contains(e.target) && !tipoVendaFilterDropdown.contains(e.target)) tipoVendaFilterDropdown.classList.add('hidden');
-
-                if (!citySupervisorFilterBtn.contains(e.target) && !citySupervisorFilterDropdown.contains(e.target)) citySupervisorFilterDropdown.classList.add('hidden');
-                if (!cityVendedorFilterBtn.contains(e.target) && !cityVendedorFilterDropdown.contains(e.target)) cityVendedorFilterDropdown.classList.add('hidden');
-                if (!citySupplierFilterBtn.contains(e.target) && !citySupplierFilterDropdown.contains(e.target)) citySupplierFilterDropdown.classList.add('hidden');
-                if (!cityTipoVendaFilterBtn.contains(e.target) && !cityTipoVendaFilterDropdown.contains(e.target)) cityTipoVendaFilterDropdown.classList.add('hidden');
-                if (!cityComRedeBtn.contains(e.target) && !cityRedeFilterDropdown.contains(e.target)) cityRedeFilterDropdown.classList.add('hidden');
-                if (!mainComRedeBtn.contains(e.target) && !mainRedeFilterDropdown.contains(e.target)) mainRedeFilterDropdown.classList.add('hidden');
-
-                if (!comparisonSupervisorFilterBtn.contains(e.target) && !comparisonSupervisorFilterDropdown.contains(e.target)) comparisonSupervisorFilterDropdown.classList.add('hidden');
-                if (!comparisonComRedeBtn.contains(e.target) && !comparisonRedeFilterDropdown.contains(e.target)) comparisonRedeFilterDropdown.classList.add('hidden');
-                if (!comparisonVendedorFilterBtn.contains(e.target) && !comparisonVendedorFilterDropdown.contains(e.target)) comparisonVendedorFilterDropdown.classList.add('hidden');
-                if (!comparisonTipoVendaFilterBtn.contains(e.target) && !comparisonTipoVendaFilterDropdown.contains(e.target)) comparisonTipoVendaFilterDropdown.classList.add('hidden');
-                if (!comparisonSupplierFilterBtn.contains(e.target) && !comparisonSupplierFilterDropdown.contains(e.target)) comparisonSupplierFilterDropdown.classList.add('hidden');
-                if (!comparisonProductFilterBtn.contains(e.target) && !comparisonProductFilterDropdown.contains(e.target)) comparisonProductFilterDropdown.classList.add('hidden');
-
-                if (!stockSupervisorFilterBtn.contains(e.target) && !stockSupervisorFilterDropdown.contains(e.target)) stockSupervisorFilterDropdown.classList.add('hidden');
-                if (!stockComRedeBtn.contains(e.target) && !stockRedeFilterDropdown.contains(e.target)) stockRedeFilterDropdown.classList.add('hidden');
-                if (!stockVendedorFilterBtn.contains(e.target) && !stockVendedorFilterDropdown.contains(e.target)) stockVendedorFilterDropdown.classList.add('hidden');
-                if (!stockSupplierFilterBtn.contains(e.target) && !stockSupplierFilterDropdown.contains(e.target)) stockSupplierFilterDropdown.classList.add('hidden');
-                if (!stockProductFilterBtn.contains(e.target) && !stockProductFilterDropdown.contains(e.target)) stockProductFilterDropdown.classList.add('hidden');
-                if (!stockTipoVendaFilterBtn.contains(e.target) && !stockTipoVendaFilterDropdown.contains(e.target)) stockTipoVendaFilterDropdown.classList.add('hidden');
-
-                if (!innovationsMonthSupervisorFilterBtn.contains(e.target) && !innovationsMonthSupervisorFilterDropdown.contains(e.target)) innovationsMonthSupervisorFilterDropdown.classList.add('hidden');
-                if (!coverageSupervisorFilterBtn.contains(e.target) && !coverageSupervisorFilterDropdown.contains(e.target)) coverageSupervisorFilterDropdown.classList.add('hidden');
-
-                if (e.target.closest('[data-pedido-id]')) { e.preventDefault(); openModal(e.target.closest('[data-pedido-id]').dataset.pedidoId); }
-                if (e.target.closest('[data-codcli]')) { e.preventDefault(); openClientModal(e.target.closest('[data-codcli]').dataset.codcli); }
-                if (e.target.closest('#city-suggestions > div')) { cityNameFilter.value = e.target.textContent; citySuggestions.classList.add('hidden'); updateCityView(); }
-                if (e.target.closest('#comparison-city-suggestions > div')) { comparisonCityFilter.value = e.target.textContent; comparisonCitySuggestions.classList.add('hidden'); updateAllComparisonFilters(); updateComparisonView(); }
-                else if (!comparisonCityFilter.contains(e.target)) comparisonCitySuggestions.classList.add('hidden');
-                if (e.target.closest('#stock-city-suggestions > div')) { stockCityFilter.value = e.target.textContent; stockCitySuggestions.classList.add('hidden'); handleStockFilterChange(); }
-                else if (!stockCityFilter.contains(e.target)) stockCitySuggestions.classList.add('hidden');
-            });
-
-            fornecedorToggleContainerEl.querySelectorAll('.fornecedor-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const fornecedor = btn.dataset.fornecedor;
-                    if (currentFornecedor === fornecedor) { currentFornecedor = ''; btn.classList.remove('active'); } else { currentFornecedor = fornecedor; fornecedorToggleContainerEl.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
-
-                    let supplierDataSource = [...allSalesData, ...allHistoryData];
-                    if (currentFornecedor) {
-                        supplierDataSource = supplierDataSource.filter(s => s.OBSERVACAOFOR === currentFornecedor);
-                    }
-                    selectedMainSuppliers = updateSupplierFilter(document.getElementById('fornecedor-filter-dropdown'), document.getElementById('fornecedor-filter-text'), selectedMainSuppliers, supplierDataSource, 'main');
-
-                    selectedMainSupervisors = updateSupervisorFilter(document.getElementById('supervisor-filter-dropdown'), document.getElementById('supervisor-filter-text'), selectedMainSupervisors, allSalesData);
-                    selectedSellers = [];
-                    updateSellerFilter(selectedMainSupervisors, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
-                    mainTableState.currentPage = 1;
-                    updateDashboard();
-                });
-            });
-
-            const updateWeekly = () => {
-                markDirty('semanal');
-                updateWeeklyView();
-            };
-
-            weeklyFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const fornecedor = btn.dataset.fornecedor;
-                    if (currentWeeklyFornecedor === fornecedor) { currentWeeklyFornecedor = ''; btn.classList.remove('active'); } else { currentWeeklyFornecedor = fornecedor; weeklyFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
-                    updateWeekly();
-                });
-            });
-
-            weeklySupervisorFilterBtn.addEventListener('click', () => weeklySupervisorFilterDropdown.classList.toggle('hidden'));
-            weeklySupervisorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedWeeklySupervisors.push(value);
-                    else selectedWeeklySupervisors = selectedWeeklySupervisors.filter(s => s !== value);
-
-                    selectedWeeklySupervisors = updateSupervisorFilter(weeklySupervisorFilterDropdown, weeklySupervisorFilterText, selectedWeeklySupervisors, allSalesData);
-                    selectedWeeklySellers = updateSellerFilter(selectedWeeklySupervisors, weeklyVendedorFilterDropdown, weeklyVendedorFilterText, selectedWeeklySellers, allSalesData);
-                    updateWeekly();
-                }
-            });
-
-            weeklyVendedorFilterBtn.addEventListener('click', () => weeklyVendedorFilterDropdown.classList.toggle('hidden'));
-            weeklyVendedorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedWeeklySellers.includes(value)) selectedWeeklySellers.push(value);
-                    } else {
-                        selectedWeeklySellers = selectedWeeklySellers.filter(s => s !== value);
-                    }
-                    updateSellerFilter(selectedWeeklySupervisors, weeklyVendedorFilterDropdown, weeklyVendedorFilterText, selectedWeeklySellers, allSalesData);
-                    updateWeekly();
-                }
-            });
-
-            const weeklyFilialFilter = document.getElementById('weekly-filial-filter');
-            if (weeklyFilialFilter) {
-                weeklyFilialFilter.addEventListener('change', () => {
-                    updateWeekly();
-                });
-            }
-
-            clearWeeklyFiltersBtn.addEventListener('click', () => { resetWeeklyFilters(); markDirty('semanal'); });
-
-            // --- Comparison View Filters ---
-            const updateComparison = () => {
-                markDirty('comparativo');
-                updateAllComparisonFilters();
-                updateComparisonView();
-            };
-
-            const handleComparisonFilterChange = updateComparison;
-
-            const comparisonSupervisorFilterBtn = document.getElementById('comparison-supervisor-filter-btn');
-            const comparisonSupervisorFilterDropdown = document.getElementById('comparison-supervisor-filter-dropdown');
-            comparisonSupervisorFilterBtn.addEventListener('click', () => comparisonSupervisorFilterDropdown.classList.toggle('hidden'));
-            comparisonSupervisorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedComparisonSupervisors.push(value);
-                    else selectedComparisonSupervisors = selectedComparisonSupervisors.filter(s => s !== value);
-                    selectedComparisonSellers = [];
-                    handleComparisonFilterChange();
-                }
-            });
-
-            comparisonFilialFilter.addEventListener('change', handleComparisonFilterChange);
-            comparisonVendedorFilterBtn.addEventListener('click', () => comparisonVendedorFilterDropdown.classList.toggle('hidden'));
-            comparisonVendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedComparisonSellers.push(value); else selectedComparisonSellers = selectedComparisonSellers.filter(s => s !== value); handleComparisonFilterChange(); } });
-            comparisonTipoVendaFilterBtn.addEventListener('click', () => comparisonTipoVendaFilterDropdown.classList.toggle('hidden'));
-            comparisonTipoVendaFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedComparisonTiposVenda.includes(value)) selectedComparisonTiposVenda.push(value);
-                    } else {
-                        selectedComparisonTiposVenda = selectedComparisonTiposVenda.filter(s => s !== value);
-                    }
-                    selectedComparisonTiposVenda = updateTipoVendaFilter(comparisonTipoVendaFilterDropdown, comparisonTipoVendaFilterText, selectedComparisonTiposVenda, [...allSalesData, ...allHistoryData]);
-                    handleComparisonFilterChange();
-                }
-            });
-            comparisonFornecedorToggleContainer.addEventListener('click', (e) => { if (e.target.tagName === 'BUTTON') { const fornecedor = e.target.dataset.fornecedor; if (currentComparisonFornecedor === fornecedor) { currentComparisonFornecedor = ''; e.target.classList.remove('active'); } else { currentComparisonFornecedor = fornecedor; comparisonFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); e.target.classList.add('active'); } handleComparisonFilterChange(); } });
-            comparisonSupplierFilterBtn.addEventListener('click', () => comparisonSupplierFilterDropdown.classList.toggle('hidden'));
-            comparisonSupplierFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox' && e.target.dataset.filterType === 'comparison') { const { value, checked } = e.target; if (checked) selectedComparisonSuppliers.push(value); else selectedComparisonSuppliers = selectedComparisonSuppliers.filter(s => s !== value); handleComparisonFilterChange(); } });
-
-            comparisonComRedeBtn.addEventListener('click', () => comparisonRedeFilterDropdown.classList.toggle('hidden'));
-            comparisonRedeGroupContainer.addEventListener('click', (e) => {
-                if(e.target.closest('button')) {
-                    const button = e.target.closest('button');
-                    comparisonRedeGroupFilter = button.dataset.group;
-                    comparisonRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    button.classList.add('active');
-                    if (comparisonRedeGroupFilter !== 'com_rede') {
-                        comparisonRedeFilterDropdown.classList.add('hidden');
-                        selectedComparisonRedes = [];
-                    }
-                    updateRedeFilter(comparisonRedeFilterDropdown, comparisonComRedeBtnText, selectedComparisonRedes, allClientsData);
-                    handleComparisonFilterChange();
-                }
-            });
-            comparisonRedeFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedComparisonRedes.push(value);
-                    else selectedComparisonRedes = selectedComparisonRedes.filter(r => r !== value);
-
-                    comparisonRedeGroupFilter = 'com_rede';
-                    comparisonRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    comparisonComRedeBtn.classList.add('active');
-
-                    selectedComparisonRedes = updateRedeFilter(comparisonRedeFilterDropdown, comparisonComRedeBtnText, selectedComparisonRedes, allClientsData);
-                    handleComparisonFilterChange();
-                }
-            });
-
-            comparisonCityFilter.addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/[0-9]/g, '');
-                const { currentSales, historySales } = getComparisonFilteredData({ excludeFilter: 'city' });
-                comparisonCitySuggestions.classList.remove('manual-hide');
-                updateComparisonCitySuggestions([...currentSales, ...historySales]);
-            });
-            comparisonCityFilter.addEventListener('focus', () => {
-                const { currentSales, historySales } = getComparisonFilteredData({ excludeFilter: 'city' });
-                comparisonCitySuggestions.classList.remove('manual-hide');
-                updateComparisonCitySuggestions([...currentSales, ...historySales]);
-            });
-            comparisonCityFilter.addEventListener('blur', () => setTimeout(() => comparisonCitySuggestions.classList.add('hidden'), 150));
-            comparisonCityFilter.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    comparisonCitySuggestions.classList.add('hidden', 'manual-hide');
-                    handleComparisonFilterChange();
-                    e.target.blur();
-                }
-            });
-            comparisonCitySuggestions.addEventListener('click', (e) => {
-                if (e.target.tagName === 'DIV') {
-                    comparisonCityFilter.value = e.target.textContent;
-                    comparisonCitySuggestions.classList.add('hidden');
-                    handleComparisonFilterChange();
-                }
-            });
-
-            clearComparisonFiltersBtn.addEventListener('click', resetComparisonFilters);
-
-            const handleProductFilterChange = (e, selectedArray) => {
-                 if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedArray.includes(value)) selectedArray.push(value);
-                    } else {
-                        const index = selectedArray.indexOf(value);
-                        if (index > -1) selectedArray.splice(index, 1);
-                    }
-                    return true;
-                }
-                return false;
-            }
-
-            comparisonProductFilterBtn.addEventListener('click', () => {
-                updateComparisonProductFilter();
-                comparisonProductFilterDropdown.classList.toggle('hidden');
-            });
-
-            const debouncedComparisonProductSearch = debounce(updateComparisonProductFilter, 250);
-            comparisonProductFilterDropdown.addEventListener('input', (e) => {
-                if (e.target.id === 'comparison-product-search-input') {
-                    debouncedComparisonProductSearch();
-                }
-            });
-            comparisonProductFilterDropdown.addEventListener('change', (e) => {
-                if(e.target.dataset.filterType === 'comparison' && handleProductFilterChange(e, selectedComparisonProducts)) {
-                    handleComparisonFilterChange();
-                    updateComparisonProductFilter();
-                }
-            });
-            stockProductFilterBtn.addEventListener('click', () => {
-                updateStockProductFilter();
-                stockProductFilterDropdown.classList.toggle('hidden');
-            });
-
-            const debouncedStockProductSearch = debounce(updateStockProductFilter, 250);
-            stockProductFilterDropdown.addEventListener('input', (e) => {
-                if (e.target.id === 'stock-product-search-input') {
-                    debouncedStockProductSearch();
-                }
-            });
-
-            stockProductFilterDropdown.addEventListener('change', (e) => {
-                if(e.target.dataset.filterType === 'stock' && handleProductFilterChange(e, selectedStockProducts)) {
-                    handleStockFilterChange();
-                    updateStockProductFilter();
-                }
-            });
-
-            stockFilialFilter.addEventListener('change', handleStockFilterChange);
-            clearStockFiltersBtn.addEventListener('click', resetStockFilters);
-            stockFornecedorToggleContainer.addEventListener('click', (e) => { if (e.target.tagName === 'BUTTON') { const fornecedor = e.target.dataset.fornecedor; if (currentStockFornecedor === fornecedor) { currentStockFornecedor = ''; e.target.classList.remove('active'); } else { currentStockFornecedor = fornecedor; stockFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); e.target.classList.add('active'); } handleStockFilterChange(); } });
-
-            const stockSupervisorFilterBtn = document.getElementById('stock-supervisor-filter-btn');
-            const stockSupervisorFilterDropdown = document.getElementById('stock-supervisor-filter-dropdown');
-            stockSupervisorFilterBtn.addEventListener('click', () => stockSupervisorFilterDropdown.classList.toggle('hidden'));
-            stockSupervisorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedStockSupervisors.push(value);
-                    else selectedStockSupervisors = selectedStockSupervisors.filter(s => s !== value);
-
-                    selectedStockSellers = [];
-                    handleStockFilterChange();
-                }
-            });
-
-            stockVendedorFilterBtn.addEventListener('click', () => stockVendedorFilterDropdown.classList.toggle('hidden'));
-            stockVendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedStockSellers.push(value); else selectedStockSellers = selectedStockSellers.filter(s => s !== value); handleStockFilterChange({ skipFilter: 'seller' }); } });
-            stockSupplierFilterBtn.addEventListener('click', () => stockSupplierFilterDropdown.classList.toggle('hidden'));
-            stockSupplierFilterDropdown.addEventListener('change', (e) => { if (e.target.dataset.filterType === 'stock' && e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) { if(!selectedStockSuppliers.includes(value)) selectedStockSuppliers.push(value); } else { selectedStockSuppliers = selectedStockSuppliers.filter(s => s !== value); } handleStockFilterChange({ skipFilter: 'supplier' }); } });
-
-            stockTipoVendaFilterBtn.addEventListener('click', () => stockTipoVendaFilterDropdown.classList.toggle('hidden'));
-            stockTipoVendaFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedStockTiposVenda.includes(value)) selectedStockTiposVenda.push(value);
-                    } else {
-                        selectedStockTiposVenda = selectedStockTiposVenda.filter(s => s !== value);
-                    }
-                    selectedStockTiposVenda = updateTipoVendaFilter(stockTipoVendaFilterDropdown, stockTipoVendaFilterText, selectedStockTiposVenda, [...allSalesData, ...allHistoryData]);
-                    handleStockFilterChange({ skipFilter: 'tipoVenda' });
-                }
-            });
-
-            stockCityFilter.addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/[0-9]/g, '');
-                const cityData = getStockFilteredData({ excludeFilter: 'city' });
-                stockCitySuggestions.classList.remove('manual-hide');
-                updateStockCitySuggestions([...cityData.sales, ...cityData.history]);
-            });
-            stockCityFilter.addEventListener('focus', () => {
-                const cityData = getStockFilteredData({ excludeFilter: 'city' });
-                stockCitySuggestions.classList.remove('manual-hide');
-                updateStockCitySuggestions([...cityData.sales, ...cityData.history]);
-            });
-            stockCityFilter.addEventListener('blur', () => setTimeout(() => stockCitySuggestions.classList.add('hidden'), 150));
-            stockCityFilter.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    stockCitySuggestions.classList.add('hidden', 'manual-hide');
-                    handleStockFilterChange();
-                    e.target.blur();
-                }
-            });
-            stockCitySuggestions.addEventListener('click', (e) => {
-                if (e.target.tagName === 'DIV') {
-                    stockCityFilter.value = e.target.textContent;
-                    stockCitySuggestions.classList.add('hidden');
-                    handleStockFilterChange();
-                }
-            });
-
-            stockComRedeBtn.addEventListener('click', () => stockRedeFilterDropdown.classList.toggle('hidden'));
-            stockRedeGroupContainer.addEventListener('click', (e) => {
-                if(e.target.closest('button')) {
-                    const button = e.target.closest('button');
-                    stockRedeGroupFilter = button.dataset.group;
-                    stockRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    button.classList.add('active');
-                    if (stockRedeGroupFilter !== 'com_rede') {
-                        stockRedeFilterDropdown.classList.add('hidden');
-                        selectedStockRedes = [];
-                    }
-                    updateRedeFilter(stockRedeFilterDropdown, stockComRedeBtnText, selectedStockRedes, allClientsData, 'Com Rede');
-                    handleStockFilterChange();
-                }
-            });
-            stockRedeFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedStockRedes.push(value);
-                    else selectedStockRedes = selectedStockRedes.filter(r => r !== value);
-                    selectedStockRedes = updateRedeFilter(stockRedeFilterDropdown, stockComRedeBtnText, selectedStockRedes, allClientsData, 'Com Rede');
-                    handleStockFilterChange();
-                }
-            });
-
-
-            comparisonTendencyToggle.addEventListener('click', () => {
-                useTendencyComparison = !useTendencyComparison;
-                comparisonTendencyToggle.textContent = useTendencyComparison ? 'Ver Dados Reais' : 'Calcular Tendência';
-                comparisonTendencyToggle.classList.toggle('bg-orange-600');
-                comparisonTendencyToggle.classList.toggle('hover:bg-orange-500');
-                comparisonTendencyToggle.classList.toggle('bg-purple-600');
-                comparisonTendencyToggle.classList.toggle('hover:bg-purple-500');
-                updateComparison();
-            });
-
-            toggleWeeklyBtn.addEventListener('click', () => {
-                comparisonChartType = 'weekly';
-                toggleWeeklyBtn.classList.add('active');
-                toggleMonthlyBtn.classList.remove('active');
-                document.getElementById('comparison-monthly-metric-container').classList.add('hidden');
-                updateComparison();
-            });
-
-            toggleMonthlyBtn.addEventListener('click', () => {
-                comparisonChartType = 'monthly';
-                toggleMonthlyBtn.classList.add('active');
-                toggleWeeklyBtn.classList.remove('active');
-                // The toggle visibility is handled inside updateComparisonView based on mode
-                updateComparison();
-            });
-
-            // New Metric Toggle Listeners
-            const toggleMonthlyFatBtn = document.getElementById('toggle-monthly-fat-btn');
-            const toggleMonthlyClientsBtn = document.getElementById('toggle-monthly-clients-btn');
-
-            if (toggleMonthlyFatBtn && toggleMonthlyClientsBtn) {
-                toggleMonthlyFatBtn.addEventListener('click', () => {
-                    comparisonMonthlyMetric = 'faturamento';
-                    toggleMonthlyFatBtn.classList.add('active');
-                    toggleMonthlyClientsBtn.classList.remove('active');
-                    updateComparison();
-                });
-
-                toggleMonthlyClientsBtn.addEventListener('click', () => {
-                    comparisonMonthlyMetric = 'clientes';
-                    toggleMonthlyClientsBtn.classList.add('active');
-                    toggleMonthlyFatBtn.classList.remove('active');
-                    updateComparison();
-                });
-            }
-
-            mainHolidayPickerBtn.addEventListener('click', () => {
-                renderCalendar(calendarState.year, calendarState.month);
-                holidayModal.classList.remove('hidden');
-            });
-            comparisonHolidayPickerBtn.addEventListener('click', () => {
-                renderCalendar(calendarState.year, calendarState.month);
-                holidayModal.classList.remove('hidden');
-            });
-            holidayModalCloseBtn.addEventListener('click', () => holidayModal.classList.add('hidden'));
-            holidayModalDoneBtn.addEventListener('click', () => {
-                holidayModal.classList.add('hidden');
-                const holidayBtnText = selectedHolidays.length > 0 ? `${selectedHolidays.length} feriado(s)` : 'Selecionar Feriados';
-                comparisonHolidayPickerBtn.textContent = holidayBtnText;
-                mainHolidayPickerBtn.textContent = holidayBtnText;
-                updateComparison();
-                updateDashboard();
-            });
-            calendarContainer.addEventListener('click', (e) => {
-                if (e.target.id === 'prev-month-btn') {
-                    calendarState.month--;
-                    if (calendarState.month < 0) {
-                        calendarState.month = 11;
-                        calendarState.year--;
-                    }
-                    renderCalendar(calendarState.year, calendarState.month);
-                } else if (e.target.id === 'next-month-btn') {
-                    calendarState.month++;
-                    if (calendarState.month > 11) {
-                        calendarState.month = 0;
-                        calendarState.year++;
-                    }
-                    renderCalendar(calendarState.year, calendarState.month);
-                } else if (e.target.dataset.date) {
-                    const dateString = e.target.dataset.date;
-                    const index = selectedHolidays.indexOf(dateString);
-                    if (index > -1) {
-                        selectedHolidays.splice(index, 1);
-                    } else {
-                        selectedHolidays.push(dateString);
-                    }
-                    renderCalendar(calendarState.year, calendarState.month);
-                }
-            });
-
-
-            document.getElementById('export-active-pdf-btn').addEventListener('click', () => exportClientsPDF(activeClientsForExport, 'Relatório de Clientes Ativos no Mês', 'clientes_ativos', true));
-            document.getElementById('export-inactive-pdf-btn').addEventListener('click', () => exportClientsPDF(inactiveClientsForExport, 'Relatório de Clientes Sem Vendas no Mês', 'clientes_sem_vendas', false));
-            modalCloseBtn.addEventListener('click', () => modal.classList.add('hidden'));
-            clientModalCloseBtn.addEventListener('click', () => clientModal.classList.add('hidden'));
-            faturamentoBtn.addEventListener('click', () => { currentProductMetric = 'faturamento'; faturamentoBtn.classList.add('active'); pesoBtn.classList.remove('active'); updateDashboard(); });
-            pesoBtn.addEventListener('click', () => { currentProductMetric = 'peso'; pesoBtn.classList.add('active'); faturamentoBtn.classList.remove('active'); updateDashboard(); });
-
-            // --- Innovations View Filters ---
-            const updateInnovations = () => {
-                markDirty('inovacoes');
-                updateInnovationsMonthView();
-            };
-
-            innovationsMonthCategoryFilter.addEventListener('change', updateInnovations);
-
-            const debouncedUpdateInnovationsMonth = debounce(updateInnovations, 400);
-
-            const innovationsMonthSupervisorFilterBtn = document.getElementById('innovations-month-supervisor-filter-btn');
-            const innovationsMonthSupervisorFilterDropdown = document.getElementById('innovations-month-supervisor-filter-dropdown');
-            innovationsMonthSupervisorFilterBtn.addEventListener('click', () => innovationsMonthSupervisorFilterDropdown.classList.toggle('hidden'));
-            innovationsMonthSupervisorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedInnovationsSupervisors.push(value);
-                    else selectedInnovationsSupervisors = selectedInnovationsSupervisors.filter(s => s !== value);
-
-                    selectedInnovationsSupervisors = updateSupervisorFilter(innovationsMonthSupervisorFilterDropdown, document.getElementById('innovations-month-supervisor-filter-text'), selectedInnovationsSupervisors, allSalesData, true);
-
-                    selectedInnovationsMonthSellers = [];
-                    updateSellerFilter(selectedInnovationsSupervisors, innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, selectedInnovationsMonthSellers, allSalesData);
-                    debouncedUpdateInnovationsMonth();
-                }
-            });
-
-            innovationsMonthVendedorFilterBtn.addEventListener('click', () => innovationsMonthVendedorFilterDropdown.classList.toggle('hidden'));
-            innovationsMonthVendedorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedInnovationsMonthSellers.includes(value)) selectedInnovationsMonthSellers.push(value);
-                    } else {
-                        selectedInnovationsMonthSellers = selectedInnovationsMonthSellers.filter(s => s !== value);
-                    }
-                    updateSellerFilter(selectedInnovationsSupervisors, innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, selectedInnovationsMonthSellers, allSalesData);
-                    debouncedUpdateInnovationsMonth();
-                }
-            });
-
-            innovationsMonthCityFilter.addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/[0-9]/g, '');
-                const cityDataSource = getInnovationsMonthFilteredData({ excludeFilter: 'city' }).clients;
-                innovationsMonthCitySuggestions.classList.remove('manual-hide');
-                updateCitySuggestions(innovationsMonthCityFilter, innovationsMonthCitySuggestions, cityDataSource);
-            });
-            innovationsMonthCityFilter.addEventListener('focus', () => {
-                const cityDataSource = getInnovationsMonthFilteredData({ excludeFilter: 'city' }).clients;
-                innovationsMonthCitySuggestions.classList.remove('manual-hide');
-                updateCitySuggestions(innovationsMonthCityFilter, innovationsMonthCitySuggestions, cityDataSource);
-            });
-            innovationsMonthCityFilter.addEventListener('blur', () => setTimeout(() => innovationsMonthCitySuggestions.classList.add('hidden'), 150));
-            innovationsMonthCityFilter.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    innovationsMonthCitySuggestions.classList.add('hidden', 'manual-hide');
-                    debouncedUpdateInnovationsMonth();
-                    e.target.blur();
-                }
-            });
-            innovationsMonthCitySuggestions.addEventListener('click', (e) => {
-                if (e.target.tagName === 'DIV') {
-                    innovationsMonthCityFilter.value = e.target.textContent;
-                    innovationsMonthCitySuggestions.classList.add('hidden');
-                    debouncedUpdateInnovationsMonth();
-                }
-            });
-
-            innovationsMonthFilialFilter.addEventListener('change', debouncedUpdateInnovationsMonth);
-            clearInnovationsMonthFiltersBtn.addEventListener('click', () => { resetInnovationsMonthFilters(); markDirty('inovacoes'); });
-            exportInnovationsMonthPdfBtn.addEventListener('click', exportInnovationsMonthPDF);
-
-            innovationsMonthTipoVendaFilterBtn.addEventListener('click', () => innovationsMonthTipoVendaFilterDropdown.classList.toggle('hidden'));
-            innovationsMonthTipoVendaFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedInnovationsMonthTiposVenda.includes(value)) selectedInnovationsMonthTiposVenda.push(value);
-                    } else {
-                        selectedInnovationsMonthTiposVenda = selectedInnovationsMonthTiposVenda.filter(s => s !== value);
-                    }
-                    selectedInnovationsMonthTiposVenda = updateTipoVendaFilter(innovationsMonthTipoVendaFilterDropdown, innovationsMonthTipoVendaFilterText, selectedInnovationsMonthTiposVenda, [...allSalesData, ...allHistoryData]);
-                    debouncedUpdateInnovationsMonth();
-                }
-            });
-
-
-            document.getElementById('export-coverage-pdf-btn').addEventListener('click', exportCoveragePDF);
-
-            const coverageChartToggleBtn = document.getElementById('coverage-chart-toggle-btn');
-            if (coverageChartToggleBtn) {
-                coverageChartToggleBtn.addEventListener('click', () => {
-                    currentCoverageChartMode = currentCoverageChartMode === 'city' ? 'seller' : 'city';
-                    updateCoverageView();
-                });
-            }
-
-            // --- Mix View Event Listeners ---
-            // --- Goals View Event Listeners ---
-            const updateGoals = () => {
+const updateGoals = () => {
                 markDirty('goals');
                 handleGoalsFilterChange();
             };
-
-            document.addEventListener('goalsCleared', () => {
+document.addEventListener('goalsCleared', () => {
                 updateGoals();
             });
-
-            const debouncedUpdateGoals = debounce(updateGoals, 400);
-
-            async function loadGoalsFromSupabase() {
+const debouncedUpdateGoals = debounce(updateGoals, 400);
+async function loadGoalsFromSupabase() {
                 try {
                     const monthKey = new Date().toISOString().slice(0, 7);
                     const { data, error } = await window.supabaseClient
@@ -13865,13 +5166,9 @@ const supervisorGroups = new Map();
                     console.error('Exceção ao carregar metas:', err);
                 }
             }
-
-            // Trigger Load
-            loadGoalsFromSupabase();
-
-            // Sub-tabs Switching
-            const goalsSubTabsContainer = document.getElementById('goals-sub-tabs-container');
-            if (goalsSubTabsContainer) {
+loadGoalsFromSupabase();
+const goalsSubTabsContainer = document.getElementById('goals-sub-tabs-container');
+if (goalsSubTabsContainer) {
                 goalsSubTabsContainer.addEventListener('click', (e) => {
                     const btn = e.target.closest('.goals-sub-tab');
                     if (!btn) return;
@@ -13927,28 +5224,21 @@ const supervisorGroups = new Map();
                     updateGoals();
                 });
             }
-
-            // Category Toggle Logic
-            const btnPepsico = document.getElementById('goals-category-pepsico-btn');
-            const btnElmaChips = document.getElementById('goals-category-elmachips-btn');
-            const btnFoods = document.getElementById('goals-category-foods-btn');
-            const btnSummary = document.getElementById('goals-category-summary-btn');
-            const subTabsPepsico = document.getElementById('goals-sub-tabs-pepsico');
-            const subTabsElmaChips = document.getElementById('goals-sub-tabs-elmachips');
-            const subTabsFoods = document.getElementById('goals-sub-tabs-foods');
-
-            // Containers
-            const goalsMainContainer = document.getElementById('goals-input-cards');
-            const goalsTableContainer = document.getElementById('goals-table-container'); // Main table wrapper
-            const goalsFiltersContainer = document.querySelector('#goals-gv-content > div.mb-4'); // Filters wrapper
-            const goalsSummaryContainer = document.getElementById('goals-summary-content');
-
-            // Filter Wrappers
-            const wrapperSupervisor = document.getElementById('goals-gv-supervisor-filter-wrapper');
-            const wrapperSeller = document.getElementById('goals-gv-seller-filter-wrapper');
-            const wrapperCodCli = document.getElementById('goals-gv-codcli-filter-wrapper');
-
-            const toggleGoalsView = (view) => {
+const btnPepsico = document.getElementById('goals-category-pepsico-btn');
+const btnElmaChips = document.getElementById('goals-category-elmachips-btn');
+const btnFoods = document.getElementById('goals-category-foods-btn');
+const btnSummary = document.getElementById('goals-category-summary-btn');
+const subTabsPepsico = document.getElementById('goals-sub-tabs-pepsico');
+const subTabsElmaChips = document.getElementById('goals-sub-tabs-elmachips');
+const subTabsFoods = document.getElementById('goals-sub-tabs-foods');
+const goalsMainContainer = document.getElementById('goals-input-cards');
+const goalsTableContainer = document.getElementById('goals-table-container');
+const goalsFiltersContainer = document.querySelector('#goals-gv-content > div.mb-4');
+const goalsSummaryContainer = document.getElementById('goals-summary-content');
+const wrapperSupervisor = document.getElementById('goals-gv-supervisor-filter-wrapper');
+const wrapperSeller = document.getElementById('goals-gv-seller-filter-wrapper');
+const wrapperCodCli = document.getElementById('goals-gv-codcli-filter-wrapper');
+const toggleGoalsView = (view) => {
                 // Reset Buttons
                 [btnPepsico, btnElmaChips, btnFoods, btnSummary].forEach(btn => {
                     if (btn) {
@@ -14020,16 +5310,13 @@ const supervisorGroups = new Map();
                     }
                 }
             };
-
-            if (btnPepsico && btnElmaChips && btnFoods && btnSummary) {
+if (btnPepsico && btnElmaChips && btnFoods && btnSummary) {
                 btnPepsico.addEventListener('click', () => toggleGoalsView('pepsico'));
                 btnElmaChips.addEventListener('click', () => toggleGoalsView('elmachips'));
                 btnFoods.addEventListener('click', () => toggleGoalsView('foods'));
                 btnSummary.addEventListener('click', () => toggleGoalsView('summary'));
             }
-
-            // Tab Switching
-            document.getElementById('goals-tabs').addEventListener('click', (e) => {
+document.getElementById('goals-tabs').addEventListener('click', (e) => {
                 if (e.target.tagName === 'BUTTON') {
                     const tab = e.target.dataset.tab;
                     document.querySelectorAll('#goals-tabs button').forEach(btn => {
@@ -14052,12 +5339,8 @@ const supervisorGroups = new Map();
                     }
                 }
             });
-
-            // SV Sub-tabs Logic and Toggle Logic REMOVED (Replaced by Single Table View)
-
-            // GV Filters
-            goalsGvSupervisorFilterBtn.addEventListener('click', () => goalsGvSupervisorFilterDropdown.classList.toggle('hidden'));
-            goalsGvSupervisorFilterDropdown.addEventListener('change', (e) => {
+goalsGvSupervisorFilterBtn.addEventListener('click', () => goalsGvSupervisorFilterDropdown.classList.toggle('hidden'));
+goalsGvSupervisorFilterDropdown.addEventListener('change', (e) => {
                 if (e.target.type === 'checkbox') {
                     const { value, checked } = e.target;
                     if (checked) selectedGoalsGvSupervisors.push(value);
@@ -14073,9 +5356,8 @@ const supervisorGroups = new Map();
                     updateGoals();
                 }
             });
-
-            goalsGvSellerFilterBtn.addEventListener('click', () => goalsGvSellerFilterDropdown.classList.toggle('hidden'));
-            goalsGvSellerFilterDropdown.addEventListener('change', (e) => {
+goalsGvSellerFilterBtn.addEventListener('click', () => goalsGvSellerFilterDropdown.classList.toggle('hidden'));
+goalsGvSellerFilterDropdown.addEventListener('change', (e) => {
                 if (e.target.type === 'checkbox') {
                     const { value, checked } = e.target;
                     if (checked) selectedGoalsGvSellers.push(value);
@@ -14086,20 +5368,16 @@ const supervisorGroups = new Map();
                     updateGoals();
                 }
             });
-
-            goalsGvCodcliFilter.addEventListener('input', (e) => {
+goalsGvCodcliFilter.addEventListener('input', (e) => {
                 e.target.value = e.target.value.replace(/[^0-9]/g, '');
                 debouncedUpdateGoals();
             });
-
-            // --- Summary View Independent Filters ---
-            const goalsSummarySupervisorFilterBtn = document.getElementById('goals-summary-supervisor-filter-btn');
-            const goalsSummarySupervisorFilterDropdown = document.getElementById('goals-summary-supervisor-filter-dropdown');
-            const goalsSummarySellerFilterBtn = document.getElementById('goals-summary-seller-filter-btn');
-            const goalsSummarySellerFilterDropdown = document.getElementById('goals-summary-seller-filter-dropdown');
-            const clearGoalsSummaryFiltersBtn = document.getElementById('clear-goals-summary-filters-btn');
-
-            if (goalsSummarySupervisorFilterBtn && goalsSummarySupervisorFilterDropdown) {
+const goalsSummarySupervisorFilterBtn = document.getElementById('goals-summary-supervisor-filter-btn');
+const goalsSummarySupervisorFilterDropdown = document.getElementById('goals-summary-supervisor-filter-dropdown');
+const goalsSummarySellerFilterBtn = document.getElementById('goals-summary-seller-filter-btn');
+const goalsSummarySellerFilterDropdown = document.getElementById('goals-summary-seller-filter-dropdown');
+const clearGoalsSummaryFiltersBtn = document.getElementById('clear-goals-summary-filters-btn');
+if (goalsSummarySupervisorFilterBtn && goalsSummarySupervisorFilterDropdown) {
                 goalsSummarySupervisorFilterBtn.addEventListener('click', () => goalsSummarySupervisorFilterDropdown.classList.toggle('hidden'));
 
                 goalsSummarySupervisorFilterDropdown.addEventListener('change', (e) => {
@@ -14109,17 +5387,16 @@ const supervisorGroups = new Map();
                         else selectedGoalsSummarySupervisors = selectedGoalsSummarySupervisors.filter(s => s !== value);
 
                         selectedGoalsSummarySupervisors = updateSupervisorFilter(goalsSummarySupervisorFilterDropdown, document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, allSalesData, true);
-                        
+
                         // Update Seller Filter Cascade
                         selectedGoalsSummarySellers = [];
                         selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, goalsSummarySellerFilterDropdown, document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData);
-                        
+
                         updateGoalsSummaryView();
                     }
                 });
             }
-
-            if (goalsSummarySellerFilterBtn && goalsSummarySellerFilterDropdown) {
+if (goalsSummarySellerFilterBtn && goalsSummarySellerFilterDropdown) {
                 goalsSummarySellerFilterBtn.addEventListener('click', () => goalsSummarySellerFilterDropdown.classList.toggle('hidden'));
 
                 goalsSummarySellerFilterDropdown.addEventListener('change', (e) => {
@@ -14135,8 +5412,7 @@ const supervisorGroups = new Map();
                     }
                 });
             }
-
-            if (clearGoalsSummaryFiltersBtn) {
+if (clearGoalsSummaryFiltersBtn) {
                 clearGoalsSummaryFiltersBtn.addEventListener('click', () => {
                     selectedGoalsSummarySupervisors = [];
                     selectedGoalsSummarySellers = [];
@@ -14145,9 +5421,7 @@ const supervisorGroups = new Map();
                     updateGoalsSummaryView();
                 });
             }
-
-            // Close dropdowns on outside click
-            document.addEventListener('click', (e) => {
+document.addEventListener('click', (e) => {
                 if (goalsSummarySupervisorFilterBtn && goalsSummarySupervisorFilterDropdown) {
                     if (!goalsSummarySupervisorFilterBtn.contains(e.target) && !goalsSummarySupervisorFilterDropdown.contains(e.target)) {
                         goalsSummarySupervisorFilterDropdown.classList.add('hidden');
@@ -14159,9 +5433,8 @@ const supervisorGroups = new Map();
                     }
                 }
             });
-
-            const btnDistributeFat = document.getElementById('btn-distribute-fat');
-            if (btnDistributeFat) {
+const btnDistributeFat = document.getElementById('btn-distribute-fat');
+if (btnDistributeFat) {
                 btnDistributeFat.addEventListener('click', () => {
                     const filterDesc = getFilterDescription();
                     const val = document.getElementById('goal-global-fat').value;
@@ -14170,9 +5443,8 @@ const supervisorGroups = new Map();
                     });
                 });
             }
-
-            const btnDistributeVol = document.getElementById('btn-distribute-vol');
-            if (btnDistributeVol) {
+const btnDistributeVol = document.getElementById('btn-distribute-vol');
+if (btnDistributeVol) {
                 btnDistributeVol.addEventListener('click', () => {
                     const filterDesc = getFilterDescription();
                     const val = document.getElementById('goal-global-vol').value;
@@ -14181,9 +5453,8 @@ const supervisorGroups = new Map();
                     });
                 });
             }
-
-            const btnDistributeMixSalty = document.getElementById('btn-distribute-mix-salty');
-            if (btnDistributeMixSalty) {
+const btnDistributeMixSalty = document.getElementById('btn-distribute-mix-salty');
+if (btnDistributeMixSalty) {
                 btnDistributeMixSalty.addEventListener('click', () => {
                     const sellerName = selectedGoalsGvSellers[0];
                     if (!sellerName) return;
@@ -14209,9 +5480,8 @@ const supervisorGroups = new Map();
                     });
                 });
             }
-
-            const btnDistributeMixFoods = document.getElementById('btn-distribute-mix-foods');
-            if (btnDistributeMixFoods) {
+const btnDistributeMixFoods = document.getElementById('btn-distribute-mix-foods');
+if (btnDistributeMixFoods) {
                 btnDistributeMixFoods.addEventListener('click', () => {
                     const sellerName = selectedGoalsGvSellers[0];
                     if (!sellerName) return;
@@ -14222,19 +5492,11 @@ const supervisorGroups = new Map();
                     });
                 });
             }
-
-            // Add Input Listeners for Real-time State Updates
-            const fatInput = document.getElementById('goal-global-fat');
-            const volInput = document.getElementById('goal-global-vol');
-
-            // REMOVED: Automatic update on change/input to prevent overwriting user input before distribution.
-            // Values are now read directly from the input when the "Distribute" button is clicked.
-
-            clearGoalsGvFiltersBtn.addEventListener('click', () => { resetGoalsGvFilters(); markDirty('goals'); });
-
-            // SV Filters
-            goalsSvSupervisorFilterBtn.addEventListener('click', () => goalsSvSupervisorFilterDropdown.classList.toggle('hidden'));
-            goalsSvSupervisorFilterDropdown.addEventListener('change', (e) => {
+const fatInput = document.getElementById('goal-global-fat');
+const volInput = document.getElementById('goal-global-vol');
+clearGoalsGvFiltersBtn.addEventListener('click', () => { resetGoalsGvFilters(); markDirty('goals'); });
+goalsSvSupervisorFilterBtn.addEventListener('click', () => goalsSvSupervisorFilterDropdown.classList.toggle('hidden'));
+goalsSvSupervisorFilterDropdown.addEventListener('change', (e) => {
                 if (e.target.type === 'checkbox') {
                     const { value, checked } = e.target;
                     if (checked) selectedGoalsSvSupervisors.push(value);
@@ -14244,662 +5506,50 @@ const supervisorGroups = new Map();
                     updateGoalsSvView();
                 }
             });
-
-            document.getElementById('goals-sv-export-xlsx-btn').addEventListener('click', exportGoalsSvXLSX);
-
-            document.addEventListener('click', (e) => {
+document.getElementById('goals-sv-export-xlsx-btn').addEventListener('click', exportGoalsSvXLSX);
+document.addEventListener('click', (e) => {
                 if (!goalsGvSupervisorFilterBtn.contains(e.target) && !goalsGvSupervisorFilterDropdown.contains(e.target)) goalsGvSupervisorFilterDropdown.classList.add('hidden');
                 if (!goalsGvSellerFilterBtn.contains(e.target) && !goalsGvSellerFilterDropdown.contains(e.target)) goalsGvSellerFilterDropdown.classList.add('hidden');
                 if (!goalsSvSupervisorFilterBtn.contains(e.target) && !goalsSvSupervisorFilterDropdown.contains(e.target)) goalsSvSupervisorFilterDropdown.classList.add('hidden');
             });
-
-            document.getElementById('goals-prev-page-btn').addEventListener('click', () => {
+document.getElementById('goals-prev-page-btn').addEventListener('click', () => {
                 if (goalsTableState.currentPage > 1) {
                     goalsTableState.currentPage--;
                     updateGoalsView();
                 }
             });
-
-            const goalsGvExportPdfBtn = document.getElementById('goals-gv-export-pdf-btn');
-            if(goalsGvExportPdfBtn) {
+const goalsGvExportPdfBtn = document.getElementById('goals-gv-export-pdf-btn');
+if(goalsGvExportPdfBtn) {
                 goalsGvExportPdfBtn.addEventListener('click', exportGoalsGvPDF);
             }
-
-            const goalsGvExportXlsxBtn = document.getElementById('goals-gv-export-xlsx-btn');
-            if(goalsGvExportXlsxBtn) {
+const goalsGvExportXlsxBtn = document.getElementById('goals-gv-export-xlsx-btn');
+if(goalsGvExportXlsxBtn) {
                 goalsGvExportXlsxBtn.addEventListener('click', exportGoalsCurrentTabXLSX);
             }
-            document.getElementById('goals-next-page-btn').addEventListener('click', () => {
+document.getElementById('goals-next-page-btn').addEventListener('click', () => {
                 if (goalsTableState.currentPage < goalsTableState.totalPages) {
                     goalsTableState.currentPage++;
                     updateGoalsView();
                 }
             });
+}
 
-            // --- Meta Vs Realizado Listeners ---
-            const updateMetaRealizado = () => {
-                markDirty('metaRealizado');
-                updateMetaRealizadoView();
-            };
+initializeOptimizedDataStructures();
 
-            const debouncedUpdateMetaRealizado = debounce(updateMetaRealizado, 400);
+selectedGoalsGvSupervisors = updateSupervisorFilter(goalsGvSupervisorFilterDropdown, goalsGvSupervisorFilterText, selectedGoalsGvSupervisors, allSalesData);
 
-            // Supervisor Filter
-            const metaRealizadoSupervisorFilterBtn = document.getElementById('meta-realizado-supervisor-filter-btn');
-            const metaRealizadoSupervisorFilterDropdown = document.getElementById('meta-realizado-supervisor-filter-dropdown');
-            metaRealizadoSupervisorFilterBtn.addEventListener('click', () => metaRealizadoSupervisorFilterDropdown.classList.toggle('hidden'));
-            metaRealizadoSupervisorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedMetaRealizadoSupervisors.push(value);
-                    else selectedMetaRealizadoSupervisors = selectedMetaRealizadoSupervisors.filter(s => s !== value);
+selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, [...allSalesData, ...allHistoryData]);
 
-                    selectedMetaRealizadoSupervisors = updateSupervisorFilter(metaRealizadoSupervisorFilterDropdown, document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
-                    
-                    // Reset or Filter Sellers
-                    selectedMetaRealizadoSellers = [];
-                    selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData]);
-                    
-                    debouncedUpdateMetaRealizado();
-                }
-            });
+selectedGoalsSvSupervisors = updateSupervisorFilter(goalsSvSupervisorFilterDropdown, goalsSvSupervisorFilterText, selectedGoalsSvSupervisors, allSalesData);
 
-            // Seller Filter
-            const metaRealizadoSellerFilterBtn = document.getElementById('meta-realizado-vendedor-filter-btn');
-            const metaRealizadoSellerFilterDropdown = document.getElementById('meta-realizado-vendedor-filter-dropdown');
-            metaRealizadoSellerFilterBtn.addEventListener('click', () => metaRealizadoSellerFilterDropdown.classList.toggle('hidden'));
-            metaRealizadoSellerFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedMetaRealizadoSellers.includes(value)) selectedMetaRealizadoSellers.push(value);
-                    } else {
-                        selectedMetaRealizadoSellers = selectedMetaRealizadoSellers.filter(s => s !== value);
-                    }
-                    selectedMetaRealizadoSellers = updateSellerFilter(selectedMetaRealizadoSupervisors, metaRealizadoSellerFilterDropdown, document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData], true);
-                    debouncedUpdateMetaRealizado();
-                }
-            });
-
-            // Supplier Filter
-            const metaRealizadoSupplierFilterBtn = document.getElementById('meta-realizado-supplier-filter-btn');
-            const metaRealizadoSupplierFilterDropdown = document.getElementById('meta-realizado-supplier-filter-dropdown');
-            metaRealizadoSupplierFilterBtn.addEventListener('click', () => metaRealizadoSupplierFilterDropdown.classList.toggle('hidden'));
-            metaRealizadoSupplierFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedMetaRealizadoSuppliers.includes(value)) selectedMetaRealizadoSuppliers.push(value);
-                    } else {
-                        selectedMetaRealizadoSuppliers = selectedMetaRealizadoSuppliers.filter(s => s !== value);
-                    }
-                    selectedMetaRealizadoSuppliers = updateSupplierFilter(metaRealizadoSupplierFilterDropdown, document.getElementById('meta-realizado-supplier-filter-text'), selectedMetaRealizadoSuppliers, pepsicoSuppliersSource, 'metaRealizado', true);
-                    debouncedUpdateMetaRealizado();
-                }
-            });
-
-            // Pasta Filter
-            const metaRealizadoPastaContainer = document.getElementById('meta-realizado-pasta-toggle-container');
-            if (metaRealizadoPastaContainer) {
-                metaRealizadoPastaContainer.addEventListener('click', (e) => {
-                    if (e.target.tagName === 'BUTTON') {
-                        const pasta = e.target.dataset.pasta;
-                        
-                        // Toggle logic: If clicking active button, deselect (revert to PEPSICO/All).
-                        // If clicking inactive, select it.
-                        if (currentMetaRealizadoPasta === pasta) {
-                            currentMetaRealizadoPasta = 'PEPSICO'; // Revert to default
-                        } else {
-                            currentMetaRealizadoPasta = pasta;
-                        }
-
-                        // Update UI
-                        metaRealizadoPastaContainer.querySelectorAll('.pasta-btn').forEach(b => {
-                            if (b.dataset.pasta === currentMetaRealizadoPasta) {
-                                b.classList.remove('bg-slate-700');
-                                b.classList.add('bg-teal-600', 'hover:bg-teal-500'); // Active State
-                            } else {
-                                b.classList.add('bg-slate-700');
-                                b.classList.remove('bg-teal-600', 'hover:bg-teal-500');
-                            }
-                        });
-                        
-                        debouncedUpdateMetaRealizado();
-                    }
-                });
-                
-                // Initialize default active button style
-                metaRealizadoPastaContainer.querySelectorAll('.pasta-btn').forEach(b => {
-                    if (b.dataset.pasta === currentMetaRealizadoPasta) {
-                        b.classList.remove('bg-slate-700');
-                        b.classList.add('bg-teal-600', 'hover:bg-teal-500');
-                    }
-                });
-            }
-
-            // Toggle Metric Logic
-            const metaRealizadoMetricToggleBtn = document.getElementById('metaRealizadoMetricToggleBtn');
-            if (metaRealizadoMetricToggleBtn) {
-                metaRealizadoMetricToggleBtn.addEventListener('click', () => {
-                    if (currentMetaRealizadoMetric === 'valor') {
-                        currentMetaRealizadoMetric = 'peso';
-                        metaRealizadoMetricToggleBtn.textContent = 'Toneladas';
-                        metaRealizadoMetricToggleBtn.classList.remove('active', 'text-white');
-                        metaRealizadoMetricToggleBtn.classList.add('text-slate-300'); // Inactive style? No, it's a toggle button.
-                        // Better style: keep active but change text? Or standard toggle behavior?
-                        // User image shows "R$ / Ton". It implies a switch.
-                        // Let's toggle between states.
-                    } else {
-                        currentMetaRealizadoMetric = 'valor';
-                        metaRealizadoMetricToggleBtn.textContent = 'R$ / Ton'; // Or 'Faturamento'? Image says "R$ / Ton" likely meaning the button label is static or toggles?
-                        // "gostaria de ter um botão desse da imagem, deve ter a função de alternar entre R$ e Tonelada"
-                        // The image shows "R$ / Ton". It might be a label for the button that cycles?
-                        // Let's update text to indicate CURRENT state or NEXT state?
-                        // Usually toggle buttons indicate current state.
-                        // Let's use: "Faturamento (R$)" and "Volume (Ton)" as labels for clarity, or stick to user image.
-                        // User image: "R$ / Ton". 
-                        // Let's assume the button text is static "R$ / Ton" and we just toggle state?
-                        // No, usually buttons show what is selected.
-                        // Let's change text to "Volume (Ton)" when Ton is selected, and "Faturamento (R$)" when R$ is selected?
-                        // Or just keep "R$ / Ton" and toggle a visual indicator?
-                        // Let's just update the chart and maybe change button style/text slightly.
-                    }
-                    
-                    // Simple Toggle Text Update
-                    metaRealizadoMetricToggleBtn.textContent = currentMetaRealizadoMetric === 'valor' ? 'R$ / Ton' : 'Toneladas';
-
-                    const metaRealizadoChartTitle = document.getElementById('metaRealizadoChartTitle');
-                    if (metaRealizadoChartTitle) {
-                        metaRealizadoChartTitle.textContent = currentMetaRealizadoMetric === 'valor' ? 'Meta Vs Realizado - Faturamento' : 'Meta Vs Realizado - Tonelada';
-                    }
-                    
-                    updateMetaRealizado();
-                });
-            }
-
-            // Clear Filters
-            document.getElementById('clear-meta-realizado-filters-btn').addEventListener('click', () => {
-                selectedMetaRealizadoSupervisors = [];
-                selectedMetaRealizadoSellers = [];
-                selectedMetaRealizadoSuppliers = [];
-                currentMetaRealizadoPasta = 'PEPSICO'; // Reset to default
-                if (metaRealizadoFilialFilter) metaRealizadoFilialFilter.value = 'ambas';
-
-                // Reset UI
-                updateSupervisorFilter(metaRealizadoSupervisorFilterDropdown, document.getElementById('meta-realizado-supervisor-filter-text'), [], allSalesData);
-                updateSellerFilter([], metaRealizadoSellerFilterDropdown, document.getElementById('meta-realizado-vendedor-filter-text'), [], allSalesData);
-                
-                // Reset Supplier UI
-                document.getElementById('meta-realizado-supplier-filter-text').textContent = 'Todos';
-                metaRealizadoSupplierFilterDropdown.querySelectorAll('input').forEach(cb => cb.checked = false);
-
-                // Reset Pasta UI (Deactivate all, since PEPSICO button is gone)
-                metaRealizadoPastaContainer.querySelectorAll('.pasta-btn').forEach(b => {
-                    b.classList.add('bg-slate-700');
-                    b.classList.remove('bg-teal-600', 'hover:bg-teal-500');
-                });
-
-                debouncedUpdateMetaRealizado();
-            });
-
-            if (metaRealizadoFilialFilter) {
-                metaRealizadoFilialFilter.addEventListener('change', debouncedUpdateMetaRealizado);
-            }
-
-            // Close Dropdowns on Click Outside
-            document.addEventListener('click', (e) => {
-                if (!metaRealizadoSupervisorFilterBtn.contains(e.target) && !metaRealizadoSupervisorFilterDropdown.contains(e.target)) metaRealizadoSupervisorFilterDropdown.classList.add('hidden');
-                if (!metaRealizadoSellerFilterBtn.contains(e.target) && !metaRealizadoSellerFilterDropdown.contains(e.target)) metaRealizadoSellerFilterDropdown.classList.add('hidden');
-                if (!metaRealizadoSupplierFilterBtn.contains(e.target) && !metaRealizadoSupplierFilterDropdown.contains(e.target)) metaRealizadoSupplierFilterDropdown.classList.add('hidden');
-            });
-
-            // Pagination Listeners for Meta Realizado Clients Table
-            document.getElementById('meta-realizado-clients-prev-page-btn').addEventListener('click', () => {
-                if (metaRealizadoClientsTableState.currentPage > 1) {
-                    metaRealizadoClientsTableState.currentPage--;
-                    updateMetaRealizadoView();
-                }
-            });
-
-            document.getElementById('export-meta-realizado-pdf-btn').addEventListener('click', exportMetaRealizadoPDF);
-            document.getElementById('export-meta-realizado-pdf-btn-bottom').addEventListener('click', exportMetaRealizadoPDF);
-            document.getElementById('meta-realizado-clients-next-page-btn').addEventListener('click', () => {
-                if (metaRealizadoClientsTableState.currentPage < metaRealizadoClientsTableState.totalPages) {
-                    metaRealizadoClientsTableState.currentPage++;
-                    updateMetaRealizadoView();
-                }
-            });
-
-
-            const updateMix = () => {
-                markDirty('mix');
-                handleMixFilterChange();
-            };
-
-            document.getElementById('mix-supervisor-filter-btn').addEventListener('click', (e) => {
-                document.getElementById('mix-supervisor-filter-dropdown').classList.toggle('hidden');
-            });
-            document.getElementById('mix-supervisor-filter-dropdown').addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedMixSupervisors.push(value);
-                    else selectedMixSupervisors = selectedMixSupervisors.filter(s => s !== value);
-                    selectedMixSellers = [];
-                    updateMix();
-                }
-            });
-
-            document.getElementById('mix-vendedor-filter-btn').addEventListener('click', (e) => {
-                document.getElementById('mix-vendedor-filter-dropdown').classList.toggle('hidden');
-            });
-            document.getElementById('mix-vendedor-filter-dropdown').addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedMixSellers.push(value);
-                    else selectedMixSellers = selectedMixSellers.filter(s => s !== value);
-                    handleMixFilterChange({ skipFilter: 'seller' });
-                    markDirty('mix');
-                }
-            });
-
-            document.getElementById('mix-tipo-venda-filter-btn').addEventListener('click', (e) => {
-                document.getElementById('mix-tipo-venda-filter-dropdown').classList.toggle('hidden');
-            });
-            document.getElementById('mix-tipo-venda-filter-dropdown').addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedMixTiposVenda.push(value);
-                    else selectedMixTiposVenda = selectedMixTiposVenda.filter(s => s !== value);
-                    handleMixFilterChange({ skipFilter: 'tipoVenda' });
-                    markDirty('mix');
-                }
-            });
-
-            document.getElementById('mix-filial-filter').addEventListener('change', updateMix);
-
-            const mixCityFilter = document.getElementById('mix-city-filter');
-            const mixCitySuggestions = document.getElementById('mix-city-suggestions');
-
-            mixCityFilter.addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/[0-9]/g, '');
-                const { clients } = getMixFilteredData({ excludeFilter: 'city' });
-                mixCitySuggestions.classList.remove('manual-hide');
-                updateCitySuggestions(mixCityFilter, mixCitySuggestions, clients);
-            });
-            mixCityFilter.addEventListener('focus', () => {
-                const { clients } = getMixFilteredData({ excludeFilter: 'city' });
-                mixCitySuggestions.classList.remove('manual-hide');
-                updateCitySuggestions(mixCityFilter, mixCitySuggestions, clients);
-            });
-            mixCityFilter.addEventListener('blur', () => setTimeout(() => mixCitySuggestions.classList.add('hidden'), 150));
-            mixCityFilter.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    mixCitySuggestions.classList.add('hidden', 'manual-hide');
-                    updateMix();
-                    e.target.blur();
-                }
-            });
-            mixCitySuggestions.addEventListener('click', (e) => {
-                if (e.target.tagName === 'DIV') {
-                    mixCityFilter.value = e.target.textContent;
-                    mixCitySuggestions.classList.add('hidden');
-                    updateMix();
-                }
-            });
-
-            document.getElementById('mix-com-rede-btn').addEventListener('click', () => {
-                document.getElementById('mix-rede-filter-dropdown').classList.toggle('hidden');
-            });
-            document.getElementById('mix-rede-group-container').addEventListener('click', (e) => {
-                if(e.target.closest('button')) {
-                    const button = e.target.closest('button');
-                    mixRedeGroupFilter = button.dataset.group;
-                    document.getElementById('mix-rede-group-container').querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    button.classList.add('active');
-                    if (mixRedeGroupFilter !== 'com_rede') {
-                        document.getElementById('mix-rede-filter-dropdown').classList.add('hidden');
-                        selectedMixRedes = [];
-                    }
-                    handleMixFilterChange();
-                }
-            });
-            document.getElementById('mix-rede-filter-dropdown').addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedMixRedes.push(value);
-                    else selectedMixRedes = selectedMixRedes.filter(r => r !== value);
-
-                    mixRedeGroupFilter = 'com_rede';
-                    document.getElementById('mix-rede-group-container').querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    document.getElementById('mix-com-rede-btn').classList.add('active');
-
-                    handleMixFilterChange({ skipFilter: 'rede' });
-                }
-            });
-
-            document.getElementById('clear-mix-filters-btn').addEventListener('click', () => { resetMixFilters(); markDirty('mix'); });
-
-            const exportMixDropdownBtn = document.getElementById('export-mix-dropdown-btn');
-            const exportMixDropdownMenu = document.getElementById('export-mix-dropdown-menu');
-
-            exportMixDropdownBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                exportMixDropdownMenu.classList.toggle('hidden');
-            });
-
-            document.addEventListener('click', (e) => {
-                if (!exportMixDropdownBtn.contains(e.target) && !exportMixDropdownMenu.contains(e.target)) {
-                    exportMixDropdownMenu.classList.add('hidden');
-                }
-            });
-
-            document.getElementById('export-mix-pdf-btn').addEventListener('click', (e) => {
-                e.preventDefault();
-                exportMixDropdownMenu.classList.add('hidden');
-                exportMixPDF();
-            });
-
-            document.getElementById('export-mix-excel-btn').addEventListener('click', (e) => {
-                e.preventDefault();
-                exportMixDropdownMenu.classList.add('hidden');
-                exportMixExcel();
-            });
-
-            document.getElementById('mix-kpi-toggle').addEventListener('change', (e) => {
-                mixKpiMode = e.target.checked ? 'atendidos' : 'total';
-                markDirty('mix');
-                updateMixView();
-            });
-
-            document.getElementById('mix-prev-page-btn').addEventListener('click', () => {
-                if (mixTableState.currentPage > 1) {
-                    mixTableState.currentPage--;
-                    updateMixView();
-                }
-            });
-            document.getElementById('mix-next-page-btn').addEventListener('click', () => {
-                if (mixTableState.currentPage < mixTableState.totalPages) {
-                    mixTableState.currentPage++;
-                    updateMixView();
-                }
-            });
-
-            document.addEventListener('click', (e) => {
-                // Close Mix Dropdowns
-                if (!document.getElementById('mix-supervisor-filter-btn').contains(e.target) && !document.getElementById('mix-supervisor-filter-dropdown').contains(e.target)) document.getElementById('mix-supervisor-filter-dropdown').classList.add('hidden');
-                if (!document.getElementById('mix-vendedor-filter-btn').contains(e.target) && !document.getElementById('mix-vendedor-filter-dropdown').contains(e.target)) document.getElementById('mix-vendedor-filter-dropdown').classList.add('hidden');
-                if (!document.getElementById('mix-tipo-venda-filter-btn').contains(e.target) && !document.getElementById('mix-tipo-venda-filter-dropdown').contains(e.target)) document.getElementById('mix-tipo-venda-filter-dropdown').classList.add('hidden');
-                if (!document.getElementById('mix-com-rede-btn').contains(e.target) && !document.getElementById('mix-rede-filter-dropdown').contains(e.target)) document.getElementById('mix-rede-filter-dropdown').classList.add('hidden');
-
-                if (!document.getElementById('weekly-supervisor-filter-btn').contains(e.target) && !document.getElementById('weekly-supervisor-filter-dropdown').contains(e.target)) document.getElementById('weekly-supervisor-filter-dropdown').classList.add('hidden');
-                if (!document.getElementById('weekly-vendedor-filter-btn').contains(e.target) && !document.getElementById('weekly-vendedor-filter-dropdown').contains(e.target)) document.getElementById('weekly-vendedor-filter-dropdown').classList.add('hidden');
-            });
-
-            // --- Coverage View Filters ---
-            const updateCoverage = () => {
-                markDirty('cobertura');
-                handleCoverageFilterChange();
-            };
-
-            const debouncedHandleCoverageChange = debounce(updateCoverage, 400);
-
-            coverageFilialFilter.addEventListener('change', updateCoverage);
-
-            const coverageSupervisorFilterBtn = document.getElementById('coverage-supervisor-filter-btn');
-            const coverageSupervisorFilterDropdown = document.getElementById('coverage-supervisor-filter-dropdown');
-            coverageSupervisorFilterBtn.addEventListener('click', () => coverageSupervisorFilterDropdown.classList.toggle('hidden'));
-            coverageSupervisorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) selectedCoverageSupervisors.push(value);
-                    else selectedCoverageSupervisors = selectedCoverageSupervisors.filter(s => s !== value);
-
-                    selectedCoverageSellers = [];
-                    updateCoverage();
-                }
-            });
-
-            coverageCityFilter.addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/[0-9]/g, '');
-                const { clients } = getCoverageFilteredData({ excludeFilter: 'city' });
-                coverageCitySuggestions.classList.remove('manual-hide');
-                updateCitySuggestions(coverageCityFilter, coverageCitySuggestions, clients);
-            });
-            coverageCityFilter.addEventListener('focus', () => {
-                const { clients } = getCoverageFilteredData({ excludeFilter: 'city' });
-                coverageCitySuggestions.classList.remove('manual-hide');
-                updateCitySuggestions(coverageCityFilter, coverageCitySuggestions, clients);
-            });
-            coverageCityFilter.addEventListener('blur', () => setTimeout(() => coverageCitySuggestions.classList.add('hidden'), 150));
-            coverageCityFilter.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    coverageCitySuggestions.classList.add('hidden', 'manual-hide');
-                    updateCoverage();
-                    e.target.blur();
-                }
-            });
-            coverageCitySuggestions.addEventListener('click', (e) => {
-                if (e.target.tagName === 'DIV') {
-                    coverageCityFilter.value = e.target.textContent;
-                    coverageCitySuggestions.classList.add('hidden');
-                    updateCoverage();
-                }
-            });
-
-            coverageTipoVendaFilterBtn.addEventListener('click', () => coverageTipoVendaFilterDropdown.classList.toggle('hidden'));
-            coverageTipoVendaFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedCoverageTiposVenda.includes(value)) selectedCoverageTiposVenda.push(value);
-                    } else {
-                        selectedCoverageTiposVenda = selectedCoverageTiposVenda.filter(s => s !== value);
-                    }
-                    updateCoverage();
-                }
-            });
-
-            clearCoverageFiltersBtn.addEventListener('click', () => { resetCoverageFilters(); markDirty('cobertura'); });
-
-            coverageVendedorFilterBtn.addEventListener('click', () => coverageVendedorFilterDropdown.classList.toggle('hidden'));
-            coverageVendedorFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedCoverageSellers.includes(value)) selectedCoverageSellers.push(value);
-                    } else {
-                        selectedCoverageSellers = selectedCoverageSellers.filter(s => s !== value);
-                    }
-                    markDirty('cobertura');
-                    handleCoverageFilterChange({ skipFilter: 'seller' });
-                }
-            });
-
-            coverageSupplierFilterBtn.addEventListener('click', () => coverageSupplierFilterDropdown.classList.toggle('hidden'));
-            coverageSupplierFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox' && e.target.dataset.filterType === 'coverage') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedCoverageSuppliers.includes(value)) selectedCoverageSuppliers.push(value);
-                    } else {
-                        selectedCoverageSuppliers = selectedCoverageSuppliers.filter(s => s !== value);
-                    }
-
-                    markDirty('cobertura');
-                    handleCoverageFilterChange({ skipFilter: 'supplier' });
-                }
-            });
-
-            coverageProductFilterBtn.addEventListener('click', () => {
-                const { sales, history } = getCoverageFilteredData({ excludeFilter: 'product' });
-                selectedCoverageProducts = updateProductFilter(coverageProductFilterDropdown, coverageProductFilterText, selectedCoverageProducts, [...sales, ...history], 'coverage');
-                coverageProductFilterDropdown.classList.toggle('hidden');
-            });
-
-            const debouncedCoverageProductUpdate = debounce(() => {
-                 const { sales, history } = getCoverageFilteredData({ excludeFilter: 'product' });
-                 selectedCoverageProducts = updateProductFilter(coverageProductFilterDropdown, coverageProductFilterText, selectedCoverageProducts, [...sales, ...history], 'coverage');
-            }, 250);
-
-            coverageProductFilterDropdown.addEventListener('input', (e) => {
-                if (e.target.id === 'coverage-product-search-input') {
-                    debouncedCoverageProductUpdate();
-                }
-            });
-
-            coverageProductFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.dataset.filterType === 'coverage' && handleProductFilterChange(e, selectedCoverageProducts)) {
-                    markDirty('cobertura');
-                    handleCoverageFilterChange({ skipFilter: 'product' });
-                }
-            });
-
-            const coverageDateFilterInput = document.getElementById('coverage-date-filter');
-            if (coverageDateFilterInput) {
-                coverageDateFilterInstance = flatpickr(coverageDateFilterInput, {
-                    mode: 'range',
-                    dateFormat: 'd/m/Y',
-                    locale: 'pt',
-                    onClose: (selectedDates, dateStr, instance) => {
-                        if (selectedDates.length === 2) {
-                            selectedCoverageDateRange = selectedDates;
-                            updateCoverage();
-                        } else if (selectedDates.length === 1) {
-                            // Handle single day selection as a range [Start, Start]
-                            selectedCoverageDateRange = [selectedDates[0], selectedDates[0]];
-                            instance.setDate(selectedCoverageDateRange, false);
-                            updateCoverage();
-                        } else if (selectedDates.length === 0) {
-                            selectedCoverageDateRange = null;
-                            updateCoverage();
-                        }
-                    }
-                });
-            }
-
-            const coverageUnitPriceInput = document.getElementById('coverage-unit-price-filter');
-            if (coverageUnitPriceInput) {
-                coverageUnitPriceInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        updateCoverage();
-                        e.target.blur();
-                    }
-                });
-                coverageUnitPriceInput.addEventListener('blur', updateCoverage);
-            }
-
-
-            document.addEventListener('click', (e) => {
-                if (!innovationsMonthVendedorFilterBtn.contains(e.target) && !innovationsMonthVendedorFilterDropdown.contains(e.target)) innovationsMonthVendedorFilterDropdown.classList.add('hidden');
-                if (!innovationsMonthTipoVendaFilterBtn.contains(e.target) && !innovationsMonthTipoVendaFilterDropdown.contains(e.target)) innovationsMonthTipoVendaFilterDropdown.classList.add('hidden');
-                if (!coverageVendedorFilterBtn.contains(e.target) && !coverageVendedorFilterDropdown.contains(e.target)) coverageVendedorFilterDropdown.classList.add('hidden');
-                if (!coverageSupplierFilterBtn.contains(e.target) && !coverageSupplierFilterDropdown.contains(e.target)) coverageSupplierFilterDropdown.classList.add('hidden');
-                if (!coverageProductFilterBtn.contains(e.target) && !coverageProductFilterDropdown.contains(e.target)) coverageProductFilterDropdown.classList.add('hidden');
-                if (!coverageTipoVendaFilterBtn.contains(e.target) && !coverageTipoVendaFilterDropdown.contains(e.target)) coverageTipoVendaFilterDropdown.classList.add('hidden');
-            });
-
-            const stockWorkingDaysInput = document.getElementById('stock-working-days-input');
-            if (stockWorkingDaysInput) {
-                stockWorkingDaysInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const value = parseInt(e.target.value);
-                        if (!isNaN(value) && value > 0 && value <= maxWorkingDaysStock) {
-                            customWorkingDaysStock = value;
-                        } else {
-                             e.target.value = customWorkingDaysStock;
-                        }
-                        handleStockFilterChange();
-                        e.target.blur(); // <-- ADICIONADO: Remove o foco do input após pressionar Enter
-                    }
-                });
-                stockWorkingDaysInput.addEventListener('blur', (e) => {
-                    const value = parseInt(e.target.value);
-                     if (isNaN(value) || value <= 0 || value > maxWorkingDaysStock) {
-                         e.target.value = customWorkingDaysStock;
-                    } else if (value !== customWorkingDaysStock) {
-
-                        customWorkingDaysStock = value;
-                        handleStockFilterChange();
-                    }
-                });
-            }
-
-            document.querySelectorAll('.stock-trend-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    stockTrendFilter = btn.dataset.trend;
-                    document.querySelectorAll('.stock-trend-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    handleStockFilterChange();
-                });
-            });
-        }
-
-        initializeOptimizedDataStructures();
-        calculateHistoricalBests(); // <-- MOVIDA PARA CIMA
-        selectedMainSupervisors = updateSupervisorFilter(document.getElementById('supervisor-filter-dropdown'), document.getElementById('supervisor-filter-text'), selectedMainSupervisors, allSalesData);
-        selectedMainSuppliers = updateSupplierFilter(document.getElementById('fornecedor-filter-dropdown'), document.getElementById('fornecedor-filter-text'), selectedMainSuppliers, [...allSalesData, ...allHistoryData], 'main');
-        selectedCitySupervisors = updateSupervisorFilter(document.getElementById('city-supervisor-filter-dropdown'), document.getElementById('city-supervisor-filter-text'), selectedCitySupervisors, allSalesData);
-        selectedStockSupervisors = updateSupervisorFilter(document.getElementById('stock-supervisor-filter-dropdown'), document.getElementById('stock-supervisor-filter-text'), selectedStockSupervisors, [...allSalesData, ...allHistoryData]);
-
-        updateSellerFilter(selectedMainSupervisors, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
-        updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
-        updateSellerFilter(selectedCitySupervisors, cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData);
-
-        // --- FIXED: Initialize Filters for Other Views ---
-        // Coverage
-        selectedCoverageSupervisors = updateSupervisorFilter(document.getElementById('coverage-supervisor-filter-dropdown'), document.getElementById('coverage-supervisor-filter-text'), selectedCoverageSupervisors, allSalesData);
-        updateSellerFilter(selectedCoverageSupervisors, document.getElementById('coverage-vendedor-filter-dropdown'), document.getElementById('coverage-vendedor-filter-text'), selectedCoverageSellers, allSalesData);
-
-        // Innovations
-        selectedInnovationsSupervisors = updateSupervisorFilter(document.getElementById('innovations-month-supervisor-filter-dropdown'), document.getElementById('innovations-month-supervisor-filter-text'), selectedInnovationsSupervisors, allSalesData, true);
-        updateSellerFilter(selectedInnovationsSupervisors, document.getElementById('innovations-month-vendedor-filter-dropdown'), document.getElementById('innovations-month-vendedor-filter-text'), selectedInnovationsMonthSellers, allSalesData);
-
-        // Mix
-        selectedMixSupervisors = updateSupervisorFilter(document.getElementById('mix-supervisor-filter-dropdown'), document.getElementById('mix-supervisor-filter-text'), selectedMixSupervisors, allSalesData);
-        updateSellerFilter(selectedMixSupervisors, document.getElementById('mix-vendedor-filter-dropdown'), document.getElementById('mix-vendedor-filter-text'), selectedMixSellers, allSalesData);
-        // -------------------------------------------------
-
-        updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
-        updateRedeFilter(cityRedeFilterDropdown, cityComRedeBtnText, selectedCityRedes, allClientsData);
-        updateRedeFilter(comparisonRedeFilterDropdown, comparisonComRedeBtnText, selectedComparisonRedes, allClientsData);
-        updateRedeFilter(stockRedeFilterDropdown, stockComRedeBtnText, selectedStockRedes, allClientsData, 'Com Rede');
-
-        // Initial Population for Goals Filters
-        selectedGoalsGvSupervisors = updateSupervisorFilter(goalsGvSupervisorFilterDropdown, goalsGvSupervisorFilterText, selectedGoalsGvSupervisors, allSalesData);
-        selectedGoalsGvSellers = updateSellerFilter(selectedGoalsGvSupervisors, goalsGvSellerFilterDropdown, goalsGvSellerFilterText, selectedGoalsGvSellers, [...allSalesData, ...allHistoryData]);
-        // Initialize SV Supervisor filter just in case
-        selectedGoalsSvSupervisors = updateSupervisorFilter(goalsSvSupervisorFilterDropdown, goalsSvSupervisorFilterText, selectedGoalsSvSupervisors, allSalesData);
-        // Initialize Summary Supervisor Filter
-        if(document.getElementById('goals-summary-supervisor-filter-dropdown')) {
+if(document.getElementById('goals-summary-supervisor-filter-dropdown')) {
             selectedGoalsSummarySupervisors = updateSupervisorFilter(document.getElementById('goals-summary-supervisor-filter-dropdown'), document.getElementById('goals-summary-supervisor-filter-text'), selectedGoalsSummarySupervisors, allSalesData);
             selectedGoalsSummarySellers = updateSellerFilter(selectedGoalsSummarySupervisors, document.getElementById('goals-summary-seller-filter-dropdown'), document.getElementById('goals-summary-seller-filter-text'), selectedGoalsSummarySellers, allSalesData);
         }
 
-        // Initialize Meta Vs Realizado Filters
-        selectedMetaRealizadoSupervisors = updateSupervisorFilter(document.getElementById('meta-realizado-supervisor-filter-dropdown'), document.getElementById('meta-realizado-supervisor-filter-text'), selectedMetaRealizadoSupervisors, allSalesData);
-        updateSellerFilter(selectedMetaRealizadoSupervisors, document.getElementById('meta-realizado-vendedor-filter-dropdown'), document.getElementById('meta-realizado-vendedor-filter-text'), selectedMetaRealizadoSellers, [...allSalesData, ...allHistoryData]);
+calculateGoalsMetrics();
 
-        // Fix: Pre-filter Suppliers for Meta Realizado (Only PEPSICO)
-        selectedMetaRealizadoSuppliers = updateSupplierFilter(document.getElementById('meta-realizado-supplier-filter-dropdown'), document.getElementById('meta-realizado-supplier-filter-text'), selectedMetaRealizadoSuppliers, pepsicoSuppliersSource, 'metaRealizado');
-
-        updateAllComparisonFilters();
-
-        updateStockSellerFilter();
-        updateStockSupplierFilter();
-        updateStockProductFilter();
-        updateStockCitySuggestions([...allSalesData, ...allHistoryData]);
-
-        initializeRedeFilters();
-        setupEventListeners();
-
-        // Assegura que os dados históricos estão prontos antes da primeira renderização
-        calculateHistoricalBests();
-
-        // --- Initialization for Goals Metrics ---
-        calculateGoalsMetrics();
-        // Initialize Targets with Defaults (Pre-fill)
-        for (const key in globalGoalsMetrics) {
+for (const key in globalGoalsMetrics) {
             if (!goalsTargets[key]) {
                 goalsTargets[key] = { fat: 0, vol: 0 };
             }
@@ -14908,9 +5558,10 @@ const supervisorGroups = new Map();
                 goalsTargets[key].vol = globalGoalsMetrics[key].prevVol;
             }
         }
-        // Initialize Inputs and Refs for Default Tab (ELMA_ALL)
-        const defGoalsMetric = globalGoalsMetrics['ELMA_ALL'];
-        if (defGoalsMetric) {
+
+const defGoalsMetric = globalGoalsMetrics['ELMA_ALL'];
+
+if (defGoalsMetric) {
             const fi = document.getElementById('goal-global-fat');
             const vi = document.getElementById('goal-global-vol');
             if (fi) fi.value = defGoalsMetric.prevFat.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -14923,109 +5574,10 @@ const supervisorGroups = new Map();
             const refAvgClients = document.getElementById('ref-avg-clients');
             const refPrevClients = document.getElementById('ref-prev-clients');
         }
-        // ----------------------------------------
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const targetPage = urlParams.get('ir_para');
+navigateTo();
 
-        if (targetPage) {
-            navigateTo(targetPage);
-        } else {
-            navigateTo('goals');
-        }
-        renderTable(aggregatedOrders);
-
-        // Helper to redistribute weekly goals
-        function calculateAdjustedWeeklyGoals(totalGoal, realizedByWeek, weeks) {
-            let adjustedGoals = new Array(weeks.length).fill(0);
-            let remainingWorkingDays = 0;
-            let pastDifference = 0;
-            let totalWorkingDays = weeks.reduce((sum, w) => sum + w.workingDays, 0);
-            if (totalWorkingDays === 0) totalWorkingDays = 1;
-
-            const currentDate = lastSaleDate; // Global context
-
-            // 1. First Pass: Identify Past Weeks and Calculate Initial Diff
-            weeks.forEach((week, i) => {
-                // Determine if week is fully past
-                // A week is "past" if its END date is strictly BEFORE the currentDate (ignoring time)
-                // Note: user said "check if first week passed... then redistribute difference".
-                // If we are IN week 2, week 1 is past.
-                // Assuming lastSaleDate represents "today".
-
-                const isPast = week.end < currentDate;
-                const dailyGoal = totalGoal / totalWorkingDays;
-                let originalWeekGoal = dailyGoal * week.workingDays;
-
-                if (isPast) {
-                    // Week is closed. The goal is fixed? No, the user says:
-                    // "case in the first week the goal that was 40k wasn't hit (realized 30k), the 10k missing must be reassigned"
-                    // This implies the "Goal" for the past week stays as original or realized?
-                    // Usually in these reports, you show the original goal for past weeks, and the *future* weeks get adjusted.
-                    // Or does the user want to see the "gap" moved?
-                    // "the 10.000 missing must be reassigned to other weeks"
-                    // This means the TARGET for future weeks increases. The displayed Goal for past week usually remains static (Original) so you can see the failure.
-                    // HOWEVER, if I change the future goals, the sum of all displayed goals will be Total Goal.
-                    // If I show Original Goal for W1 (40k) and Realized (30k), I have a deficit of 10k.
-                    // If I add 10k to W2, W3, W4...
-                    // The sum of displayed goals would be: 40k (W1) + (Original W2 + share of 10k) + ... = Total Goal + 10k.
-                    // This is mathmatically wrong if "Meta Total" column shows the fixed monthly target.
-                    // BUT, dynamic planning often works this way: "To hit the month, now I need to do X".
-                    // The user said: "as colunas onde mostram as metas por semana fossem dinâmicas de acordo com o realizado"
-
-                    // Let's assume:
-                    // Displayed Goal for Past Week = Original Proportional Goal (so you can see the variance).
-                    // Displayed Goal for Future Week = Original + Redistribution.
-
-                    adjustedGoals[i] = originalWeekGoal;
-                    const realized = realizedByWeek[i] || 0;
-                    pastDifference += (originalWeekGoal - realized); // Positive if deficit, Negative if surplus
-                } else {
-                    remainingWorkingDays += week.workingDays;
-                }
-            });
-
-            // 2. Second Pass: Distribute Difference to Future Weeks
-            if (remainingWorkingDays > 0) {
-                weeks.forEach((week, i) => {
-                    const isPast = week.end < currentDate;
-                    if (!isPast) {
-                        const dailyGoal = totalGoal / totalWorkingDays;
-                        const originalWeekGoal = dailyGoal * week.workingDays;
-
-                        // Distribute pastDifference proportionally to this week's weight in remaining time
-                        const share = pastDifference * (week.workingDays / remainingWorkingDays);
-
-                        // New Goal = Original + Share
-                        // If deficit (pos), goal increases. If surplus (neg), goal decreases.
-                        let newGoal = originalWeekGoal + share;
-
-                        // Prevent negative goals? (Extreme surplus)
-                        if (newGoal < 0) newGoal = 0;
-
-                        adjustedGoals[i] = newGoal;
-                    }
-                });
-            } else {
-                // If no remaining days (month over), the deficit just sits there (or we add to last week?)
-                // Usually just leave as is.
-                weeks.forEach((week, i) => {
-                    const isPast = week.end < currentDate;
-                    if (!isPast) {
-                         // Should not happen if logic is correct, unless current date is before start of month?
-                         // If we are strictly before month starts, remaining = total. Loop above handles it (pastDifference=0).
-                         const dailyGoal = totalGoal / totalWorkingDays;
-                         adjustedGoals[i] = dailyGoal * week.workingDays;
-                    }
-                });
-            }
-
-            return adjustedGoals;
-        }
-
-        // --- IMPORT PARSER AND LOGIC ---
-
-        function calculateSellerDefaults(sellerName) {
+function calculateSellerDefaults(sellerName) {
             const defaults = {
                 elmaPos: 0,
                 foodsPos: 0,
@@ -15047,7 +5599,7 @@ const supervisorGroups = new Map();
             activeClients.forEach(client => {
                 const codCli = String(client["Código"] || client["codigo_cliente"]);
                 const historyIds = optimizedData.indices.history.byClient.get(codCli);
-                
+
                 if (historyIds) {
                     let clientElmaFat = 0;
                     let clientFoodsFat = 0;
@@ -15090,7 +5642,7 @@ const supervisorGroups = new Map();
             return defaults;
         }
 
-        function parseGoalsSvStructure(text) {
+function parseGoalsSvStructure(text) {
             console.log("[Parser] Iniciando parse...");
             const lines = text.replace(/[\r\n]+$/, '').split(/\r?\n/);
             if (lines.length === 0) return null;
@@ -15228,9 +5780,9 @@ const supervisorGroups = new Map();
 
                 const dotIdx = clean.lastIndexOf('.');
                 const commaIdx = clean.lastIndexOf(',');
-                
+
                 if (dotIdx > -1 && commaIdx > -1) {
-                    if (dotIdx > commaIdx) clean = clean.replace(/,/g, ''); 
+                    if (dotIdx > commaIdx) clean = clean.replace(/,/g, '');
                     else clean = clean.replace(/\./g, '').replace(',', '.');
                 } else if (commaIdx > -1) {
                     // Has comma, no dot. Assume comma is decimal in Brazil
@@ -15253,7 +5805,7 @@ const supervisorGroups = new Map();
             // Identify Vendor Column Index (Name)
             // Usually Index 1 (Code, Name, ...)
             // We scan first few rows to find valid seller names
-            let nameColIndex = 1; 
+            let nameColIndex = 1;
             // Basic Heuristic: If col 0 looks like a name and col 1 is number, maybe it's col 0.
             // But standard template is [Code, Name, ...]. We stick to 1 for now or 0 if 1 is empty.
 
@@ -15274,13 +5826,13 @@ const supervisorGroups = new Map();
                      }
                 }
 
-                if (!sellerName) continue; 
-                
+                if (!sellerName) continue;
+
                 // --- ENHANCED FILTER: Ignore Supervisors, Aggregates, and BALCAO ---
                 const upperName = sellerName.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-                
+
                 // 1. Explicit Blocklist
-                if (upperName === 'BALCAO' || upperName === 'BALCÃO' || 
+                if (upperName === 'BALCAO' || upperName === 'BALCÃO' ||
                     upperName.includes('TOTAL') || upperName.includes('SUPERVISOR') || upperName.includes('GERAL') ||
                     upperName === 'VENDEDOR' || upperName === 'NOME' || upperName === 'CODIGO' || upperName === 'CÓDIGO') {
                     continue;
@@ -15374,37 +5926,48 @@ const supervisorGroups = new Map();
             return updates;
         }
 
-        // --- Event Listeners for Import ---
-        const importBtn = document.getElementById('goals-sv-import-btn');
-        const importModal = document.getElementById('import-goals-modal');
-        const importCloseBtn = document.getElementById('import-goals-close-btn');
-        const importCancelBtn = document.getElementById('import-goals-cancel-btn');
-        const importAnalyzeBtn = document.getElementById('import-goals-analyze-btn');
-        const importConfirmBtn = document.getElementById('import-goals-confirm-btn');
-        const importTextarea = document.getElementById('import-goals-textarea');
-        const analysisContainer = document.getElementById('import-analysis-container');
-        const analysisBody = document.getElementById('import-analysis-table-body');
-        const analysisBadges = document.getElementById('import-summary-badges');
-            const importPaginationControls = document.createElement('div');
-            importPaginationControls.id = 'import-pagination-controls';
-            importPaginationControls.className = 'flex justify-between items-center mt-4 hidden';
-            importPaginationControls.innerHTML = `
+const importBtn = document.getElementById('goals-sv-import-btn');
+
+const importModal = document.getElementById('import-goals-modal');
+
+const importCloseBtn = document.getElementById('import-goals-close-btn');
+
+const importCancelBtn = document.getElementById('import-goals-cancel-btn');
+
+const importAnalyzeBtn = document.getElementById('import-goals-analyze-btn');
+
+const importConfirmBtn = document.getElementById('import-goals-confirm-btn');
+
+const importTextarea = document.getElementById('import-goals-textarea');
+
+const analysisContainer = document.getElementById('import-analysis-container');
+
+const analysisBody = document.getElementById('import-analysis-table-body');
+
+const analysisBadges = document.getElementById('import-summary-badges');
+
+const importPaginationControls = document.createElement('div');
+
+importPaginationControls.id = 'import-pagination-controls';
+
+importPaginationControls.className = 'flex justify-between items-center mt-4 hidden';
+
+importPaginationControls.innerHTML = `
                 <button id="import-prev-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50 text-xs" disabled>Anterior</button>
                 <span id="import-page-info-text" class="text-slate-400 text-xs">Página 1 de 1</span>
                 <button id="import-next-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50 text-xs" disabled>Próxima</button>
             `;
-            // Insert after table container (which is inside analysisContainer -> div.bg-slate-900)
-            // analysisContainer contains a header div, result div, and then the table container div.
-            // We need to find the table container.
-            
-        let pendingImportUpdates = [];
-            let importTablePage = 1;
-            const importTablePageSize = 19;
 
-            function renderImportTable() {
+let pendingImportUpdates = [];
+
+let importTablePage = 1;
+
+const importTablePageSize = 19;
+
+function renderImportTable() {
                 if (!analysisBody) return;
                 analysisBody.innerHTML = '';
-                
+
                 const totalPages = Math.ceil(pendingImportUpdates.length / importTablePageSize);
                 if (importTablePage > totalPages && totalPages > 0) importTablePage = totalPages;
                 if (totalPages === 0) importTablePage = 1;
@@ -15421,7 +5984,7 @@ const supervisorGroups = new Map();
 
                 pageItems.forEach(u => {
                     const row = document.createElement('tr');
-                    
+
                     const currentVal = getSellerCurrentGoal(u.seller, u.category, u.type);
                     const newVal = u.val;
                     const diff = newVal - currentVal;
@@ -15469,7 +6032,7 @@ const supervisorGroups = new Map();
                 }
             }
 
-        if (importBtn && importModal) {
+if (importBtn && importModal) {
             const dropZone = document.getElementById('import-drop-zone');
             const fileInput = document.getElementById('import-goals-file');
 
@@ -15484,7 +6047,7 @@ const supervisorGroups = new Map();
             // Bind Pagination Listeners
             const prevBtn = document.getElementById('import-prev-page-btn');
             const nextBtn = document.getElementById('import-next-page-btn');
-            
+
             if (prevBtn) {
                 prevBtn.addEventListener('click', () => {
                     if (importTablePage > 1) {
@@ -15509,7 +6072,7 @@ const supervisorGroups = new Map();
                 analysisContainer.classList.add('hidden');
                 importConfirmBtn.disabled = true;
                 importConfirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                
+
                 // Reset File Input
                 if (fileInput) fileInput.value = '';
                 if (dropZone) {
@@ -15574,7 +6137,7 @@ const supervisorGroups = new Map();
             function handleFiles(files) {
                 if (files.length === 0) return;
                 const file = files[0];
-                
+
                 // Visual Feedback: Loading
                 if (dropZone) {
                     dropZone.innerHTML = `
@@ -15593,13 +6156,13 @@ const supervisorGroups = new Map();
                     try {
                         const data = new Uint8Array(e.target.result);
                         const workbook = XLSX.read(data, {type: 'array'});
-                        
+
                         const sheetName = workbook.SheetNames[0];
                         const sheet = workbook.Sheets[sheetName];
-                        
+
                         // Convert to TSV for the parser
                         const tsv = XLSX.utils.sheet_to_csv(sheet, {FS: "\t"});
-                        
+
                         // Update UI
                         importTextarea.value = tsv;
                         if (dropZone) {
@@ -15609,7 +6172,7 @@ const supervisorGroups = new Map();
                                 <p class="text-slate-400 text-sm">${file.name} carregado.</p>
                             `;
                         }
-                        
+
                         // Auto-analyze
                         setTimeout(() => importAnalyzeBtn.click(), 500);
 
@@ -15680,7 +6243,7 @@ const supervisorGroups = new Map();
 
                     let total = 0;
                     const leafCategories = resolveGoalCategory(category);
-                    
+
                     activeClients.forEach(client => {
                         const codCli = String(client['Código'] || client['codigo_cliente']);
                         const clientGoals = globalClientGoals.get(codCli);
@@ -15702,13 +6265,13 @@ const supervisorGroups = new Map();
             // --- AI Insights Logic ---
                         async function generateAiInsights() {
                 const btn = document.getElementById('btn-generate-ai');
-                
+
                 if (!pendingImportUpdates || pendingImportUpdates.length === 0) return;
 
                 // UI Loading State
                 btn.disabled = true;
                 btn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Analisando...`;
-                
+
                 // Show loading overlay
                 const pageLoader = document.getElementById('page-transition-loader');
                 const loaderText = document.getElementById('loader-text');
@@ -15760,9 +6323,9 @@ const supervisorGroups = new Map();
                        // Actually pendingImportUpdates doesn't store history, it stores 'val' (new).
                        // We can compute history on the fly for the top items only? No, we need to sort first.
                        // Let's rely on 'getSellerCurrentGoal' as the "Old" value (which is Current Target).
-                       // The Prompt asks for comparison with "History". 
-                       // getSellerCurrentGoal returns the *Current Goal* before update. 
-                       // The AI prompt usually compares New Goal vs History Avg. 
+                       // The Prompt asks for comparison with "History".
+                       // getSellerCurrentGoal returns the *Current Goal* before update.
+                       // The AI prompt usually compares New Goal vs History Avg.
                        // Let's provide [Current Goal] and [New Goal]. The AI can infer "Change".
                        return getSellerCurrentGoal(sellerName, category, type);
                     };
@@ -15771,7 +6334,7 @@ const supervisorGroups = new Map();
                     for (const u of pendingImportUpdates) {
                         // Filter out supervisors/aggregates
                         const upperUName = u.seller.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-                        if (upperUName === 'BALCAO' || upperUName === 'BALCÃO' || 
+                        if (upperUName === 'BALCAO' || upperUName === 'BALCÃO' ||
                             upperUName.includes('TOTAL') || upperUName.includes('SUPERVISOR') || upperUName.includes('GERAL') ||
                             optimizedData.rcasBySupervisor.has(upperUName) || optimizedData.rcasBySupervisor.has(u.seller)) {
                             continue;
@@ -15802,12 +6365,12 @@ const supervisorGroups = new Map();
 
                         // Add to Supervisor Group
                         const supervisorEntry = getSupervisorEntry(supervisorName);
-                        
+
                         // We aggregate items per seller? Or just list variations?
                         // Requirement: "list the main variations of 5 sellers".
                         // It's better to list *Variations* as items.
                         // One seller might have huge Rev change AND huge Vol change.
-                        
+
                         supervisorEntry.sellers.push({
                             seller: u.seller,
                             category: u.category,
@@ -15825,25 +6388,25 @@ const supervisorGroups = new Map();
                     supervisorsMap.forEach(sup => {
                         // Sort by Impact (Magnitude of change)
                         sup.sellers.sort((a, b) => b.impact - a.impact);
-                        
+
                         // Deduplicate Variations (same seller + same metric)
                         const seen = new Set();
                         const uniqueVariations = [];
-                        
+
                         for (const v of sup.sellers) {
                             const catName = resolveCategoryName(v.category);
                             let metricName = '';
                             if (v.unit === 'R$') metricName = `Faturamento (${catName})`;
                             else if (v.unit === 'Kg') metricName = `Volume (${catName})`;
                             else metricName = `Positivação (${catName})`;
-                            
+
                             // Create unique signature
                             const sig = `${v.seller}|${metricName}`;
-                            
+
                             if (!seen.has(sig)) {
                                 seen.add(sig);
                                 // Attach resolved metric name for later use
-                                v._resolvedMetricName = metricName; 
+                                v._resolvedMetricName = metricName;
                                 uniqueVariations.push(v);
                             }
                         }
@@ -15867,9 +6430,9 @@ const supervisorGroups = new Map();
                     const promptText = `
                         Atue como um Gerente Nacional de Vendas da Prime Distribuição.
                         Analise as alterações de metas propostas (Proposed Goals).
-                        
+
                         Dados: ${JSON.stringify(optimizedContext)}
-                        
+
                         Gere um relatório JSON estritamente com esta estrutura:
                         {
                             "global_summary": "Resumo executivo da estratégia geral percebida nas alterações. Use emojis.",
@@ -15888,7 +6451,7 @@ const supervisorGroups = new Map();
                                 }
                             ]
                         }
-                        
+
                         Regras:
                         1. "variations" deve conter EXATAMENTE os itens enviados no contexto.
                         2. Use o nome COMPLETO da métrica fornecido no input (ex: "Faturamento (Extrusados)"). NÃO simplifique para apenas "Faturamento".
@@ -15903,7 +6466,7 @@ const supervisorGroups = new Map();
 
                     const response = await fetch(`https://api.groq.com/openai/v1/chat/completions`, {
                         method: 'POST',
-                        headers: { 
+                        headers: {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${API_KEY}`
                         },
@@ -15915,40 +6478,40 @@ const supervisorGroups = new Map();
 
                     const data = await response.json();
                     if (data.error) throw new Error(data.error.message);
-                    
+
                     const aiText = data.choices[0].message.content;
-                    
+
                     // 3. Render Output
                     let result;
                     try {
                         const jsonStart = aiText.indexOf('{');
                         const jsonEnd = aiText.lastIndexOf('}');
                         result = JSON.parse(aiText.substring(jsonStart, jsonEnd + 1));
-                        
+
                         // Deduplicate Variations (Post-Processing)
                         if (result.supervisors) {
                             result.supervisors.forEach(sup => {
                                 if (sup.variations) {
                                     const uniqueMap = new Map();
                                     const cleanVariations = [];
-                                    
+
                                     sup.variations.forEach(v => {
                                         // Create signature: Seller + Metric Name
                                         // Normalize strings to avoid case/space issues
                                         const sig = `${v.seller}_${v.metric}`.trim().toLowerCase();
-                                        
+
                                         if (!uniqueMap.has(sig)) {
                                             uniqueMap.set(sig, true);
                                             cleanVariations.push(v);
                                         }
                                     });
-                                    
+
                                     // Enforce Limits (Safety Net)
                                     // If AI hallucinates or context structure varies, ensure BALCAO/Americanas is capped at 5
                                     // Other supervisors can show up to 10
                                     const isBalcao = sup.name && (sup.name.toUpperCase() === 'BALCAO' || sup.name.toUpperCase().includes('AMERICANAS'));
                                     const limit = isBalcao ? 5 : 10;
-                                    
+
                                     sup.variations = cleanVariations.slice(0, limit);
                                 }
                             });
@@ -15974,7 +6537,7 @@ const supervisorGroups = new Map();
             function renderAiSummaryChart(fatDiff) {
                 const chartContainer = document.getElementById('ai-chart-container');
                 if(!chartContainer) return;
-                
+
                 // Clear previous canvas
                 chartContainer.innerHTML = '<canvas id="aiSummaryChart"></canvas>';
                 const ctx = document.getElementById('aiSummaryChart').getContext('2d');
@@ -15984,7 +6547,7 @@ const supervisorGroups = new Map();
                 // Let's iterate updates again to sum "Current" and "Proposed" totals for Revenue only.
                 let totalCurrent = 0;
                 let totalProposed = 0;
-                
+
                 pendingImportUpdates.forEach(u => {
                     if (u.type === 'rev') {
                         const cur = getSellerCurrentGoal(u.seller, u.category, u.type);
@@ -16013,15 +6576,15 @@ const supervisorGroups = new Map();
                             title: { display: true, text: 'Comparativo de Faturamento Total', color: '#fff' }
                         },
                         scales: {
-                            y: { 
-                                beginAtZero: false, 
-                                grid: { color: '#334155' }, 
-                                ticks: { 
+                            y: {
+                                beginAtZero: false,
+                                grid: { color: '#334155' },
+                                ticks: {
                                     color: '#94a3b8',
                                     callback: function(value) {
                                         return new Intl.NumberFormat('pt-BR', { notation: "compact", maximumFractionDigits: 1 }).format(value);
                                     }
-                                } 
+                                }
                             },
                             x: { grid: { display: false }, ticks: { color: '#fff' } }
                         }
@@ -16043,7 +6606,7 @@ const supervisorGroups = new Map();
                         return;
                     }
                     console.log("Iniciando análise. Tamanho do texto:", text.length);
-                    
+
                     const updates = parseGoalsSvStructure(text);
                     console.log("Resultado da análise:", updates ? updates.length : "null");
 
@@ -16051,16 +6614,16 @@ const supervisorGroups = new Map();
                         alert("Nenhum dado válido encontrado para atualização. \n\nVerifique se:\n1. O arquivo possui os cabeçalhos corretos (3 linhas iniciais).\n2. As colunas de 'Ajuste' contêm valores numéricos.\n3. Os nomes dos vendedores correspondem ao cadastro.");
                         return;
                     }
-                    
+
                     pendingImportUpdates = updates;
-                    
+
                     // Reset to page 1 and render using the pagination function
                     importTablePage = 1;
                     renderImportTable();
-                    
+
                     analysisBadges.innerHTML = `<span class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">${updates.length} Registros Encontrados</span>`;
                     analysisContainer.classList.remove('hidden');
-                    
+
                     // Force Scroll
                     analysisContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -16088,7 +6651,7 @@ const supervisorGroups = new Map();
                     goalsSellerTargets.clear();
                     globalClientGoals.clear();
                     // ------------------------
-                    
+
                     // 1. Process Manual Updates (Imported)
                     pendingImportUpdates.forEach(u => {
                         if (u.type === 'rev') {
@@ -16123,7 +6686,7 @@ const supervisorGroups = new Map();
                     const activeSellerNames = new Set();
                     const forbiddenBackfill = ['INATIVOS', 'N/A', 'BALCAO', 'BALCÃO', 'TOTAL', 'GERAL'];
                     const supervisorNames = new Set(optimizedData.rcasBySupervisor.keys());
-                    
+
                     optimizedData.rcasBySupervisor.forEach(rcas => {
                         rcas.forEach(code => {
                             const name = optimizedData.rcaNameByCode.get(code);
@@ -16141,7 +6704,7 @@ const supervisorGroups = new Map();
                     activeSellerNames.forEach(sellerName => {
                         if (!goalsSellerTargets.has(sellerName)) goalsSellerTargets.set(sellerName, {});
                         const targets = goalsSellerTargets.get(sellerName);
-                        
+
                         // Calculate Defaults
                         const defaults = calculateSellerDefaults(sellerName);
 
@@ -16154,10 +6717,10 @@ const supervisorGroups = new Map();
 
                     // Save to Supabase (SKIPPED - Load to Memory Only)
                     // const success = await saveGoalsToSupabase();
-                    
+
                     alert(`Importação realizada! As metas foram carregadas para a aba "Rateio Metas". Verifique e salve manualmente.`);
                     closeModal();
-                    
+
                     // Switch to "Rateio Metas" tab to verify
                     const btnGv = document.querySelector('button[data-tab="gv"]');
                     if (btnGv) btnGv.click();
@@ -16171,155 +6734,8 @@ const supervisorGroups = new Map();
                 }
             });
         }
-        async function exportMetaRealizadoPDF() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('landscape');
 
-            const supervisor = document.getElementById('meta-realizado-supervisor-filter-text').textContent;
-            const vendedor = document.getElementById('meta-realizado-vendedor-filter-text').textContent;
-            const supplier = document.getElementById('meta-realizado-supplier-filter-text').textContent;
-            const pasta = currentMetaRealizadoPasta;
-            const generationDate = new Date().toLocaleString('pt-BR');
-
-            // --- Header ---
-            doc.setFontSize(18);
-            doc.text('Painel Meta vs Realizado', 14, 22);
-            doc.setFontSize(10);
-            doc.setTextColor(100);
-            doc.text(`Data de Emissão: ${generationDate}`, 14, 30);
-            doc.text(`Filtros: Supervisor: ${supervisor} | Vendedor: ${vendedor} | Fornecedor: ${supplier} | Pasta: ${pasta}`, 14, 36);
-
-            // --- Table 1: Sellers Summary ---
-            // Build dynamic headers based on weeks
-            const weeksHeaders = [];
-            metaRealizadoDataForExport.weeks.forEach((w, i) => {
-                weeksHeaders.push({ content: `Semana ${i + 1}`, colSpan: 2, styles: { halign: 'center' } });
-            });
-
-            const weeksSubHeaders = [];
-            metaRealizadoDataForExport.weeks.forEach(() => {
-                weeksSubHeaders.push('Meta');
-                weeksSubHeaders.push('Real.');
-            });
-
-            const sellersHead = [
-                [
-                    { content: 'Vendedor', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
-                    { content: 'Geral', colSpan: 2, styles: { halign: 'center' } },
-                    ...weeksHeaders,
-                    { content: 'Positivação', colSpan: 2, styles: { halign: 'center' } }
-                ],
-                [
-                    'Meta Total', 'Real. Total',
-                    ...weeksSubHeaders,
-                    'Meta', 'Real.'
-                ]
-            ];
-
-            const sellersBody = metaRealizadoDataForExport.sellers.map(row => {
-                const weekCells = [];
-                row.weekData.forEach(w => {
-                    weekCells.push(w.meta.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
-                    weekCells.push(w.real.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
-                });
-                return [
-                    getFirstName(row.name),
-                    row.metaTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-                    row.realTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-                    ...weekCells,
-                    row.posGoal,
-                    row.posRealized
-                ];
-            });
-
-            doc.autoTable({
-                head: sellersHead,
-                body: sellersBody,
-                startY: 45,
-                theme: 'grid',
-                styles: { fontSize: 7, cellPadding: 1, textColor: [0, 0, 0], halign: 'center' },
-                headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', lineWidth: 0.1, lineColor: [200, 200, 200] },
-                alternateRowStyles: { fillColor: [240, 240, 240] },
-                columnStyles: {
-                    0: { halign: 'left', fontStyle: 'bold' } // Vendedor Name
-                },
-                didParseCell: function(data) {
-                    if (data.section === 'body' && data.column.index > 2) {
-                        // Highlight Logic if needed (e.g. Red for Past weeks deficit)
-                    }
-                }
-            });
-
-            // --- Table 2: Clients Detail ---
-            doc.addPage();
-            doc.setFontSize(14);
-            doc.text('Detalhamento por Cliente', 14, 20);
-
-            const clientsHead = [
-                [
-                    { content: 'Cód', rowSpan: 2, styles: { valign: 'middle' } },
-                    { content: 'Cliente', rowSpan: 2, styles: { valign: 'middle' } },
-                    { content: 'Vendedor', rowSpan: 2, styles: { valign: 'middle' } },
-                    { content: 'Cidade', rowSpan: 2, styles: { valign: 'middle' } },
-                    { content: 'Geral', colSpan: 2, styles: { halign: 'center' } },
-                    ...weeksHeaders
-                ],
-                [
-                    'Meta', 'Real.',
-                    ...weeksSubHeaders
-                ]
-            ];
-
-            const clientsBody = metaRealizadoDataForExport.clients.map(row => {
-                const weekCells = [];
-                row.weekData.forEach(w => {
-                    weekCells.push(w.meta.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
-                    weekCells.push(w.real.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
-                });
-                return [
-                    row.codcli,
-                    row.razaoSocial,
-                    getFirstName(row.vendedor),
-                    row.cidade,
-                    row.metaTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-                    row.realTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-                    ...weekCells
-                ];
-            });
-
-            doc.autoTable({
-                head: clientsHead,
-                body: clientsBody,
-                startY: 25,
-                theme: 'grid',
-                styles: { fontSize: 6, cellPadding: 1, textColor: [0, 0, 0], halign: 'right' },
-                headStyles: { fillColor: [22, 30, 61], textColor: 255, fontStyle: 'bold' },
-                columnStyles: {
-                    0: { halign: 'center', cellWidth: 15 },
-                    1: { halign: 'left', cellWidth: 40 },
-                    2: { halign: 'left', cellWidth: 20 },
-                    3: { halign: 'left', cellWidth: 20 },
-                }
-            });
-
-            // Add Page Numbers
-            const pageCount = doc.internal.getNumberOfPages();
-            for(let i = 1; i <= pageCount; i++) {
-                doc.setPage(i);
-                doc.setFontSize(8);
-                doc.setTextColor(150);
-                doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 10, { align: 'center' });
-            }
-
-            let fileNameParam = 'geral';
-            if (selectedMetaRealizadoSellers.length === 1) {
-                fileNameParam = getFirstName(selectedMetaRealizadoSellers[0]);
-            }
-            const safeFileNameParam = fileNameParam.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            doc.save(`meta_vs_realizado_${safeFileNameParam}_${new Date().toISOString().slice(0,10)}.pdf`);
-        }
-
-            function renderAiFullPage(data) {
+function renderAiFullPage(data) {
                 const fullPage = document.getElementById('ai-insights-full-page');
                 const contentDiv = document.getElementById('ai-insights-full-content');
                 const mainWrapper = document.getElementById('content-wrapper'); // This wraps dashboard
@@ -16332,23 +6748,23 @@ const supervisorGroups = new Map();
 
                 // Hide Main Dashboard / Content Wrapper
                 // Note: index.html structure shows content-wrapper wraps everything *except* the new page which I inserted *inside*?
-                // Let's check where I inserted it. 
+                // Let's check where I inserted it.
                 // "Insert the new full-screen AI insights container into index.html... inside content-wrapper"
                 // If it is inside content-wrapper, hiding content-wrapper hides it too.
                 // Wait, in my previous step I used  to insert it *before* Goals View.
                 //  is inside .
                 // So  IS inside .
                 // Therefore, I should hide the *siblings* (dashboard, goals-view, etc) explicitly, NOT the wrapper.
-                
+
                 // Hide all main views
-                ['main-dashboard', 'city-view', 'weekly-view', 'comparison-view', 'stock-view', 'coverage-view', 'goals-view', 'meta-realizado-view', 'mix-view', 'innovations-month-view'].forEach(id => {
+                ['goals-view'].forEach(id => {
                     const el = document.getElementById(id);
                     if (el) el.classList.add('hidden');
                 });
 
                 // Show AI Page
                 fullPage.classList.remove('hidden');
-                
+
                 // Render Content
                 let html = `
                     <div class="bg-gradient-to-r from-slate-800 to-slate-900 rounded-lg p-6 border border-slate-700 shadow-lg mb-8">
@@ -16361,7 +6777,7 @@ const supervisorGroups = new Map();
                     <div id="ai-full-page-chart-container" class="mt-8 mb-8 h-80 bg-slate-800 rounded-xl p-4 border border-slate-700 relative">
                         <canvas id="aiFullPageSummaryChart"></canvas>
                     </div>
-                    
+
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
                 `;
 
@@ -16380,7 +6796,7 @@ const supervisorGroups = new Map();
                                         <h4 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Análise do Time</h4>
                                         <p class="text-slate-300 text-sm leading-relaxed">${sup.analysis}</p>
                                     </div>
-                                    
+
                                     <div>
                                         <div class="flex justify-between items-center mb-3">
                                             <h4 class="text-sm font-bold text-slate-400 uppercase tracking-wider">Detalhamento por Vendedor</h4>
@@ -16398,12 +6814,12 @@ const supervisorGroups = new Map();
                                                 </thead>
                                                 <tbody class="divide-y divide-slate-700/50 bg-slate-800/30">
                         `;
-                        
+
                         if (sup.variations) {
                             sup.variations.forEach(v => {
                                 // Enhance change display with colors and icons
                                 let coloredChange = v.change_display;
-                                
+
                                 // Regex for (+...) -> Green with arrow up
                                 if (coloredChange.includes('(+')) {
                                     coloredChange = coloredChange.replace(/(\(\+[^)]+\))/g, '<span class="text-emerald-400 font-bold bg-emerald-400/10 px-1.5 py-0.5 rounded ml-1 text-xs">$1</span>');
@@ -16442,7 +6858,7 @@ const supervisorGroups = new Map();
 
                 html += `</div>`;
                 contentDiv.innerHTML = html;
-                
+
                 // Render Chart
                 setTimeout(renderFullPageSummaryChart, 100);
 
@@ -16450,14 +6866,14 @@ const supervisorGroups = new Map();
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             }
 
-            function renderFullPageSummaryChart() {
+function renderFullPageSummaryChart() {
                 const ctx = document.getElementById('aiFullPageSummaryChart');
                 if (!ctx) return;
 
                 // Calculate Totals
                 let totalCurrent = 0;
                 let totalProposed = 0;
-                
+
                 // Ensure we have updates
                 if (pendingImportUpdates) {
                     pendingImportUpdates.forEach(u => {
@@ -16493,9 +6909,9 @@ const supervisorGroups = new Map();
                         maintainAspectRatio: false,
                         plugins: {
                             legend: { display: false },
-                            title: { 
-                                display: true, 
-                                text: `Comparativo Global de Faturamento (Diferença: ${diff > 0 ? '+' : ''}${diff.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})})`, 
+                            title: {
+                                display: true,
+                                text: `Comparativo Global de Faturamento (Diferença: ${diff > 0 ? '+' : ''}${diff.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})})`,
                                 color: '#fff',
                                 font: { size: 16 }
                             },
@@ -16508,25 +6924,24 @@ const supervisorGroups = new Map();
                             }
                         },
                         scales: {
-                            y: { 
-                                beginAtZero: false, 
-                                grid: { color: '#334155' }, 
-                                ticks: { color: '#94a3b8' } 
+                            y: {
+                                beginAtZero: false,
+                                grid: { color: '#334155' },
+                                ticks: { color: '#94a3b8' }
                             },
-                            x: { 
-                                grid: { display: false }, 
-                                ticks: { color: '#fff', font: { size: 14, weight: 'bold' } } 
+                            x: {
+                                grid: { display: false },
+                                ticks: { color: '#fff', font: { size: 14, weight: 'bold' } }
                             }
                         }
                     }
                 });
             }
 
-            // Export to HTML Function
-            document.getElementById('ai-insights-export-btn')?.addEventListener('click', () => {
+document.getElementById('ai-insights-export-btn')?.addEventListener('click', () => {
                 const content = document.getElementById('ai-insights-full-content').innerHTML;
                 const timestamp = new Date().toLocaleString();
-                
+
                 const fullHtml = `
                     <!DOCTYPE html>
                     <html lang="pt-br">
@@ -16546,7 +6961,7 @@ const supervisorGroups = new Map();
                     </body>
                     </html>
                 `;
-                
+
                 const blob = new Blob([fullHtml], { type: 'text/html' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -16558,16 +6973,14 @@ const supervisorGroups = new Map();
                 URL.revokeObjectURL(url);
             });
 
-            // Back Button Logic
-            document.getElementById('ai-insights-back-btn')?.addEventListener('click', () => {
+document.getElementById('ai-insights-back-btn')?.addEventListener('click', () => {
                 document.getElementById('ai-insights-full-page').classList.add('hidden');
                 // Restore Dashboard (or Goals View specifically since we came from there)
                 // Default to Goals View since the Import Modal is there
                 navigateTo('goals');
-                
+
                 // Re-open the Import Modal to preserve context/flow
                 const modal = document.getElementById('import-goals-modal');
                 if (modal) modal.classList.remove('hidden');
             });
-
 })();

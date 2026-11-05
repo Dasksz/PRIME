@@ -627,6 +627,9 @@
         const telaLogin = document.getElementById('tela-login');
         const telaLoading = document.getElementById('tela-loading');
         const telaPendente = document.getElementById('tela-pendente');
+        const passwordRecovery = window.setupPrimePasswordRecovery(supabaseClient, async () => {
+            window.location.replace(window.location.origin + window.location.pathname);
+        });
 
         // Logout Button Logic for Pending Screen
         const logoutButtonPendente = document.getElementById('logout-button-pendente');
@@ -649,6 +652,7 @@
         let isAppReady = false;
 
         async function verifyUserProfile(session) {
+            if (passwordRecovery.isRecovering()) return;
             if (window.isDataLoaded) {
                 const telaLoading = document.getElementById('tela-loading');
                 const telaLogin = document.getElementById('tela-login');
@@ -778,10 +782,14 @@
         });
 
         // Auth State Listener
-        supabaseClient.auth.onAuthStateChange(async (event, session) => {
+        supabaseClient.auth.onAuthStateChange((event, session) => {
+            if (passwordRecovery.handleAuth(event)) return;
             if (session) {
-                verifyUserProfile(session);
+                setTimeout(() => { void verifyUserProfile(session); }, 0);
             } else {
+                telaLoading.classList.add('hidden');
+                telaPendente.classList.add('hidden');
+                document.getElementById('content-wrapper')?.classList.add('hidden');
                 telaLogin.classList.remove('hidden');
             }
         });
