@@ -1,4 +1,6 @@
 (function() {
+if (window.primeGoalsAppInitialized) return;
+window.primeGoalsAppInitialized = true;
 const embeddedData = window.embeddedData;
 
 class ColumnarDataset {
@@ -5575,6 +5577,7 @@ if (defGoalsMetric) {
             const refPrevClients = document.getElementById('ref-prev-clients');
         }
 
+setupEventListeners();
 navigateTo();
 
 function calculateSellerDefaults(sellerName) {
