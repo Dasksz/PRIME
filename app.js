@@ -402,7 +402,7 @@ for(let i=0; i<allClientsData.length; i++) {
             clientMapForKPIs.set(String(c['Código'] || c['codigo_cliente']), c);
         }
 
-const productDetailsMap = new Map(Object.entries(embeddedData.productDetails || {}));
+
 
 if (embeddedData.lastSaleDate) {
             const ts = parseInt(embeddedData.lastSaleDate);
@@ -775,28 +775,7 @@ function initializeOptimizedDataStructures() {
             processDatasetForIndices(allSalesData, optimizedData.indices.current, optimizedData.salesById, false);
             processDatasetForIndices(allHistoryData, optimizedData.indices.history, optimizedData.historyById, true);
 
-            // --- POPULATE MISSING PASTA FOR UNSOLD PRODUCTS ---
-            // Build a map of CODFOR -> PASTA using sold products
-            const codforToPastaMap = new Map();
-            optimizedData.productPastaMap.forEach((pasta, productCode) => {
-                const details = productDetailsMap.get(productCode);
-                if (details && details.codfor) {
-                    if (!codforToPastaMap.has(details.codfor)) {
-                        codforToPastaMap.set(details.codfor, pasta);
-                    }
-                }
-            });
 
-            // Backfill Pasta for products that have no sales (and thus no entry in productPastaMap yet)
-            productDetailsMap.forEach((details, productCode) => {
-                if (!optimizedData.productPastaMap.has(productCode) && details.codfor) {
-                    const inferredPasta = codforToPastaMap.get(details.codfor);
-                    if (inferredPasta) {
-                        optimizedData.productPastaMap.set(productCode, inferredPasta);
-                    }
-                }
-            });
-            // --- END BACKFILL ---
 
             supervisorToRcaMap.forEach((rcas, supervisor) => {
                 optimizedData.rcasBySupervisor.set(supervisor, Array.from(rcas));
@@ -4932,18 +4911,6 @@ async function enviarDadosParaSupabase(data) {
                     await clearTable('data_stock');
                     await uploadBatchParallel('data_stock', data.stock, false);
                 }
-                if (data.innovations && data.innovations.length > 0) {
-                    await clearTable('data_innovations');
-                    await uploadBatchParallel('data_innovations', data.innovations, false);
-                }
-                if (data.product_details && data.product_details.length > 0) {
-                    await clearTable('data_product_details', 'code');
-                    await uploadBatchParallel('data_product_details', data.product_details, false);
-                }
-                if (data.active_products && data.active_products.length > 0) {
-                    await clearTable('data_active_products', 'code');
-                    await uploadBatchParallel('data_active_products', data.active_products, false);
-                }
                 if (data.metadata && data.metadata.length > 0) {
                     // Update last_update timestamp
                     const now = new Date();
@@ -5029,9 +4996,7 @@ if (generateBtn) {
                 generateBtn.addEventListener('click', async () => {
                     const salesFile = document.getElementById('sales-file-input').files[0];
                     const clientsFile = document.getElementById('clients-file-input').files[0];
-                    const productsFile = document.getElementById('products-file-input').files[0];
                     const historyFile = document.getElementById('history-file-input').files[0];
-                    const innovationsFile = document.getElementById('innovations-file-input').files[0];
 
                     if (!salesFile && !historyFile) {
                         alert("Pelo menos o arquivo de Vendas ou Histórico é necessário.");
@@ -5055,11 +5020,11 @@ if (generateBtn) {
                     }
 
                     // Initialize Worker
-                    const worker = new Worker('worker.js?v=20261013-client-headers');
+                    const worker = new Worker('worker.js?v=20261105-metas-inputs');
 
                     document.getElementById('status-text').textContent = "Processando arquivos...";
 
-                    worker.postMessage({ salesFile, clientsFile, productsFile, historyFile, innovationsFile, configCityBranches });
+                    worker.postMessage({ salesFile, clientsFile, historyFile, configCityBranches });
 
                     worker.onmessage = (e) => {
                         const { type, data, status, percentage, message, missingCities } = e.data;

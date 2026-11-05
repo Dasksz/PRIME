@@ -128,7 +128,7 @@
             }
 
             if (useCache) {
-                 const { detailed, history, clients, products, activeProds, stock, innovations, metadata, orders } = cachedData;
+                 const { detailed, history, clients, stock, metadata, orders } = cachedData;
                  // Proceed with cached data
                  // Need to reconstruct Helper Maps if they are not in cache or reconstructable
 
@@ -444,7 +444,7 @@
                 });
             };
 
-            let detailed, history, clients, products, activeProds, stock, innovations, metadata, orders;
+            let detailed, history, clients, stock, metadata, orders;
 
             let clientCoordinates;
 
@@ -454,10 +454,7 @@
                 detailed = cachedData.detailed;
                 history = cachedData.history;
                 clients = cachedData.clients;
-                products = cachedData.products;
-                activeProds = cachedData.activeProds;
                 stock = cachedData.stock;
-                innovations = cachedData.innovations;
                 metadata = metadataRemoteRaw || cachedData.metadata;
                 orders = cachedData.orders;
                 
@@ -485,14 +482,11 @@
                 const colsStock = 'id,product_code,filial,stock_qty';
                 const colsOrders = 'id,pedido,codcli,cliente_nome,cidade,nome,superv,fornecedores_str,dtped,dtsaida,posicao,vlvenda,totpesoliq,filial,tipovenda,fornecedores_list,codfors_list';
 
-                const [detailedUpper, historyUpper, clientsUpper, productsFetched, activeProdsFetched, stockFetched, innovationsFetched, metadataFetched, ordersUpper, clientCoordinatesFetched] = await Promise.all([
+                const [detailedUpper, historyUpper, clientsUpper, stockFetched, metadataFetched, ordersUpper, clientCoordinatesFetched] = await Promise.all([
                     fetchAll('data_detailed', colsDetailed, 'sales', 'columnar', 'id'),
                     fetchAll('data_history', colsDetailed, 'history', 'columnar', 'id'),
                     fetchAll('data_clients', colsClients, 'clients', 'columnar', 'id'),
-                    fetchAll('data_product_details', null, null, 'object', 'code'),
-                    fetchAll('data_active_products', null, null, 'object', 'code'),
                     fetchAll('data_stock', colsStock, 'stock', 'columnar', 'id'),
-                    fetchAll('data_innovations', null, null, 'object', 'id'),
                     fetchAll('data_metadata', null, null, 'object', 'key'),
                     fetchAll('data_orders', colsOrders, 'orders', 'object', 'id'),
                     fetchAll('data_client_coordinates', null, null, 'object', 'client_code')
@@ -501,17 +495,14 @@
                 detailed = detailedUpper;
                 history = historyUpper;
                 clients = clientsUpper;
-                products = productsFetched;
-                activeProds = activeProdsFetched;
                 stock = stockFetched;
-                innovations = innovationsFetched;
                 metadata = metadataFetched;
                 orders = ordersUpper;
                 clientCoordinates = clientCoordinatesFetched;
 
                 // Salvar no Cache
                 const dataToCache = {
-                    detailed, history, clients, products, activeProds, stock, innovations, metadata, orders, clientCoordinates
+                    detailed, history, clients, stock, metadata, orders, clientCoordinates
                 };
 
                 // Salvar de forma assíncrona sem travar UI
@@ -519,22 +510,6 @@
             }
 
             loaderText.textContent = 'Processando...';
-
-            // Reconstruct Helper Maps
-            const productDetailsMap = {};
-            if (products && products.length) {
-                products.forEach(p => {
-                    productDetailsMap[p.code] = {
-                        descricao: p.descricao,
-                        fornecedor: p.fornecedor,
-                        codfor: p.codfor,
-                        dtCadastro: p.dtcadastro ? new Date(p.dtcadastro).getTime() : null,
-                        ...p
-                    };
-                });
-            }
-
-            const activeProductCodes = activeProds.map(p => p.code);
 
             const stockMap05 = {};
             const stockMap08 = {};
@@ -572,9 +547,6 @@
                 byOrder: orders,
                 stockMap05: stockMap05,
                 stockMap08: stockMap08,
-                innovationsMonth: innovations,
-                activeProductCodes: activeProductCodes,
-                productDetails: productDetailsMap,
                 metadata: metadata,
                 clientCoordinates: clientCoordinates,
                 passedWorkingDaysCurrentMonth: 1,

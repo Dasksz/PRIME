@@ -64,7 +64,6 @@ function readClientWorksheet(worksheet, fileName) {
         const mandatoryColumns = {
             sales: ['CODCLI', 'PEDIDO', 'CODUSUR', 'CODSUPERVISOR', 'DTPED', 'DTSAIDA', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX'],
             clients: [], // Validation relaxed to support variable headers (aliases handled in processing)
-            products: ['Código', 'Qtde embalagem master(Compra)', 'Descrição', 'Nome do fornecedor', 'Fornecedor', 'Dt.Cadastro'],
             history: ['CODCLI', 'NOME', 'SUPERV', 'PEDIDO', 'CODUSUR', 'CODSUPERVISOR', 'DTPED', 'DTSAIDA', 'PRODUTO', 'DESCRICAO', 'FORNECEDOR', 'OBSERVACAOFOR', 'CODFOR', 'QTVENDA', 'VLVENDA', 'VLBONIFIC', 'TOTPESOLIQ', 'POSICAO', 'ESTOQUEUNIT', 'TIPOVENDA', 'FILIAL', 'ESTOQUECX']
         };
 
@@ -87,11 +86,6 @@ function readClientWorksheet(worksheet, fileName) {
                 'Código': 'number',
                 'Data da Última Compra': 'date',
                 'Data e Hora de Cadastro': 'date'
-            },
-            products: {
-                'Código': 'number',
-                'Qtde embalagem master(Compra)': 'number',
-                'Dt.Cadastro': 'date'
             },
             history: {
                 'CODCLI': 'number',
@@ -669,16 +663,14 @@ function readClientWorksheet(worksheet, fileName) {
         }
 
         self.onmessage = async (event) => {
-            const { salesFile, clientsFile, productsFile, historyFile, innovationsFile, configCityBranches } = event.data;
+            const { salesFile, clientsFile, historyFile, configCityBranches } = event.data;
 
             try {
                 self.postMessage({ type: 'progress', status: 'Lendo arquivos...', percentage: 10 });
-                const [salesDataRaw, clientsDataRaw, productsDataRaw, historyDataRaw, innovationsDataRaw] = await Promise.all([
+                const [salesDataRaw, clientsDataRaw, historyDataRaw] = await Promise.all([
                     readFile(salesFile, 'sales'),
                     readFile(clientsFile, 'clients'),
-                    readFile(productsFile, 'products'),
                     readFile(historyFile, 'history'),
-                    readFile(innovationsFile, 'innovations')
                 ]);
 
 
@@ -757,27 +749,6 @@ function readClientWorksheet(worksheet, fileName) {
                 };
                 collectProducts(salesDataRaw);
                 collectProducts(historyDataRaw);
-
-                productsDataRaw.forEach(prod => {
-                    const productCode = String(prod['Código'] || '').trim();
-                    if (!productCode) return;
-                    activeProductCodesFromCadastro.add(productCode);
-                    let qtdeMaster = parseInt(prod['Qtde embalagem master(Compra)'], 10);
-                    if (isNaN(qtdeMaster) || qtdeMaster <= 0) qtdeMaster = 1;
-                    productMasterMap.set(productCode, qtdeMaster);
-                    if (!productDetailsMap.has(productCode)) {
-                            const dtCad = parseDate(prod['Dt.Cadastro']);
-                            productDetailsMap.set(productCode, {
-                                code: productCode,
-                                descricao: String(prod['Descrição'] || `Produto ${productCode}`),
-                                fornecedor: String(prod['Nome do fornecedor'] || 'N/A'),
-                                codfor: String(prod['Fornecedor'] || 'N/A'),
-                                dtCadastro: dtCad ? dtCad.getTime() : null,
-                                pasta: null
-                            });
-                        }
-                });
-
 
                 const clientRcaOverrides = new Map();
                 salesDataRaw.forEach(rawRow => {
@@ -1042,8 +1013,6 @@ function readClientWorksheet(worksheet, fileName) {
                 const columnarClients = toColumnar(Array.from(clientMap.values()));
 
                 // --- RESTORED LOGIC FOR UPLOAD ARRAYS ---
-                const finalProductDetailsData = Array.from(productDetailsMap.values());
-                const finalActiveProductsData = Array.from(activeProductCodesFromCadastro).map(code => ({ code: code }));
 
                 const finalStockData = [];
                 // Reconstruct stock array from Maps (05 and 08)
@@ -1053,12 +1022,6 @@ function readClientWorksheet(worksheet, fileName) {
                 stockMap08.forEach((qty, code) => {
                     finalStockData.push({ product_code: code, filial: '08', stock_qty: qty });
                 });
-
-                const finalInnovationsData = innovationsDataRaw.map(item => ({
-                    codigo: item['Codigo'] || item['codigo'] || null,
-                    produto: item['Produto'] || item['produto'] || null,
-                    inovacoes: item['Inovacoes'] || item['inovacoes'] || null
-                }));
 
                 const finalMetadata = [];
                 finalMetadata.push({ key: 'passed_working_days', value: String(passedWorkingDaysCurrentMonth) });
@@ -1077,9 +1040,6 @@ function readClientWorksheet(worksheet, fileName) {
                         clients: columnarClients,
                         // Upload Support Arrays
                         stock: finalStockData,
-                        innovations: finalInnovationsData,
-                        product_details: finalProductDetailsData,
-                        active_products: finalActiveProductsData,
                         metadata: finalMetadata,
 
                         // Legacy Maps for Frontend (if needed, or logic script handles it)
