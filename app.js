@@ -4679,7 +4679,11 @@ async function enviarDadosParaSupabase(data) {
    if (!length && ['data_detailed','data_history','data_clients'].includes(table)) throw new Error('Arquivo obrigatório vazio: ' + table);
    if (!length) continue;
    counts[table] = length;
-   for (let start=0; start<length; start+=1000) {
+   let nextChunk = 0, completedRows = 0;
+   const sendChunks = async () => {
+   while (nextChunk < length) {
+    const start = nextChunk;
+    nextChunk += 1000;
     const rows=[];
     for (let i=start;i<Math.min(start+1000,length);i++) {
      const raw = source.columns ? Object.fromEntries(source.columns.map(col=>[col,source.values[col][i]])) : source[i];
@@ -4691,10 +4695,20 @@ async function enviarDadosParaSupabase(data) {
      }
      rows.push(row);
     }
-    status.textContent = `Preparando ${table}: ${Math.min(start+1000,length)}/${length}`;
-    const {error} = await window.supabaseClient.from('metas_upload_chunks').upsert({upload_id:uploadId,table_name:table,chunk_no:start/1000,rows_data:rows},{onConflict:'owner_id,upload_id,table_name,chunk_no'});
-    if(error) throw error;
+    for (let attempt=0; ; attempt++) {
+     const {error} = await window.supabaseClient.from('metas_upload_chunks').upsert({upload_id:uploadId,table_name:table,chunk_no:start/1000,rows_data:rows},{onConflict:'owner_id,upload_id,table_name,chunk_no'});
+     if (!error) break;
+     const retryable = /fetch|network|timeout|temporar|502|503|504/i.test(error.message || '');
+     if (!retryable || attempt >= 2) throw error;
+     await new Promise(resolve => setTimeout(resolve, 500 * 2 ** attempt));
+    }
+    completedRows += rows.length;
+    status.textContent = `Enviando ${table}: ${completedRows}/${length}`;
    }
+   };
+   const results = await Promise.allSettled(Array.from({length:Math.min(3,Math.ceil(length/1000))}, () => sendChunks()));
+   const failed = results.find(result => result.status === 'rejected');
+   if (failed) throw failed.reason;
   }
   status.textContent='Conferindo e aplicando a nova base...';
   const {error}=await window.supabaseClient.rpc('commit_metas_upload',{p_upload_id:uploadId,p_counts:counts});
