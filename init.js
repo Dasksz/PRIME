@@ -872,7 +872,7 @@
                 throw new Error('Dados de metas não disponíveis (globalClientGoals undefined).');
             }
 
-            const monthKey = new Date().toISOString().slice(0, 7); // YYYY-MM
+            const monthKey = window.getGoalsMonthKey(); // YYYY-MM
 
             // Convert Map to JSON-friendly format
             const goalsObj = {};
@@ -896,7 +896,8 @@
                 goals_data: {
                     clients: goalsObj,
                     targets: goalsTargets,
-                    seller_targets: sellerTargetsObj
+                    seller_targets: sellerTargetsObj,
+                    adjustments: window.getGoalsAdjustments()
                 },
                 updated_at: new Date().toISOString()
             };
@@ -927,7 +928,7 @@
             btn.innerHTML = 'Limpando...';
             btn.disabled = true;
 
-            const monthKey = new Date().toISOString().slice(0, 7);
+            const monthKey = window.getGoalsMonthKey();
 
             try {
                 // DELETE via REST
@@ -945,6 +946,7 @@
                     throw new Error(`Erro ao limpar metas (${response.status}): ${errorText}`);
                 }
 
+                window.resetGoalsState();
                 // Limpar estado local
                 if(typeof globalClientGoals !== 'undefined') globalClientGoals.clear();
                 if(typeof goalsTargets !== 'undefined') {

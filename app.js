@@ -3305,6 +3305,16 @@ function distributeDown(sellerName, parentCategory, parentTargetValue) {
             });
         }
 
+function allocateIntegerGoals(total, rows) {
+    total = Math.round(Number(total));
+    if (!Number.isFinite(total) || total < 0) throw new Error('Informe uma meta válida, maior ou igual a zero.');
+    const weights = rows.map(row => Math.max(0, Number(row.hist) || 0));
+    const sum = weights.reduce((a,b) => a+b,0);
+    const parts = rows.map((row,index) => { const raw = total * (sum ? weights[index]/sum : 1/rows.length); return {row,index,value:Math.floor(raw),fraction:raw-Math.floor(raw)}; });
+    let remaining = total - parts.reduce((n,p) => n+p.value,0);
+    [...parts].sort((a,b) => b.fraction-a.fraction || a.index-b.index).forEach(p => { if (remaining > 0) { p.value++; remaining--; } });
+    return parts.map(p => ({...p.row, allocated:p.value}));
+}
 function handleDistributePositivation(totalGoal, contextKey, filteredClientMetrics) {
             // filteredClientMetrics contains the list of sellers currently visible/active
             // We should distribute ONLY to them.
@@ -3332,16 +3342,12 @@ function handleDistributePositivation(totalGoal, contextKey, filteredClientMetri
             // 2. Distribute Total Goal
             // We use Largest Remainder Method or simple rounding? Simple rounding for now.
 
-            sellersHistory.forEach(item => {
-                let share = 0;
-                if (totalHistoryPos > 0) {
-                    share = item.hist / totalHistoryPos;
-                }
+            allocateIntegerGoals(totalGoal, sellersHistory).forEach(item => {
 
                 // If totalHistory is 0 but we have a Goal, distribute evenly?
                 // Or leave 0? User said "proporcional". 0 history -> 0 share seems fair.
 
-                const sellerTarget = Math.round(totalGoal * share);
+                const sellerTarget = item.allocated;
 
                 // Update Primary Target
                 if (!goalsSellerTargets.has(item.seller)) goalsSellerTargets.set(item.seller, {});
@@ -3389,13 +3395,9 @@ function handleDistributeMix(totalGoal, type, contextKey, filteredClientMetrics)
             });
 
             // 2. Distribute Total Goal
-            sellersHistory.forEach(item => {
-                let share = 0;
-                if (totalHistoryMix > 0) {
-                    share = item.hist / totalHistoryMix;
-                }
+            allocateIntegerGoals(totalGoal, sellersHistory).forEach(item => {
 
-                const sellerTarget = Math.round(totalGoal * share);
+                const sellerTarget = item.allocated;
 
                 // Update Primary Target
                 if (!goalsSellerTargets.has(item.seller)) goalsSellerTargets.set(item.seller, {});
@@ -4661,309 +4663,49 @@ async function navigateTo() {
 }
 
 async function enviarDadosParaSupabase(data) {
-            const supabaseUrl = document.getElementById('supabase-url').value;
-
-            // Tentamos obter a sessão atual do usuário
-            const { data: { session } } = await supabaseClient.auth.getSession();
-
-            // Definição da chave de autenticação (Token)
-            // Agora usa estritamente o token de sessão do usuário logado
-            const authToken = session?.access_token;
-
-            // Definição da API Key (Header 'apikey')
-            const apiKeyHeader = SUPABASE_ANON_KEY;
-
-            if (!supabaseUrl || !authToken) {
-                alert("Você precisa estar logado como Administrador para enviar dados.");
-                return;
-            }
-
-            const statusText = document.getElementById('status-text');
-            const progressBar = document.getElementById('progress-bar');
-            const statusContainer = document.getElementById('status-container');
-
-            statusContainer.classList.remove('hidden');
-            const updateStatus = (msg, percent) => {
-                statusText.textContent = msg;
-                progressBar.style.width = `${percent}%`;
-            };
-
-            // --- OPTIMIZATION: Increased Batch Size & Concurrency ---
-            const BATCH_SIZE = 2000;
-            const CONCURRENT_REQUESTS = 5;
-
-            const retryOperation = async (operation, retries = 3, delay = 1000) => {
-                for (let i = 0; i < retries; i++) {
-                    try {
-                        return await operation();
-                    } catch (error) {
-                        if (i === retries - 1) throw error;
-                        console.warn(`Tentativa ${i + 1} falhou. Retentando em ${delay}ms...`, error);
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                        delay *= 2; // Exponential backoff
-                    }
-                }
-            };
-
-            const performUpsert = async (table, batch) => {
-                await retryOperation(async () => {
-                    const response = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
-                        method: 'POST',
-                        headers: {
-                            'apikey': apiKeyHeader,
-                            'Authorization': `Bearer ${authToken}`,
-                            'Content-Type': 'application/json',
-                            'Prefer': 'resolution=merge-duplicates'
-                        },
-                        body: JSON.stringify(batch)
-                    });
-
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        throw new Error(`Erro Supabase (${response.status}): ${errorText}`);
-                    }
-                });
-            };
-
-            const clearTable = async (table, pkColumn = 'id') => {
-                await retryOperation(async () => {
-                    // Tenta limpar usando a função RPC 'truncate_table' (muito mais rápido e sem timeout)
-                    try {
-                        const rpcResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/truncate_table`, {
-                            method: 'POST',
-                            headers: {
-                                'apikey': apiKeyHeader,
-                                'Authorization': `Bearer ${authToken}`,
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ table_name: table })
-                        });
-
-                        if (rpcResponse.ok) {
-                            return; // Sucesso com TRUNCATE
-                        } else {
-                            const errorText = await rpcResponse.text();
-                            console.warn(`RPC truncate_table falhou para ${table} (Status: ${rpcResponse.status}). Msg: ${errorText}. Tentando DELETE convencional...`);
-                        }
-                    } catch (e) {
-                        console.warn(`Erro ao chamar RPC truncate_table para ${table}, tentando DELETE convencional...`, e);
-                    }
-
-                    // Fallback: Batched Delete para evitar Statement Timeout (57014)
-                    console.info(`Iniciando exclusão em lote para a tabela ${table}...`);
-                    let hasMore = true;
-                    // Utiliza lote de 50 para garantir que a URL gerada com in.(id1,id2...)
-                    // não exceda o limite de ~8KB de requisições HTTP do Supabase/NGINX
-                    // (50 UUIDs * 37 chars = ~1850 bytes).
-                    const batchSize = 50;
-
-                    while (hasMore) {
-                        // Busca um lote de IDs
-                        const fetchResponse = await fetch(`${supabaseUrl}/rest/v1/${table}?select=${pkColumn}&limit=${batchSize}`, {
-                            method: 'GET',
-                            headers: {
-                                'apikey': apiKeyHeader,
-                                'Authorization': `Bearer ${authToken}`,
-                                'Content-Type': 'application/json'
-                            }
-                        });
-
-                        if (!fetchResponse.ok) {
-                            const errorText = await fetchResponse.text();
-                            throw new Error(`Erro ao buscar IDs para exclusão em lote na tabela ${table}: ${errorText}`);
-                        }
-
-                        const rows = await fetchResponse.json();
-
-                        if (rows.length === 0) {
-                            hasMore = false;
-                            break;
-                        }
-
-                        const ids = rows.map(r => r[pkColumn]);
-
-                        // Deleta o lote
-                        const deleteUrl = new URL(`${supabaseUrl}/rest/v1/${table}`);
-
-                        // Para evitar URL too long, não passamos todos os ids na URL se forem muitos (limitamos a 50 que é seguro)
-                        deleteUrl.searchParams.append(pkColumn, `in.(${ids.join(',')})`);
-
-                        const deleteResponse = await fetch(deleteUrl.toString(), {
-                            method: 'DELETE',
-                            headers: {
-                                'apikey': apiKeyHeader,
-                                'Authorization': `Bearer ${authToken}`,
-                                'Content-Type': 'application/json',
-                                'Prefer': 'return=representation'
-                            }
-                        });
-
-                        if (!deleteResponse.ok) {
-                            const errorText = await deleteResponse.text();
-                            if (errorText.includes('57014') || errorText.includes('statement timeout')) {
-                                throw new Error(`Erro de Timeout (57014) ao limpar a tabela ${table} em lotes. O banco de dados está extremamente lento.\n\nPara resolver isso permanentemente, você precisa criar a função 'truncate_table' no Supabase. Copie todo o conteúdo do arquivo 'SQL/SQL_GERAL.sql' e execute-o no SQL Editor do seu projeto Supabase.`);
-                            }
-                            throw new Error(`Erro ao deletar lote na tabela ${table}: ${errorText}`);
-                        }
-
-                        const deletedRows = await deleteResponse.json();
-
-                        // Prevent infinite loop if RLS blocks deletion (i.e. we fetch rows but cannot delete them)
-                        if (deletedRows.length === 0) {
-                            throw new Error(`Permissão Negada: Nenhuma linha foi deletada na tabela ${table}. Suas políticas de segurança (RLS) permitem leitura mas bloqueiam exclusão.`);
-                        }
-                    }
-                });
-            };
-
-            // List of columns that are dates and need conversion from timestamp (ms) to ISO String
-            const dateColumns = new Set(['dtped', 'dtsaida', 'ultimacompra', 'datacadastro', 'dtcadastro', 'updated_at']);
-
-            const formatValue = (key, value) => {
-                if (dateColumns.has(key) && typeof value === 'number') {
-                    try {
-                        return new Date(value).toISOString();
-                    } catch (e) {
-                        return null;
-                    }
-                }
-                return value;
-            };
-
-            // --- Unified Parallel Uploader ---
-            const uploadBatchParallel = async (table, dataObj, isColumnar) => {
-                const totalRows = isColumnar ? dataObj.length : dataObj.length;
-                if (totalRows === 0) return;
-
-                const totalBatches = Math.ceil(totalRows / BATCH_SIZE);
-                let processedBatches = 0;
-
-                const processChunk = async (chunkIndex) => {
-                    const start = chunkIndex * BATCH_SIZE;
-                    const end = Math.min(start + BATCH_SIZE, totalRows);
-                    const batch = [];
-
-                    if (isColumnar) {
-                        const columns = dataObj.columns;
-                        const values = dataObj.values;
-                        // Pre-calculate lower keys to avoid repeated toLowerCase()
-                        const colKeys = columns.map(c => c.toLowerCase());
-
-                        for (let j = start; j < end; j++) {
-                            const row = {};
-                            for (let k = 0; k < columns.length; k++) {
-                                const col = columns[k];
-                                const lowerKey = colKeys[k];
-                                row[lowerKey] = formatValue(lowerKey, values[col][j]);
-                            }
-                            batch.push(row);
-                        }
-                    } else {
-                        // Array of Objects
-                        for (let j = start; j < end; j++) {
-                            const item = dataObj[j];
-                            const newItem = {};
-                            for (const key in item) {
-                                const lowerKey = key.toLowerCase();
-                                newItem[lowerKey] = formatValue(lowerKey, item[key]);
-                            }
-                            batch.push(newItem);
-                        }
-                    }
-
-                    await performUpsert(table, batch);
-                    processedBatches++;
-                    const progress = Math.round((processedBatches / totalBatches) * 100);
-                    updateStatus(`Enviando ${table}: ${progress}%`, progress);
-                };
-
-                // Queue worker pattern
-                const queue = Array.from({ length: totalBatches }, (_, i) => i);
-                const worker = async () => {
-                    while (queue.length > 0) {
-                        const index = queue.shift();
-                        await processChunk(index);
-                    }
-                };
-
-                const workers = Array.from({ length: Math.min(CONCURRENT_REQUESTS, totalBatches) }, worker);
-                await Promise.all(workers);
-            };
-
-            try {
-                if (data.detailed && data.detailed.length > 0) {
-                    await clearTable('data_detailed');
-                    await uploadBatchParallel('data_detailed', data.detailed, true);
-                }
-                if (data.history && data.history.length > 0) {
-                    await clearTable('data_history');
-                    await uploadBatchParallel('data_history', data.history, true);
-                }
-                if (data.byOrder && data.byOrder.length > 0) {
-                    await clearTable('data_orders');
-                    await uploadBatchParallel('data_orders', data.byOrder, false);
-                }
-                if (data.clients && data.clients.length > 0) {
-                    await clearTable('data_clients');
-                    await uploadBatchParallel('data_clients', data.clients, true);
-                }
-                if (data.stock && data.stock.length > 0) {
-                    await clearTable('data_stock');
-                    await uploadBatchParallel('data_stock', data.stock, false);
-                }
-                if (data.metadata && data.metadata.length > 0) {
-                    // Update last_update timestamp
-                    const now = new Date();
-                    const lastUpdateIdx = data.metadata.findIndex(m => m.key === 'last_update');
-                    if (lastUpdateIdx !== -1) {
-                        data.metadata[lastUpdateIdx].value = now.toISOString();
-                    } else {
-                        data.metadata.push({ key: 'last_update', value: now.toISOString() });
-                    }
-
-                    // --- PRESERVE MANUAL KEYS ---
-                    try {
-                        const keysToPreserve = ['groq_api_key'];
-                        const { data: currentMetadata } = await window.supabaseClient
-                            .from('data_metadata')
-                            .select('*')
-                            .in('key', keysToPreserve);
-
-                        if (currentMetadata && currentMetadata.length > 0) {
-                            currentMetadata.forEach(item => {
-                                const existsInNew = data.metadata.some(newM => newM.key === item.key);
-                                if (!existsInNew) {
-                                    data.metadata.push(item);
-                                }
-                            });
-                        }
-                    } catch (e) {
-                        console.warn("[Upload] Failed to preserve manual keys:", e);
-                    }
-
-                    await clearTable('data_metadata', 'key');
-                    await uploadBatchParallel('data_metadata', data.metadata, false);
-
-                    const lastUpdateText = document.getElementById('last-update-text');
-                    if (lastUpdateText) {
-                        lastUpdateText.textContent = `Dados atualizados em: ${now.toLocaleString('pt-BR')}`;
-                    }
-                }
-
-                updateStatus('Upload Concluído com Sucesso!', 100);
-                alert('Dados enviados com sucesso!');
-                setTimeout(() => statusContainer.classList.add('hidden'), 3000);
-
-            } catch (error) {
-                console.error(error);
-                let msg = error.message;
-                if (msg.includes('403') || msg.includes('row-level security') || msg.includes('violates row-level security policy') || msg.includes('Access denied')) {
-                     msg = "Permissão negada. Verifique se seu usuário tem permissão de 'adm' no Supabase. " + msg;
-                }
-                updateStatus('Erro: ' + msg, 0);
-                alert('Erro durante o upload: ' + msg);
-            }
-        }
+ const status = document.getElementById('status-text');
+ const button = document.getElementById('generate-btn');
+ button.disabled = true;
+ const uploadId = crypto.randomUUID();
+ const counts = {};
+ const dateColumns = new Set(['dtped','dtsaida','ultimacompra','datacadastro','dtcadastro','updated_at']);
+ const tables = {data_detailed:data.detailed, data_history:data.history, data_clients:data.clients, data_orders:data.byOrder, data_stock:data.stock};
+ try {
+  const now = new Date().toISOString();
+  tables.data_metadata = (data.metadata || []).filter(row => !['groq_api_key','last_update'].includes(row.key));
+  tables.data_metadata.push({key:'last_update',value:now});
+  for (const [table, source] of Object.entries(tables)) {
+   const length = source?.length || 0;
+   if (!length && ['data_detailed','data_history','data_clients'].includes(table)) throw new Error('Arquivo obrigatório vazio: ' + table);
+   if (!length) continue;
+   counts[table] = length;
+   for (let start=0; start<length; start+=1000) {
+    const rows=[];
+    for (let i=start;i<Math.min(start+1000,length);i++) {
+     const raw = source.columns ? Object.fromEntries(source.columns.map(col=>[col,source.values[col][i]])) : source[i];
+     const row={};
+     for (const [key,value] of Object.entries(raw)) {
+      const lower=key.toLowerCase();
+      if(lower==='id') continue;
+      row[lower] = dateColumns.has(lower) && typeof value==='number' ? new Date(value).toISOString() : value;
+     }
+     rows.push(row);
+    }
+    status.textContent = `Preparando ${table}: ${Math.min(start+1000,length)}/${length}`;
+    const {error} = await window.supabaseClient.from('metas_upload_chunks').upsert({upload_id:uploadId,table_name:table,chunk_no:start/1000,rows_data:rows},{onConflict:'owner_id,upload_id,table_name,chunk_no'});
+    if(error) throw error;
+   }
+  }
+  status.textContent='Conferindo e aplicando a nova base...';
+  const {error}=await window.supabaseClient.rpc('commit_metas_upload',{p_upload_id:uploadId,p_counts:counts});
+  if(error) throw error;
+  alert('Dados enviados com sucesso! A página será atualizada.');
+  window.location.reload();
+ } catch(error) {
+  status.textContent='Não foi possível concluir o envio. A base anterior foi preservada.';
+  alert(status.textContent + '\n' + error.message);
+ } finally { button.disabled=false; }
+}
 
 function setupEventListeners() {
 const openAdminBtn = document.getElementById('open-admin-btn');
@@ -4998,8 +4740,8 @@ if (generateBtn) {
                     const clientsFile = document.getElementById('clients-file-input').files[0];
                     const historyFile = document.getElementById('history-file-input').files[0];
 
-                    if (!salesFile && !historyFile) {
-                        alert("Pelo menos o arquivo de Vendas ou Histórico é necessário.");
+                    if (!salesFile || !historyFile || !clientsFile) {
+                        alert("Selecione os três arquivos: Vendas, Cadastro de Clientes e Histórico.");
                         return;
                     }
 
@@ -5067,6 +4809,10 @@ document.querySelectorAll('.nav-link').forEach(link => {
                     }
                 });
             });
+window.getGoalsMonthKey = () => `${lastSaleDate.getUTCFullYear()}-${String(lastSaleDate.getUTCMonth() + 1).padStart(2, '0')}`;
+const periodLabel = document.getElementById('goals-period-label'); if (periodLabel) periodLabel.textContent = 'Referência: ' + window.getGoalsMonthKey().split('-').reverse().join('/');
+window.getGoalsAdjustments = () => Object.fromEntries(Object.entries({pos: goalsPosAdjustments, salty: goalsMixSaltyAdjustments, foods: goalsMixFoodsAdjustments}).map(([kind, groups]) => [kind, Object.fromEntries(Object.entries(groups).map(([key, map]) => [key, Object.fromEntries(map)]))]));
+window.resetGoalsState = () => { globalClientGoals.clear(); goalsSellerTargets.clear(); [goalsPosAdjustments, goalsMixSaltyAdjustments, goalsMixFoodsAdjustments].forEach(groups => Object.values(groups).forEach(map => map.clear())); };
 const updateGoals = () => {
                 markDirty('goals');
                 handleGoalsFilterChange();
@@ -5077,7 +4823,7 @@ document.addEventListener('goalsCleared', () => {
 const debouncedUpdateGoals = debounce(updateGoals, 400);
 async function loadGoalsFromSupabase() {
                 try {
-                    const monthKey = new Date().toISOString().slice(0, 7);
+                    const monthKey = window.getGoalsMonthKey();
                     const { data, error } = await window.supabaseClient
                         .from('goals_distribution')
                         .select('goals_data')
@@ -5093,6 +4839,8 @@ async function loadGoalsFromSupabase() {
 
                     if (data && data.goals_data) {
                         const gd = data.goals_data;
+                        const adjustmentGroups = {pos: goalsPosAdjustments, salty: goalsMixSaltyAdjustments, foods: goalsMixFoodsAdjustments};
+                        Object.entries(adjustmentGroups).forEach(([kind, groups]) => Object.entries(groups).forEach(([key, map]) => { map.clear(); Object.entries(gd.adjustments?.[kind]?.[key] || {}).forEach(([seller, value]) => map.set(seller, value)); }));
                         let clientsData = {};
                         let targetsData = {};
 
@@ -6613,11 +6361,10 @@ if (importBtn && importModal) {
                     let countRev = 0;
                     let countPos = 0;
 
-                    // --- FULL RESET (Purge Everything) ---
-                    // To guarantee no ghost data from Supervisors or previous states persists, we clear all targets.
-                    // Only active sellers (backfilled) and imported sellers will remain.
-                    goalsSellerTargets.clear();
-                    globalClientGoals.clear();
+                    // Apply only the imported targets.
+                    
+                    
+                    // Preserve targets not included in a partial import.
                     // ------------------------
 
                     // 1. Process Manual Updates (Imported)

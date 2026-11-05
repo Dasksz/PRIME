@@ -25,7 +25,7 @@ function boot() {
  const window={embeddedData:{detailed:columnar([{...history[0],DTPED:new Date(2026,9,15).getTime(),VLVENDA:0,TOTPESOLIQ:0}]),history:columnar(history),clients:columnar(clients),byOrder:[],stockMap05:[],stockMap08:[],innovationsMonth:[],activeProductCodes:['100'],productDetails:new Map([['100',{codfor:'707',category:'SALTY'}]]),isColumnar:true},supabaseClient:{from:()=>({select:()=>({eq(){return this},maybeSingle:async()=>({data:null,error:null})})})},location:{href:'https://dasksz.github.io/PRIME/',search:''},userRole:'adm'};
  const doc={getElementById:id=>ids.has(id)?element(id):null,querySelector:s=>element(s),querySelectorAll:()=>[],createElement:()=>element('generated-'+elements.size),addEventListener(type,fn){(documentHandlers[type] ||= []).push(fn)},body:element('body')};
  const c=vm.createContext({window,document:doc,console:{log(){},warn(){},error(){}},Chart:{register(){}},ChartDataLabels:{},Map,Set,Date,Intl,Promise,URL,URLSearchParams,localStorage:{getItem(){return null},setItem(){}},alert(){},setTimeout:fn=>{callbacks.push(fn);return callbacks.length},clearTimeout(){},requestAnimationFrame:fn=>{callbacks.push(fn)},performance:{now:()=>0}});
- const exported=source.replace(/\}\)\(\);\s*$/, 'window.testGoals = { globalGoalsMetrics, goalsTargets, globalClientGoals, calculateDistributedGoals, getGoalsFilteredData, parseGoalsSvStructure, updateGoalsSvView, updateGoalsSummaryView, filterSeller(name) { selectedGoalsGvSellers = name ? [name] : []; }, filterSupervisor(name) { selectedGoalsGvSupervisors = name ? [name] : []; } };})();');
+ const exported=source.replace(/\}\)\(\);\s*$/, 'window.testGoals = { globalGoalsMetrics, goalsTargets, globalClientGoals, calculateDistributedGoals, getGoalsFilteredData, parseGoalsSvStructure, allocateIntegerGoals, goalsSellerTargets, saveMixAdjustment, updateGoalsSvView, updateGoalsSummaryView, filterSeller(name) { selectedGoalsGvSellers = name ? [name] : []; }, filterSupervisor(name) { selectedGoalsGvSupervisors = name ? [name] : []; } };})();');
  vm.runInContext(exported,c,{timeout:5000});
  return {window,elements,c,callbacks,documentHandlers};
 }
@@ -90,3 +90,23 @@ test('startup connects the menu and goal controls once, including when app scrip
  assert.equal(s.documentHandlers.click.length,count);
 });
 
+
+test('integer allocation closes totals, supports zero history and rejects negative goals',()=>{
+ const {window:{testGoals:g}}=boot();
+ for(const weights of [[1,1,1],[0,0,0],[1,8,2]]) {
+  const rows=weights.map((hist,i)=>({seller:String(i),hist}));
+  for(const total of [0,1,10,1001]) assert.equal(g.allocateIntegerGoals(total,rows).reduce((n,r)=>n+r.allocated,0),total);
+ }
+ assert.throws(()=>g.allocateIntegerGoals(-1,[{hist:1}]));
+});
+test('manual adjustments serialize and full reset removes seller overrides',()=>{
+ const s=boot(),g=s.window.testGoals;
+ g.saveMixAdjustment('salty',7,'Vendedor 10');
+ assert.ok(Object.keys(s.window.getGoalsAdjustments().salty.PEPSICO_ALL).includes('Vendedor 10'));
+ g.goalsSellerTargets.set('Vendedor 10',{mix_salty:99});
+ s.window.resetGoalsState();
+ assert.equal(g.goalsSellerTargets.size,0);
+ assert.equal(g.globalClientGoals.size,0);
+ assert.equal(Object.keys(s.window.getGoalsAdjustments().salty.PEPSICO_ALL).length,0);
+ assert.equal(s.window.getGoalsMonthKey(),'2026-10');
+});
